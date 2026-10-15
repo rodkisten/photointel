@@ -77,7 +77,7 @@ jobs:
           python-version: "3.13"
 
       - name: Setup uv with persistent cache
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           cache-local-path: /tmp/photointel-uv-cache
