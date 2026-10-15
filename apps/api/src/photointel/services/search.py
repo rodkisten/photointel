@@ -14,6 +14,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from photointel.errors import AppError, ErrorCode
 from photointel.models import (
     AlbumAsset, Asset, AssetTag, DuplicateMember, Embedding, ModelRegistry, Setting, Tag,
+    TagAlias,
 )
 from photointel.schemas import FilterNode, SearchPage, SearchRequest
 from photointel.serializers import asset_out, decode_cursor, encode_cursor
@@ -41,6 +42,31 @@ def rejection_exists(asset_id: Any, tag_id: Any) -> Any:
     ))
 
 
+def current_assertion() -> Any:
+    return or_(
+        AssetTag.origin != "joytag",
+        exists(select(ModelRegistry.id).where(
+            ModelRegistry.active.is_(True),
+            ModelRegistry.model_name == "fancyfeast/joytag",
+            ModelRegistry.revision == AssetTag.model_version,
+        )),
+    )
+
+
+def canonical_tag_ids(value: str) -> Any:
+    match_alias = exists(select(TagAlias.id).where(
+        TagAlias.tag_id == Tag.id, func.lower(TagAlias.alias) == value.casefold(),
+    ))
+    chain = select(Tag.id, Tag.merged_into_id).where(or_(
+        Tag.canonical_key == value, match_alias,
+    )).cte(recursive=True)
+    target = aliased(Tag)
+    chain = chain.union_all(select(target.id, target.merged_into_id).join(
+        chain, target.id == chain.c.merged_into_id,
+    ))
+    return select(chain.c.id).where(chain.c.merged_into_id.is_(None))
+
+
 def date_value(value: Any) -> datetime:
     try:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
@@ -66,10 +92,14 @@ def filter_expression(node: FilterNode, show_sensitive: bool = False) -> Any:
     if node.op == "tag":
         conditions = [
             AssetTag.asset_id == Asset.id, AssetTag.tag_id == Tag.id,
-            Tag.canonical_key == node.value, Tag.enabled.is_(True),
+            Tag.id.in_(canonical_tag_ids(str(node.value))), Tag.enabled.is_(True),
             AssetTag.user_status != "rejected",
+            current_assertion(),
             not_(rejection_exists(AssetTag.asset_id, AssetTag.tag_id)),
-            or_(AssetTag.confidence.is_(None), AssetTag.confidence >= node.confidence),
+            or_(
+                AssetTag.confidence.is_(None),
+                AssetTag.confidence >= func.greatest(node.confidence, Tag.minimum_confidence),
+            ),
         ]
         if not show_sensitive:
             conditions.append(Tag.is_sensitive.is_(False))
@@ -121,11 +151,12 @@ def filter_expression(node: FilterNode, show_sensitive: bool = False) -> Any:
 async def semantic_vector(
     session: AsyncSession, request: SearchRequest,
 ) -> tuple[list[float], ModelRegistry]:
-    from photointel.config import get_settings
-    settings = get_settings()
+    from photointel.services.runtime_settings import effective_settings
+    settings = await effective_settings(session)
     model = await session.scalar(select(ModelRegistry).where(
         ModelRegistry.active.is_(True),
         ModelRegistry.model_name == settings.siglip_model_id,
+        ModelRegistry.revision == settings.siglip_model_revision,
         ModelRegistry.embedding_dimension.is_not(None),
     ).limit(1))
     if not model:

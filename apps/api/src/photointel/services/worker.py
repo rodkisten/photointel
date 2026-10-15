@@ -6,13 +6,17 @@ import os
 import signal
 import socket
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import select, text, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncSession, async_sessionmaker, create_async_engine,
+)
+from sqlalchemy.pool import NullPool
 
 from photointel.config import get_settings
 from photointel.database import SessionLocal
@@ -22,7 +26,7 @@ from photointel.services.jobs import (
     ACTIVE,
     claim_jobs,
     enqueue_job,
-    heartbeat,
+    heartbeat_many,
     refresh_batch,
     retry_delay,
     worker_seen,
@@ -34,6 +38,18 @@ logger = structlog.get_logger()
 
 class LeaseLost(Exception):
     """The operation must roll back after cancellation, pause, or lease loss."""
+
+
+def superseded_reason(
+    payload: dict[str, Any], content_revision: str, representation_revision: str,
+) -> str | None:
+    expected = payload.get("content_revision")
+    if expected is not None and expected != content_revision:
+        return "superseded_content_revision"
+    expected_input = payload.get("representation_revision")
+    if expected_input is not None and expected_input != representation_revision:
+        return "superseded_representation_revision"
+    return None
 
 
 async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
@@ -71,6 +87,9 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     if not asset:
         raise AppError(ErrorCode.NOT_FOUND, "Foto não encontrada", 404)
     revision = asset.content_revision
+    reason = superseded_reason(job.payload, revision, asset.representation_revision)
+    if reason:
+        return {"skipped": True, "reason": reason}
     if job.job_type == "media_download":
         from photointel.services.media import source_path
         if asset.media_type != "video":
@@ -79,7 +98,8 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
                 raise AppError(
                     ErrorCode.MEDIA_DOWNLOAD_FAILED, "Representação excede o limite",
                 )
-        await enqueue_job(session, "metadata_extract", asset.id, {},
+        await enqueue_job(session, "metadata_extract", asset.id,
+                          {"content_revision": revision},
                           f"metadata_extract:{asset.id}:{revision}", job.batch_id)
         return {"download_validated": True}
     if job.job_type == "metadata_extract":
@@ -87,12 +107,16 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
         result = await process_asset(session, asset, settings)
         for kind in ("thumbnail_generate", "hash_generate", "quality_analysis"):
             await enqueue_job(
-                session, kind, asset.id, {}, f"{kind}:{asset.id}:{revision}",
+                session, kind, asset.id, {"content_revision": revision},
+                f"{kind}:{asset.id}:{revision}",
                               job.batch_id)
         if settings.gpu_enabled and asset.media_type == "image":
             for kind in ("joytag_inference", "embedding_inference"):
                 await enqueue_job(
-                    session, kind, asset.id, {},
+                    session, kind, asset.id, {
+                        "content_revision": revision,
+                        "representation_revision": asset.representation_revision,
+                    },
                     f"{kind}:{asset.id}:{asset.representation_revision}:"
                     f"{settings.joytag_model_revision}:{settings.siglip_model_revision}",
                     job.batch_id,
@@ -101,16 +125,16 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
             asset.classification_status = "not_configured"
         return result
     if job.job_type in ("thumbnail_generate", "hash_generate", "quality_analysis"):
-        # Decode and derive once in metadata_extract; verify each persisted stage.
-        if asset.ingestion_status != "completed":
-            raise AppError(
-                ErrorCode.MEDIA_DECODE_FAILED, "Processamento de mídia pendente",
-            )
+        from photointel.services.media import verify_media_stage
+        result = await verify_media_stage(
+            session, asset, settings, job.job_type, force=bool(job.payload.get("force")),
+        )
         if job.job_type == "hash_generate" and asset.media_type == "image":
-            await enqueue_job(session, "duplicate_analysis", asset.id, {},
-                              f"duplicate_analysis:{asset.id}:{revision}", job.batch_id)
-        return {"verified": True, "shared_decode": True,
-                "bytes_processed": asset.filesize or 0}
+            await enqueue_job(
+                session, "duplicate_analysis", asset.id, {"content_revision": revision},
+                f"duplicate_analysis:{asset.id}:{revision}", job.batch_id,
+            )
+        return result
     if job.job_type == "duplicate_analysis":
         from photointel.services.duplicates import analyze_duplicates
         return await analyze_duplicates(
@@ -132,23 +156,41 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     raise AppError(ErrorCode.INVALID_REQUEST, "Tipo de job desconhecido")
 
 
-async def _heartbeat_loop(job_id: UUID, worker_id: str, stopped: asyncio.Event) -> None:
+@lru_cache(maxsize=1)
+def lease_sessions() -> async_sessionmaker[AsyncSession]:
+    # Long-running media/GPU work can occupy every connection in the normal pool.
+    # Short-lived lease connections must remain available independently. NullPool
+    # also avoids retained connections when the CLI runs the worker for fixture seeding.
+    lease_engine = create_async_engine(
+        get_settings().database_url, poolclass=NullPool, pool_pre_ping=True,
+    )
+    return async_sessionmaker(lease_engine, expire_on_commit=False)
+
+
+async def _heartbeat_many_loop(
+    job_ids: list[UUID], worker_id: str, stopped: asyncio.Event,
+) -> None:
     while not stopped.is_set():
         try:
-            async with SessionLocal() as session:
-                if not await heartbeat(session, job_id, worker_id):
+            async with lease_sessions()() as session:
+                renewed = await heartbeat_many(session, job_ids, worker_id)
+                if renewed != len(job_ids):
                     stopped.set()
                     return
-                await worker_seen(session, worker_id, job_id)
+                await worker_seen(session, worker_id, job_ids[0] if job_ids else None)
                 await session.commit()
         except Exception:
-            # Do not log credentials, SQL parameters, exception text, or image data.
-            logger.warning("worker_heartbeat_unavailable", job_id=str(job_id))
+            # Never log credentials, SQL parameters, exception text, or image data.
+            logger.warning("worker_heartbeat_unavailable", jobs=len(job_ids))
         Path("/tmp/photointel-worker.heartbeat").write_text(str(time.time()))
         try:
             await asyncio.wait_for(stopped.wait(), get_settings().job_heartbeat_seconds)
         except TimeoutError:
             pass
+
+
+async def _heartbeat_loop(job_id: UUID, worker_id: str, stopped: asyncio.Event) -> None:
+    await _heartbeat_many_loop([job_id], worker_id, stopped)
 
 
 async def execute_job(job_id: UUID, worker_id: str) -> None:
@@ -285,8 +327,9 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
     """Run many durable GPU jobs in one actual model batch, fenced as one transaction."""
     from photointel.services.inference import infer_assets
     stopped = asyncio.Event()
-    heartbeats = [asyncio.create_task(_heartbeat_loop(job_id, worker_id, stopped))
-                  for job_id in job_ids]
+    heartbeat_task = asyncio.create_task(
+        _heartbeat_many_loop(job_ids, worker_id, stopped),
+    )
     started = time.monotonic()
     try:
         async with SessionLocal() as session:
@@ -301,25 +344,47 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
                 await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {
                     "key": int.from_bytes(asset_id.bytes[:8], "big", signed=True),
                 })
+            assets = {asset.id: asset for asset in (await session.scalars(
+                select(Asset).where(Asset.id.in_(asset_ids)),
+            )).all()}
+            if len(assets) != len(asset_ids):
+                raise AppError(ErrorCode.NOT_FOUND, "Ativo não encontrado", 404)
+            skipped = {
+                job.id: superseded_reason(
+                    job.payload, assets[job.asset_id].content_revision,
+                    assets[job.asset_id].representation_revision,
+                ) for job in jobs if job.asset_id
+            }
+            eligible = [job for job in jobs if job.asset_id and not skipped.get(job.id)]
+            eligible_ids = sorted({job.asset_id for job in eligible if job.asset_id}, key=str)
             result = await infer_assets(
-                session, asset_ids, await effective_settings(session),
-            )
+                session, eligible_ids, await effective_settings(session),
+            ) if eligible_ids else {"completed": 0, "skipped": len(jobs)}
             await session.flush()
             fenced = (await session.execute(update(Job).where(
                 Job.id.in_(job_ids), Job.worker_id == worker_id, Job.status.in_(ACTIVE),
                 Job.lease_until > utcnow(),
-            ).values(status="completed", lease_until=None, finished_at=utcnow(),
-                     progress={
-                **result, "batch_assets": len(asset_ids),
-                "runtime_ms": round((time.monotonic() - started) * 1000, 2),
-            }).returning(Job.id))).all()
+            ).values(status="completed", lease_until=None, finished_at=utcnow())
+                .returning(Job.id))).all()
             if len(fenced) != len(jobs):
                 raise LeaseLost()
+            leader_id = eligible[0].id if eligible else None
             for job in jobs:
+                if skipped.get(job.id):
+                    job.progress = {"skipped": True, "reason": skipped[job.id]}
+                elif job.id == leader_id:
+                    job.progress = {
+                        **result, "batch_assets": len(eligible_ids),
+                        "runtime_ms": round((time.monotonic() - started) * 1000, 2),
+                    }
+                else:
+                    job.progress = {"batch_metrics_job_id": str(leader_id),
+                                    "batch_assets": len(eligible_ids)}
                 session.add(JobEvent(job_id=job.id, status="completed", payload={
-                    "batch_assets": len(asset_ids),
+                    "batch_assets": len(eligible_ids),
+                    "skipped": bool(skipped.get(job.id)),
                 }))
-            for batch_id in {job.batch_id for job in jobs}:
+            for batch_id in sorted({job.batch_id for job in jobs}, key=str):
                 await refresh_batch(session, batch_id)
             await session.commit()
     except (LeaseLost, asyncio.CancelledError):
@@ -349,16 +414,15 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
                 from photointel.services.inference import record_inference_failure
                 for asset_id in {job.asset_id for job in jobs if job.asset_id}:
                     await record_inference_failure(session, asset_id, settings, str(code))
-            for batch_id in {job.batch_id for job in jobs}:
+            for batch_id in sorted({job.batch_id for job in jobs}, key=str):
                 await refresh_batch(session, batch_id)
             await session.commit()
         logger.warning("worker_gpu_batch_failed", jobs=len(job_ids), error_code=code,
                        exception_type=type(exc).__name__)
     finally:
         stopped.set()
-        for task in heartbeats:
-            task.cancel()
-        await asyncio.gather(*heartbeats, return_exceptions=True)
+        heartbeat_task.cancel()
+        await asyncio.gather(heartbeat_task, return_exceptions=True)
 
 
 if __name__ == "__main__":

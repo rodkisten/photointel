@@ -11,9 +11,14 @@ if target.exists():
 else:
     password = secrets.token_hex(24)
     storage_password = secrets.token_hex(24)
+    app_password = secrets.token_hex(24)
     contents = (root / ".env.example").read_text()
     replacements = {
         "POSTGRES_PASSWORD": password,
+        "POSTGRES_APP_PASSWORD": app_password,
+        "APP_DATABASE_URL": (
+            f"postgresql+asyncpg://photointel_app:{app_password}@postgres:5432/photointel"
+        ),
         "DATABASE_URL": (
             f"postgresql+asyncpg://photointel:{password}@localhost:5432/photointel"
         ),

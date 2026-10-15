@@ -21,7 +21,8 @@ from photointel.models import (
 from photointel.schemas import (
     AlbumAssetsInput, AlbumCreate, AlbumOut, AlbumPatch, AssetDetailOut, AssetOut,
     AssetTagOut, BulkTagEdit, FilterNode, Page, ResourceOut, SavedSearchInput,
-    SearchPage, SearchRequest, SimilarRequest, TagCreate, TagEdit, TagOut, TagPatch,
+    RethresholdInput, SearchPage, SearchRequest, SimilarRequest, TagCreate,
+    TagEdit, TagOut, TagPatch,
 )
 from photointel.serializers import (
     assertion_out, asset_out, decode_cursor, encode_cursor, resource_out, row_dict,
@@ -29,6 +30,7 @@ from photointel.serializers import (
 )
 from photointel.services.catalog import (
     CATEGORIES, SENSITIVE_CATEGORIES, aliases_for, audit, edit_tags, get_asset,
+    merge_tag_assertions,
 )
 from photointel.services.search import execute_search, rejection_exists, sensitive_visible
 from photointel.storage import get_storage
@@ -62,7 +64,9 @@ async def assets(
 async def tags_for_asset(
     session: AsyncSession, asset_id: UUID, include_rejected: bool = True,
 ) -> list[AssetTagOut]:
-    query = select(AssetTag, Tag).join(Tag).where(AssetTag.asset_id == asset_id)
+    query = select(AssetTag, Tag).join(Tag).where(
+        AssetTag.asset_id == asset_id, Tag.enabled.is_(True),
+    )
     if not await sensitive_visible(session):
         query = query.where(Tag.is_sensitive.is_(False))
     if not include_rejected:
@@ -258,13 +262,22 @@ async def tags(
 
 @router.get("/tags/categories", tags=["taxonomy"])
 async def tag_categories(session: Session) -> dict[str, Any]:
+    from photointel.services.runtime_settings import effective_settings
+    from photointel.services.taxonomy import CATEGORIES as names
+    settings = await effective_settings(session)
+    stored = await session.get(Setting, "taxonomy_categories")
+    rules = stored.value if stored else {}
     counts = dict((await session.execute(select(
         Tag.category, func.count(Tag.id)
     ).group_by(Tag.category))).all())
     visible = await sensitive_visible(session)
     return {"items": [
-        {"key": key, "name": key, "count": counts.get(key, 0),
-         "is_sensitive": key in SENSITIVE_CATEGORIES}
+        {"key": key, "name": names[key], "count": counts.get(key, 0),
+         "is_sensitive": key in SENSITIVE_CATEGORIES,
+         "enabled": rules.get(key, {}).get("enabled", True),
+         "minimum_confidence": rules.get(key, {}).get(
+             "minimum_confidence", settings.joytag_threshold,
+         )}
         for key in CATEGORIES if visible or key not in SENSITIVE_CATEGORIES
     ], "next_cursor": None}
 
@@ -289,12 +302,28 @@ async def create_tag(body: TagCreate, session: Session, identity: Actor) -> TagO
         raise AppError(ErrorCode.INVALID_REQUEST, "Categoria inválida", 422)
     if await session.scalar(select(Tag.id).where(Tag.canonical_key == body.canonical_key)):
         raise AppError(ErrorCode.INVALID_REQUEST, "Keyword já existe", 409)
-    tag = Tag(**body.model_dump(), minimum_confidence=0)
+    values = body.model_dump()
+    values["is_sensitive"] = body.is_sensitive or body.category in SENSITIVE_CATEGORIES
+    tag = Tag(**values, minimum_confidence=0)
     session.add(tag)
     await session.flush()
     audit(session, identity, "tag.create", tag_id=str(tag.id))
     await session.commit()
     return tag_out(tag)
+
+
+@router.post("/tags/rethreshold", tags=["taxonomy"])
+async def rethreshold(
+    body: RethresholdInput, session: Session, identity: Actor,
+) -> dict[str, int]:
+    from photointel.services.inference import rethreshold_assets
+    from photointel.services.runtime_settings import effective_settings
+    result = await rethreshold_assets(
+        session, body.asset_ids, await effective_settings(session),
+    )
+    audit(session, identity, "tags.rethreshold", assets=len(body.asset_ids))
+    await session.commit()
+    return result
 
 
 @router.patch("/tags/{tag_id}", response_model=TagOut, tags=["taxonomy"])
@@ -306,7 +335,9 @@ async def update_tag(
         raise AppError(ErrorCode.NOT_FOUND, "Tag não encontrada", 404)
     if body.category and body.category not in CATEGORIES:
         raise AppError(ErrorCode.INVALID_REQUEST, "Categoria inválida", 422)
-    for relation in (body.parent_id, body.merged_into_id):
+    for field, relation in (
+        ("parent_id", body.parent_id), ("merged_into_id", body.merged_into_id),
+    ):
         if relation:
             seen = {tag_id}
             current = relation
@@ -317,7 +348,7 @@ async def update_tag(
                 parent = await session.get(Tag, current)
                 if not parent:
                     raise AppError(ErrorCode.NOT_FOUND, "Tag de destino não encontrada", 404)
-                next_id = parent.parent_id if body.parent_id else parent.merged_into_id
+                next_id = getattr(parent, field)
                 if not next_id:
                     break
                 current = next_id
@@ -325,6 +356,12 @@ async def update_tag(
                 raise AppError(ErrorCode.INVALID_REQUEST, "Hierarquia excede limite", 422)
     for key, value in body.model_dump(exclude_unset=True, exclude={"aliases"}).items():
         setattr(tag, key, value)
+    if tag.category in SENSITIVE_CATEGORIES:
+        tag.is_sensitive = True
+    if body.merged_into_id:
+        target = await session.get(Tag, body.merged_into_id)
+        if target:
+            await merge_tag_assertions(session, tag, target)
     if body.aliases is not None:
         await session.execute(delete(TagAlias).where(TagAlias.tag_id == tag_id))
         for alias in body.aliases:

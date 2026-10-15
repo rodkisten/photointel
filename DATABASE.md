@@ -4,6 +4,13 @@ PostgreSQL 16 com extensões `vector` e `pg_trgm`; SQLAlchemy 2 usa `asyncpg`.
 Alembic aplica migrações em `infra/migrations`. Datas são UTC, IDs de entidades
 são UUID e JSONB guarda metadados versionáveis sem substituir chaves e índices.
 
+Em produção `APP_DATABASE_URL` aponta a um papel LOGIN sem SUPERUSER, CREATEDB,
+CREATEROLE ou BYPASSRLS, autorizado a CRUD/uso de sequências do catálogo.
+`MIGRATION_DATABASE_URL` usa credencial separada para extensões/DDL e só é
+injetada no container `migrate`. `.env.runtime` não contém segredos administrativos.
+Veja o provisionamento explícito em `infra/oracle/provision-app-role.sh` e
+[docs/deployment/oracle-arm.md](docs/deployment/oracle-arm.md).
+
 ## Entidades
 
 | Grupo | Tabelas | Papel |

@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, not_, select, update
+from sqlalchemy import Uuid, case, delete, func, literal, not_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,16 +36,25 @@ def audit(
     ))
 
 
-async def refresh_search_document(session: AsyncSession, asset_ids: list[UUID]) -> None:
-    from photointel.services.search import rejection_exists
-    tag_text = select(func.string_agg(Tag.display_name, " ")).select_from(AssetTag).join(
+async def refresh_search_document(
+    session: AsyncSession, asset_ids: list[UUID] | None = None, *,
+    tag_id: UUID | None = None,
+) -> None:
+    from photointel.services.search import current_assertion, rejection_exists
+    tag_text = select(func.string_agg(
+        func.concat(Tag.display_name, " ", Tag.canonical_key), " ",
+    )).select_from(AssetTag).join(
         Tag, AssetTag.tag_id == Tag.id,
     ).where(
         AssetTag.asset_id == Asset.id, AssetTag.user_status != "rejected",
         Tag.is_sensitive.is_(False), Tag.enabled.is_(True),
         not_(rejection_exists(AssetTag.asset_id, AssetTag.tag_id)),
+        current_assertion(),
     ).correlate(Asset).scalar_subquery()
-    await session.execute(update(Asset).where(Asset.id.in_(asset_ids)).values(
+    identifiers = asset_ids if asset_ids is not None else select(AssetTag.asset_id).where(
+        AssetTag.tag_id == tag_id
+    )
+    await session.execute(update(Asset).where(Asset.id.in_(identifiers)).values(
         search_document=func.to_tsvector(
             "simple", func.concat(Asset.filename, " ", func.coalesce(tag_text, "")),
         )
@@ -76,17 +85,28 @@ async def edit_tags(
             session.add(tag)
             await session.flush()
             tag_by_key[key] = tag
+    from photointel.services.taxonomy import resolve_tag_targets
+    targets = await resolve_tag_targets(session, list(tag_by_key.values()))
+    tag_by_key = {key: targets[tag.id] for key, tag in tag_by_key.items()}
     reference_ids = set(request.approve + request.reject)
     found_refs = set((await session.scalars(select(Tag.id).where(Tag.id.in_(
         reference_ids
     )))).all()) if reference_ids else set()
     if found_refs != reference_ids:
         raise AppError(ErrorCode.NOT_FOUND, "Tag não encontrada", 404)
+    reference_tags = list((await session.scalars(select(Tag).where(
+        Tag.id.in_(reference_ids)
+    ))).all()) if reference_ids else []
+    reference_targets = await resolve_tag_targets(session, reference_tags)
     assertions: dict[UUID, str] = {
         tag_by_key[key].id: "approved" for key in request.add
     }
-    assertions.update({identifier: "approved" for identifier in request.approve})
-    assertions.update({identifier: "rejected" for identifier in request.reject})
+    assertions.update({
+        reference_targets[identifier].id: "approved" for identifier in request.approve
+    })
+    assertions.update({
+        reference_targets[identifier].id: "rejected" for identifier in request.reject
+    })
     values = [
         {
             "asset_id": asset_id, "tag_id": tag_id, "origin": "user",
@@ -117,6 +137,60 @@ async def edit_tags(
         audit(session, identity, "asset.tags.edit", asset_id,
               added=len(request.add), removed=len(request.remove),
               approved=len(request.approve), rejected=len(request.reject))
+
+
+async def merge_tag_assertions(
+    session: AsyncSession, source: Tag, requested_target: Tag,
+) -> None:
+    """Merge canonical assertions while preserving provenance and user rejections."""
+    from photointel.services.taxonomy import resolve_tag_targets
+    target = (await resolve_tag_targets(session, [requested_target]))[requested_target.id]
+    if source.id == target.id:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Uma tag não pode ser mesclada consigo", 422)
+    source.merged_into_id = target.id
+    target.is_sensitive = target.is_sensitive or source.is_sensitive
+    columns = [
+        "id", "asset_id", "tag_id", "origin", "confidence", "model_version",
+        "user_status", "review_status", "created_at", "updated_at",
+    ]
+    statement = insert(AssetTag).from_select(columns, select(
+        func.gen_random_uuid(), AssetTag.asset_id, literal(target.id, type_=Uuid()),
+        AssetTag.origin, AssetTag.confidence, AssetTag.model_version,
+        AssetTag.user_status, AssetTag.review_status,
+        AssetTag.created_at, AssetTag.updated_at,
+    ).where(AssetTag.tag_id == source.id), include_defaults=False)
+    excluded = statement.excluded
+    user_status = case(
+        ((AssetTag.user_status == "rejected") | (excluded.user_status == "rejected"),
+         "rejected"),
+        ((AssetTag.user_status == "approved") | (excluded.user_status == "approved"),
+         "approved"),
+        else_=AssetTag.user_status,
+    )
+    await session.execute(statement.on_conflict_do_update(
+        index_elements=["asset_id", "tag_id", "origin", "model_version"],
+        set_={
+            "confidence": func.greatest(AssetTag.confidence, excluded.confidence),
+            "user_status": user_status, "review_status": user_status,
+            "updated_at": func.now(),
+        },
+    ))
+    await session.execute(delete(AssetTag).where(AssetTag.tag_id == source.id))
+    aliases = insert(TagAlias).from_select(
+        ["id", "tag_id", "language", "alias", "alias_type"],
+        select(
+            func.gen_random_uuid(), literal(target.id, type_=Uuid()),
+            TagAlias.language, TagAlias.alias, TagAlias.alias_type,
+        ).where(TagAlias.tag_id == source.id), include_defaults=False,
+    )
+    await session.execute(aliases.on_conflict_do_nothing(
+        index_elements=["tag_id", "language", "alias"]
+    ))
+    await session.execute(insert(TagAlias).values(
+        tag_id=target.id, language="en", alias=source.canonical_key,
+        alias_type="merged_key",
+    ).on_conflict_do_nothing(index_elements=["tag_id", "language", "alias"]))
+    await refresh_search_document(session, tag_id=target.id)
 
 
 async def aliases_for(

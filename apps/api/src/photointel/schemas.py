@@ -131,6 +131,16 @@ class TagPatch(Contract):
     merged_into_id: UUID | None = None
     aliases: list[AliasInput] | None = Field(default=None, max_length=50)
 
+    @model_validator(mode="after")
+    def required_fields_cannot_be_cleared(self) -> "TagPatch":
+        for key in self.model_fields_set & {
+            "display_name", "category", "enabled", "minimum_confidence",
+            "is_sensitive", "sync_eligible",
+        }:
+            if getattr(self, key) is None:
+                raise ValueError(f"{key} cannot be null")
+        return self
+
 
 class FilterNode(Contract):
     op: Literal[
@@ -222,6 +232,14 @@ class AlbumPatch(Contract):
     cover_asset_id: UUID | None = None
     sort_order: Literal["captured_desc", "added_desc", "position"] | None = None
 
+    @model_validator(mode="after")
+    def required_fields_cannot_be_cleared(self) -> "AlbumPatch":
+        if ("name" in self.model_fields_set and self.name is None) or (
+            "sort_order" in self.model_fields_set and self.sort_order is None
+        ):
+            raise ValueError("Album name and sort order cannot be null")
+        return self
+
 
 class AlbumAssetsInput(Contract):
     asset_ids: list[UUID] = Field(min_length=1, max_length=500)
@@ -283,6 +301,33 @@ class IngestionInput(Contract):
     confirm_expansion: bool = False
 
 
+class CategoryRule(Contract):
+    enabled: bool = True
+    minimum_confidence: float = Field(default=.4, ge=0, le=1)
+
+
+class TaxonomyOverride(Contract):
+    category: Literal[
+        "person", "body", "face_hair", "clothing", "clothing_bulge", "pose_action",
+        "sexual_action", "genitals", "penis", "environment", "objects", "composition",
+        "visual", "other",
+    ] | None = None
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    is_sensitive: bool | None = None
+    aliases: list[str] = Field(default_factory=list, max_length=30)
+    parent_key: str | None = Field(default=None, max_length=255)
+
+
+class CompoundRule(Contract):
+    all: list[str] = Field(min_length=1, max_length=30)
+    none: list[str] = Field(default_factory=list, max_length=30)
+    output: str = Field(min_length=1, max_length=255)
+
+
+class RethresholdInput(Contract):
+    asset_ids: list[UUID] = Field(min_length=1, max_length=1000)
+
+
 class SettingsPatch(Contract):
     sensitive_tags_visible: bool | None = None
     gpu_enabled: bool | None = None
@@ -301,3 +346,25 @@ class SettingsPatch(Contract):
     gpu_monthly_budget: float | None = Field(default=None, ge=0, le=10000)
     temporary_retention_hours: int | None = Field(default=None, ge=1, le=8760)
     apple_keyword_sync_mode: Literal["manual", "disabled"] | None = None
+    taxonomy_categories: dict[str, CategoryRule] | None = Field(default=None, max_length=14)
+    taxonomy_overrides: dict[str, TaxonomyOverride] | None = Field(default=None, max_length=1000)
+    taxonomy_compound_rules: list[CompoundRule] | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def taxonomy_keys(self) -> "SettingsPatch":
+        categories = {
+            "person", "body", "face_hair", "clothing", "clothing_bulge", "pose_action",
+            "sexual_action", "genitals", "penis", "environment", "objects", "composition",
+            "visual", "other",
+        }
+        if self.taxonomy_categories and set(self.taxonomy_categories) - categories:
+            raise ValueError("Unknown taxonomy category")
+        for key, override in (self.taxonomy_overrides or {}).items():
+            if not 1 <= len(key) <= 255:
+                raise ValueError("Invalid taxonomy key")
+            if any(not 1 <= len(alias) <= 255 for alias in override.aliases):
+                raise ValueError("Invalid taxonomy alias")
+        for rule in self.taxonomy_compound_rules or []:
+            if any(not 1 <= len(key) <= 255 for key in [*rule.all, *rule.none]):
+                raise ValueError("Invalid compound-rule key")
+        return self

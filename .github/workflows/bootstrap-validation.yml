@@ -1,0 +1,279 @@
+name: Bootstrap and validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: s3
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_BUCKET: photointel-ci-private
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY: ci-access
+      STORAGE_SECRET_KEY: ci-only-not-a-production-secret
+      TEMP_DIRECTORY: /tmp/photointel-ci-processing
+      ICLOUD_ENABLED: 'false'
+      GPU_ENABLED: 'false'
+      INFERENCE_BACKEND: test
+      UV_CACHE_DIR: /tmp/photointel-uv-cache
+      npm_config_cache: /tmp/photointel-npm-cache
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.23'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Initialize evidence directory
+        run: mkdir -p reports packages/contracts
+      - name: Resolve Python dependencies only when no lock exists
+        id: python_install
+        continue-on-error: true
+        run: |
+          uv python install 3.12
+          if test -s uv.lock; then
+            uv sync --frozen --group ingest
+          else
+            uv sync --group ingest
+          fi
+      - name: Resolve missing or placeholder npm lock
+        id: node_install
+        continue-on-error: true
+        run: |
+          if node -e 'const fs=require("node:fs");const p="apps/web/package-lock.json";if(!fs.existsSync(p))process.exit(1);const l=JSON.parse(fs.readFileSync(p,"utf8"));if(!l.packages?.[""]?.dependencies)process.exit(1)'; then
+            npm --prefix apps/web ci
+          else
+            npm --prefix apps/web install
+          fi
+      - name: Generate OpenAPI from the real application
+        id: openapi
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          from pathlib import Path
+          from photointel.main import app
+          schema = app.openapi()
+          if not schema.get("paths"):
+              raise SystemExit("OpenAPI has no paths")
+          Path("packages/contracts/openapi.json").write_text(
+              json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+          )
+          PY
+      - name: Generate typed frontend contract
+        id: contracts
+        if: steps.openapi.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run generate:api
+      - name: Python lint
+        id: python_lint
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync ruff check . --output-format=github
+      - name: Python type checking
+        id: python_types
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync mypy apps/api/src gpu bridges
+      - name: Unit tests without GPU or external accounts
+        id: python_tests
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+      - name: Frontend lint
+        id: web_lint
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run lint
+      - name: Frontend type checking
+        id: web_types
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run typecheck
+      - name: Frontend unit tests
+        id: web_tests
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
+      - name: Frontend production build
+        id: web_build
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run build
+      - name: Start real private object storage
+        id: storage
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          uv run --no-sync python - <<'PY'
+          import os
+          import time
+          import boto3
+          client = boto3.client("s3", endpoint_url=os.environ["STORAGE_ENDPOINT"],
+              aws_access_key_id=os.environ["STORAGE_ACCESS_KEY"],
+              aws_secret_access_key=os.environ["STORAGE_SECRET_KEY"],
+              region_name="us-east-1")
+          for attempt in range(30):
+              try:
+                  client.list_buckets()
+                  break
+              except Exception:
+                  if attempt == 29:
+                      raise
+                  time.sleep(2)
+          client.create_bucket(Bucket=os.environ["STORAGE_BUCKET"])
+          PY
+      - name: Apply actual PostgreSQL migrations
+        id: migrate
+        if: steps.storage.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: Integration tests against PostgreSQL and MinIO
+        id: integration
+        if: steps.app_role.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+      - name: Browser E2E on real API and synthetic media
+        id: e2e
+        if: steps.app_role.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm exec --prefix apps/web -- playwright install --with-deps chromium
+          uv run --no-sync python -m photointel.cli seed --synthetic-assets 12
+          uv run --no-sync uvicorn photointel.main:app --host 127.0.0.1 --port 8000 > reports/api.log 2>&1 &
+          api_process_id=$!
+          trap 'kill "$api_process_id" 2>/dev/null || true' EXIT
+          uv run --no-sync python - <<'PY'
+          import time
+          import urllib.request
+          for attempt in range(30):
+              try:
+                  urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=2)
+                  break
+              except OSError:
+                  if attempt == 29:
+                      raise
+                  time.sleep(1)
+          PY
+          npm --prefix apps/web run test:e2e -- --reporter=list,junit
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/browser.xml
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+          GPU_ENABLED: 'true'
+          JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
+          SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
+      - name: Measure synthetic metadata queries
+        id: benchmark
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync python -m photointel.cli benchmark --assets 10000 --output reports/benchmark-10000.json
+      - name: Build one backend image and check native libraries
+        id: api_build
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker build -f infra/docker/api.Dockerfile -t photointel-api:bootstrap .
+          docker run --rm --entrypoint python photointel-api:bootstrap -c 'import cv2, pillow_heif, psycopg; print("native runtime imports passed")'
+      - name: Dependency security reports
+        id: security
+        if: steps.python_install.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv export --frozen --no-dev --group ingest --no-emit-project > /tmp/photointel-runtime-requirements.txt
+          uvx pip-audit -r /tmp/photointel-runtime-requirements.txt --disable-pip --format=json --output reports/python-audit.json &
+          audit_process_id=$!
+          npm --prefix apps/web audit --json > reports/npm-audit.json &
+          npm_audit_process_id=$!
+          audit_status=0
+          wait "$audit_process_id" || audit_status=1
+          wait "$npm_audit_process_id" || audit_status=1
+          exit "$audit_status"
+      - name: Capture public model and Apple/Pyto evidence without model weights
+        id: references
+        if: always()
+        continue-on-error: true
+        run: python3 infra/scripts/fetch-public-references.py --output reports/public-references
+      - name: Record check outcomes
+        id: evidence
+        if: always()
+        env:
+          CHECK_OUTCOMES: >-
+            {"python_install":"${{ steps.python_install.outcome }}","node_install":"${{ steps.node_install.outcome }}","openapi":"${{ steps.openapi.outcome }}","contracts":"${{ steps.contracts.outcome }}","python_lint":"${{ steps.python_lint.outcome }}","python_types":"${{ steps.python_types.outcome }}","python_tests":"${{ steps.python_tests.outcome }}","web_lint":"${{ steps.web_lint.outcome }}","web_types":"${{ steps.web_types.outcome }}","web_tests":"${{ steps.web_tests.outcome }}","web_build":"${{ steps.web_build.outcome }}","storage":"${{ steps.storage.outcome }}","migrate":"${{ steps.migrate.outcome }}","integration":"${{ steps.integration.outcome }}","e2e":"${{ steps.e2e.outcome }}","benchmark":"${{ steps.benchmark.outcome }}","api_build":"${{ steps.api_build.outcome }}","security":"${{ steps.security.outcome }}"}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+          checks = json.loads(os.environ["CHECK_OUTCOMES"])
+          result = {"executed_at": datetime.now(UTC).isoformat(),
+              "commit": os.environ["GITHUB_SHA"], "checks": checks,
+              "scope": "synthetic local services; no production deploy, Apple account or real GPU"}
+          Path("reports").mkdir(exist_ok=True)
+          Path("reports/validation.json").write_text(json.dumps(result, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("| Check | Actual outcome |\n|---|---|\n")
+              for name, outcome in checks.items():
+                  summary.write(f"| {name} | {outcome} |\n")
+          PY
+      - name: Upload exact generated dependency locks and contracts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-locks-contracts
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            uv.lock
+            apps/web/package-lock.json
+            packages/contracts/openapi.json
+            apps/web/src/api/schema.d.ts
+      - name: Upload actual validation and public research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            reports/
+            apps/web/test-results/
+            apps/web/playwright-report/
+      - name: Fail when a required check did not pass
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          checks = json.loads(Path("reports/validation.json").read_text())["checks"]
+          failed = {name: value for name, value in checks.items() if value != "success"}
+          if failed:
+              raise SystemExit(f"Required checks did not pass: {failed}")
+          PY

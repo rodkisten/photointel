@@ -49,6 +49,14 @@ async def test_all_tables_extensions_and_vector_indexes_are_migrated(
     assert "vector_cosine_ops" in indexes["ix_embeddings_cosine_hnsw"]
     assert "USING gin" in indexes["ix_assets_search_document"]
     assert "gin_trgm_ops" in indexes["ix_tags_name_trgm"]
+    assert "local_identifier" in indexes["ix_photokit_snapshot_device_local"]
+    assert "photokit" in indexes["ix_photokit_snapshot_device_local"]
+    assert "verification_status" in indexes["ix_device_mappings_asset_verification"]
+    # ORM metadata must retain migration-owned indexes during future autogeneration.
+    expected_indexes = {
+        index.name for table in Base.metadata.tables.values() for index in table.indexes
+    }
+    assert expected_indexes.issubset(indexes)
 
 
 async def test_asset_identity_is_unique_per_source_not_per_filename(

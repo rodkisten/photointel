@@ -25,6 +25,8 @@ _requests: dict[str, deque[float]] = defaultdict(deque)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
     settings = get_settings()  # Revalidate startup invariants before serving traffic.
+    from photointel.logging import configure_logging
+    configure_logging(settings.log_level)
     logger.info("api_started", extra={"environment": settings.app_env})
     yield
     await engine.dispose()
@@ -139,14 +141,8 @@ def create_app() -> FastAPI:
     from photointel.routers.operations import router as operations
     app.include_router(catalog, prefix="/v1")
     app.include_router(operations, prefix="/v1")
-    try:
-        from photointel.routers.bridge import router as bridge
-    except ImportError:
-        # Removed during final integration; do not start production without Bridge.
-        if settings.is_production:
-            raise
-    else:
-        app.include_router(bridge, prefix="/v1")
+    from photointel.routers.bridge import router as bridge
+    app.include_router(bridge, prefix="/v1")
     return app
 
 

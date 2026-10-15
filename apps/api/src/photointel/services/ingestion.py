@@ -4,13 +4,14 @@ import asyncio
 import json
 import os
 import shutil
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,9 @@ def authentication_state(settings: Settings) -> dict[str, Any]:
         moment = datetime.fromisoformat(checked) if isinstance(checked, str) else None
         fresh = (moment is not None
                  and timedelta(0) <= utcnow() - moment < timedelta(minutes=65))
+        fresh = fresh and report.get("account_fingerprint") == sha256(
+            settings.icloud_account.encode(),
+        ).hexdigest() and report.get("library") == settings.icloud_library
         if fresh:
             return {"state": report.get("state", "unknown"),
                     "valid": report.get("state") == "valid", "checked_at": checked,
@@ -63,8 +67,11 @@ def record_authentication(settings: Settings, state: str, reason: str) -> None:
     os.chmod(directory, 0o700)
     target = _state_path(settings)
     temporary = target.with_suffix(".tmp")
-    temporary.write_text(json.dumps({"state": state, "reason": reason,
-                                     "checked_at": utcnow().isoformat()}))
+    temporary.write_text(json.dumps({
+        "state": state, "reason": reason, "checked_at": utcnow().isoformat(),
+        "account_fingerprint": sha256(settings.icloud_account.encode()).hexdigest(),
+        "library": settings.icloud_library,
+    }))
     os.chmod(temporary, 0o600)
     temporary.replace(target)
 
@@ -119,6 +126,10 @@ async def _upsert_asset(
         asset.content_revision = revision
         asset.source_metadata = metadata
         asset.filename = filename
+        asset.filesize = size
+        asset.captured_at, asset.added_at = captured_at, added_at
+        asset.media_type = media_type
+        asset.source_account = metadata.get("source_account")
         asset.ingestion_status = "pending"
         asset.classification_status = (
             "pending" if media_type == "image" else "not_applicable"
@@ -126,8 +137,11 @@ async def _upsert_asset(
     asset.visibility_status = "active"
     asset.missing_scan_count = 0
     if changed or asset.ingestion_status != "completed":
-        await enqueue_job(session, "media_download", asset.id, {},
-                          f"media_download:{asset.id}:{revision}", batch_id)
+        if not metadata.get("representation_unavailable"):
+            await enqueue_job(
+                session, "media_download", asset.id, {"content_revision": revision},
+                f"media_download:{asset.id}:{revision}", batch_id,
+            )
     return asset, created is not None
 
 
@@ -211,6 +225,23 @@ async def schedule_due_ingestion(session: AsyncSession) -> None:
     }, idempotency_key=f"scheduled:icloud:{bucket}")
 
 
+@dataclass(frozen=True)
+class RemoteAsset:
+    """Whitelisted snapshot. All potentially lazy downloader properties run in a thread."""
+
+    source_key: str
+    filename: str
+    media_type: str
+    original_size: int | None
+    captured_at: datetime | None
+    added_at: datetime | None
+    dimensions: tuple[int, int] | None
+    version: Any
+    representation_size: int | None
+    representation_checksum: str | None
+    live_resources: tuple[tuple[str, int], ...]
+
+
 class ICloudAdapter:
     """Version-guarded icloudpd 1.32.3 Python adapter.
 
@@ -266,6 +297,43 @@ class ICloudAdapter:
         album = self.library.all
         album.offset = offset
         return iter(album.photos)
+
+    def describe(self, photo: Any) -> RemoteAsset:
+        """Read remote objects only on the blocking-adapter thread boundary."""
+        from pyicloud_ipd.item_type import AssetItemType
+        media_type = "video" if photo.item_type == AssetItemType.MOVIE else "image"
+        version = self.representation(photo) if media_type == "image" else None
+        try:
+            original_size = int(photo.size)
+        except (KeyError, TypeError, ValueError):
+            original_size = None
+        try:
+            width, height = (int(value) for value in photo.dimensions)
+            dimensions = (width, height) if width > 0 and height > 0 else None
+        except (KeyError, TypeError, ValueError):
+            dimensions = None
+        try:
+            added_at = photo.added_date
+        except (KeyError, TypeError, ValueError, OverflowError):
+            added_at = None
+        try:
+            captured_at = photo.asset_date
+        except (KeyError, TypeError, ValueError, OverflowError):
+            captured_at = None
+        live_resources = tuple(
+            (key.name.lower(), int(resource.size))
+            for key, resource in photo.versions.items()
+            if type(key).__name__ == "LivePhotoVersionSize"
+        )
+        return RemoteAsset(
+            source_key=str(photo.id),
+            filename=str(photo.calculate_filename() or photo.filename)[:1024],
+            media_type=media_type, original_size=original_size,
+            captured_at=captured_at, added_at=added_at, dimensions=dimensions,
+            version=version, representation_size=int(version.size) if version else None,
+            representation_checksum=str(version.checksum) if version else None,
+            live_resources=live_resources,
+        )
 
     def representation(self, photo: Any) -> Any:
         from pyicloud_ipd.version_size import AssetVersionSize
@@ -356,6 +424,12 @@ async def ingest_icloud(
             ErrorCode.ICLOUD_ACCESS_DENIED, "Configure e habilite integração iCloud", 503,
         )
     limit = min(max(1, limit), settings.ingestion_import_limit)
+    identifier = sha256(
+        f"{settings.icloud_account}:{settings.icloud_library}".encode(),
+    ).hexdigest()
+    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {
+        "key": int.from_bytes(bytes.fromhex(identifier)[:8], "big", signed=True),
+    })
     adapter = ICloudAdapter(settings)
     try:
         await asyncio.to_thread(adapter.connect)
@@ -363,11 +437,8 @@ async def ingest_icloud(
         raise
     except Exception as exc:
         code, reason = classify_icloud_failure(type(exc).__name__)
-        record_authentication(settings, "unavailable", reason)
+        await asyncio.to_thread(record_authentication, settings, "unavailable", reason)
         raise AppError(code, reason, 503) from exc
-    identifier = sha256(
-        f"{settings.icloud_account}:{settings.icloud_library}".encode(),
-    ).hexdigest()
     library = await _library(session, "icloud", identifier, settings.icloud_library)
     library.last_attempted_scan = utcnow()
     run = IngestionRun(library_id=library.id, job_id=job_id, full_scan=False)
@@ -398,32 +469,26 @@ async def ingest_icloud(
         photo, from_deep_scan = entry
         count += 1
         deep_count += int(from_deep_scan)
-        filename = str(photo.calculate_filename() or photo.filename)[:1024]
-        from pyicloud_ipd.item_type import AssetItemType
-        media_type = "video" if photo.item_type == AssetItemType.MOVIE else "image"
-        version = (await asyncio.to_thread(adapter.representation, photo)
-                   if media_type == "image" else None)
-        # Persist only a whitelist: raw records can contain bearer download URLs.
-        source = {"downloader_id": photo.id, "icloud_library": settings.icloud_library,
-                  "source_account": sha256(settings.icloud_account.encode()).hexdigest(),
-                  "scan_token": scan_token,
-                  "source_identity_kind": "icloudpd_not_phcloud",
-                  "representation": settings.download_representation,
-                  "live_photo": any(
-                      type(key).__name__ == "LivePhotoVersionSize"
-                      for key in photo.versions
-                  )}
+        remote = await asyncio.to_thread(adapter.describe, photo)
+        version = remote.version
+        source = {
+            "downloader_id": remote.source_key, "icloud_library": settings.icloud_library,
+            "source_account": sha256(settings.icloud_account.encode()).hexdigest(),
+            "scan_token": scan_token, "source_identity_kind": "icloudpd_not_phcloud",
+            "representation": settings.download_representation,
+            "live_photo": bool(remote.live_resources),
+        }
         metadata_revision = revision_hash({
-            "id": photo.id, "original_bytes": photo.size,
-            "representation_checksum": version.checksum if version else None,
-            "representation_bytes": version.size if version else None,
-            "filename": filename, "captured_at": photo.asset_date,
-            "added_at": photo.added_date,
+            "id": remote.source_key, "original_bytes": remote.original_size,
+            "representation_checksum": remote.representation_checksum,
+            "representation_bytes": remote.representation_size,
+            "filename": remote.filename, "captured_at": remote.captured_at,
+            "added_at": remote.added_at,
         })
-        relative = f"{sha256(photo.id.encode()).hexdigest()}/{metadata_revision}.image"
+        relative = f"{sha256(remote.source_key.encode()).hexdigest()}/{metadata_revision}.image"
         source["cache_relative_path"] = relative
         existing = await session.scalar(select(Asset).where(
-            Asset.library_id == library.id, Asset.source_asset_key == photo.id,
+            Asset.library_id == library.id, Asset.source_asset_key == remote.source_key,
         ))
         if (existing and existing.content_revision == metadata_revision
                 and existing.ingestion_status == "completed"):
@@ -434,7 +499,7 @@ async def ingest_icloud(
             existing.missing_scan_count = 0
             skipped += 1
             continue
-        if media_type == "image" and version:
+        if remote.media_type == "image" and version:
             if version.size > settings.max_download_bytes:
                 source["representation_unavailable"] = "exceeds_download_limit"
             elif transferred + version.size > settings.max_run_download_bytes:
@@ -457,23 +522,21 @@ async def ingest_icloud(
                     raise AppError(
                         code, "Falha ao baixar mídia; execução será retomada", 503,
                     ) from exc
-        elif media_type == "image":
+        elif remote.media_type == "image":
             source["representation_unavailable"] = (
                 "requested_representation_missing_no_fallback"
             )
         asset, created = await _upsert_asset(
-            session, library, source_key=photo.id, filename=filename,
-            revision=metadata_revision, metadata=source, size=photo.size,
-            media_type=media_type, captured_at=photo.asset_date,
-            added_at=photo.added_date,
+            session, library, source_key=remote.source_key, filename=remote.filename,
+            revision=metadata_revision, metadata=source, size=remote.original_size,
+            media_type=remote.media_type, captured_at=remote.captured_at,
+            added_at=remote.added_at,
             batch_id=batch_id,
         )
         # Linked Live Photo video resources stay under this asset; no video
         # download is needed for v1 image inference.
-        for size_key, linked_version in photo.versions.items():
-            if type(size_key).__name__ != "LivePhotoVersionSize":
-                continue
-            resource_type = f"source_live_video_{size_key.name.lower()}"
+        for size_name, byte_size in remote.live_resources:
+            resource_type = f"source_live_video_{size_name}"
             linked = await session.scalar(select(AssetResource).where(
                 AssetResource.asset_id == asset.id,
                 AssetResource.resource_type == resource_type,
@@ -482,14 +545,12 @@ async def ingest_icloud(
             if linked is None:
                 session.add(AssetResource(
                     asset_id=asset.id, resource_type=resource_type,
-                    source_identifier=f"{photo.id}:{size_key.name}",
-                    revision=metadata_revision, byte_size=linked_version.size,
+                    source_identifier=f"{remote.source_key}:{size_name}",
+                    revision=metadata_revision, byte_size=byte_size,
                     mime_type="video/quicktime", status="catalog_only",
                 ))
-        try:
-            asset.width, asset.height = photo.dimensions
-        except (KeyError, TypeError, ValueError):
-            pass
+        if remote.dimensions:
+            asset.width, asset.height = remote.dimensions
         if source.get("representation_unavailable"):
             asset.ingestion_status = "unavailable"
             asset.last_error = str(source["representation_unavailable"])

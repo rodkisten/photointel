@@ -26,8 +26,8 @@ db_environment() {
 }
 source_url="$(db_environment "$source_db")"
 target_url="$(db_environment "$target_db")"
-scratch_env=(-e APP_ENV=test -e AUTH_MODE=local -e INFERENCE_BACKEND=test -e STORAGE_BACKEND=local -e STORAGE_LOCAL_DIRECTORY=/tmp/restore-media -e ICLOUD_ENABLED=false -e GPU_ENABLED=false)
-"${compose[@]}" run --no-deps --rm -T "${scratch_env[@]}" -e "DATABASE_URL=$source_url" migrate alembic -c infra/migrations/alembic.ini upgrade head
+scratch_env=(-e APP_ENV=test -e AUTH_MODE=local -e INFERENCE_BACKEND=test -e STORAGE_BACKEND=local -e STORAGE_LOCAL_DIRECTORY=/tmp/restore-media -e ICLOUD_ENABLED=false -e GPU_ENABLED=false -e MIGRATION_DATABASE_URL=)
+"${compose[@]}" run --no-deps --rm -T "${scratch_env[@]}" -e "DATABASE_URL=$source_url" -e "MIGRATION_DATABASE_URL=$source_url" migrate alembic -c infra/migrations/alembic.ini upgrade head
 "${compose[@]}" run --no-deps --rm -T "${scratch_env[@]}" -e "DATABASE_URL=$source_url" api python -m photointel.cli seed --synthetic-assets 16
 "${compose[@]}" run --no-deps --rm -T "${scratch_env[@]}" -e "DATABASE_URL=$source_url" api python infra/scripts/fingerprint.py > "$scratch/source.json"
 "${compose[@]}" exec -T postgres sh -ec 'exec pg_dump --username="$POSTGRES_USER" --dbname="$1" --format=custom --no-owner --no-acl' sh "$source_db" > "$scratch/fixture.dump"

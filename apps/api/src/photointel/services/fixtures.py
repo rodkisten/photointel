@@ -6,6 +6,8 @@ from PIL import Image, ImageDraw
 
 
 def generate_fixtures(directory: Path, count: int = 12) -> Path:
+    if not 1 <= count <= 1000:
+        raise ValueError("Fixture generation is bounded to 1000 images")
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     for number in range(count):
         target = directory / f"fixture-{number:03d}.jpg"
@@ -20,8 +22,8 @@ def generate_fixtures(directory: Path, count: int = 12) -> Path:
         draw.polygon([(340, 440), (680, 240), (960, 440)], fill=(67, 90, 120))
         draw.text((32, 660), f"Photo Intelligence / fixture {number:03d}", fill="white")
         image.save(target, "JPEG", quality=90)
-    # An exact duplicate belongs to a separate logical source asset for review.
-    duplicate = directory / "fixture-exact-copy.jpg"
-    if count and not duplicate.exists():
+    # Keep the duplicate inside the requested bounded initial import.
+    if count >= 4:
+        duplicate = directory / f"fixture-{count - 1:03d}.jpg"
         duplicate.write_bytes((directory / "fixture-000.jpg").read_bytes())
     return directory

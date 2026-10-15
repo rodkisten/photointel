@@ -55,6 +55,10 @@ async def run_migrations_online() -> None:
             try:
                 await connection.run_sync(do_run_migrations)
             finally:
+                # A failed migration may leave a transaction aborted. Roll it back
+                # before releasing the session-level advisory lock.
+                if connection.in_transaction():
+                    await connection.rollback()
                 await connection.exec_driver_sql("SELECT pg_advisory_unlock(719281049)")
                 await connection.commit()
     finally:

@@ -19,7 +19,7 @@ du -sh var/postgres var/processing var/icloud-downloads backups
 ```
 
 Não cole logs sem revisar dados pessoais. Não execute `env`, `docker inspect`,
-`cat .env`, nem imprima cookies/chaves para coletar um diagnóstico. Identificadores
+`cat .env`, `cat .env.runtime`, nem imprima cookies/chaves para coletar um diagnóstico. Identificadores
 de mídias e metadados também são privados.
 
 API tem healthcheck HTTP; worker/ingestion escrevem heartbeat do event loop em

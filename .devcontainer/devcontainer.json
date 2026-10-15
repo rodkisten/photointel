@@ -12,6 +12,6 @@
     "8000": {"label": "API privada", "onAutoForward": "silent"},
     "9001": {"label": "MinIO local", "onAutoForward": "silent"}
   },
-  "postCreateCommand": "python -m pip install uv==0.9.7 && make setup",
+  "postCreateCommand": "python -m pip install uv==0.12.23 && make setup",
   "customizations": {"vscode": {"extensions": ["ms-python.python", "charliermarsh.ruff", "dbaeumer.vscode-eslint"]}}
 }

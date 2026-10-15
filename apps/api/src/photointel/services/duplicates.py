@@ -4,11 +4,11 @@ from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from photointel.models import Asset, DuplicateGroup, DuplicateMember
+from photointel.models import Asset, AuditEvent, DuplicateGroup, DuplicateMember
 
 
 def hash_distance(left: str, right: str) -> int:
@@ -40,25 +40,74 @@ async def _persist_group(
         DuplicateGroup.group_key == group_key,
     ).with_for_update())
     assert group is not None
-    existing_ids = (await session.scalars(select(DuplicateMember.asset_id).where(
-        DuplicateMember.group_id == group.id,
-    ))).all()
-    if existing_ids:
-        existing = (await session.scalars(select(Asset).where(
-            Asset.id.in_(existing_ids),
-        ))).all()
-        best = max([best, *existing], key=representative_score)
+    existing_best = await session.scalar(select(Asset).join(
+        DuplicateMember, DuplicateMember.asset_id == Asset.id,
+    ).where(DuplicateMember.group_id == group.id).order_by(
+        (Asset.width * Asset.height).desc().nullslast(),
+        Asset.quality["sharpness_laplacian_variance"].as_float().desc().nullslast(),
+        Asset.filesize.desc().nullslast(), Asset.id,
+    ).limit(1))
+    if existing_best is not None:
+        best = max([best, existing_best], key=representative_score)
+    previous_representative = group.representative_asset_id
+    if previous_representative and previous_representative != best.id:
+        await session.execute(update(DuplicateMember).where(
+            DuplicateMember.group_id == group.id,
+            DuplicateMember.asset_id == previous_representative,
+        ).values(quality_rank=None))
     group.representative_asset_id = best.id
     ranked = sorted(members, key=lambda item: representative_score(item[0]), reverse=True)
-    for index, (asset, similarity) in enumerate(ranked):
+    for asset, similarity in ranked:
         await session.execute(insert(DuplicateMember).values(
             group_id=group.id, asset_id=asset.id, similarity=similarity,
-            quality_rank=index + 1,
+            quality_rank=1 if asset.id == best.id else None,
         ).on_conflict_do_update(
             index_elements=[DuplicateMember.group_id, DuplicateMember.asset_id],
-            set_={"similarity": similarity},
+            set_={"similarity": similarity,
+                  "quality_rank": 1 if asset.id == best.id else None},
         ))
     return group.id
+
+
+async def invalidate_duplicate_memberships(
+    session: AsyncSession, asset_id: UUID,
+) -> None:
+    """Remove stale derived grouping after an edit; never remove photos or resources.
+
+    All grouping changes happen in SQL. An asset with many candidate pairs must
+    not cause the entire group membership list to be loaded into Python memory.
+    """
+    affected = select(DuplicateMember.group_id).where(
+        DuplicateMember.asset_id == asset_id,
+    )
+    replacement = select(Asset.id).join(
+        DuplicateMember, DuplicateMember.asset_id == Asset.id,
+    ).where(
+        DuplicateMember.group_id == DuplicateGroup.id, Asset.id != asset_id,
+    ).order_by(
+        (Asset.width * Asset.height).desc().nullslast(),
+        Asset.quality["sharpness_laplacian_variance"].as_float().desc().nullslast(),
+        Asset.filesize.desc().nullslast(), Asset.id,
+    ).limit(1).correlate(DuplicateGroup).scalar_subquery()
+    await session.execute(update(DuplicateGroup).where(
+        DuplicateGroup.id.in_(affected),
+        DuplicateGroup.representative_asset_id == asset_id,
+    ).values(representative_asset_id=replacement).execution_options(
+        synchronize_session=False,
+    ))
+    member_count = select(func.count()).select_from(DuplicateMember).where(
+        DuplicateMember.group_id == DuplicateGroup.id,
+    ).correlate(DuplicateGroup).scalar_subquery()
+    await session.execute(delete(DuplicateGroup).where(
+        DuplicateGroup.id.in_(affected), member_count <= 2,
+    ).execution_options(synchronize_session=False))
+    await session.execute(delete(DuplicateMember).where(
+        DuplicateMember.asset_id == asset_id,
+    ).execution_options(synchronize_session=False))
+    session.add(AuditEvent(
+        actor="worker", action="duplicates.invalidated", asset_id=asset_id,
+        details={"reason": "source_representation_changed"},
+    ))
 
 
 async def analyze_duplicates(

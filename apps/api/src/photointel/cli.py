@@ -6,7 +6,7 @@ import csv
 import json
 import math
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -57,6 +57,10 @@ async def seed(count: int) -> dict[str, Any]:
             ).order_by(Asset.filename).limit(count))).all()
             names = ["landscape", "beach", "plant", "abstract"]
             for index, asset in enumerate(assets):
+                asset.captured_at = datetime(2020, 1, 1, tzinfo=UTC) + timedelta(
+                    days=index * 90
+                )
+                asset.added_at = asset.created_at
                 canonical = names[index % len(names)]
                 tag = await session.scalar(select(Tag).where(Tag.canonical_key == canonical))
                 if not tag:
@@ -144,7 +148,7 @@ async def benchmark(count: int, output: Path) -> dict[str, Any]:
                 search_document
             )
             SELECT gen_random_uuid(), :library_id, 'bench-'||g, '{}'::jsonb,
-                'image','synthetic-'||g||'.jpg',now()-g*interval '1 hour',
+                'image','synthetic-landscape-beach-'||g||'.jpg',now()-g*interval '1 hour',
                 now(),1600+(g%800),900+(g%600),100000+(g%10000000),'1','1',
                 'completed','pending','active',0,
                 jsonb_build_object('sharpness',g%100,'score',g%100),

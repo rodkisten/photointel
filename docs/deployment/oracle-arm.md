@@ -19,6 +19,7 @@ sem exibir seus valores; modo 0600 e proprietário administrador.
 ```bash
 cd /opt/photointel
 python3 infra/scripts/setup-env.py
+python3 infra/scripts/prepare-production-env.py
 sudo bash infra/oracle/prepare-host.sh /opt/photointel
 df -h
 uname -m
@@ -35,12 +36,32 @@ Access allowlist, origens HTTPS, pepper e Tunnel token. GPU/iCloud podem permane
 desativados. Defina versões/digests de imagens em `PHOTOINTEL_IMAGE` e
 `PHOTOINTEL_WEB_IMAGE`; a imagem deve suportar `linux/arm64`.
 
+Produção usa dois arquivos 0600: `.env` controla Compose/Tunnel/PostgreSQL e
+`.env.runtime` contém somente configuração e credenciais da aplicação. Não copie
+senha administrativa ou `MIGRATION_DATABASE_URL` para `.env.runtime`.
+`make setup` gera `POSTGRES_APP_PASSWORD` e `APP_DATABASE_URL` para o papel
+`photointel_app`; revise o host `postgres` e nome do banco. Configure
+`MIGRATION_DATABASE_URL` em `.env` com a credencial de bootstrap/migração para o
+mesmo banco. O papel limitado não pode criar extensões ou alterar o schema.
+
+Construa as imagens e configure os arquivos. Depois inicie apenas banco e
+migração, conceda permissões ao papel limitado e só então inicie os processos:
+
 ```bash
 docker buildx build --platform linux/arm64 -f infra/docker/api.Dockerfile -t photointel-api:SEU_COMMIT --load .
 docker buildx build --platform linux/arm64 -f infra/docker/web.Dockerfile -t photointel-web:SEU_COMMIT --load .
+PHOTOINTEL_COMPOSE_MODE=prod bash infra/scripts/compose.sh up -d postgres
+PHOTOINTEL_COMPOSE_MODE=prod bash infra/scripts/compose.sh run --rm migrate
+bash infra/oracle/provision-app-role.sh
 PHOTOINTEL_COMPOSE_MODE=prod bash infra/scripts/compose.sh up -d
-PHOTOINTEL_COMPOSE_MODE=prod bash infra/scripts/compose.sh ps
 ```
+
+O script cria/atualiza somente o papel app definido, força NOSUPERUSER/NOCREATEDB/
+NOCREATEROLE/NOBYPASSRLS e concede CRUD nas tabelas, uso de sequências e grants
+padrão para objetos criados pelo papel bootstrap. Rode novamente após migrações
+se forem usados outros donos de objetos; nesse caso ajuste os grants padrão ao
+papel real de migração. API/worker não recebem a senha administrativa. Não use
+o papel de aplicação como proprietário do banco, schema ou de papéis privilegiados.
 
 No ambiente Codex gerenciado, builds precisam da CA do proxy fornecida com
 `--secret id=build_ca,src=/etc/ssl/certs/ca-certificates.crt`. Preserve proxy,

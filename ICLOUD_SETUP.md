@@ -49,7 +49,8 @@ comando. Em produção use o mesmo comando com
 
 ## Ativar uma importação pequena
 
-Edite `.env` no terminal e configure `ICLOUD_ACCOUNT`, `ICLOUD_LIBRARY`,
+Edite `.env` no ambiente local ou `.env.runtime` em produção e configure
+`ICLOUD_ACCOUNT`, `ICLOUD_LIBRARY`,
 `ICLOUD_ENABLED=true`. Mantenha inicialmente:
 
 ```dotenv

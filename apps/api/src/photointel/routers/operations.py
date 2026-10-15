@@ -362,7 +362,14 @@ async def settings_get(session: Session) -> dict[str, Any]:
         "siglip_model_revision", "siglip_embedding_dimension", "download_representation",
         "allow_original_fallback",
     }
-    return {key: value for key, value in settings.model_dump().items() if key in allowed}
+    result = {key: value for key, value in settings.model_dump().items() if key in allowed}
+    for key, default in (
+        ("taxonomy_categories", {}), ("taxonomy_overrides", {}),
+        ("taxonomy_compound_rules", []),
+    ):
+        row = await session.get(Setting, key)
+        result[key] = row.value if row else default
+    return result
 
 
 @router.patch("/settings", tags=["system"])

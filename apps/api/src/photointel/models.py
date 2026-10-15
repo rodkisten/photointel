@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON, BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey,
-    Index, Integer, String, Text, UniqueConstraint, func,
+    Index, Integer, String, Text, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
@@ -89,6 +89,20 @@ class Asset(Identifier, Timestamps, Base):
         Index("ix_assets_search_document", "search_document", postgresql_using="gin"),
         Index("ix_assets_filename_trgm", "filename", postgresql_using="gin",
               postgresql_ops={"filename": "gin_trgm_ops"}),
+        Index(
+            "ix_assets_source_metadata_gin", "source_metadata", postgresql_using="gin",
+            postgresql_ops={"source_metadata": "jsonb_path_ops"},
+        ),
+        Index(
+            "ix_assets_gallery_cursor",
+            text("(coalesce(captured_at, created_at, '1970-01-01 UTC'::timestamptz)) DESC"),
+            "id", postgresql_where=text("visibility_status <> 'archived'"),
+        ),
+        Index(
+            "ix_assets_added_cursor",
+            text("(coalesce(added_at, created_at, '1970-01-01 UTC'::timestamptz)) DESC"),
+            "id", postgresql_where=text("visibility_status <> 'archived'"),
+        ),
     )
 
 
@@ -198,7 +212,7 @@ class ModelRegistry(Identifier, Base):
         ),
         Index(
             "uq_active_model_revision", "provider", "model_name", unique=True,
-            postgresql_where=active.is_(True),
+            postgresql_where=text("active"),
         ),
     )
 
@@ -271,6 +285,10 @@ class Job(Identifier, Base):
         CheckConstraint("attempts >= 0 AND maximum_attempts > 0"),
         Index("ix_jobs_claim", "status", "scheduled_at", "priority", "created_at"),
         Index("ix_jobs_stale", "status", "lease_until"),
+        Index(
+            "ix_jobs_live_claim", text("priority DESC"), "scheduled_at", "created_at",
+            postgresql_where=text("status IN ('queued', 'retrying')"),
+        ),
     )
 
 
@@ -337,8 +355,12 @@ class DeviceMapping(Identifier, Base):
         CheckConstraint("confidence >= 0 AND confidence <= 1"),
         Index("ix_device_mappings_target", "device_id", "local_identifier"),
         Index(
+            "ix_device_mappings_asset_verification", "device_id", "asset_id",
+            "verification_status",
+        ),
+        Index(
             "uq_verified_device_target", "device_id", "local_identifier", unique=True,
-            postgresql_where=verification_status == "verified",
+            postgresql_where=text("verification_status = 'verified'"),
         ),
     )
 
@@ -351,7 +373,14 @@ class MetadataSnapshot(Identifier, Base):
     revision_hash: Mapped[str] = mapped_column(String(128))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    __table_args__ = (Index("ix_metadata_snapshot_asset_source", "asset_id", "source", "created_at"),)
+    __table_args__ = (
+        Index("ix_metadata_snapshot_asset_source", "asset_id", "source", "created_at"),
+        Index(
+            "ix_photokit_snapshot_device_local", "device_id",
+            text("(payload ->> 'local_identifier')"), text("created_at DESC"),
+            postgresql_where=text("source = 'photokit'"),
+        ),
+    )
 
 
 class SyncOperation(Identifier, Base):

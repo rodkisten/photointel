@@ -63,6 +63,8 @@ async def recover_stale_jobs(session: AsyncSession, limit: int = 100) -> int:
             job.finished_at = utcnow()
         session.add(JobEvent(job_id=job.id, status=job.status,
                              payload={"error_code": job.error_code}))
+    for batch_id in sorted({job.batch_id for job in rows if job.batch_id}, key=str):
+        await refresh_batch(session, batch_id)
     return len(rows)
 
 
@@ -100,16 +102,24 @@ async def claim_jobs(
     return list(rows)
 
 
-async def heartbeat(
-    session: AsyncSession, job_id: UUID, worker_id: str,
-) -> bool:
+async def heartbeat_many(
+    session: AsyncSession, job_ids: list[UUID], worker_id: str,
+) -> int:
+    if not job_ids:
+        return 0
     result = await session.execute(update(Job).where(
-        Job.id == job_id, Job.worker_id == worker_id, Job.status.in_(ACTIVE),
+        Job.id.in_(job_ids), Job.worker_id == worker_id, Job.status.in_(ACTIVE),
         Job.lease_until > utcnow(),
     ).values(heartbeat_at=utcnow(), lease_until=utcnow() + timedelta(
         seconds=get_settings().job_lease_seconds,
     )).returning(Job.id))
-    return result.scalar_one_or_none() is not None
+    return len(result.all())
+
+
+async def heartbeat(
+    session: AsyncSession, job_id: UUID, worker_id: str,
+) -> bool:
+    return await heartbeat_many(session, [job_id], worker_id) == 1
 
 
 async def worker_seen(
@@ -128,7 +138,11 @@ async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
     if not batch_id:
         return
     from sqlalchemy import func
-    batch = await session.get(JobBatch, batch_id)
+    # Serialize aggregation after the job's fenced update. A stale concurrent
+    # snapshot must not leave a fully completed batch marked as running forever.
+    batch = await session.scalar(select(JobBatch).where(
+        JobBatch.id == batch_id,
+    ).with_for_update().execution_options(populate_existing=True))
     if not batch:
         return
     counts = dict((await session.execute(select(Job.status, func.count()).where(

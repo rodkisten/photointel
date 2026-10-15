@@ -9,7 +9,7 @@ está em `.github/workflows/deploy-pages.yml`; o workflow usa environment
 
 Crie um bucket dedicado sem acesso público e sem domínio público conectado.
 Emita uma credencial S3 restrita a esse bucket e às operações necessárias.
-Configure no host, com `.env` 0600:
+Configure no host em `.env.runtime` 0600 para produção (`.env` no ambiente local):
 
 ```dotenv
 STORAGE_BACKEND=r2
@@ -34,7 +34,10 @@ configure um public hostname como `api.seudominio.com` apontando a
 HTTP é exclusivamente a rede privada de containers. Configure firewall Oracle
 e do host sem portas públicas 5432/8000/8080/9000/9001.
 
-Use `CLOUDFLARE_TUNNEL_TOKEN` com Compose production. A alternativa por arquivo
+Use `CLOUDFLARE_TUNNEL_TOKEN` em `.env` de controle com Compose production.
+Credenciais PostgreSQL de bootstrap/migração também ficam nesse arquivo; ele
+não é injetado na API/worker. Os segredos Access/R2/Modal ficam no arquivo
+separado `.env.runtime`. A alternativa por arquivo
 está em `infra/cloudflare/tunnel.example.yml`; não misture token gerenciado e
 arquivo de credenciais. O hostname de exemplo deve ser substituído no painel
 ou arquivo. Proteja o arquivo/token com 0600 e nunca mostre `docker inspect`
@@ -44,7 +47,7 @@ ou o ambiente completo em relatórios.
 
 Crie uma aplicação Access para o hostname da API, com política **Allow** apenas
 para o email escolhido. Não crie regra Bypass para `/v1`, mídia, bridge ou docs.
-Copie audience tag e domínio do team, depois configure:
+Copie audience tag e domínio do team, depois configure em `.env.runtime`:
 
 ```dotenv
 APP_ENV=production

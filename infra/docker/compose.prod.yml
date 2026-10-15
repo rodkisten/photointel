@@ -1,11 +1,12 @@
 name: ${COMPOSE_PROJECT_NAME:-photointel}
 x-runtime: &runtime
   image: ${PHOTOINTEL_IMAGE:?set a versioned API image}
-  env_file: ../../.env
+  env_file: ../../.env.runtime
   environment: &runtime-env
     APP_ENV: production
     AUTH_MODE: cloudflare
-    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-photointel}:${POSTGRES_PASSWORD:?required}@postgres:5432/${POSTGRES_DB:-photointel}
+    DATABASE_URL: ${APP_DATABASE_URL:?configure the limited application role}
+    MIGRATION_DATABASE_URL: ""
     TEMP_DIRECTORY: /data/processing
     ICLOUD_SESSION_DIRECTORY: /data/icloud-session
     ICLOUD_DOWNLOAD_DIRECTORY: /data/icloud-downloads
@@ -30,6 +31,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-photointel}
       POSTGRES_USER: ${POSTGRES_USER:-photointel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-photointel_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?required}
     volumes: [../../var/postgres:/var/lib/postgresql/data]
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -46,6 +49,10 @@ services:
   migrate:
     <<: *runtime
     command: [alembic, -c, infra/migrations/alembic.ini, upgrade, head]
+    environment:
+      <<: *runtime-env
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?configure the migration role}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?configure the migration role}
     depends_on: {postgres: {condition: service_healthy}}
     restart: "no"
   api:
