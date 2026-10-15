@@ -1,24 +1,39 @@
-name: Dev Environment (SSH + Make)
+name: Photo Intelligence Cloud (SSH + Make + Auto Commit)
 
 on:
   workflow_dispatch:
     inputs:
       command:
-        description: "Choose a Make target, or open an SSH session"
+        description: "Make target to run, or ssh for an interactive session"
         required: true
         type: choice
         default: ssh
         options:
           - ssh
+          - help
           - setup
           - info
           - check
-          - test
+          - dev
+          - stop
+          - migrate
+          - seed
           - lint
+          - typecheck
+          - test
+          - test-integration
+          - test-e2e
           - build
-          - clean
+          - doctor
+          - ingest-test
+          - gpu-test
+          - backup
+          - restore-test
+          - benchmark
+          - export
+          - cleanup
       session_minutes:
-        description: "SSH session duration (only used for ssh)"
+        description: "Maximum SSH session duration (only for ssh)"
         required: true
         type: choice
         default: "60"
@@ -28,18 +43,20 @@ on:
           - "120"
           - "180"
 
+# Required by the Auto Commit & Push step.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: dev-ssh-${{ github.ref }}
-  cancel-in-progress: true
+  group: photointel-dev-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   development:
     name: development
     runs-on: ubuntu-24.04
-    timeout-minutes: 195
+    # Longest interactive session is 180 min; reserve time for setup and push.
+    timeout-minutes: 240
 
     defaults:
       run:
@@ -47,48 +64,69 @@ jobs:
 
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-          # Do not use setup-python's lockfile-based caching here.
+
+      - name: Setup uv with persistent cache
+        uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-local-path: /tmp/photointel-uv-cache
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+          ignore-nothing-to-cache: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          # Avoid automatic npm caching when no lockfile exists.
+          # Its automatic cache looks for a root lockfile. Our lockfile is in apps/web.
           package-manager-cache: false
 
-      - name: Restore Python pip cache
-        if: ${{ hashFiles('requirements.txt', 'pyproject.toml') != '' }}
+      - name: Restore npm download cache
+        if: ${{ hashFiles('apps/web/package.json') != '' }}
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-python313-pip-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+          path: /tmp/photointel-npm-cache
+          key: ${{ runner.os }}-node24-photointel-npm-${{ hashFiles('apps/web/package-lock.json', 'apps/web/npm-shrinkwrap.json', 'apps/web/package.json') }}
           restore-keys: |
-            ${{ runner.os }}-python313-pip-
-
-      - name: Restore Node.js npm cache
-        if: ${{ hashFiles('package.json') != '' }}
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node24-npm-${{ hashFiles('package-lock.json', 'npm-shrinkwrap.json', 'package.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node24-npm-
+            ${{ runner.os }}-node24-photointel-npm-
 
       - name: Install Make and development tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             make git curl jq wget unzip tmux htop ripgrep
+
+          # SSH login does not inherit the PATH created by setup-uv/setup-node.
+          # Publish the installed toolchain to a common interactive-shell PATH.
+          for executable in uv python python3 node npm npx; do
+            installed_path="$(command -v "$executable")"
+            if [[ -n "$installed_path" && "$installed_path" != "/usr/local/bin/$executable" ]]; then
+              sudo ln -sfn "$installed_path" "/usr/local/bin/$executable"
+            fi
+          done
           make --version | head -n 1
+          uv --version
+          node --version
+          npm --version
+
+      - name: Initialize session marker
+        if: ${{ inputs.command == 'ssh' }}
+        run: rm -f -- "$(git rev-parse --git-path dev-ssh-finish)"
 
       - name: Install project dependencies
-        if: ${{ inputs.command != 'setup' && inputs.command != 'info' && inputs.command != 'clean' }}
+        if: ${{ inputs.command != 'setup' && inputs.command != 'help' && inputs.command != 'info' && inputs.command != 'stop' && inputs.command != 'cleanup' }}
         run: make setup
 
       - name: Run Make command
@@ -103,7 +141,7 @@ jobs:
           TAILSCALE_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
         run: |
           if [[ -z "$TAILSCALE_AUTHKEY" ]]; then
-            echo "::error::Missing repository secret TS_AUTHKEY"
+            echo '::error::Missing repository secret TS_AUTHKEY'
             exit 1
           fi
 
@@ -120,23 +158,29 @@ jobs:
           sudo tailscale set --ssh
           ip="$(tailscale ip -4 | head -n 1)"
           if [[ -z "$ip" ]]; then
-            echo "::error::Tailscale did not provide an IPv4 address"
+            echo '::error::Tailscale did not provide an IPv4 address'
             exit 1
           fi
-          echo "ip=$ip" >> "$GITHUB_OUTPUT"
-          echo "user=$(whoami)" >> "$GITHUB_OUTPUT"
-          echo ""
-          echo "========================================"
-          echo "CONNECT FROM YOUR IPHONE (TAILSCALE ON):"
-          echo "ssh $(whoami)@$ip"
-          echo "========================================"
-          echo ""
-          echo "Working directory: $GITHUB_WORKSPACE"
-          echo "Run: make help"
-          echo "Use tmux to keep programs running across SSH reconnects."
+          echo ''
+          echo '========================================='
+          echo 'CONNECT FROM IPHONE WITH TAILSCALE ENABLED:'
+          echo "ssh runner@$ip"
+          echo '========================================='
+          echo ''
+          echo "Repository: $GITHUB_WORKSPACE"
+          echo 'Quick start: cd ~/photointel && make help'
+          echo 'To save and finish: make finish'
+          ln -sfn "$GITHUB_WORKSPACE" "$HOME/photointel"
 
       - name: Keep SSH session alive
         if: ${{ inputs.command == 'ssh' }}
         env:
           SESSION_MINUTES: ${{ inputs.session_minutes }}
         run: make keepalive
+
+      # IMPORTANT: immediately after SSH. Preserve it in this position.
+      - name: Auto Commit & Push session changes
+        if: ${{ always() && steps.checkout.outcome == 'success' && steps.ssh.outcome == 'success' }}
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: bash scripts/commit-session.sh
