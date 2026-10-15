@@ -12,16 +12,16 @@ cache = modal.Volume.from_name("photo-intelligence-models-v1", create_if_missing
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
-        "torch==2.7.1",
-        "torchvision==0.22.1",
-        "transformers==4.53.3",
-        "huggingface-hub==0.33.4",
-        "safetensors==0.5.3",
-        "einops==0.8.1",
-        "sentencepiece==0.2.0",
-        "pillow==11.3.0",
-        "fastapi==0.116.1",
-        "pydantic==2.11.7",
+        "torch==2.14.1",
+        "torchvision==0.29.1",
+        "transformers==4.57.6",
+        "huggingface-hub==0.36.2",
+        "safetensors==0.8.0",
+        "einops==0.8.2",
+        "sentencepiece==0.2.2",
+        "pillow==12.3.0",
+        "fastapi==0.143.2",
+        "pydantic==2.14.1",
     )
     .add_local_python_source("gpu")
 )

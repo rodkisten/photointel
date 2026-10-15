@@ -31,6 +31,7 @@ from photointel.models import (
     Job,
     JobBatch,
     JobEvent,
+    ModelRegistry,
     Setting,
     SyncOperation,
     Tag,
@@ -649,7 +650,21 @@ async def cost_statistics(session: Session) -> dict[str, Any]:
     bytes_transferred = await session.scalar(
         select(func.sum(IngestionRun.bytes_transferred))
     )
+    reservation_keys = {
+        "daily": f"gpu_budget_day_{now:%Y-%m-%d}",
+        "monthly": f"gpu_budget_month_{now:%Y-%m}",
+    }
+    reservations = {
+        row.key: float(row.value)
+        for row in (
+            await session.scalars(
+                select(Setting).where(Setting.key.in_(reservation_keys.values()))
+            )
+        ).all()
+    }
     return {
+        "reserved_daily_estimate": reservations.get(reservation_keys["daily"], 0.0),
+        "reserved_monthly_estimate": reservations.get(reservation_keys["monthly"], 0.0),
         "estimated_daily_cost": costs[0],
         "estimated_monthly_cost": costs[1],
         "estimated_total_cost": costs[2],
@@ -658,14 +673,47 @@ async def cost_statistics(session: Session) -> dict[str, Any]:
         "currency": "USD",
         "daily_budget": settings.gpu_daily_budget,
         "monthly_budget": settings.gpu_monthly_budget,
-        "notice": "Estimador da aplicação; não é um limite garantido de faturamento.",
+        "notice": (
+            "Tempos dos resultados retidos não incluem chamadas de texto, cold starts "
+            "ou resultados substituídos. Reservas incluem retries possíveis e falhas "
+            "incertas. Ambos são estimativas, sem garantia sobre billing do provedor."
+        ),
     }
 
 
 @router.get("/system/capabilities", tags=["system"])
 async def capabilities(session: Session) -> dict[str, Any]:
     settings = await effective_settings(session)
-    embedding_count = await session.scalar(select(func.count()).select_from(Embedding))
+    from photointel.services.ingestion import authentication_state
+
+    async def has_current_result(
+        name: str, revision: str, *, vectors: bool = False
+    ) -> bool:
+        record = Embedding if vectors else InferenceRun
+        query = (
+            select(record.id)
+            .join(ModelRegistry, ModelRegistry.id == record.model_id)
+            .join(Asset, Asset.id == record.asset_id)
+            .where(
+                ModelRegistry.provider == "huggingface",
+                ModelRegistry.model_name == name,
+                ModelRegistry.revision == revision,
+                ModelRegistry.active.is_(True),
+                record.input_revision == Asset.representation_revision,
+            )
+            .limit(1)
+        )
+        if not vectors:
+            query = query.where(InferenceRun.status == "completed")
+        return await session.scalar(query) is not None
+
+    joytag_ok = await has_current_result(
+        settings.joytag_model_id, settings.joytag_model_revision
+    )
+    siglip_ok = await has_current_result(
+        settings.siglip_model_id, settings.siglip_model_revision, vectors=True
+    )
+    apple_session = authentication_state(settings)
     device = await session.scalar(
         select(BridgeDevice)
         .where(BridgeDevice.revoked_at.is_(None))
@@ -682,10 +730,7 @@ async def capabilities(session: Session) -> dict[str, Any]:
         if not settings.gpu_enabled
         else ("Adapter configurado; disponibilidade real confirmada por smoke test/jobs")
     )
-    inference_ok = await session.scalar(
-        select(InferenceRun.id).where(InferenceRun.status == "completed").limit(1)
-    )
-    if settings.gpu_enabled and inference_ok:
+    if settings.gpu_enabled and (joytag_ok or siglip_ok):
         gpu_state = "operational"
         gpu_reason = (
             "Inferência concluída registrada; falhas futuras são reportadas por job"
@@ -697,18 +742,24 @@ async def capabilities(session: Session) -> dict[str, Any]:
     )
     result = {
         "icloud_ingestion": capability(
-            "unavailable" if settings.icloud_enabled else "not_configured",
-            "Verifique sessão e execute importação controlada no terminal",
+            "operational"
+            if apple_session["valid"]
+            else ("unavailable" if settings.icloud_enabled else "not_configured"),
+            apple_session["reason"],
         ),
         "apple_session_valid": capability(
-            "unavailable", "Requer verificação atual no Apple"
+            "operational" if apple_session["valid"] else "unavailable",
+            apple_session["reason"],
         ),
         "gpu_inference": capability(gpu_state, gpu_reason),
-        "joytag": capability(gpu_state, gpu_reason),
-        "semantic_search": capability(
+        "joytag": capability(
             "operational"
-            if embedding_count and settings.gpu_enabled
-            else "not_configured",
+            if settings.gpu_enabled and joytag_ok
+            else ("unavailable" if settings.gpu_enabled else "not_configured"),
+            "Exige resultado do checkpoint configurado e da representação atual",
+        ),
+        "semantic_search": capability(
+            "operational" if siglip_ok and settings.gpu_enabled else "not_configured",
             "Requer embeddings e adapter de texto do mesmo checkpoint",
         ),
         "duplicate_detection": capability("operational", "SHA-256 e pHash; sem exclusão"),
@@ -718,8 +769,10 @@ async def capabilities(session: Session) -> dict[str, Any]:
             "Execução manual via Pyto",
         ),
         "apple_keywords_read": capability(
-            "unavailable" if not device else "experimental",
-            "Disponibilidade depende de PhotoKit e do runtime Pyto no dispositivo",
+            "operational"
+            if connected and device and device.capabilities.get("keywords_read")
+            else "unavailable",
+            "Leitura depende da capability reportada pelo dispositivo conectado",
         ),
         "apple_keywords_write": capability(
             "experimental" if device and device.write_verified else "unavailable",

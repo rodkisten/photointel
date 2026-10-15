@@ -436,6 +436,51 @@
         }
       }
     },
+    "/v1/assets/bulk/tags": {
+      "patch": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Bulk Asset Tags",
+        "operationId": "bulk_asset_tags_v1_assets_bulk_tags_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkTagEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "type": "object",
+                  "title": "Response Bulk Asset Tags V1 Assets Bulk Tags Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/assets/tags": {
       "patch": {
         "tags": [
@@ -1093,7 +1138,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 4096
                 },
                 {
                   "type": "null"
@@ -1517,7 +1563,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 4096
                 },
                 {
                   "type": "null"

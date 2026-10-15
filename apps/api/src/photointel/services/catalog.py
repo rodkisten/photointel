@@ -125,9 +125,8 @@ async def refresh_search_document(
         update(Asset)
         .where(Asset.id.in_(identifiers))
         .values(
-            search_document=func.to_tsvector(
-                "simple",
-                func.concat(Asset.filename, " ", func.coalesce(tag_text, "")),
+            search_document=func.photointel_filename_document(Asset.filename).op("||")(
+                func.to_tsvector("simple", func.coalesce(tag_text, ""))
             )
         )
     )

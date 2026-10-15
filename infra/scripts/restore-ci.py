@@ -13,9 +13,6 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
-import psycopg
-from psycopg import sql
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -28,6 +25,9 @@ def main() -> None:
     container = arguments.postgres_container
     if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", container):
         raise SystemExit("Invalid PostgreSQL container identifier")
+    import psycopg
+    from psycopg import sql
+
     url = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://")
     parsed = urlsplit(url)
     nonce = uuid4().hex[:16]

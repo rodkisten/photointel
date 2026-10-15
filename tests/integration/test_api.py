@@ -312,6 +312,21 @@ async def test_sensitive_tag_change_removes_stale_full_text_terms(
     assert str(asset.id) not in [row["id"] for row in after.json()["items"]]
 
 
+async def test_duplicate_tag_creation_is_a_conflict_not_a_database_error(
+    client: httpx.AsyncClient,
+) -> None:
+    body = {"canonical_key": f"tag_{uuid4().hex}", "display_name": "My tag"}
+    first = await client.post("/v1/tags", json=body)
+    assert first.status_code == 201
+    second = await client.post("/v1/tags", json=body)
+    assert second.status_code == 409
+    invalid = await client.patch(
+        f"/v1/tags/{first.json()['id']}",
+        json={"category": ""},
+    )
+    assert invalid.status_code == 422
+
+
 @pytest.mark.parametrize("path", ["/v1/tags", "/v1/albums", "/v1/duplicates"])
 @pytest.mark.parametrize("payload", [{}, {"id": None}, {"id": "bad"}])
 async def test_list_cursors_reject_malformed_identifiers(
@@ -323,3 +338,74 @@ async def test_list_cursors_reject_malformed_identifiers(
 
     response = await client.get(path, params={"cursor": encode_cursor(payload)})
     assert response.status_code == 422
+
+
+async def test_capabilities_require_current_model_and_input_revision(
+    database: AsyncSession,
+    asset: Asset,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from photointel.config import Settings
+    from photointel.models import Embedding, InferenceRun, ModelRegistry
+    from photointel.routers import operations
+
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        inference_backend="cpu",
+        gpu_enabled=True,
+        icloud_enabled=False,
+        joytag_model_id=f"capability-joytag-{uuid4()}",
+        siglip_model_id=f"capability-siglip-{uuid4()}",
+    )
+
+    async def configured(_session: AsyncSession) -> Settings:
+        return settings
+
+    monkeypatch.setattr(operations, "effective_settings", configured)
+    asset.representation_revision = "current-input"
+    joytag = ModelRegistry(
+        provider="huggingface",
+        model_name=settings.joytag_model_id,
+        revision=settings.joytag_model_revision,
+        architecture="joytag",
+        active=True,
+    )
+    siglip = ModelRegistry(
+        provider="huggingface",
+        model_name=settings.siglip_model_id,
+        revision=settings.siglip_model_revision,
+        architecture="siglip2",
+        embedding_dimension=768,
+        active=True,
+    )
+    database.add_all([joytag, siglip])
+    await database.flush()
+    database.add_all(
+        [
+            InferenceRun(
+                asset_id=asset.id,
+                model_id=joytag.id,
+                input_revision="current-input",
+                status="completed",
+            ),
+            Embedding(
+                asset_id=asset.id,
+                model_id=siglip.id,
+                input_revision="current-input",
+                vector=[1.0] + [0.0] * 767,
+            ),
+        ]
+    )
+    await database.flush()
+    current = await operations.capabilities(database)
+    assert current["joytag"]["state"] == "operational"
+    assert current["semantic_search"]["state"] == "operational"
+    assert current["apple_keywords_read"]["state"] == "unavailable"
+
+    asset.representation_revision = "replacement-input"
+    await database.flush()
+    stale = await operations.capabilities(database)
+    assert stale["joytag"]["state"] == "unavailable"
+    assert stale["semantic_search"]["state"] == "not_configured"
+    assert stale["gpu_inference"]["state"] == "unavailable"

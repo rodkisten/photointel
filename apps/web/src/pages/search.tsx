@@ -2,6 +2,7 @@ import { Bookmark, Info, Search, SlidersHorizontal, Sparkles, X } from 'lucide-r
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
+import { readUrlFilter } from '../api/filter-url';
 import type { Capabilities, FilterNode, Info as InfoData, Page, SavedSearch, SearchRequest } from '../api/types';
 import { PageHeader } from '../components/common';
 import { Gallery } from '../components/gallery';
@@ -10,16 +11,10 @@ import { Button } from '../components/ui/button';
 import { Dialog } from '../components/ui/dialog';
 import { useUi } from '../lib/store';
 
-function readFilter(raw: string | null): FilterNode | undefined {
-  if (!raw || raw.length > 12_000) return undefined;
-  try { const parsed = JSON.parse(raw) as FilterNode;
-    return parsed && typeof parsed.op === 'string' ? parsed : undefined;
-  } catch { return undefined; }
-}
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get('q') ?? '');
-  const [tree, setTree] = useState<FilterNode>(() => readFilter(params.get('filter')) ?? emptyGroup());
+  const [tree, setTree] = useState<FilterNode>(() => readUrlFilter(params.get('filter')).filter ?? emptyGroup());
   const [advanced, setAdvanced] = useState(!!params.get('filter'));
   const [sort, setSort] = useState<SearchRequest['sort']>((params.get('sort') ?? 'captured_desc') as SearchRequest['sort']);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -36,9 +31,10 @@ export function SearchPage() {
   const semantic = caps.data?.semantic_search;
   const semanticReady = ['operational', 'test_only'].includes(semantic?.state ?? '');
   const paramsString = params.toString();
+  const filterError = readUrlFilter(params.get('filter')).error;
   const active = useMemo<SearchRequest>(() => {
     const values = new URLSearchParams(paramsString);
-    const filter = readFilter(values.get('filter'));
+    const filter = readUrlFilter(values.get('filter')).filter;
     return { limit: 90, sort: (values.get('sort') ?? (values.get('q') ? 'relevance' : 'captured_desc')) as SearchRequest['sort'],
       ...(values.get('q') ? { query: values.get('q')! } : {}),
       ...(values.get('similar') ? { source_asset_id: values.get('similar')! } : {}),
@@ -92,7 +88,7 @@ export function SearchPage() {
         <option value="captured_desc">Data de captura</option><option value="added_desc">Data de adição</option>
         <option value="relevance">Relevância semântica</option><option value="quality_desc">Qualidade técnica</option>
         <option value="filesize_asc">Tamanho de arquivo</option></select>
-      {(active.filter || active.query || active.source_asset_id) && <Button variant="ghost" size="sm" onClick={reset}>
+      {(active.filter || active.query || active.source_asset_id || filterError) && <Button variant="ghost" size="sm" onClick={reset}>
         <X size={13} />Limpar busca</Button>}</div>
     {advanced && <div className="filter-panel"><div className="filter-grid">
       <label className="field">Capturada a partir de<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
@@ -124,7 +120,8 @@ export function SearchPage() {
       {active.query ? `Busca semântica: “${active.query}”. ` : active.source_asset_id ? 'Busca por semelhança visual. ' : 'Busca por filtros exatos. '}
       {active.filter ? 'Filtros estruturados aplicados. ' : ''}
       A relevância é uma similaridade do modelo, não uma certeza.</span></div>}
-    <Gallery search={active} compact />
+    {filterError ? <div className="notice warning" role="alert">{filterError}</div> :
+      <Gallery search={active} compact />}
     <Dialog open={saveOpen} onOpenChange={setSaveOpen} title="Salvar esta busca"
       description="Os critérios ficam disponíveis apenas dentro do seu workspace privado.">
       <label className="field">Nome<input value={name} maxLength={255} autoFocus

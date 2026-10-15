@@ -93,9 +93,20 @@ jobs:
         with: {version: '0.12.23'}
       - run: uv python install 3.12
       - run: uv sync --frozen --group ingest
+      - name: Set up cached source builds for local object storage
+        uses: docker/setup-buildx-action@v3
+      - name: Build real MinIO from pinned upstream source with CI cache
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/minio.Dockerfile
+          tags: photointel-minio:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=photointel-minio
+          cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
       - name: Start private local object storage
         run: |
-          docker build -f infra/docker/minio.Dockerfile -t photointel-minio:ci .
           docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
       - name: Wait for storage and create private bucket
         run: |

@@ -35,7 +35,9 @@ PHOTOINTEL_COMPOSE_MODE=prod make backup
 ```
 
 O script gera `backups/AAAA.../postgres.dump`, metadados CSV/JSON e manifest SHA-256
-em diretório 0700. Dump completo preserva vetores; exportação de portabilidade
+em diretório 0700. A exportação temporária usa o volume de processamento, em vez
+do `/tmp` limitado do container, e é removida após a cópia. Reserve espaço no
+volume para a exportação completa além do dump. Dump completo preserva vetores; exportação de portabilidade
 não inclui embeddings. A exportação e o dump são feitos sequencialmente, por isso
 não representam uma transação única: para um ponto perfeitamente coordenado,
 pause ingestão/worker e alterações pela API durante o backup.
@@ -49,13 +51,19 @@ de política/cópia própria; os originais iCloud não são backup deste projeto
 ## Testar o procedimento
 
 ```bash
-make restore-test
+PHOTOINTEL_COMPOSE_MODE=prod make restore-test
 ```
 
 O teste cria **dois bancos scratch**, migra um, insere 16 mídias sintéticas,
 calcula hashes e contagens por tabela, executa `pg_dump`/`pg_restore` no outro e
 compara a totalidade da fixture. Ao terminar remove apenas esses bancos e arquivos
 temporários, deixando `reports/restore-test.json` quando passou.
+O CI executa a mesma sequência de migração, seed, dump, restore e comparação
+sobre o PostgreSQL real do runner, usando `infra/scripts/restore-ci.py`; o
+resultado só é confirmado quando o artefato `reports/restore-test.json` existe
+com `status=passed` naquela execução. Nenhum teste de restore acessa iCloud,
+R2 ou GPU.
+
 Ele não comprova restauração do seu backup real nem disponibilidade de objetos
 R2. Execute-o no mesmo PostgreSQL/imagem de produção após upgrades.
 

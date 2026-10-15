@@ -26,10 +26,10 @@ async def test_synthetic_benchmark_executes_vectors_and_rolls_back(
     assert report["vector_validation"]["minimum_norm"] == pytest.approx(1, abs=1e-5)
     assert report["vector_validation"]["maximum_norm"] == pytest.approx(1, abs=1e-5)
     assert 0 <= report["vector_recall_at_20"] <= 1
-    for query in report["queries"].values():
+    for name, query in report["queries"].items():
         assert query["samples_ms"][0] >= 0
         assert query["query_plan"][0]["Execution Time"] >= 0
-        assert query["returned_rows"] > 0
+        assert query["returned_rows"] > 0, f"{name} returned no synthetic candidates"
     assert json.loads(output.read_text())["status"] == "completed"
     async with SessionLocal() as session:
         after = (await session.execute(text("SELECT count(*) FROM assets"))).scalar_one()

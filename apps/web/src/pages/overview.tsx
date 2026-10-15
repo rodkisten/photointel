@@ -56,7 +56,8 @@ export function Overview() {
           <p>{bytes(storage.data?.total_bytes)} registrados no catálogo</p></div>
           <Link to="/settings"><ArrowRight size={16} /></Link></div>
         <div className="row-item"><div><strong>Estimativa de processamento</strong>
-          <p>USD {number(costs.data?.estimated_monthly_cost)} neste mês · não é limite de billing</p>
+          <p>USD {number(costs.data?.estimated_monthly_cost)} em resultados retidos neste mês</p>
+          <p>Reserva estimada: USD {number(costs.data?.reserved_monthly_estimate)} · não é limite de billing</p>
         </div><Link to="/jobs"><ArrowRight size={16} /></Link></div>
       </div></section>
       <section className="panel"><div className="panel-title"><h2>Próximos passos</h2>

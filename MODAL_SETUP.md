@@ -121,3 +121,25 @@ Falhas de modelo/configuração não devem ser confundidas com tags vazias. Conf
 os estados `GPU_UNAVAILABLE`, `MODEL_LOAD_FAILED` e `INFERENCE_FAILED`, a revisão
 do registry, a compatibilidade do cache e os limites de memória. Se necessário,
 reduza `BATCH_SIZE`; o limite do endpoint e o limite local são independentes.
+
+## Teste Pytest explicitamente autorizado
+
+`make gpu-test` seleciona o smoke real marcado `gpu`. Por padrão ele informa
+`skipped`: instalação, CI e testes comuns não autorizam consumo de créditos.
+Escolha uma única mídia sintética já processada no catálogo e configure backend
+real, revisões, PostgreSQL, armazenamento e credenciais conforme acima. Depois:
+
+```bash
+PHOTOINTEL_RUN_REAL_GPU=1 \
+PHOTOINTEL_GPU_TEST_ASSET_ID=UUID_DA_MIDIA_SINTETICA \
+GPU_ENABLED=true make gpu-test
+```
+
+Essa combinação autoriza a chamada real e pode consumir créditos do provedor.
+O teste valida resultados persistidos, dimensão do vetor e similaridade finita
+com uma consulta textual. Um adapter `test` é rejeitado; uma configuração ausente
+ou GPU desativada gera motivo preciso de `skipped`. Resultados existentes podem
+ser reutilizados pela política incremental: para comprovar uma primeira chamada
+JoyTag e SigLIP 2, selecione uma mídia ainda sem essas inferências e confira o
+relatório de execução. Esse teste não é um benchmark e não confirma cobrança,
+quota ou disponibilidade futura.

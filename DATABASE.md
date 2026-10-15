@@ -66,6 +66,13 @@ GIN sobre tsvector e trigram para nome/filename. O índice HNSW usa distância
 cosseno; avalie seletividade dos filtros e recall em cada escala antes de ajustar
 `ef_search` ou parâmetros de construção. Índice existente não prova plano usado.
 
+A migração `0004_filename_search_tokens` mantém o nome original e indexa também
+as palavras separadas por pontuação. Assim `garden.jpg`, `summer_beach-2020.jpeg`
+e nomes sintéticos de benchmark respondem a termos como `garden` e `beach`.
+O trigger de inserção/renomeação e a atualização de tags usam a mesma função
+`photointel_filename_document`; tags sensíveis/rejeitadas continuam excluídas
+do documento textual da aplicação.
+
 Evite `OFFSET` profundo em listagens e mantenha a ordem com desempate UUID.
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` deve acompanhar medições em banco
 sintético. Planos e relatórios de uma biblioteca pessoal contêm nomes/metadados:

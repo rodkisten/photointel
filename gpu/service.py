@@ -4,7 +4,7 @@ import secrets
 from typing import Protocol
 
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
 from gpu.pipelines.contracts import (
@@ -27,7 +27,9 @@ def create_service(models: ModelRuntime, spec: ModelSpec, token: str) -> FastAPI
         raise ValueError("Inference bearer token requires 32+ characters")
     api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
-    async def payload(request: Request, schema: type[BaseModel]) -> BaseModel:
+    async def payload(
+        request: Request, schema: type[ImageRequest] | type[TextRequest]
+    ) -> ImageRequest | TextRequest:
         authorization = request.headers.get("authorization", "")
         if not secrets.compare_digest(authorization, f"Bearer {token}"):
             raise HTTPException(401, "Unauthorized inference service")

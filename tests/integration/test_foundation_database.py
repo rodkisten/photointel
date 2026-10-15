@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from photointel.database import Base, engine
 from photointel.models import Asset, Library, ModelRegistry
+from photointel.services.catalog import refresh_search_document
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -141,6 +142,56 @@ async def test_filename_search_document_is_updated_by_database_trigger(
         )
     )
     assert result == asset.id
+    old_term = await foundation_database.scalar(
+        select(Asset.id).where(
+            Asset.id == asset.id,
+            Asset.search_document.op("@@")(
+                text("websearch_to_tsquery('simple', 'tropical')")
+            ),
+        )
+    )
+    assert old_term is None
+
+
+@pytest.mark.parametrize(
+    "filename,term",
+    [
+        ("garden.jpg", "garden"),
+        ("summer_beach-2020.jpeg", "beach"),
+        ("synthetic-landscape-beach-176000.jpg", "landscape"),
+        ("verão_flores.heic", "flores"),
+    ],
+)
+async def test_filename_search_indexes_words_around_punctuation(
+    foundation_database: AsyncSession,
+    filename: str,
+    term: str,
+) -> None:
+    library = Library(
+        name="Filename tokenization test",
+        source_type="fixture",
+        source_identifier=f"filename-tokens-{uuid4()}",
+    )
+    foundation_database.add(library)
+    await foundation_database.flush()
+    asset = Asset(library_id=library.id, source_asset_key="tokens", filename=filename)
+    foundation_database.add(asset)
+    await foundation_database.flush()
+    query = (
+        select(Asset.id)
+        .where(
+            Asset.id == asset.id,
+            Asset.search_document.op("@@")(
+                text("websearch_to_tsquery('simple', :filename_term)")
+            ),
+        )
+        .params(filename_term=term)
+    )
+    assert await foundation_database.scalar(query) == asset.id
+    # Tag edits and reindexing rebuild documents through a separate application
+    # path; its tokenization must match the database trigger.
+    await refresh_search_document(foundation_database, [asset.id])
+    assert await foundation_database.scalar(query) == asset.id
 
 
 async def test_only_one_active_revision_per_model_and_dimensions_are_enforced(

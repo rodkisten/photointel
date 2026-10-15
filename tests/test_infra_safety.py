@@ -147,3 +147,25 @@ def test_e2e_runner_refuses_production_or_real_inference():
         )
         assert result.returncode == 2
         assert "E2E exige" in result.stderr
+
+
+def test_restore_ci_refuses_production_and_invalid_container():
+    configurations = [
+        ({"APP_ENV": "production"}, "database", "requires APP_ENV=test"),
+        ({"APP_ENV": "test"}, "unsafe;command", "Invalid PostgreSQL container"),
+    ]
+    for overrides, container, message in configurations:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "infra/scripts/restore-ci.py"),
+                "--postgres-container",
+                container,
+            ],
+            env=dict(os.environ, **overrides),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        assert result.returncode != 0
+        assert message in result.stderr

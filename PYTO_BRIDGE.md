@@ -46,12 +46,16 @@ Referências oficiais para validar em um dispositivo:
 4. Execute `doctor`. Se necessário, execute `doctor --request-permission` e
    responda ao diálogo Fotos. Alternativamente, ajuste Fotos em Ajustes > Pyto.
    Acesso limitado é reportado; não representa inventário da biblioteca inteira.
-5. No aplicativo web autenticado, gere um código de matrícula usando
+5. Se a origem usa Cloudflare Access, configure o Service Token restrito aos
+   caminhos Bridge conforme a seção abaixo. Execute
+   `access --url https://photos.exemplo.com`; Client ID e Client Secret são pedidos
+   com entrada oculta e gravados somente no Keychain.
+6. No aplicativo web autenticado, gere um código de matrícula usando
    `POST /v1/apple-sync/enrollment`. O código é de uso único e expira em dez minutos.
-6. Execute `enroll --url https://photos.exemplo.com --code CODIGO --name "Meu iPhone"`.
+7. Execute `enroll --url https://photos.exemplo.com --code CODIGO --name "Meu iPhone"`.
    Cole o código temporário em uma sessão privada do Pyto; não o publique no GitHub.
-7. Execute `inventory --limit 50 --batches 1`. Repita para continuar o inventário.
-8. Na interface Apple Bridge, confirme manualmente as correspondências sugeridas.
+8. Execute `inventory --limit 50 --batches 1`. Repita para continuar o inventário.
+9. Na interface Apple Bridge, confirme manualmente as correspondências sugeridas.
 
 O CLI tem estes comandos:
 
@@ -59,6 +63,7 @@ O CLI tem estes comandos:
 python bridge.py doctor
 python bridge.py doctor --request-permission
 python bridge.py capabilities
+python bridge.py access --url https://photos.exemplo.com
 python bridge.py enroll --url https://photos.exemplo.com --code CODIGO
 python bridge.py inventory --limit 50 --batches 4
 python bridge.py status
@@ -114,12 +119,49 @@ Referências públicas do armazenamento:
 - https://github.com/ColdGrub1384/Pyto/blob/main/docs/Objective-C.rst
 - https://github.com/ColdGrub1384/Pyto/blob/main/Lib/userkeys.py
 
-Se Cloudflare Access estiver na frente de toda a origem, a matrícula e os
-endpoints `/v1/bridge/*` precisam de uma política apropriada para clientes
-dispositivo. Uma exceção Access restrita a esses caminhos é possível porque
-esses endpoints validam o token Bridge próprio; nunca abra `/v1/apple-sync/*`
-ou o restante da API. Não inclua o token Bridge em uma query string. Confirme
-no Tunnel que a origem continua inacessível fora da rota Cloudflare.
+## Cloudflare Access para o dispositivo
+
+Mantenha Access em toda a origem. O Pyto não compartilha a sessão Safari;
+configure uma aplicação Access específica para `photos.exemplo.com/v1/bridge/*`,
+com política **Service Auth** que aceite somente o Service Token desse dispositivo.
+Mantenha os demais caminhos protegidos pela aplicação de identidade humana,
+incluindo `/v1/apple-sync/*`. A correspondência mais específica deve selecionar
+a aplicação Bridge; confira a política resultante no painel Zero Trust.
+Não use uma regra `Bypass` para o Bridge. O Tunnel continua sendo a única rota
+até a origem. Consulte [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md).
+
+Crie um Service Token com prazo de validade e permissões restritas a essa
+aplicação. Execute no console privado do Pyto:
+
+```text
+python bridge.py access --url https://photos.exemplo.com
+```
+
+O comando solicita Client ID e Client Secret com `getpass`. Se o console não
+conseguir ocultar a entrada, interrompe com `ACCESS_INPUT_UNAVAILABLE`; nenhum
+argumento CLI aceita segredos. Não cole os valores no arquivo de configuração,
+no Atalho, em variáveis exportadas por logs ou em uma URL. Um item Keychain
+`cloudflare-access:<SHA-256 da origem>` mantém o par, com a mesma proteção local
+do token Bridge. Repetir `access` rotaciona o par e verifica a gravação por leitura.
+O comando não altera o cadastro do dispositivo e pode ser executado antes de `enroll`.
+
+Cada requisição usa `CF-Access-Client-Id` e `CF-Access-Client-Secret` para a camada
+Cloudflare, inclusive durante a matrícula. Após a matrícula, usa também o Bearer
+Bridge próprio: o servidor continua validando o dispositivo em todos os endpoints.
+Service Auth não concede acesso à API humana e não substitui o token Bridge.
+O cliente só envia requisições para `/v1/bridge/*` na origem HTTPS configurada.
+Redirecionamentos são recusados antes de qualquer reenvio das credenciais.
+Um redirecionamento ao login Access retorna `CLOUDFLARE_ACCESS_REQUIRED`; confira
+expiração, escopo e política, depois repita `access` se precisar rotacionar.
+
+Para revogar um aparelho, revogue tanto o Service Token no Cloudflare quanto o
+dispositivo na API. Depois de migrar a origem, execute `access` e `enroll` para a
+nova URL; os itens Keychain são separados por origem. O Service Token é opcional
+para uma origem HTTPS local que não utiliza Access; sua ausência não ativa um
+fallback de autenticação no servidor. Cloudflare Service Auth e Keychain nativo
+exigem teste real na conta e no iPhone. Os testes portáveis verificam somente
+composição dos cabeçalhos, escopo, recusa de redirecionamentos e armazenamento
+com adaptadores exclusivos de testes.
 
 ## Identidade e retomada
 

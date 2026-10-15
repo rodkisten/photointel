@@ -1,0 +1,111 @@
+# Evidências de validação
+
+Este registro distingue implementação, execução controlada e integração externa.
+O projeto ainda está em validação v1; a existência do código não comprova o cenário
+de aceitação completo com iCloud, GPU e PhotoKit reais.
+
+## Checkpoints publicados
+
+| Commit remoto | Conteúdo |
+| --- | --- |
+| `fcb8eb7` | Primeiro conjunto integrado: API, PWA, serviços, Bridge e infraestrutura |
+| `c4eb115` | Pipelines duráveis e bootstrap de CI executável |
+| `edb2df8` | Locks, OpenAPI, revisões verificadas dos modelos e testes de interface |
+| `29e5b8b` | Correções de validação, Keychain público e build do MinIO oficial |
+
+O histórico inclui também mudanças do operador. As atualizações automatizadas
+usam o head esperado e preservam os commits existentes, sem force push.
+
+## Execuções concluídas
+
+[Bootstrap 38808843904](https://github.com/rodkisten/photointel/actions/runs/38808843904)
+executou no GitHub Actions:
+
+- Instalação Python, export OpenAPI e geração dos tipos: passaram.
+- Mypy: passou. Pytest: **116 passaram, 16 desmarcados**, sem GPU real.
+- Imagem API AMD64 e imports `cv2`, `pillow_heif`, `psycopg`: passaram.
+- Auditorias de dependências: passaram nesse checkpoint.
+- A integração não iniciou: pull do MinIO recusado. As falhas web foram corrigidas
+  em seguida. Essa execução completa falhou, como esperado.
+
+[Validate 38809588711](https://github.com/rodkisten/photointel/actions/runs/38809588711)
+e [Bootstrap 38809589016](https://github.com/rodkisten/photointel/actions/runs/38809589016)
+executaram no checkpoint `29e5b8b`:
+
+- Ruff: passou. Pytest no bootstrap: **160 passaram, 28 desmarcados**.
+- Frontend: lint, TypeScript, **18 testes**, build e npm audit com **zero
+  vulnerabilidades** passaram no job dedicado.
+- Mypy identificou um erro de tipo em `gpu/service.py`, corrigido no código
+  subsequente; a correção ainda exige nova execução.
+- O build do MinIO estava em andamento quando outro push cancelou os workflows.
+  Migrations, restauração, integração, E2E e benchmark não foram executados nessa
+  rodada. Cancelamento não é resultado aprovado.
+
+Verificações locais adicionais efetivamente executadas:
+
+- Ruff check e format check de todo o Python, com o executável do CI e hash do
+  artifact verificado.
+- `compileall` de API, GPU, Bridge e testes.
+- `python tests/worker_core_smoke.py`: **29 verificações** do núcleo do worker.
+- `python -m unittest discover -s tests -p test_pyto_keychain.py`: **28 testes**
+  portáveis da política Keychain com backend de teste; nenhum Keychain Apple real.
+- Parse de Compose development/production sem daemon e verificações de sintaxe
+  shell: passaram. Isso não equivale a `docker compose up` concluído.
+
+## Primeiro exercício real de infraestrutura
+
+[Bootstrap 38810056593](https://github.com/rodkisten/photointel/actions/runs/38810056593)
+executou no commit `38ab4e4`:
+
+- MinIO oficial compilado, iniciado e bucket privado acessível: passou.
+- Alembic até `0003`, provisionamento do papel limitado da aplicação: passaram.
+- `pg_dump`/`pg_restore` em dois bancos sintéticos, 16 imagens e fingerprints de
+  todas as tabelas: passou.
+- Integração com PostgreSQL e MinIO: **26 passaram e 2 falharam**. As falhas
+  identificaram a normalização de palavras em nomes como `garden.jpg`.
+- Benchmark com 10.000 metadados: inserção 0,549 s; medianas de cinco amostras
+  de galeria 0,685 ms, próxima página 0,744 ms e filtro 0,588 ms, 60 resultados
+  por consulta. Planos usaram `ix_assets_capture_cursor`. São medições no runner
+  x86_64 PostgreSQL 16.15/pgvector 0.8.7, com cache possivelmente aquecido; não
+  representam percentis nem desempenho da biblioteca real.
+- FTS retornou zero candidatos nessa execução e não teve sua performance
+  validada. [Relatório original](evidence/benchmark-10000-before-fts-fix.json).
+- A ausência do lock npm provocou resolução inconsistente de `ajv` e bloqueou
+  instalação/E2E; a versão anteriormente validada será restaurada. Não trate
+  resolução automática como substituto de um lock revisado e testado.
+
+## Como interpretar os artifacts
+
+O workflow bootstrap mantém passos independentes com `continue-on-error` para
+coletar evidência de todas as áreas. A conclusão visual de um passo pode mascarar
+essa condição. A autoridade é **`reports/validation.json`**, com o `outcome` real
+de cada check. O último passo exige sucesso em todos os checks obrigatórios.
+
+Artifacts gerados:
+
+- `generated-locks-contracts`: `uv.lock`, lock npm, OpenAPI e schema TypeScript.
+- `validation-evidence`: JUnit, logs operacionais sintéticos, benchmarks e restore
+  quando executados, relatórios de dependências e referências públicas.
+- `validation-tools`: Ruff para correções offline, acompanhado de versão e hash.
+
+As capturas em `reports/previews/` só existem se Playwright realmente executou.
+O teste exige ambiente de teste, catálogo exclusivamente sintético e mídia
+procedural limitada. Não exporta imagens de uma biblioteca pessoal.
+
+## Integrações que ainda exigem validação externa
+
+| Integração | Implementado | Evidência ainda necessária |
+| --- | --- | --- |
+| iCloud | Adapter 1.32.3, sessão, limites, cursores e recuperação | Login/2FA, biblioteca e importação real de até 100 imagens |
+| JoyTag | Pipeline oficial, pesos fixados, probabilidades e persistência | Carregar pesos e executar smoke explícito real |
+| SigLIP 2 | Imagem/texto compatíveis 768D, persistência e busca SQL | Smoke real, qualidade de recuperação em português e custo |
+| Modal | ASGI autenticado, cache, GPU e orçamentos | Deploy e chamada autenticada com credenciais reais |
+| Cloudflare | Validação JWT, Pages/Tunnel/R2 e configuração Access | Provisionar conta e testar login, mídia e credenciais de serviço |
+| Oracle ARM | Compose e runbooks de implantação | Build multiarch e exercício no host de destino |
+| Pyto | PhotoKit read, Keychain público, protocolo seguro | Permissão, entitlements e APIs no iPhone real |
+| Keywords Apple | Diffs, aprovações, conflitos e bloqueios | API disponível e adapter validado numa foto selecionada; bulk continua desabilitado |
+
+Metadados públicos dos checkpoints foram verificados sem baixar pesos: JoyTag
+com 5.813 tags e SigLIP 2 com dimensões padrão 768 conferidas na configuração
+Transformers fixada. Esses fatos estão versionados em `packages/configuration/`.
+Isso não comprova inferência real nem desempenho com 176 mil fotografias.

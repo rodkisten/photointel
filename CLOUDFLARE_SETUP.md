@@ -78,6 +78,27 @@ Evite políticas diferentes para subdomínios que deixem o login em loop.
 Uma alternativa operacional é servir a PWA e `/v1` pela mesma origem gateway;
 isso reduz negociação cross-origin e continua exigindo Access/API validados.
 
+## Access para o Bridge Pyto
+
+A credencial Bearer do dispositivo autentica o protocolo Bridge na API; ela não
+substitui o login exigido na borda Access. Para execução não interativa, crie uma
+aplicação Access mais específica cobrindo apenas `api.seudominio.com/v1/bridge/*`
+e uma política **Service Auth** com service token dedicado ao dispositivo. Não
+inclua `/v1/apple-sync/*`, catálogo ou administração nessa política. Preserve as
+políticas humanas nas demais rotas; não use uma regra Bypass global.
+
+No Pyto configure o par de service token com o comando `access` descrito em
+[PYTO_BRIDGE.md](PYTO_BRIDGE.md). Ambos os valores ficam no Keychain, separados
+do Bearer do dispositivo. O cliente envia `CF-Access-Client-Id` e
+`CF-Access-Client-Secret` também na matrícula. A API continua exigindo código de
+matrícula de uso único e, depois, o Bearer do dispositivo para cada operação.
+Não copie o token administrativo Cloudflare para o iPhone ou para a PWA.
+
+Teste com credencial de serviço ausente/revogada e com Bearer inválido antes de
+inventariar fotos reais. Rotacione/revogue as duas credenciais separadamente.
+Essa configuração depende da conta Access e permanece não verificada até um
+teste real contra sua borda; testes unitários não comprovam a política remota.
+
 ## Pages/PWA
 
 Crie um projeto Pages com saída `apps/web/dist`; proteja o hostname público e

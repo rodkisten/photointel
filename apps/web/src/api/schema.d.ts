@@ -124,6 +124,23 @@ export interface paths {
         patch: operations["change_asset_tags_v1_assets__asset_id__tags_patch"];
         trace?: never;
     };
+    "/v1/assets/bulk/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Bulk Asset Tags */
+        patch: operations["bulk_asset_tags_v1_assets_bulk_tags_patch"];
+        trace?: never;
+    };
     "/v1/assets/tags": {
         parameters: {
             query?: never;
@@ -2350,6 +2367,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetTagOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_asset_tags_v1_assets_bulk_tags_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkTagEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
                 };
             };
             /** @description Validation Error */

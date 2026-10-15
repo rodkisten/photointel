@@ -1,12 +1,28 @@
 """Portable Keychain policy tests; native Apple framework execution is not simulated."""
 
+import getpass
+import io
+import json
 import tempfile
 import unittest
+import urllib.error
+import warnings
 from collections.abc import Callable
+from contextlib import redirect_stdout
+from email.message import Message
 from pathlib import Path
-from unittest.mock import Mock, call, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
-from bridges.pyto.bridge import Bridge, BridgeError, KeychainStore, SecurityKeychain
+from bridges.pyto.bridge import (
+    AccessCredentials,
+    Bridge,
+    BridgeError,
+    Client,
+    KeychainStore,
+    SecurityKeychain,
+    main,
+    prompt_access_credentials,
+)
 
 
 class MemoryKeychain:
@@ -174,6 +190,191 @@ class KeychainPolicyTests(unittest.TestCase):
                 )
                 request.assert_not_called()
             self.assertFalse(bridge.config_path.exists())
+
+
+class AccessPolicyTests(unittest.TestCase):
+    origin = "https://photos.example.com"
+
+    def setUp(self) -> None:
+        self.backend = MemoryKeychain()
+        self.store = KeychainStore(self.backend)
+        self.credentials = AccessCredentials("test-client.access", "test-service-secret")
+
+    def test_optional_access_credentials_are_scoped_to_backend(self) -> None:
+        self.credentials.save(self.store, self.origin)
+        self.assertEqual(
+            AccessCredentials.load(self.store, self.origin), self.credentials
+        )
+        self.assertIsNone(AccessCredentials.load(self.store, "https://other.example.com"))
+        self.assertIsNone(self.store.get(self.origin))
+        self.assertNotIn("test-service-secret", repr(self.credentials))
+
+    def test_pair_rotation_uses_one_verified_keychain_item(self) -> None:
+        self.credentials.save(self.store, self.origin)
+        updated = AccessCredentials("updated-client.access", "rotated-test-secret")
+        updated.save(self.store, self.origin)
+        self.assertEqual(len(self.backend.items), 1)
+        self.assertEqual(AccessCredentials.load(self.store, self.origin), updated)
+
+    def test_access_fields_reject_header_injection_and_oversized_values(self) -> None:
+        for value in ("", "with space", "client\r\nInjected: value", "x" * 1025):
+            with self.subTest(length=len(value)), self.assertRaises(BridgeError):
+                AccessCredentials("test-client.access", value)
+        with self.assertRaises(BridgeError):
+            AccessCredentials("x" * 257, "test-secret")
+
+    def test_invalid_keychain_envelope_is_rejected(self) -> None:
+        key = AccessCredentials.account(self.origin)
+        for raw in ("[]", '{"id":"test"}', '{"id":3,"secret":"test"}'):
+            with self.subTest(raw=raw), self.assertRaises(BridgeError) as caught:
+                self.backend.items[key] = raw.encode()
+                AccessCredentials.load(self.store, self.origin)
+            self.assertEqual(caught.exception.code, "ACCESS_CREDENTIAL_INVALID")
+
+    def test_transport_sends_two_independent_identities(self) -> None:
+        response = MagicMock()
+        response.read.return_value = b'{"ok":true}'
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = response
+        with patch(
+            "bridges.pyto.bridge.urllib.request.build_opener", return_value=opener
+        ):
+            result = Client(self.origin, "test-device-bearer", self.credentials).request(
+                "GET", "/v1/bridge/status"
+            )
+        self.assertEqual(result, {"ok": True})
+        request = opener.open.call_args.args[0]
+        headers = {key.lower(): value for key, value in request.header_items()}
+        self.assertEqual(headers["authorization"], "Bearer test-device-bearer")
+        self.assertEqual(headers["cf-access-client-id"], "test-client.access")
+        self.assertEqual(headers["cf-access-client-secret"], "test-service-secret")
+        self.assertEqual(request.full_url, self.origin + "/v1/bridge/status")
+        self.assertEqual(opener.open.call_args.kwargs["timeout"], 30)
+
+    def test_transport_omits_access_headers_when_unconfigured(self) -> None:
+        response = MagicMock()
+        response.read.return_value = b'{"ok":true}'
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = response
+        with patch(
+            "bridges.pyto.bridge.urllib.request.build_opener", return_value=opener
+        ):
+            Client(self.origin, "test-device-bearer").request("GET", "/v1/bridge/status")
+        headers = dict(opener.open.call_args.args[0].header_items())
+        self.assertFalse(any(key.lower().startswith("cf-access-") for key in headers))
+
+    def test_service_credentials_cannot_target_other_routes_or_origins(self) -> None:
+        client = Client(self.origin, "test-device-bearer", self.credentials)
+        for path in (
+            "https://other.example.com/v1/bridge/status",
+            "//other.example.com/v1/bridge/status",
+            "/v1/settings",
+            "/v1/bridge/../settings",
+            "/v1/bridge/%2e%2e/settings",
+            "/v1/bridge/status#fragment",
+            "/v1/bridge/status\n",
+        ):
+            with self.subTest(path=path), self.assertRaises(BridgeError) as caught:
+                client.request("GET", path)
+            self.assertEqual(caught.exception.code, "INVALID_BRIDGE_PATH")
+
+    def test_access_login_redirect_is_actionable_and_never_followed(self) -> None:
+        headers = Message()
+        headers["Location"] = (
+            "https://team.cloudflareaccess.com/cdn-cgi/access/login/secret"
+        )
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            self.origin, 302, "Found", headers, io.BytesIO(b"login page")
+        )
+        with (
+            patch(
+                "bridges.pyto.bridge.urllib.request.build_opener", return_value=opener
+            ) as build,
+            self.assertRaises(BridgeError) as caught,
+        ):
+            Client(self.origin, "test-device-bearer", self.credentials).request(
+                "GET", "/v1/bridge/status"
+            )
+        self.assertEqual(caught.exception.code, "CLOUDFLARE_ACCESS_REQUIRED")
+        self.assertNotIn("secret", str(caught.exception))
+        self.assertEqual(opener.open.call_count, 1)
+        handler = build.call_args.args[0]()
+        self.assertIsNone(handler.redirect_request(None, None, 302, "", None, ""))
+
+    def test_unexpected_redirect_also_fails_without_following(self) -> None:
+        headers = Message()
+        headers["Location"] = "https://other.example.com/"
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            self.origin, 307, "Redirect", headers, io.BytesIO(b"")
+        )
+        with (
+            patch("bridges.pyto.bridge.urllib.request.build_opener", return_value=opener),
+            self.assertRaises(BridgeError) as caught,
+        ):
+            Client(self.origin).request("GET", "/v1/bridge/status")
+        self.assertEqual(caught.exception.code, "BACKEND_REDIRECT_BLOCKED")
+        self.assertEqual(opener.open.call_count, 1)
+
+    def test_enrollment_and_subsequent_clients_load_service_auth(self) -> None:
+        self.credentials.save(self.store, self.origin)
+        with tempfile.TemporaryDirectory() as directory:
+            bridge = Bridge(Path(directory) / "bridge.json")
+            with (
+                patch("bridges.pyto.bridge.KeychainStore", return_value=self.store),
+                patch(
+                    "bridges.pyto.bridge.Client.request",
+                    autospec=True,
+                    return_value={
+                        "device": {"id": "test-device"},
+                        "credential": "device-token",
+                    },
+                ) as request,
+            ):
+                bridge.enroll(self.origin, "one-use-code", "test-name")
+                enrollment_client = request.call_args.args[0]
+                self.assertEqual(enrollment_client.access, self.credentials)
+                self.assertIsNone(enrollment_client.token)
+                client = bridge.client()
+                self.assertEqual(client.access, self.credentials)
+                self.assertEqual(client.token, "device-token")
+            raw = bridge.config_path.read_text()
+            self.assertNotIn("test-service-secret", raw)
+            self.assertNotIn("test-client.access", raw)
+            self.assertNotIn("device-token", raw)
+
+    def test_prompt_refuses_echo_fallback(self) -> None:
+        def insecure_getpass(prompt: str) -> str:
+            warnings.warn("Cannot hide input", getpass.GetPassWarning, stacklevel=2)
+            return "must-not-be-used"
+
+        with (
+            patch("bridges.pyto.bridge.getpass.getpass", side_effect=insecure_getpass),
+            self.assertRaises(BridgeError) as caught,
+        ):
+            prompt_access_credentials()
+        self.assertEqual(caught.exception.code, "ACCESS_INPUT_UNAVAILABLE")
+
+    def test_access_command_uses_hidden_prompts_and_never_writes_plaintext(self) -> None:
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "bridge.json"
+            with (
+                patch("bridges.pyto.bridge.KeychainStore", return_value=self.store),
+                patch(
+                    "bridges.pyto.bridge.getpass.getpass",
+                    side_effect=["test-client.access", "test-service-secret"],
+                ) as prompt,
+                redirect_stdout(output),
+            ):
+                status = main(["--config", str(config), "access", "--url", self.origin])
+            self.assertEqual(status, 0)
+            self.assertEqual(prompt.call_count, 2)
+            self.assertFalse(config.exists())
+        self.assertTrue(json.loads(output.getvalue())["result"]["configured"])
+        self.assertNotIn("test-service-secret", output.getvalue())
+        self.assertNotIn("test-client.access", output.getvalue())
 
 
 if __name__ == "__main__":

@@ -34,7 +34,9 @@ LABEL org.opencontainers.image.title="Photo Intelligence local MinIO build" \
 COPY --from=build /out/minio /usr/local/bin/minio
 COPY --from=build /source/LICENSE /licenses/minio-LICENSE
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-RUN mkdir /data && chown 10001:10001 /data
+RUN addgroup -g 10001 photointel && adduser -D -H -u 10001 -G photointel -h /tmp photointel \
+    && mkdir /data && chown 10001:10001 /data
+ENV HOME=/tmp
 USER 10001:10001
 EXPOSE 9000 9001
 ENTRYPOINT ["/usr/local/bin/minio"]

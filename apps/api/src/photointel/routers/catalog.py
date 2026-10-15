@@ -485,15 +485,19 @@ async def tag_aliases(
 async def create_tag(body: TagCreate, session: Session, identity: Actor) -> TagOut:
     if body.category not in CATEGORIES:
         raise AppError(ErrorCode.INVALID_REQUEST, "Categoria inválida", 422)
-    if await session.scalar(
-        select(Tag.id).where(Tag.canonical_key == body.canonical_key)
-    ):
-        raise AppError(ErrorCode.INVALID_REQUEST, "Keyword já existe", 409)
     values = body.model_dump()
     values["is_sensitive"] = body.is_sensitive or body.category in SENSITIVE_CATEGORIES
-    tag = Tag(**values, minimum_confidence=0)
-    session.add(tag)
-    await session.flush()
+    tag = await session.scalar(
+        insert(Tag)
+        .values(
+            **values,
+            minimum_confidence=0,
+        )
+        .on_conflict_do_nothing(index_elements=["canonical_key"])
+        .returning(Tag)
+    )
+    if tag is None:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Keyword já existe", 409)
     audit(session, identity, "tag.create", tag_id=str(tag.id))
     await session.commit()
     return tag_out(tag)
@@ -530,7 +534,7 @@ async def update_tag(
     tag = await session.get(Tag, tag_id)
     if not tag:
         raise AppError(ErrorCode.NOT_FOUND, "Tag não encontrada", 404)
-    if body.category and body.category not in CATEGORIES:
+    if body.category is not None and body.category not in CATEGORIES:
         raise AppError(ErrorCode.INVALID_REQUEST, "Categoria inválida", 422)
     for field, relation in (
         ("parent_id", body.parent_id),

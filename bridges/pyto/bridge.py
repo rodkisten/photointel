@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import getpass
 import hashlib
 import json
 import os
@@ -19,11 +20,15 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
+
+UTC = timezone.utc  # noqa: UP017 - Pyto may embed Python 3.10.
 
 KEYCHAIN_SERVICE = "photo-intelligence-cloud.bridge"
 AUTHORIZATION = {
@@ -307,6 +312,74 @@ class KeychainStore:
             )
 
 
+@dataclass(frozen=True, repr=False)
+class AccessCredentials:
+    """Cloudflare edge identity, independent of the server's Bridge device identity."""
+
+    client_id: str
+    client_secret: str
+
+    def __post_init__(self) -> None:
+        for value, limit in ((self.client_id, 256), (self.client_secret, 1024)):
+            if not 0 < len(value) <= limit or not all(33 <= ord(c) <= 126 for c in value):
+                raise BridgeError(
+                    "ACCESS_CREDENTIAL_INVALID", "Credencial Cloudflare Access inválida"
+                )
+
+    @staticmethod
+    def account(origin: str) -> str:
+        # Separate items prevent an edge identity from overwriting the device bearer.
+        digest = hashlib.sha256(origin.encode("utf-8")).hexdigest()
+        return "cloudflare-access:" + digest
+
+    @classmethod
+    def load(cls, store: KeychainStore, origin: str) -> AccessCredentials | None:
+        raw = store.get(cls.account(origin))
+        if raw is None:
+            return None
+        try:
+            payload = json.loads(raw)
+            if not isinstance(payload, dict) or set(payload) != {"id", "secret"}:
+                raise ValueError("Invalid credential envelope")
+            if not isinstance(payload["id"], str) or not isinstance(
+                payload["secret"], str
+            ):
+                raise ValueError("Invalid credential values")
+            return cls(payload["id"], payload["secret"])
+        except (TypeError, ValueError) as exc:
+            raise BridgeError(
+                "ACCESS_CREDENTIAL_INVALID",
+                "Reconfigure Service Auth usando o comando access",
+            ) from exc
+
+    def save(self, store: KeychainStore, origin: str) -> None:
+        # One item makes rotation atomic at the Keychain boundary, then verifies it.
+        store.set(
+            self.account(origin),
+            json.dumps({"id": self.client_id, "secret": self.client_secret}),
+        )
+
+
+def prompt_access_credentials() -> AccessCredentials:
+    """Do not let getpass fall back to an echoed terminal or command-line secrets."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", getpass.GetPassWarning)
+            client_id = getpass.getpass("Cloudflare Access Client ID (oculto): ")
+            secret = getpass.getpass("Cloudflare Access Client Secret (oculto): ")
+    except getpass.GetPassWarning as exc:
+        raise BridgeError(
+            "ACCESS_INPUT_UNAVAILABLE",
+            "Console sem entrada protegida; "
+            "nenhuma credencial foi solicitada em texto puro",
+        ) from exc
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise BridgeError(
+            "ACCESS_INPUT_CANCELLED", "Configuração Service Auth cancelada"
+        ) from exc
+    return AccessCredentials(client_id, secret)
+
+
 class KeywordWriter(Protocol):
     """Extension boundary; a future adapter must verify actual SDK/runtime support."""
 
@@ -516,7 +589,12 @@ def safe_keyword_plan(operation: dict[str, Any], before: list[str]) -> dict[str,
 
 
 class Client:
-    def __init__(self, base_url: str, token: str | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str | None = None,
+        access: AccessCredentials | None = None,
+    ) -> None:
         parsed = urllib.parse.urlsplit(base_url)
         if (
             parsed.scheme != "https"
@@ -533,10 +611,29 @@ class Client:
             )
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self.access = access
+
+    @staticmethod
+    def _validate_path(path: str) -> None:
+        parsed = urllib.parse.urlsplit(path)
+        decoded = urllib.parse.unquote(parsed.path)
+        if (
+            parsed.scheme
+            or parsed.netloc
+            or parsed.fragment
+            or not decoded.startswith("/v1/bridge/")
+            or any(part in {".", ".."} for part in decoded.split("/"))
+            or any(ord(char) < 32 or ord(char) == 127 for char in path)
+            or "\\" in decoded
+        ):
+            raise BridgeError(
+                "INVALID_BRIDGE_PATH", "Cliente Bridge permite somente /v1/bridge/*"
+            )
 
     def request(
         self, method: str, path: str, body: dict[str, Any] | None = None
     ) -> dict[str, Any]:
+        self._validate_path(path)
         retry_safe = path.split("?", 1)[0] in {
             "/v1/bridge/status",
             "/v1/bridge/capabilities",
@@ -563,9 +660,15 @@ class Client:
     def _request_once(
         self, method: str, path: str, body: dict[str, Any] | None
     ) -> dict[str, Any]:
+        self._validate_path(path)
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if self.token:
+            if not all(33 <= ord(char) <= 126 for char in self.token):
+                raise BridgeError("KEYCHAIN_INVALID_DATA", "Credencial Bridge inválida")
             headers["Authorization"] = "Bearer " + self.token
+        if self.access:
+            headers["CF-Access-Client-Id"] = self.access.client_id
+            headers["CF-Access-Client-Secret"] = self.access.client_secret
         encoded = json.dumps(body).encode() if body is not None else None
         request = urllib.request.Request(
             self.base_url + path, data=encoded, headers=headers, method=method
@@ -597,6 +700,20 @@ class Client:
                     raise BridgeError("INVALID_RESPONSE", "Resposta JSON inválida")
                 return data
         except urllib.error.HTTPError as exc:
+            if 300 <= exc.code < 400:
+                location = exc.headers.get("Location", "") if exc.headers else ""
+                destination = urllib.parse.urlsplit(location)
+                is_access = (destination.hostname or "").endswith(
+                    ".cloudflareaccess.com"
+                ) or "/cdn-cgi/access/login" in destination.path
+                raise BridgeError(
+                    "CLOUDFLARE_ACCESS_REQUIRED"
+                    if is_access
+                    else "BACKEND_REDIRECT_BLOCKED",
+                    "Configure Service Auth com access e confira a política /v1/bridge/*"
+                    if is_access
+                    else "Redirecionamento recusado; confira a origem HTTPS",
+                ) from exc
             code = (
                 "BACKEND_RATE_LIMITED"
                 if exc.code == 429
@@ -635,20 +752,39 @@ class Bridge:
         temporary.replace(self.config_path)
 
     def client(self) -> Client:
-        url = self.config.get("backend_url", "")
-        token = KeychainStore().get(url)
+        url = Client(self.config.get("backend_url", "")).base_url
+        store = KeychainStore()
+        token = store.get(url)
         if not token:
             raise BridgeError(
                 "DEVICE_NOT_ENROLLED",
                 "Execute enroll com um código novo da interface web",
             )
-        return Client(url, token)
+        return Client(url, token, AccessCredentials.load(store, url))
+
+    def configure_access(
+        self,
+        url: str,
+        credentials: AccessCredentials,
+    ) -> dict[str, Any]:
+        origin = Client(url).base_url
+        store = KeychainStore()
+        store.check_available()
+        credentials.save(store, origin)
+        return {
+            "backend_url": origin,
+            "credential_stored": "keychain",
+            "configured": True,
+        }
 
     def enroll(self, url: str, code: str, name: str) -> dict[str, Any]:
         client = Client(url)
         store = KeychainStore()
         # Fail before consuming the code when the runtime cannot query the Keychain.
         store.check_available()
+        client = Client(
+            client.base_url, access=AccessCredentials.load(store, client.base_url)
+        )
         result = client.request(
             "POST",
             "/v1/bridge/enroll",
@@ -731,6 +867,8 @@ def main(argv: list[str] | None = None) -> int:
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--request-permission", action="store_true")
     sub.add_parser("capabilities")
+    access_parser = sub.add_parser("access", help="Salvar Service Auth no Keychain")
+    access_parser.add_argument("--url", required=True)
     enrollment = sub.add_parser("enroll")
     enrollment.add_argument("--url", required=True)
     enrollment.add_argument("--code", required=True)
@@ -760,6 +898,11 @@ def main(argv: list[str] | None = None) -> int:
             }
         elif arguments.command == "capabilities":
             result = bridge.reader.capabilities()
+        elif arguments.command == "access":
+            # Validate the origin and storage before asking for either credential.
+            origin = Client(arguments.url).base_url
+            KeychainStore().check_available()
+            result = bridge.configure_access(origin, prompt_access_credentials())
         elif arguments.command == "enroll":
             result = bridge.enroll(arguments.url, arguments.code, arguments.name)
         elif arguments.command == "inventory":

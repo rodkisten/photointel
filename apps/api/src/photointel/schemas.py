@@ -142,6 +142,10 @@ class TagPatch(Contract):
         }:
             if getattr(self, key) is None:
                 raise ValueError(f"{key} cannot be null")
+        if self.aliases is not None:
+            keys = {(alias.language, alias.alias) for alias in self.aliases}
+            if len(keys) != len(self.aliases):
+                raise ValueError("Aliases must be unique within each language")
         return self
 
 
