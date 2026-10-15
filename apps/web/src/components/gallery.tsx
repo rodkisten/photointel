@@ -29,6 +29,7 @@ export function Gallery({ search, compact = false, albumId }: {
   const [keyword, setKeyword] = useState('');
   const [album, setAlbum] = useState('');
   const mutation = useAction();
+  const tagMutation = useAction('/v1/assets/tags', 'PATCH');
   const remove = useAction(undefined, 'DELETE');
   const albums = useApi<Page<Album>>('/v1/albums?limit=100');
   const query = useInfiniteQuery({ queryKey: ['gallery', search], initialPageParam: undefined as string | undefined,
@@ -59,7 +60,7 @@ export function Gallery({ search, compact = false, albumId }: {
   }
   async function applyBulk() {
     if (bulk === 'tag' && keyword.trim()) {
-      await mutation.mutateAsync({ url: '/v1/assets/tags', body: {
+      await tagMutation.mutateAsync({ body: {
         asset_ids: [...selected], add: keyword.split(',').map((key) => key.trim()).filter(Boolean),
       } });
     } else if (bulk === 'album' && album) {
@@ -130,7 +131,7 @@ export function Gallery({ search, compact = false, albumId }: {
           <option value="">Selecione um álbum</option>{albums.data?.items.map((item) =>
             <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
       <div className="form-actions"><Button variant="outline" onClick={() => setBulk(null)}>Cancelar</Button>
-        <Button onClick={() => void applyBulk()} disabled={mutation.isPending ||
+        <Button onClick={() => void applyBulk()} disabled={mutation.isPending || tagMutation.isPending ||
           (bulk === 'tag' ? !keyword.trim() : !album)}>Salvar</Button></div>
     </Dialog>
   </>;

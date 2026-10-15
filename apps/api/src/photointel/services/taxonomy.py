@@ -6,11 +6,19 @@ from uuid import UUID
 
 TAXONOMY_VERSION = "1.0.0"
 CATEGORIES = {
-    "person": "Pessoa", "body": "Corpo", "face_hair": "Rosto e cabelo",
-    "clothing": "Vestuário", "clothing_bulge": "Volume sob a roupa",
-    "pose_action": "Pose e ação", "sexual_action": "Ação sexual",
-    "genitals": "Genitais", "penis": "Pênis", "environment": "Ambiente",
-    "objects": "Objetos", "composition": "Composição", "visual": "Visual",
+    "person": "Pessoa",
+    "body": "Corpo",
+    "face_hair": "Rosto e cabelo",
+    "clothing": "Vestuário",
+    "clothing_bulge": "Volume sob a roupa",
+    "pose_action": "Pose e ação",
+    "sexual_action": "Ação sexual",
+    "genitals": "Genitais",
+    "penis": "Pênis",
+    "environment": "Ambiente",
+    "objects": "Objetos",
+    "composition": "Composição",
+    "visual": "Visual",
     "other": "Outros",
 }
 SENSITIVE_CATEGORIES = {"clothing_bulge", "sexual_action", "genitals", "penis"}
@@ -21,64 +29,205 @@ CATEGORY_TERMS: dict[str, set[str]] = {
     "penis": {"penis", "erection", "foreskin", "glans", "testicles", "scrotum"},
     "genitals": {"pussy", "vulva", "vagina", "anus", "clitoris", "pubic"},
     "sexual_action": {
-        "sex", "fellatio", "cunnilingus", "masturbation", "penetration",
-        "handjob", "footjob", "paizuri", "orgasm", "cum", "ejaculation",
+        "sex",
+        "fellatio",
+        "cunnilingus",
+        "masturbation",
+        "penetration",
+        "handjob",
+        "footjob",
+        "paizuri",
+        "orgasm",
+        "cum",
+        "ejaculation",
     },
     "clothing_bulge": {"bulge", "cameltoe", "crotch"},
     "person": {"boy", "girl", "boys", "girls", "male", "female", "man", "woman"},
     "body": {
-        "body", "breasts", "nipples", "nude", "navel", "muscular", "abs",
-        "thighs", "legs", "arms", "feet", "hands", "skin", "buttocks", "ass",
+        "body",
+        "breasts",
+        "nipples",
+        "nude",
+        "navel",
+        "muscular",
+        "abs",
+        "thighs",
+        "legs",
+        "arms",
+        "feet",
+        "hands",
+        "skin",
+        "buttocks",
+        "ass",
     },
     "face_hair": {
-        "hair", "eyes", "eyebrows", "beard", "mustache", "mouth", "lips",
-        "smile", "smiling", "teeth", "face", "ponytail", "bangs", "braid",
+        "hair",
+        "eyes",
+        "eyebrows",
+        "beard",
+        "mustache",
+        "mouth",
+        "lips",
+        "smile",
+        "smiling",
+        "teeth",
+        "face",
+        "ponytail",
+        "bangs",
+        "braid",
     },
     "clothing": {
-        "shirt", "t-shirt", "dress", "pants", "shorts", "skirt", "jacket",
-        "socks", "shoes", "hat", "cap", "uniform", "bikini", "underwear",
-        "bra", "panties", "swimsuit", "gloves", "coat", "boots", "sweater",
+        "shirt",
+        "t-shirt",
+        "dress",
+        "pants",
+        "shorts",
+        "skirt",
+        "jacket",
+        "socks",
+        "shoes",
+        "hat",
+        "cap",
+        "uniform",
+        "bikini",
+        "underwear",
+        "bra",
+        "panties",
+        "swimsuit",
+        "gloves",
+        "coat",
+        "boots",
+        "sweater",
     },
     "pose_action": {
-        "standing", "sitting", "lying", "walking", "running", "jumping",
-        "dancing", "crouching", "kneeling", "hugging", "holding", "reaching",
+        "standing",
+        "sitting",
+        "lying",
+        "walking",
+        "running",
+        "jumping",
+        "dancing",
+        "crouching",
+        "kneeling",
+        "hugging",
+        "holding",
+        "reaching",
     },
     "environment": {
-        "outdoors", "indoors", "beach", "forest", "mountain", "mountains",
-        "sky", "cloud", "clouds", "sunset", "ocean", "sea", "room", "street",
-        "park", "garden", "snow", "rain", "water", "sand", "city", "building",
+        "outdoors",
+        "indoors",
+        "beach",
+        "forest",
+        "mountain",
+        "mountains",
+        "sky",
+        "cloud",
+        "clouds",
+        "sunset",
+        "ocean",
+        "sea",
+        "room",
+        "street",
+        "park",
+        "garden",
+        "snow",
+        "rain",
+        "water",
+        "sand",
+        "city",
+        "building",
     },
     "objects": {
-        "plant", "flower", "flowers", "tree", "car", "book", "phone", "chair",
-        "table", "bed", "cup", "food", "dog", "cat", "bird", "bicycle",
+        "plant",
+        "flower",
+        "flowers",
+        "tree",
+        "car",
+        "book",
+        "phone",
+        "chair",
+        "table",
+        "bed",
+        "cup",
+        "food",
+        "dog",
+        "cat",
+        "bird",
+        "bicycle",
     },
     "composition": {
-        "portrait", "close-up", "solo", "focus", "view", "background", "crop",
-        "cropped", "profile", "perspective", "pov", "full-body",
+        "portrait",
+        "close-up",
+        "solo",
+        "focus",
+        "view",
+        "background",
+        "crop",
+        "cropped",
+        "profile",
+        "perspective",
+        "pov",
+        "full-body",
     },
     "visual": {
-        "monochrome", "grayscale", "blurry", "realistic", "photorealistic",
-        "illustration", "comic", "greyscale", "watermark", "signature", "text",
+        "monochrome",
+        "grayscale",
+        "blurry",
+        "realistic",
+        "photorealistic",
+        "illustration",
+        "comic",
+        "greyscale",
+        "watermark",
+        "signature",
+        "text",
     },
 }
 
 # Names translate labels only; no inferred identities or unsupported people counts.
 PORTUGUESE = {
-    "1boy": "Pessoa masculina", "1girl": "Pessoa feminina", "solo": "Uma pessoa",
-    "black_shirt": "Camiseta preta", "white_shirt": "Camiseta branca",
-    "shirt": "Camiseta", "t-shirt": "Camiseta", "beach": "Praia",
-    "outdoors": "Ao ar livre", "indoors": "Ambiente interno", "portrait": "Retrato",
-    "green_background": "Fundo verde", "plant": "Planta", "flower": "Flor",
-    "flowers": "Flores", "mountain": "Montanha", "mountains": "Montanhas",
-    "sunset": "Pôr do sol", "sky": "Céu", "water": "Água", "tree": "Árvore",
-    "smile": "Sorriso", "smiling": "Sorrindo", "standing": "Em pé",
-    "sitting": "Sentado", "lying": "Deitado", "long_hair": "Cabelo longo",
-    "short_hair": "Cabelo curto", "black_hair": "Cabelo preto",
-    "brown_hair": "Cabelo castanho", "blue_eyes": "Olhos azuis",
-    "muscular": "Musculatura", "nude": "Nudez", "breasts": "Seios",
-    "penis": "Pênis", "erection": "Ereção", "bulge": "Volume sob a roupa",
-    "sex": "Sexo", "pussy": "Vulva", "monochrome": "Monocromático",
-    "blurry": "Desfocado", "close-up": "Enquadramento próximo",
+    "1boy": "Pessoa masculina",
+    "1girl": "Pessoa feminina",
+    "solo": "Uma pessoa",
+    "black_shirt": "Camiseta preta",
+    "white_shirt": "Camiseta branca",
+    "shirt": "Camiseta",
+    "t-shirt": "Camiseta",
+    "beach": "Praia",
+    "outdoors": "Ao ar livre",
+    "indoors": "Ambiente interno",
+    "portrait": "Retrato",
+    "green_background": "Fundo verde",
+    "plant": "Planta",
+    "flower": "Flor",
+    "flowers": "Flores",
+    "mountain": "Montanha",
+    "mountains": "Montanhas",
+    "sunset": "Pôr do sol",
+    "sky": "Céu",
+    "water": "Água",
+    "tree": "Árvore",
+    "smile": "Sorriso",
+    "smiling": "Sorrindo",
+    "standing": "Em pé",
+    "sitting": "Sentado",
+    "lying": "Deitado",
+    "long_hair": "Cabelo longo",
+    "short_hair": "Cabelo curto",
+    "black_hair": "Cabelo preto",
+    "brown_hair": "Cabelo castanho",
+    "blue_eyes": "Olhos azuis",
+    "muscular": "Musculatura",
+    "nude": "Nudez",
+    "breasts": "Seios",
+    "penis": "Pênis",
+    "erection": "Ereção",
+    "bulge": "Volume sob a roupa",
+    "sex": "Sexo",
+    "pussy": "Vulva",
+    "monochrome": "Monocromático",
+    "blurry": "Desfocado",
+    "close-up": "Enquadramento próximo",
 }
 
 
@@ -102,31 +251,55 @@ def map_tag(key: str, overrides: dict[str, Any] | None = None) -> TaxonomyTag:
     if normalized in {"boy", "girl", "boys", "girls", "other"}:
         category = "person"
     else:
-        category = next((
-            category for category, words in CATEGORY_TERMS.items()
-            if terms & words or key.lower() in words
-        ), "other")
+        category = next(
+            (
+                category
+                for category, words in CATEGORY_TERMS.items()
+                if terms & words or key.lower() in words
+            ),
+            "other",
+        )
     category = str(override.get("category", category))
     if category not in CATEGORIES:
         raise ValueError("Unknown taxonomy category")
-    display = str(override.get(
-        "display_name", PORTUGUESE.get(key, key.replace("_", " ")),
-    ))
+    display = str(
+        override.get(
+            "display_name",
+            PORTUGUESE.get(key, key.replace("_", " ")),
+        )
+    )
     sensitive_terms = {"nude", "naked", "breasts", "nipples", "underwear", "panties"}
-    sensitive = bool(override.get(
-        "is_sensitive", category in SENSITIVE_CATEGORIES or category == "other"
-        or bool(terms & sensitive_terms),
-    ))
-    aliases = tuple(dict.fromkeys([
-        display, key.replace("_", " "), *override.get("aliases", []),
-    ]))
+    sensitive = bool(
+        override.get(
+            "is_sensitive",
+            category in SENSITIVE_CATEGORIES
+            or category == "other"
+            or bool(terms & sensitive_terms),
+        )
+    )
+    aliases = tuple(
+        dict.fromkeys(
+            [
+                display,
+                key.replace("_", " "),
+                *override.get("aliases", []),
+            ]
+        )
+    )
     return TaxonomyTag(
-        key, display, category, sensitive, aliases, override.get("parent_key"),
+        key,
+        display,
+        category,
+        sensitive,
+        aliases,
+        override.get("parent_key"),
     )
 
 
 def select_predictions(
-    probabilities: dict[str, float], threshold: float = .4, maximum: int = 80,
+    probabilities: dict[str, float],
+    threshold: float = 0.4,
+    maximum: int = 80,
     category_settings: dict[str, Any] | None = None,
     overrides: dict[str, Any] | None = None,
     compound_rules: list[dict[str, Any]] | None = None,
@@ -162,7 +335,8 @@ def select_predictions(
         if prior is None or probability > prior[1]:
             best[tag.canonical_key] = (tag, probability)
     return sorted(
-        best.values(), key=lambda item: (-item[1], item[0].canonical_key),
+        best.values(),
+        key=lambda item: (-item[1], item[0].canonical_key),
     )[:maximum]
 
 
@@ -182,27 +356,51 @@ async def migrate_taxonomy(session) -> None:
         if current > expected:
             raise ValueError("Taxonomy downgrade is not supported")
     tags = [map_tag(key) for key in sorted(PORTUGUESE)]
-    await session.execute(insert(Tag).values([{
-        "canonical_key": tag.canonical_key, "display_name": tag.display_name,
-        "category": tag.category, "is_sensitive": tag.is_sensitive,
-        "minimum_confidence": 0,
-    } for tag in tags]).on_conflict_do_nothing(index_elements=["canonical_key"]))
-    stored = (await session.scalars(select(Tag).where(
-        Tag.canonical_key.in_([tag.canonical_key for tag in tags]),
-    ))).all()
+    await session.execute(
+        insert(Tag)
+        .values(
+            [
+                {
+                    "canonical_key": tag.canonical_key,
+                    "display_name": tag.display_name,
+                    "category": tag.category,
+                    "is_sensitive": tag.is_sensitive,
+                    "minimum_confidence": 0,
+                }
+                for tag in tags
+            ]
+        )
+        .on_conflict_do_nothing(index_elements=["canonical_key"])
+    )
+    stored = (
+        await session.scalars(
+            select(Tag).where(
+                Tag.canonical_key.in_([tag.canonical_key for tag in tags]),
+            )
+        )
+    ).all()
     by_key = {tag.canonical_key: tag.id for tag in stored}
-    aliases = [{
-        "tag_id": by_key[tag.canonical_key], "alias": alias,
-        "language": "en" if alias == tag.canonical_key.replace("_", " ") else "pt-BR",
-        "alias_type": "display",
-    } for tag in tags for alias in tag.aliases]
+    aliases = [
+        {
+            "tag_id": by_key[tag.canonical_key],
+            "alias": alias,
+            "language": "en" if alias == tag.canonical_key.replace("_", " ") else "pt-BR",
+            "alias_type": "display",
+        }
+        for tag in tags
+        for alias in tag.aliases
+    ]
     await session.execute(insert(TagAlias).values(aliases).on_conflict_do_nothing())
     marker_insert = insert(Setting).values(
-        key="taxonomy_schema_version", value=TAXONOMY_VERSION,
+        key="taxonomy_schema_version",
+        value=TAXONOMY_VERSION,
     )
-    await session.execute(marker_insert.on_conflict_do_update(
-        index_elements=["key"], set_={"value": TAXONOMY_VERSION},
-    ))
+    await session.execute(
+        marker_insert.on_conflict_do_update(
+            index_elements=["key"],
+            set_={"value": TAXONOMY_VERSION},
+        )
+    )
 
 
 async def resolve_tag_targets(session, tags: list) -> dict[UUID, Any]:
@@ -217,7 +415,9 @@ async def resolve_tag_targets(session, tags: list) -> dict[UUID, Any]:
     sources = [tag.id for tag in tags if tag.merged_into_id is not None]
     if not sources:
         return direct
-    resolved = (await session.execute(text("""
+    resolved = (
+        await session.execute(
+            text("""
         WITH RECURSIVE chain AS (
             SELECT id AS source_id,id,merged_into_id,0 AS depth,ARRAY[id] AS path
             FROM tags WHERE id=ANY(:source_ids)
@@ -227,7 +427,10 @@ async def resolve_tag_targets(session, tags: list) -> dict[UUID, Any]:
             WHERE c.depth<64 AND NOT t.id=ANY(c.path)
         )
         SELECT source_id,id FROM chain WHERE merged_into_id IS NULL
-    """), {"source_ids": sources})).all()
+    """),
+            {"source_ids": sources},
+        )
+    ).all()
     if len(resolved) != len(sources):
         raise ValueError("Tag merge chain is invalid or exceeds 64 levels")
     target_ids = {row.id for row in resolved}

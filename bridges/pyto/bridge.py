@@ -19,12 +19,20 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 KEYCHAIN_SERVICE = "photo-intelligence-cloud.bridge"
-AUTHORIZATION = {0: "not_determined", 1: "denied", 2: "denied", 3: "authorized", 4: "limited"}
+AUTHORIZATION = {
+    0: "not_determined",
+    1: "denied",
+    2: "denied",
+    3: "authorized",
+    4: "limited",
+}
 
 
 class BridgeError(Exception):
@@ -34,35 +42,269 @@ class BridgeError(Exception):
         self.message = message
 
 
-class KeychainStore:
-    """Pyto ships the documented keychain module on supported iOS builds.
+class KeychainBackend(Protocol):
+    """Small boundary for the public Security.framework functions, not a file store."""
 
-    Refuse plaintext fallback; an unavailable keychain is an actionable error.
+    def read(self, account: str) -> tuple[int, bytes | None]: ...
+
+    def update(self, account: str, value: bytes) -> int: ...
+
+    def add(self, account: str, value: bytes) -> int: ...
+
+
+class SecurityKeychain:
+    """Bind Apple's documented C Keychain APIs with the Python standard library.
+
+    CF objects created by this adapter follow the Create/Copy ownership rule.
+    Dictionaries retain keys/values with the standard CFType callbacks. No
+    Pythonista-only module, NSUserDefaults, or plaintext credential fallback is used.
+    Loading these bindings does not establish successful access on an iOS device.
     """
 
     def __init__(self) -> None:
+        if sys.platform != "ios" and platform.system() != "Darwin":
+            raise BridgeError("KEYCHAIN_UNAVAILABLE", "Keychain exige um runtime Apple")
         try:
-            import keychain  # type: ignore[import-not-found]
-        except ImportError as exc:
-            raise BridgeError("KEYCHAIN_UNAVAILABLE", "Este Pyto não fornece o módulo keychain") from exc
-        if not callable(getattr(keychain, "get_password", None)) or not callable(
-            getattr(keychain, "set_password", None)
-        ):
-            raise BridgeError("KEYCHAIN_UNAVAILABLE", "API Keychain não compatível; nenhuma credencial foi gravada")
-        self.module = keychain
+            self.security = ctypes.CDLL(
+                "/System/Library/Frameworks/Security.framework/Security"
+            )
+            self.cf = ctypes.CDLL(
+                "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
+            )
+            self._bind()
+        except (OSError, AttributeError, ValueError) as exc:
+            raise BridgeError(
+                "KEYCHAIN_UNAVAILABLE", "Security.framework não está acessível neste Pyto"
+            ) from exc
+
+    def _bind(self) -> None:
+        pointer = ctypes.c_void_p
+        self.cf.CFStringCreateWithCString.argtypes = [
+            pointer,
+            ctypes.c_char_p,
+            ctypes.c_uint32,
+        ]
+        self.cf.CFStringCreateWithCString.restype = pointer
+        self.cf.CFDataCreate.argtypes = [
+            pointer,
+            ctypes.POINTER(ctypes.c_ubyte),
+            ctypes.c_long,
+        ]
+        self.cf.CFDataCreate.restype = pointer
+        self.cf.CFDictionaryCreateMutable.argtypes = [
+            pointer,
+            ctypes.c_long,
+            pointer,
+            pointer,
+        ]
+        self.cf.CFDictionaryCreateMutable.restype = pointer
+        self.cf.CFDictionarySetValue.argtypes = [pointer, pointer, pointer]
+        self.cf.CFDictionarySetValue.restype = None
+        self.cf.CFDataGetLength.argtypes = [pointer]
+        self.cf.CFDataGetLength.restype = ctypes.c_long
+        self.cf.CFDataGetBytePtr.argtypes = [pointer]
+        self.cf.CFDataGetBytePtr.restype = pointer
+        self.cf.CFGetTypeID.argtypes = [pointer]
+        self.cf.CFGetTypeID.restype = ctypes.c_ulong
+        self.cf.CFDataGetTypeID.argtypes = []
+        self.cf.CFDataGetTypeID.restype = ctypes.c_ulong
+        self.cf.CFRelease.argtypes = [pointer]
+        self.cf.CFRelease.restype = None
+        self.security.SecItemCopyMatching.argtypes = [pointer, ctypes.POINTER(pointer)]
+        self.security.SecItemCopyMatching.restype = ctypes.c_int32
+        self.security.SecItemAdd.argtypes = [pointer, ctypes.POINTER(pointer)]
+        self.security.SecItemAdd.restype = ctypes.c_int32
+        self.security.SecItemUpdate.argtypes = [pointer, pointer]
+        self.security.SecItemUpdate.restype = ctypes.c_int32
+        # These exported values are structures, so their addresses must be passed;
+        # reading the first word as a pointer would be an invalid callback table.
+        self._key_callbacks = ctypes.addressof(
+            ctypes.c_byte.in_dll(self.cf, "kCFTypeDictionaryKeyCallBacks")
+        )
+        self._value_callbacks = ctypes.addressof(
+            ctypes.c_byte.in_dll(self.cf, "kCFTypeDictionaryValueCallBacks")
+        )
+        names = (
+            "kSecClass",
+            "kSecClassGenericPassword",
+            "kSecAttrService",
+            "kSecAttrAccount",
+            "kSecValueData",
+            "kSecReturnData",
+            "kSecMatchLimit",
+            "kSecMatchLimitOne",
+            "kSecAttrAccessible",
+            "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+        )
+        self._constants = {
+            name: ctypes.c_void_p.in_dll(self.security, name).value for name in names
+        }
+        self._constants["kCFBooleanTrue"] = ctypes.c_void_p.in_dll(
+            self.cf, "kCFBooleanTrue"
+        ).value
+        if not all(self._constants.values()):
+            raise ValueError("Required Security constants unavailable")
+
+    @contextmanager
+    def _scope(self) -> Iterator[list[int]]:
+        owned: list[int] = []
+        try:
+            yield owned
+        finally:
+            for reference in reversed(owned):
+                self.cf.CFRelease(reference)
+
+    @staticmethod
+    def _own(reference: int | None, owned: list[int]) -> int:
+        if not reference:
+            raise BridgeError(
+                "KEYCHAIN_UNAVAILABLE", "Falha ao preparar consulta Keychain"
+            )
+        owned.append(reference)
+        return reference
+
+    def _string(self, value: str, owned: list[int]) -> int:
+        return self._own(
+            self.cf.CFStringCreateWithCString(None, value.encode("utf-8"), 0x08000100),
+            owned,
+        )
+
+    def _data(self, value: bytes, owned: list[int]) -> int:
+        buffer = (ctypes.c_ubyte * len(value)).from_buffer_copy(value)
+        return self._own(self.cf.CFDataCreate(None, buffer, len(value)), owned)
+
+    def _dictionary(self, owned: list[int]) -> int:
+        return self._own(
+            self.cf.CFDictionaryCreateMutable(
+                None, 0, self._key_callbacks, self._value_callbacks
+            ),
+            owned,
+        )
+
+    def _put(self, query: int, key: str, value: int | None) -> None:
+        self.cf.CFDictionarySetValue(query, self._constants[key], value)
+
+    def _query(self, account: str, owned: list[int]) -> int:
+        query = self._dictionary(owned)
+        self._put(query, "kSecClass", self._constants["kSecClassGenericPassword"])
+        self._put(query, "kSecAttrService", self._string(KEYCHAIN_SERVICE, owned))
+        self._put(query, "kSecAttrAccount", self._string(account, owned))
+        return query
+
+    def read(self, account: str) -> tuple[int, bytes | None]:
+        with self._scope() as owned:
+            query = self._query(account, owned)
+            self._put(query, "kSecReturnData", self._constants["kCFBooleanTrue"])
+            self._put(query, "kSecMatchLimit", self._constants["kSecMatchLimitOne"])
+            result = ctypes.c_void_p()
+            status = int(self.security.SecItemCopyMatching(query, ctypes.byref(result)))
+            if result.value:
+                owned.append(result.value)
+            if status != 0:
+                return status, None
+            if (
+                not result.value
+                or self.cf.CFGetTypeID(result) != self.cf.CFDataGetTypeID()
+            ):
+                raise BridgeError(
+                    "KEYCHAIN_INVALID_DATA", "Formato de credencial inválido"
+                )
+            length = int(self.cf.CFDataGetLength(result))
+            if not 0 < length <= 4096:
+                raise BridgeError(
+                    "KEYCHAIN_INVALID_DATA", "Tamanho de credencial inválido"
+                )
+            data = self.cf.CFDataGetBytePtr(result)
+            if not data:
+                raise BridgeError("KEYCHAIN_INVALID_DATA", "Credencial não pôde ser lida")
+            return status, ctypes.string_at(data, length)
+
+    def update(self, account: str, value: bytes) -> int:
+        with self._scope() as owned:
+            query = self._query(account, owned)
+            changes = self._dictionary(owned)
+            self._put(changes, "kSecValueData", self._data(value, owned))
+            self._put(
+                changes,
+                "kSecAttrAccessible",
+                self._constants["kSecAttrAccessibleWhenUnlockedThisDeviceOnly"],
+            )
+            return int(self.security.SecItemUpdate(query, changes))
+
+    def add(self, account: str, value: bytes) -> int:
+        with self._scope() as owned:
+            query = self._query(account, owned)
+            self._put(query, "kSecValueData", self._data(value, owned))
+            self._put(
+                query,
+                "kSecAttrAccessible",
+                self._constants["kSecAttrAccessibleWhenUnlockedThisDeviceOnly"],
+            )
+            return int(self.security.SecItemAdd(query, None))
+
+
+class KeychainStore:
+    """Device-only, unlocked Keychain credentials; reject every insecure fallback."""
+
+    def __init__(self, backend: KeychainBackend | None = None) -> None:
+        self.backend = backend if backend is not None else SecurityKeychain()
+
+    @staticmethod
+    def _account(account: str) -> None:
+        if not account or "\x00" in account or len(account.encode("utf-8")) > 2048:
+            raise BridgeError("KEYCHAIN_INVALID_DATA", "Identificador Keychain inválido")
+
+    @staticmethod
+    def _check(status: int) -> None:
+        if status == 0:
+            return
+        if status == -25308:  # errSecInteractionNotAllowed
+            raise BridgeError(
+                "KEYCHAIN_LOCKED", "Desbloqueie o iPhone e execute Pyto em primeiro plano"
+            )
+        raise BridgeError(
+            "KEYCHAIN_UNAVAILABLE", f"Keychain recusou acesso (OSStatus {status})"
+        )
+
+    def check_available(self) -> None:
+        # A successful read query is evidence of callable APIs, not a successful
+        # credential write. Enrollment verifies persistence by reading it back.
+        self.get("__photointel_availability_probe__")
 
     def get(self, account: str) -> str | None:
+        self._account(account)
+        status, raw = self.backend.read(account)
+        if status == -25300:  # errSecItemNotFound
+            return None
+        self._check(status)
+        if not raw or len(raw) > 4096:
+            raise BridgeError("KEYCHAIN_INVALID_DATA", "Credencial Keychain inválida")
         try:
-            value = self.module.get_password(KEYCHAIN_SERVICE, account)
-        except Exception as exc:
-            raise BridgeError("KEYCHAIN_UNAVAILABLE", "Não foi possível ler o Keychain") from exc
-        return str(value) if value else None
+            value = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise BridgeError(
+                "KEYCHAIN_INVALID_DATA", "Credencial Keychain inválida"
+            ) from exc
+        if "\x00" in value:
+            raise BridgeError("KEYCHAIN_INVALID_DATA", "Credencial Keychain inválida")
+        return value
 
     def set(self, account: str, value: str) -> None:
-        try:
-            self.module.set_password(KEYCHAIN_SERVICE, account, value)
-        except Exception as exc:
-            raise BridgeError("KEYCHAIN_UNAVAILABLE", "Não foi possível gravar no Keychain") from exc
+        self._account(account)
+        raw = value.encode("utf-8")
+        if not raw or len(raw) > 4096 or "\x00" in value:
+            raise BridgeError("KEYCHAIN_INVALID_DATA", "Credencial Keychain inválida")
+        status = self.backend.update(account, raw)
+        if status == -25300:
+            status = self.backend.add(account, raw)
+            if status == -25299:  # errSecDuplicateItem: another enrollment won the race.
+                status = self.backend.update(account, raw)
+        self._check(status)
+        if self.get(account) != value:
+            raise BridgeError(
+                "KEYCHAIN_VERIFICATION_FAILED",
+                "Credencial não foi confirmada no Keychain",
+            )
 
 
 class KeywordWriter(Protocol):
@@ -70,15 +312,24 @@ class KeywordWriter(Protocol):
 
     def read(self, local_identifier: str) -> list[str]: ...
 
-    def apply_delta(self, local_identifier: str, add: list[str], remove: list[str]) -> None: ...
+    def apply_delta(
+        self, local_identifier: str, add: list[str], remove: list[str]
+    ) -> None: ...
 
 
 class UnavailableKeywordWriter:
     def read(self, local_identifier: str) -> list[str]:
-        raise BridgeError("PHOTOKIT_WRITE_UNAVAILABLE", "Leitura de keywords não verificada neste Pyto")
+        raise BridgeError(
+            "PHOTOKIT_WRITE_UNAVAILABLE", "Leitura de keywords não verificada neste Pyto"
+        )
 
-    def apply_delta(self, local_identifier: str, add: list[str], remove: list[str]) -> None:
-        raise BridgeError("PHOTOKIT_WRITE_UNAVAILABLE", "Adaptador de escrita PhotoKit Beta não validado")
+    def apply_delta(
+        self, local_identifier: str, add: list[str], remove: list[str]
+    ) -> None:
+        raise BridgeError(
+            "PHOTOKIT_WRITE_UNAVAILABLE",
+            "Adaptador de escrita PhotoKit Beta não validado",
+        )
 
 
 class PhotoKitReader:
@@ -94,6 +345,7 @@ class PhotoKitReader:
                 raise ImportError("PhotoKit requires iOS")
             ctypes.CDLL("/System/Library/Frameworks/Photos.framework/Photos")
             from rubicon.objc import ObjCClass  # type: ignore[import-not-found]
+
             self.asset_class = ObjCClass("PHAsset")
             self.library_class = ObjCClass("PHPhotoLibrary")
             self.options_class = ObjCClass("PHFetchOptions")
@@ -106,18 +358,25 @@ class PhotoKitReader:
         if self.library_class is None:
             return "unavailable"
         try:
-            return AUTHORIZATION.get(int(self.library_class.authorizationStatus()), "unavailable")
+            return AUTHORIZATION.get(
+                int(self.library_class.authorizationStatus()), "unavailable"
+            )
         except Exception:
             return "unavailable"
 
     def request_authorization(self) -> str:
         if self.library_class is None:
-            raise BridgeError("PHOTOKIT_PERMISSION_DENIED", "PhotoKit não está disponível neste runtime")
-        # Public API. The callback must stay alive until the system permission sheet responds.
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED", "PhotoKit não está disponível neste runtime"
+            )
+        # Keep the public API callback alive until the permission sheet responds.
         try:
             from rubicon.objc import Block  # type: ignore[import-not-found]
         except ImportError as exc:
-            raise BridgeError("PHOTOKIT_PERMISSION_DENIED", "Rubicon Block não disponível; autorize Pyto em Ajustes") from exc
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED",
+                "Rubicon Block não disponível; autorize Pyto em Ajustes",
+            ) from exc
         result: list[int] = []
 
         def receive(status: int) -> None:
@@ -127,12 +386,18 @@ class PhotoKitReader:
         try:
             self.library_class.requestAuthorization_(callback)
         except (AttributeError, TypeError, ctypes.ArgumentError) as exc:
-            raise BridgeError("PHOTOKIT_PERMISSION_DENIED", "Solicitação não disponível; autorize Pyto em Ajustes") from exc
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED",
+                "Solicitação não disponível; autorize Pyto em Ajustes",
+            ) from exc
         deadline = time.monotonic() + 120
         while not result and time.monotonic() < deadline:
             time.sleep(0.1)
         if not result:
-            raise BridgeError("PHOTOKIT_PERMISSION_DENIED", "Permissão pendente; execute doctor novamente após responder")
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED",
+                "Permissão pendente; execute doctor novamente após responder",
+            )
         return AUTHORIZATION.get(result[0], "unavailable")
 
     def capabilities(self) -> dict[str, Any]:
@@ -140,17 +405,29 @@ class PhotoKitReader:
         available = authorization in {"authorized", "limited"}
         return {
             "level": "read_only" if available else "unavailable",
-            "photokit_read": available, "keywords_read": False, "keywords_write": False,
-            "authorization": authorization, "platform": platform.platform()[:128],
+            "photokit_read": available,
+            "keywords_read": False,
+            "keywords_write": False,
+            "authorization": authorization,
+            "platform": platform.platform()[:128],
             "adapter": "pyto-readonly-v1",
-            "reason": "Keywords PhotoKit Beta não validadas em Pyto. Inventário usa somente APIs públicas estáveis.",
+            "reason": (
+                "Keywords PhotoKit Beta não validadas em Pyto. "
+                "Inventário usa somente APIs públicas estáveis."
+            ),
         }
 
-    def inventory(self, offset: int, limit: int, checkpoint: dict[str, Any]) -> dict[str, Any]:
+    def inventory(
+        self, offset: int, limit: int, checkpoint: dict[str, Any]
+    ) -> dict[str, Any]:
         if self.authorization() not in {"authorized", "limited"}:
-            raise BridgeError("PHOTOKIT_PERMISSION_DENIED", "Autorize acesso às fotos em Ajustes > Pyto")
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED", "Autorize acesso às fotos em Ajustes > Pyto"
+            )
         options = self.options_class.new()
-        options.sortDescriptors = [self.descriptor_class.sortDescriptorWithKey_ascending_("creationDate", True)]
+        options.sortDescriptors = [
+            self.descriptor_class.sortDescriptorWithKey_ascending_("creationDate", True)
+        ]
         collection = self.asset_class.fetchAssetsWithOptions_(options)
         count = int(collection.count)
         if checkpoint and checkpoint.get("total") != count:
@@ -163,25 +440,51 @@ class PhotoKitReader:
         for index in range(offset, min(offset + limit, count)):
             asset = collection.objectAtIndex_(index)
             timestamp = asset.creationDate
-            captured = datetime.fromtimestamp(float(timestamp.timeIntervalSince1970), timezone.utc).isoformat() if timestamp else None
+            captured = (
+                datetime.fromtimestamp(
+                    float(timestamp.timeIntervalSince1970), UTC
+                ).isoformat()
+                if timestamp
+                else None
+            )
             resources = self.resource_class.assetResourcesForAsset_(asset)
-            filename = str(resources.objectAtIndex_(0).originalFilename) if int(resources.count) else None
+            filename = (
+                str(resources.objectAtIndex_(0).originalFilename)
+                if int(resources.count)
+                else None
+            )
             media = {1: "image", 2: "video"}.get(int(asset.mediaType), "other")
-            items.append({
-                "local_identifier": str(asset.localIdentifier), "cloud_identifier": None,
-                "filename": filename, "captured_at": captured, "width": int(asset.pixelWidth),
-                "height": int(asset.pixelHeight), "media_type": media,
-                "sha256": None, "keywords": None,
-            })
+            items.append(
+                {
+                    "local_identifier": str(asset.localIdentifier),
+                    "cloud_identifier": None,
+                    "filename": filename,
+                    "captured_at": captured,
+                    "width": int(asset.pixelWidth),
+                    "height": int(asset.pixelHeight),
+                    "media_type": media,
+                    "sha256": None,
+                    "keywords": None,
+                }
+            )
         next_offset = offset + len(items)
-        return {"items": items, "complete": next_offset >= count,
-                "checkpoint": {"offset": next_offset, "total": count,
-                               "last_identifier": items[-1]["local_identifier"] if items else None}}
+        return {
+            "items": items,
+            "complete": next_offset >= count,
+            "checkpoint": {
+                "offset": next_offset,
+                "total": count,
+                "last_identifier": items[-1]["local_identifier"] if items else None,
+            },
+        }
 
 
 def revision(values: list[str]) -> str:
     import unicodedata
-    canonical = sorted({unicodedata.normalize("NFC", value).strip() for value in values} - {""})
+
+    canonical = sorted(
+        {unicodedata.normalize("NFC", value).strip() for value in values} - {""}
+    )
     data = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(data.encode()).hexdigest()
 
@@ -191,77 +494,130 @@ def safe_keyword_plan(operation: dict[str, Any], before: list[str]) -> dict[str,
     if operation.get("status") != "claimed" or not operation.get("approved_at"):
         raise BridgeError("SYNC_CONFLICT", "Operação não aprovada ou não adquirida")
     if revision(before) != operation["expected_revision"]:
-        raise BridgeError("SYNC_CONFLICT", "Keywords mudaram; solicite nova prévia e aprovação")
+        raise BridgeError(
+            "SYNC_CONFLICT", "Keywords mudaram; solicite nova prévia e aprovação"
+        )
     additions, removals = set(payload["add"]), set(payload["remove"])
-    if removals and (not payload["approve_removals"] or removals - set(payload["managed_keywords"])):
-        raise BridgeError("SYNC_CONFLICT", "Tentativa de remover keywords não gerenciadas")
+    if removals and (
+        not payload["approve_removals"] or removals - set(payload["managed_keywords"])
+    ):
+        raise BridgeError(
+            "SYNC_CONFLICT", "Tentativa de remover keywords não gerenciadas"
+        )
     after = sorted((set(before) | additions) - removals)
     if revision(after) != operation["desired_revision"]:
         raise BridgeError("SYNC_VERIFICATION_FAILED", "Revisão desejada não confere")
-    return {"before": before, "add": sorted(additions), "remove": sorted(removals), "after": after}
+    return {
+        "before": before,
+        "add": sorted(additions),
+        "remove": sorted(removals),
+        "after": after,
+    }
 
 
 class Client:
     def __init__(self, base_url: str, token: str | None = None) -> None:
         parsed = urllib.parse.urlsplit(base_url)
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-            raise BridgeError("INVALID_BACKEND_URL", "Bridge exige URL HTTPS sem credenciais")
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+        ):
+            raise BridgeError(
+                "INVALID_BACKEND_URL", "Bridge exige URL HTTPS sem credenciais"
+            )
         if parsed.query or parsed.fragment or parsed.path.rstrip("/"):
-            raise BridgeError("INVALID_BACKEND_URL", "Use somente a origem HTTPS do backend")
+            raise BridgeError(
+                "INVALID_BACKEND_URL", "Use somente a origem HTTPS do backend"
+            )
         self.base_url = base_url.rstrip("/")
         self.token = token
 
-    def request(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+    def request(
+        self, method: str, path: str, body: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         retry_safe = path.split("?", 1)[0] in {
-            "/v1/bridge/status", "/v1/bridge/capabilities", "/v1/bridge/manifest",
+            "/v1/bridge/status",
+            "/v1/bridge/capabilities",
+            "/v1/bridge/manifest",
             "/v1/bridge/operations/preview",
         } or path.endswith("/ack")
         for attempt in range(3 if retry_safe else 1):
             try:
                 return self._request_once(method, path, body)
             except BridgeError as error:
-                if (not retry_safe or attempt == 2 or error.code not in {
-                    "BACKEND_UNAVAILABLE", "BACKEND_RATE_LIMITED",
-                }):
+                if (
+                    not retry_safe
+                    or attempt == 2
+                    or error.code
+                    not in {
+                        "BACKEND_UNAVAILABLE",
+                        "BACKEND_RATE_LIMITED",
+                    }
+                ):
                     raise
-                time.sleep(0.5 * (2 ** attempt))
+                time.sleep(0.5 * (2**attempt))
         raise BridgeError("BACKEND_UNAVAILABLE", "Backend indisponível")
 
-    def _request_once(self, method: str, path: str,
-                      body: dict[str, Any] | None) -> dict[str, Any]:
+    def _request_once(
+        self, method: str, path: str, body: dict[str, Any] | None
+    ) -> dict[str, Any]:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
         encoded = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(self.base_url + path, data=encoded, headers=headers, method=method)
+        request = urllib.request.Request(
+            self.base_url + path, data=encoded, headers=headers, method=method
+        )
         try:
-            # Default SSL verification stays enabled. Redirects are rejected so credentials
-            # cannot be forwarded to an unexpected login page or a different host.
+            # TLS verification remains enabled. Reject redirects to prevent sending
+            # credentials to an unexpected login page or a different host.
             class NoRedirect(urllib.request.HTTPRedirectHandler):
-                def redirect_request(self, req: Any, fp: Any, code: int, msg: str,
-                                     response_headers: Any, newurl: str) -> None:
+                def redirect_request(
+                    self,
+                    req: Any,
+                    fp: Any,
+                    code: int,
+                    msg: str,
+                    response_headers: Any,
+                    newurl: str,
+                ) -> None:
                     return None
+
             opener = urllib.request.build_opener(NoRedirect)
             with opener.open(request, timeout=30) as response:
                 raw = response.read(2 * 1024 * 1024 + 1)
                 if len(raw) > 2 * 1024 * 1024:
-                    raise BridgeError("INVALID_RESPONSE", "Resposta do backend excede limite")
+                    raise BridgeError(
+                        "INVALID_RESPONSE", "Resposta do backend excede limite"
+                    )
                 data = json.loads(raw)
                 if not isinstance(data, dict):
                     raise BridgeError("INVALID_RESPONSE", "Resposta JSON inválida")
                 return data
         except urllib.error.HTTPError as exc:
-            code = ("BACKEND_RATE_LIMITED" if exc.code == 429 else
-                    "BACKEND_UNAVAILABLE" if exc.code >= 500 else "BACKEND_REJECTED")
+            code = (
+                "BACKEND_RATE_LIMITED"
+                if exc.code == 429
+                else "BACKEND_UNAVAILABLE"
+                if exc.code >= 500
+                else "BACKEND_REJECTED"
+            )
             try:
                 server_code = json.loads(exc.read(16384)).get("error", {}).get("code")
                 if exc.code < 500 and exc.code != 429 and server_code:
                     code = str(server_code)
             except (ValueError, TypeError, AttributeError):
                 pass
-            raise BridgeError(code, f"Backend recusou operação (HTTP {exc.code})") from exc
+            raise BridgeError(
+                code, f"Backend recusou operação (HTTP {exc.code})"
+            ) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-            raise BridgeError("BACKEND_UNAVAILABLE", "Não foi possível acessar o backend; tente novamente") from exc
+            raise BridgeError(
+                "BACKEND_UNAVAILABLE",
+                "Não foi possível acessar o backend; tente novamente",
+            ) from exc
 
 
 class Bridge:
@@ -282,17 +638,30 @@ class Bridge:
         url = self.config.get("backend_url", "")
         token = KeychainStore().get(url)
         if not token:
-            raise BridgeError("DEVICE_NOT_ENROLLED", "Execute enroll com um código novo da interface web")
+            raise BridgeError(
+                "DEVICE_NOT_ENROLLED",
+                "Execute enroll com um código novo da interface web",
+            )
         return Client(url, token)
 
     def enroll(self, url: str, code: str, name: str) -> dict[str, Any]:
-        store = KeychainStore()  # Verify secure storage availability before consuming a code.
         client = Client(url)
-        result = client.request("POST", "/v1/bridge/enroll", {
-            "name": name, "code": code, "capabilities": self.reader.capabilities(),
-        })
+        store = KeychainStore()
+        # Fail before consuming the code when the runtime cannot query the Keychain.
+        store.check_available()
+        result = client.request(
+            "POST",
+            "/v1/bridge/enroll",
+            {
+                "name": name,
+                "code": code,
+                "capabilities": self.reader.capabilities(),
+            },
+        )
         store.set(client.base_url, result["credential"])
-        self.config.update(backend_url=client.base_url, device_id=result["device"]["id"], checkpoint={})
+        self.config.update(
+            backend_url=client.base_url, device_id=result["device"]["id"], checkpoint={}
+        )
         self.save()
         return {"device_id": result["device"]["id"], "credential_stored": "keychain"}
 
@@ -303,18 +672,30 @@ class Bridge:
         processed, complete = 0, False
         for _ in range(batches):
             checkpoint = self.config.get("checkpoint", {})
-            batch = self.reader.inventory(int(checkpoint.get("offset", 0)), limit, checkpoint)
-            response = client.request("POST", "/v1/bridge/manifest", {
-                "items": batch["items"], "checkpoint": json.dumps(batch["checkpoint"]),
-                "complete": batch["complete"],
-            })
+            batch = self.reader.inventory(
+                int(checkpoint.get("offset", 0)), limit, checkpoint
+            )
+            response = client.request(
+                "POST",
+                "/v1/bridge/manifest",
+                {
+                    "items": batch["items"],
+                    "checkpoint": json.dumps(batch["checkpoint"]),
+                    "complete": batch["complete"],
+                },
+            )
             processed += response["accepted"]
             self.config["checkpoint"] = {} if batch["complete"] else batch["checkpoint"]
-            self.save()  # Advance only after the server durably accepted the inventory batch.
+            # Advance only after the server durably accepted the inventory batch.
+            self.save()
             complete = batch["complete"]
             if complete:
                 break
-        return {"accepted": processed, "complete": complete, "checkpoint": self.config["checkpoint"]}
+        return {
+            "accepted": processed,
+            "complete": complete,
+            "checkpoint": self.config["checkpoint"],
+        }
 
     def sync(self, dry_run: bool = True) -> dict[str, Any]:
         client = self.client()
@@ -323,16 +704,29 @@ class Bridge:
         # This executable first adapter cannot write keywords. Do not claim operations,
         # fabricate acknowledgements or consume a pending operation on a read-only device.
         if not caps["keywords_read"] or not caps["keywords_write"]:
-            return {"status": "read_only", "error_code": "PHOTOKIT_WRITE_UNAVAILABLE",
-                    "pending_preserved": True, "dry_run": dry_run,
-                    "reason": caps["reason"], "backend": client.request("GET", "/v1/bridge/status"),
-                    "operations": client.request("GET", "/v1/bridge/operations/preview?limit=20")}
-        raise BridgeError("PHOTOKIT_WRITE_UNAVAILABLE", "Escrita exige adaptador validado separado")
+            return {
+                "status": "read_only",
+                "error_code": "PHOTOKIT_WRITE_UNAVAILABLE",
+                "pending_preserved": True,
+                "dry_run": dry_run,
+                "reason": caps["reason"],
+                "backend": client.request("GET", "/v1/bridge/status"),
+                "operations": client.request(
+                    "GET", "/v1/bridge/operations/preview?limit=20"
+                ),
+            }
+        raise BridgeError(
+            "PHOTOKIT_WRITE_UNAVAILABLE", "Escrita exige adaptador validado separado"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Photo Intelligence — Pyto Bridge")
-    parser.add_argument("--config", type=Path, default=Path.home() / "Documents" / "photointel-bridge.json")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path.home() / "Documents" / "photointel-bridge.json",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--request-permission", action="store_true")
@@ -354,13 +748,16 @@ def main(argv: list[str] | None = None) -> int:
             if arguments.request_permission:
                 bridge.reader.request_authorization()
             try:
-                KeychainStore()
-                keychain_status = "available"
+                KeychainStore().check_available()
+                keychain_status = "query_available"
             except BridgeError as error:
                 keychain_status = error.code
-            result = {"capabilities": bridge.reader.capabilities(),
-                      "enrolled": bool(bridge.config.get("device_id")),
-                      "credential_storage": keychain_status}
+            result = {
+                "capabilities": bridge.reader.capabilities(),
+                "enrolled": bool(bridge.config.get("device_id")),
+                "credential_storage": keychain_status,
+                "credential_storage_backend": "Security.framework",
+            }
         elif arguments.command == "capabilities":
             result = bridge.reader.capabilities()
         elif arguments.command == "enroll":
@@ -374,19 +771,45 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False))
         return 0
     except BridgeError as exc:
-        print(json.dumps({"ok": False, "error": {"code": exc.code, "message": exc.message}}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {"ok": False, "error": {"code": exc.code, "message": exc.message}},
+                ensure_ascii=False,
+            )
+        )
         return 1
     except (OSError, ValueError, KeyError, TypeError):
-        print(json.dumps({"ok": False, "error": {"code": "BRIDGE_CONFIGURATION_INVALID", "message": "Verifique configuração e compatibilidade do runtime"}}))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "BRIDGE_CONFIGURATION_INVALID",
+                        "message": "Verifique configuração e compatibilidade do runtime",
+                    },
+                }
+            )
+        )
         return 1
     except Exception as exc:
         # Runtime Objective-C exceptions must remain structured and must not echo
         # native exception messages that can contain private metadata.
-        print(json.dumps({"ok": False, "error": {
-            "code": "BRIDGE_RUNTIME_FAILURE",
-            "message": "Falha do runtime; execute doctor e confira compatibilidade do Pyto",
-            "exception_type": type(exc).__name__,
-        }}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "BRIDGE_RUNTIME_FAILURE",
+                        "message": (
+                            "Falha do runtime; execute doctor e confira "
+                            "compatibilidade do Pyto"
+                        ),
+                        "exception_type": type(exc).__name__,
+                    },
+                },
+                ensure_ascii=False,
+            )
+        )
         return 1
 
 

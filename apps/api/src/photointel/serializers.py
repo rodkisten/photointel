@@ -2,6 +2,7 @@
 
 import base64
 import json
+import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -17,19 +18,29 @@ def row_dict(row: Any, exclude: set[str] | None = None) -> dict[str, Any]:
     excluded = exclude or set()
     return {
         item.key: getattr(row, item.key)
-        for item in inspect(type(row)).column_attrs if item.key not in excluded
+        for item in inspect(type(row)).column_attrs
+        if item.key not in excluded
     }
 
 
 def asset_out(asset: Asset, ranking: dict[str, Any] | None = None) -> AssetOut:
     data = row_dict(
-        asset, {"source_metadata", "source_account", "sha256", "phash",
-                "search_document", "missing_scan_count", "updated_at",
-                "last_successful_inference"}
+        asset,
+        {
+            "source_metadata",
+            "source_account",
+            "sha256",
+            "phash",
+            "search_document",
+            "missing_scan_count",
+            "updated_at",
+            "last_successful_inference",
+        },
     )
     data["thumbnail_url"] = (
         f"/v1/assets/{asset.id}/media/thumbnail_medium"
-        if asset.ingestion_status == "completed" and asset.media_type != "video" else None
+        if asset.ingestion_status == "completed" and asset.media_type != "video"
+        else None
     )
     data["ranking"] = ranking
     return AssetOut.model_validate(data)
@@ -38,12 +49,14 @@ def asset_out(asset: Asset, ranking: dict[str, Any] | None = None) -> AssetOut:
 def resource_out(resource: AssetResource) -> ResourceOut:
     data = {
         key: getattr(resource, key)
-        for key in ResourceOut.model_fields if key != "media_url"
+        for key in ResourceOut.model_fields
+        if key != "media_url"
     }
     data["media_url"] = (
         f"/v1/assets/{resource.asset_id}/media/{resource.resource_type}"
         if resource.status in {"available", "completed"}
-        and resource.resource_type != "inference_input" else None
+        and resource.resource_type != "inference_input"
+        else None
     )
     return ResourceOut.model_validate(data)
 
@@ -56,10 +69,16 @@ def tag_out(tag: Tag, aliases: list[dict[str, Any]] | None = None) -> TagOut:
 
 def assertion_out(assertion: AssetTag, tag: Tag) -> AssetTagOut:
     return AssetTagOut(
-        id=assertion.id, tag_id=tag.id, canonical_key=tag.canonical_key,
-        display_name=tag.display_name, category=tag.category, origin=assertion.origin,
-        confidence=assertion.confidence, model_version=assertion.model_version,
-        user_status=assertion.user_status, review_status=assertion.review_status,
+        id=assertion.id,
+        tag_id=tag.id,
+        canonical_key=tag.canonical_key,
+        display_name=tag.display_name,
+        category=tag.category,
+        origin=assertion.origin,
+        confidence=assertion.confidence,
+        model_version=assertion.model_version,
+        user_status=assertion.user_status,
+        review_status=assertion.review_status,
         is_sensitive=tag.is_sensitive,
     )
 
@@ -69,17 +88,39 @@ def encode_cursor(data: dict[str, Any]) -> str:
         if isinstance(value, (UUID, datetime)):
             return str(value)
         raise TypeError("Invalid cursor value")
-    return base64.urlsafe_b64encode(
-        json.dumps(data, default=fallback, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
+
+    return (
+        base64.urlsafe_b64encode(
+            json.dumps(data, default=fallback, separators=(",", ":")).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
 
 
 def decode_cursor(cursor: str) -> dict[str, Any]:
+    def reject_constant(value: str) -> None:
+        raise ValueError(f"Invalid JSON constant: {value}")
+
     try:
-        raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
-        data = json.loads(raw)
+        if len(cursor) > 4096 or re.fullmatch(r"[A-Za-z0-9_-]+", cursor) is None:
+            raise ValueError("Invalid cursor encoding")
+        raw = base64.b64decode(
+            cursor + "=" * (-len(cursor) % 4),
+            altchars=b"-_",
+            validate=True,
+        )
+        data = json.loads(raw, parse_constant=reject_constant)
         if not isinstance(data, dict):
             raise ValueError("Invalid cursor")
         return data
-    except (ValueError, TypeError, UnicodeError) as exc:
+    except (ValueError, TypeError, UnicodeError, RecursionError) as exc:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Cursor inválido", 422) from exc
+
+
+def decode_uuid_cursor(cursor: str) -> UUID:
+    """Validate an opaque list cursor before constructing any database predicate."""
+    try:
+        return UUID(str(decode_cursor(cursor)["id"]))
+    except (ValueError, KeyError, TypeError) as exc:
         raise AppError(ErrorCode.INVALID_REQUEST, "Cursor inválido", 422) from exc

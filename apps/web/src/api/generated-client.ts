@@ -5,7 +5,7 @@ import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types
 import { API_BASE, ApiError } from './client';
 
 export const api = createClient<paths>({
-  baseUrl: API_BASE,
+  baseUrl: API_BASE || window.location.origin,
   credentials: 'include',
   cache: 'no-store',
   fetch: (input) => globalThis.fetch(input),
@@ -16,7 +16,7 @@ function fail(response: Response, body: unknown): never {
   const denied = [401, 403].includes(response.status);
   throw new ApiError(
     denied ? 'Acesso não autorizado. Entre novamente pelo Cloudflare Access.' :
-      error?.error?.message ?? 'Não foi possível concluir. Tente novamente.',
+      error?.error?.message ?? 'Serviço indisponível. Tente novamente.',
     response.status,
     error?.error?.code ?? `HTTP_${response.status}`,
     response.headers.get('X-Correlation-ID') ?? undefined,
@@ -24,11 +24,12 @@ function fail(response: Response, body: unknown): never {
 }
 
 function completeFilter(node: FilterNode): components['schemas']['FilterNode'] {
+  const { children, ...condition } = node;
   return {
-    ...node,
+    ...condition,
     confidence: node.confidence ?? 0,
     comparison: node.comparison ?? 'gte',
-    ...(node.children ? { children: node.children.map(completeFilter) } : {}),
+    ...(children ? { children: children.map(completeFilter) } : {}),
   };
 }
 

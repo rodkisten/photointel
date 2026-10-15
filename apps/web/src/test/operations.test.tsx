@@ -86,11 +86,11 @@ describe('persisted operations and navigation', () => {
   it('opens the accessible mobile navigation and reaches a real page', async () => {
     const user = userEvent.setup();
     mount(<App />, '/albums');
-    expect(await screen.findByRole('heading', { name: 'Álbuns', exact: true })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Álbuns' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Mais páginas' }));
     const menu = screen.getByRole('dialog', { name: 'Seu workspace' });
     await user.click(within(menu).getByRole('link', { name: 'Biblioteca' }));
-    expect(await screen.findByRole('heading', { name: 'Biblioteca', exact: true })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Biblioteca' })).toBeVisible();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

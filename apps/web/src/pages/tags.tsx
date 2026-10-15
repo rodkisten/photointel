@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Edit3, Plus, Search, Tag as TagIcon } from 'lucide-react';
+import { Check, Edit3, Plus, Search, SlidersHorizontal, Tag as TagIcon } from 'lucide-react';
 import { useAction, useApi } from '../api/client';
 import type { Info, Page, Tag } from '../api/types';
 import { Empty, ErrorState, PageHeader, Skeleton, Status } from '../components/common';
@@ -7,6 +7,11 @@ import { Button } from '../components/ui/button';
 import { Dialog } from '../components/ui/dialog';
 import { number, text } from '../lib/format';
 import { useUi } from '../lib/store';
+
+interface CategoryRule { enabled: boolean; minimum_confidence: number }
+interface TagCategory extends CategoryRule {
+  key: string; name: string; count: number; is_sensitive: boolean;
+}
 
 export function TagsPage() {
   const [q, setQ] = useState(''); const [category, setCategory] = useState('');
@@ -19,7 +24,11 @@ export function TagsPage() {
   const [threshold, setThreshold] = useState(35); const [sensitive, setSensitive] = useState(false);
   const [tagCategory, setTagCategory] = useState('other');
   const [parent, setParent] = useState(''); const [merge, setMerge] = useState('');
-  const categories = useApi<Page<Info>>('/v1/tags/categories');
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [categoryRules, setCategoryRules] = useState<Record<string, CategoryRule>>({});
+  const categories = useApi<Page<TagCategory>>('/v1/tags/categories');
+  const settings = useApi<Info>('/v1/settings');
+  const configureCategories = useAction('/v1/settings', 'PATCH');
   const query = useApi<Page<Tag>>(`/v1/tags?limit=100&q=${encodeURIComponent(q)}&category=${category}&cursor=${cursor}`);
   const create = useAction<Tag>('/v1/tags'); const patch = useAction<Tag>(undefined, 'PATCH');
   function edit(tag: Tag | 'new') {
@@ -50,9 +59,21 @@ export function TagsPage() {
     for (const id of selected) await patch.mutateAsync({ url: `/v1/tags/${id}`, body: { enabled: value } });
     setSelected(new Set()); useUi.getState().notify('Categorias selecionadas atualizadas.');
   }
+  function editCategories() {
+    const stored = settings.data?.taxonomy_categories as Record<string, CategoryRule> | undefined;
+    setCategoryRules({ ...stored, ...Object.fromEntries((categories.data?.items ?? [])
+      .map((item) => [item.key, { enabled: item.enabled,
+        minimum_confidence: item.minimum_confidence }])) });
+    setCategoriesOpen(true);
+  }
+  function updateCategory(key: string, changes: Partial<CategoryRule>) {
+    setCategoryRules((current) => ({ ...current, [key]: { ...current[key], ...changes } }));
+  }
   return <><PageHeader eyebrow="Organização e vocabulário" title="Palavras-chave"
     description="Classificações com procedência, aliases e critérios que você controla."
-    actions={<Button onClick={() => edit('new')}><Plus size={14} />Criar palavra-chave</Button>} />
+    actions={<><Button variant="outline" disabled={!categories.data || !settings.data}
+      onClick={editCategories}><SlidersHorizontal size={14} />Configurar categorias</Button>
+      <Button onClick={() => edit('new')}><Plus size={14} />Criar palavra-chave</Button></>} />
     <div className="toolbar"><Search size={15} className="muted" /><input className="input"
       aria-label="Buscar palavra-chave" placeholder="Nome ou chave original…" value={q} maxLength={100}
       onChange={(event) => { setQ(event.target.value); setCursor(''); }} />
@@ -86,6 +107,29 @@ export function TagsPage() {
     <p className="field-help" style={{ marginTop: 15 }}><TagIcon size={11} style={{ display: 'inline', marginRight: 5 }} />
       Aprovação e rejeição de previsões são feitas por fotografia no visualizador.
       Rejeições manuais são preservadas durante novas inferências.</p>
+    <Dialog open={categoriesOpen} onOpenChange={setCategoriesOpen} title="Configurar categorias"
+      description="Defina os clusters incluídos nas próximas classificações e a confiança mínima por categoria.">
+      <div className="stack">{categories.data?.items.map((item) => {
+        const rule = categoryRules[item.key] ?? item;
+        return <div key={item.key} className="panel-section">
+          <label className="checkbox-field"><span>{item.name}<small>{item.key}</small></span>
+            <input type="checkbox" checked={rule.enabled}
+              onChange={(event) => updateCategory(item.key, { enabled: event.target.checked })} /></label>
+          <label className="field">Confiança mínima de {item.name}: {Math.round(rule.minimum_confidence * 100)}%
+            <input type="range" min={0} max={100} step={1} value={Math.round(rule.minimum_confidence * 100)}
+              onChange={(event) => updateCategory(item.key, {
+                minimum_confidence: Number(event.target.value) / 100,
+              })} /></label>
+        </div>;
+      })}</div>
+      <p className="field-help">Categorias sensíveis seguem o opt-in de privacidade.
+        Resultados brutos já existentes permanecem preservados.</p>
+      <div className="form-actions"><Button variant="outline" onClick={() => setCategoriesOpen(false)}>Cancelar</Button>
+        <Button disabled={configureCategories.isPending} onClick={async () => {
+          await configureCategories.mutateAsync({ body: { taxonomy_categories: categoryRules } });
+          setCategoriesOpen(false); useUi.getState().notify('Critérios das categorias salvos.');
+        }}>Salvar categorias</Button></div>
+    </Dialog>
     <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}
       title={editing === 'new' ? 'Nova palavra-chave' : 'Editar palavra-chave'}>
       <div className="stack"><label className="field">Nome em português<input value={name} maxLength={255}

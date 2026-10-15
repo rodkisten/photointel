@@ -21,7 +21,8 @@ class InTestModels:
     def embed_text(self, text: str) -> TextEmbedding:
         self.calls += 1
         return TextEmbedding(
-            embedding=[1.] + [0.] * 767, model_revision=SPEC.siglip_revision,
+            embedding=[1.0] + [0.0] * 767,
+            model_revision=SPEC.siglip_revision,
             runtime_ms=1,
         )
 
@@ -31,41 +32,58 @@ def models() -> InTestModels:
     return InTestModels()
 
 
-async def test_service_denies_missing_bearer_before_model_execution(models: InTestModels) -> None:
+async def test_service_denies_missing_bearer_before_model_execution(
+    models: InTestModels,
+) -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_service(models, SPEC, TOKEN)),
         base_url="https://private.test",
     ) as client:
-        response = await client.post("/embed-text", json={
-            "models": SPEC.model_dump(), "text": "consulta privada",
-        })
+        response = await client.post(
+            "/embed-text",
+            json={
+                "models": SPEC.model_dump(),
+                "text": "consulta privada",
+            },
+        )
         assert response.status_code == 401
         assert models.calls == 0
         assert (await client.get("/docs")).status_code == 404
 
 
-async def test_service_revision_match_and_private_validation_errors(models: InTestModels) -> None:
+async def test_service_revision_match_and_private_validation_errors(
+    models: InTestModels,
+) -> None:
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_service(models, SPEC, TOKEN)),
-        base_url="https://private.test", headers={"Authorization": f"Bearer {TOKEN}"},
+        base_url="https://private.test",
+        headers={"Authorization": f"Bearer {TOKEN}"},
     ) as client:
-        response = await client.post("/embed-text", json={
-            "models": {**SPEC.model_dump(), "siglip_revision": "c" * 40},
-            "text": "private_sensitive_query",
-        })
+        response = await client.post(
+            "/embed-text",
+            json={
+                "models": {**SPEC.model_dump(), "siglip_revision": "c" * 40},
+                "text": "private_sensitive_query",
+            },
+        )
         assert response.status_code == 422
         assert "private_sensitive_query" not in response.text
         assert models.calls == 0
-        response = await client.post("/embed-text", json={
-            "models": SPEC.model_dump(), "text": "plantas",
-        })
+        response = await client.post(
+            "/embed-text",
+            json={
+                "models": SPEC.model_dump(),
+                "text": "plantas",
+            },
+        )
         assert response.status_code == 200
         assert len(response.json()["embedding"]) == 768
         assert models.calls == 1
 
 
 async def test_service_bounds_chunked_body_without_content_length(
-    models: InTestModels, monkeypatch: pytest.MonkeyPatch,
+    models: InTestModels,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("gpu.service.MAX_REQUEST_BYTES", 40)
 
@@ -75,7 +93,8 @@ async def test_service_bounds_chunked_body_without_content_length(
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_service(models, SPEC, TOKEN)),
-        base_url="https://private.test", headers={"Authorization": f"Bearer {TOKEN}"},
+        base_url="https://private.test",
+        headers={"Authorization": f"Bearer {TOKEN}"},
     ) as client:
         response = await client.post("/embed-text", content=oversized_body())
         assert response.status_code == 413

@@ -52,22 +52,29 @@ def upgrade() -> None:
         WHERE status IN ('queued', 'retrying')
     """)
     op.create_check_constraint(
-        "ck_embedding_dimension_model", "model_registry",
+        "ck_embedding_dimension_model",
+        "model_registry",
         "embedding_dimension IS NULL OR embedding_dimension = 768",
     )
     op.create_check_constraint(
-        "ck_asset_tag_user_status", "asset_tags",
+        "ck_asset_tag_user_status",
+        "asset_tags",
         "user_status IN ('unreviewed', 'approved', 'rejected')",
     )
     op.create_check_constraint(
-        "ck_asset_missing_scan_count", "assets", "missing_scan_count >= 0",
+        "ck_asset_missing_scan_count",
+        "assets",
+        "missing_scan_count >= 0",
     )
     op.create_check_constraint(
-        "ck_resource_byte_size", "asset_resources",
+        "ck_resource_byte_size",
+        "asset_resources",
         "byte_size IS NULL OR byte_size >= 0",
     )
     op.create_check_constraint(
-        "ck_sync_attempts", "sync_operations", "attempts >= 0",
+        "ck_sync_attempts",
+        "sync_operations",
+        "attempts >= 0",
     )
     # A device identifier cannot target two verified assets; ambiguous inventory
     # candidates remain representable until the operator resolves their mapping.

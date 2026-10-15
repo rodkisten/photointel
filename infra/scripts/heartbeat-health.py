@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Container liveness from a heartbeat written by the process event loop."""
+
 import argparse
 import time
 from pathlib import Path

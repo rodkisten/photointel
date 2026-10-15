@@ -44,7 +44,7 @@ export function AlbumsPage() {
       {active && <select className="input" style={{ width: 170 }} aria-label="Ordenar álbum" value={active.sort_order}
         onChange={(event) => patch.mutate({ url: `/v1/albums/${active.id}`, body: { sort_order: event.target.value } })}>
         <option value="captured_desc">Data de captura</option><option value="added_desc">Data de adição</option>
-        <option value="position">Ordem do álbum</option></select>}</div><Gallery search={search} albumId={activeId} /></> : <>
+        </select>}</div><Gallery search={search} albumId={activeId} /></> : <>
       <div className="toolbar"><Search size={15} /><input className="input" placeholder="Buscar álbuns…"
         aria-label="Buscar álbuns" value={q} maxLength={100} onChange={(e) => setQ(e.target.value)} /></div>
       {query.error ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : query.isPending ? <Skeleton /> :

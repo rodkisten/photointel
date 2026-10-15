@@ -40,7 +40,7 @@ def create_service(models: ModelRuntime, spec: ModelSpec, token: str) -> FastAPI
             chunks.append(chunk)
         try:
             value = schema.model_validate_json(b"".join(chunks))
-            if getattr(value, "models") != spec:
+            if value.models != spec:
                 raise ValueError("Model revision mismatch")
             return value
         except (ValidationError, ValueError) as exc:

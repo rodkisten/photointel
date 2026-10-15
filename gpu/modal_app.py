@@ -12,9 +12,15 @@ cache = modal.Volume.from_name("photo-intelligence-models-v1", create_if_missing
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
-        "torch==2.7.1", "torchvision==0.22.1", "transformers==4.53.3",
-        "huggingface-hub==0.33.4", "safetensors==0.5.3", "einops==0.8.1",
-        "sentencepiece==0.2.0", "pillow==11.3.0", "fastapi==0.116.1",
+        "torch==2.7.1",
+        "torchvision==0.22.1",
+        "transformers==4.53.3",
+        "huggingface-hub==0.33.4",
+        "safetensors==0.5.3",
+        "einops==0.8.1",
+        "sentencepiece==0.2.0",
+        "pillow==11.3.0",
+        "fastapi==0.116.1",
         "pydantic==2.11.7",
     )
     .add_local_python_source("gpu")
@@ -22,9 +28,14 @@ image = (
 
 
 @app.cls(
-    image=image, gpu="T4", volumes={"/models": cache},
+    image=image,
+    gpu="T4",
+    volumes={"/models": cache},
     secrets=[modal.Secret.from_name("photo-intelligence-inference")],
-    timeout=600, scaledown_window=60, min_containers=0, max_containers=1,
+    timeout=600,
+    scaledown_window=60,
+    min_containers=0,
+    max_containers=1,
 )
 @modal.concurrent(max_inputs=1)
 class InferenceService:
@@ -46,4 +57,5 @@ class InferenceService:
     @modal.asgi_app(requires_proxy_auth=True)
     def web(self):
         from gpu.service import create_service
+
         return create_service(self.models, self.spec, self.token)

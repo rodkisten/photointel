@@ -4,13 +4,12 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from photointel import models  # noqa: F401  Registers the complete metadata.
 from photointel.config import get_settings
 from photointel.database import Base
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import create_async_engine
 
 config = context.config
 if config.config_file_name:
@@ -45,7 +44,8 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_migrations_online() -> None:
     settings = get_settings()
     engine = create_async_engine(
-        settings.migration_database_url or settings.database_url, poolclass=pool.NullPool,
+        settings.migration_database_url or settings.database_url,
+        poolclass=pool.NullPool,
     )
     try:
         async with engine.connect() as connection:

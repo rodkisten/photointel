@@ -6,8 +6,20 @@ from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    JSON, BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey,
-    Index, Integer, String, Text, UniqueConstraint, func, text,
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,6 +31,7 @@ JSON_TYPE = JSON().with_variant(JSONB(), "postgresql")
 
 def utcnow() -> datetime:
     from datetime import UTC
+
     return datetime.now(UTC)
 
 
@@ -31,7 +44,10 @@ class Timestamps:
         DateTime(timezone=True), default=utcnow, server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow, server_default=func.now()
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+        server_default=func.now(),
     )
 
 
@@ -65,7 +81,9 @@ class Asset(Identifier, Timestamps, Base):
     ingestion_status: Mapped[str] = mapped_column(String(32), default="pending")
     classification_status: Mapped[str] = mapped_column(String(32), default="pending")
     visibility_status: Mapped[str] = mapped_column(String(32), default="active")
-    last_successful_inference: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_successful_inference: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     last_error: Mapped[str | None] = mapped_column(Text)
     missing_scan_count: Mapped[int] = mapped_column(Integer, default=0)
     sha256: Mapped[str | None] = mapped_column(String(64), index=True)
@@ -76,8 +94,10 @@ class Asset(Identifier, Timestamps, Base):
     )
     __table_args__ = (
         UniqueConstraint("library_id", "source_asset_key"),
-        CheckConstraint("visibility_status IN ('active','unavailable',"
-                        "'missing_candidate','confirmed_missing','archived')"),
+        CheckConstraint(
+            "visibility_status IN ('active','unavailable',"
+            "'missing_candidate','confirmed_missing','archived')"
+        ),
         CheckConstraint("width IS NULL OR width > 0"),
         CheckConstraint("height IS NULL OR height > 0"),
         CheckConstraint("filesize IS NULL OR filesize >= 0"),
@@ -87,21 +107,31 @@ class Asset(Identifier, Timestamps, Base):
         Index("ix_assets_library_status", "library_id", "visibility_status"),
         Index("ix_assets_media_dimensions", "media_type", "width", "height"),
         Index("ix_assets_search_document", "search_document", postgresql_using="gin"),
-        Index("ix_assets_filename_trgm", "filename", postgresql_using="gin",
-              postgresql_ops={"filename": "gin_trgm_ops"}),
         Index(
-            "ix_assets_source_metadata_gin", "source_metadata", postgresql_using="gin",
+            "ix_assets_filename_trgm",
+            "filename",
+            postgresql_using="gin",
+            postgresql_ops={"filename": "gin_trgm_ops"},
+        ),
+        Index(
+            "ix_assets_source_metadata_gin",
+            "source_metadata",
+            postgresql_using="gin",
             postgresql_ops={"source_metadata": "jsonb_path_ops"},
         ),
         Index(
             "ix_assets_gallery_cursor",
-            text("(coalesce(captured_at, created_at, '1970-01-01 UTC'::timestamptz)) DESC"),
-            "id", postgresql_where=text("visibility_status <> 'archived'"),
+            text(
+                "(coalesce(captured_at, created_at, '1970-01-01 UTC'::timestamptz)) DESC"
+            ),
+            "id",
+            postgresql_where=text("visibility_status <> 'archived'"),
         ),
         Index(
             "ix_assets_added_cursor",
             text("(coalesce(added_at, created_at, '1970-01-01 UTC'::timestamptz)) DESC"),
-            "id", postgresql_where=text("visibility_status <> 'archived'"),
+            "id",
+            postgresql_where=text("visibility_status <> 'archived'"),
         ),
     )
 
@@ -122,7 +152,9 @@ class AssetResource(Identifier, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         UniqueConstraint("asset_id", "resource_type", "revision"),
-        CheckConstraint("byte_size IS NULL OR byte_size >= 0", name="ck_resource_byte_size"),
+        CheckConstraint(
+            "byte_size IS NULL OR byte_size >= 0", name="ck_resource_byte_size"
+        ),
     )
 
 
@@ -159,8 +191,12 @@ class Tag(Identifier, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         CheckConstraint("minimum_confidence >= 0 AND minimum_confidence <= 1"),
-        Index("ix_tags_name_trgm", "display_name", postgresql_using="gin",
-              postgresql_ops={"display_name": "gin_trgm_ops"}),
+        Index(
+            "ix_tags_name_trgm",
+            "display_name",
+            postgresql_using="gin",
+            postgresql_ops={"display_name": "gin_trgm_ops"},
+        ),
     )
 
 
@@ -211,7 +247,10 @@ class ModelRegistry(Identifier, Base):
             name="ck_embedding_dimension_model",
         ),
         Index(
-            "uq_active_model_revision", "provider", "model_name", unique=True,
+            "uq_active_model_revision",
+            "provider",
+            "model_name",
+            unique=True,
             postgresql_where=text("active"),
         ),
     )
@@ -240,9 +279,13 @@ class Embedding(Identifier, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         UniqueConstraint("asset_id", "model_id", "input_revision"),
-        Index("ix_embeddings_cosine_hnsw", "vector", postgresql_using="hnsw",
-              postgresql_ops={"vector": "vector_cosine_ops"},
-              postgresql_with={"m": 16, "ef_construction": 64}),
+        Index(
+            "ix_embeddings_cosine_hnsw",
+            "vector",
+            postgresql_using="hnsw",
+            postgresql_ops={"vector": "vector_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 64},
+        ),
     )
 
 
@@ -262,13 +305,17 @@ class Job(Identifier, Base):
     __tablename__ = "jobs"
     job_type: Mapped[str] = mapped_column(String(64))
     asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id"), index=True)
-    batch_id: Mapped[UUID | None] = mapped_column(ForeignKey("job_batches.id"), index=True)
+    batch_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("job_batches.id"), index=True
+    )
     payload: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
     priority: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     maximum_attempts: Mapped[int] = mapped_column(Integer, default=3)
-    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -280,13 +327,18 @@ class Job(Identifier, Base):
     idempotency_key: Mapped[str] = mapped_column(String(512), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
-        CheckConstraint("status IN ('queued','preparing','running','retrying','paused',"
-                        "'completed','failed','cancelled')"),
+        CheckConstraint(
+            "status IN ('queued','preparing','running','retrying','paused',"
+            "'completed','failed','cancelled')"
+        ),
         CheckConstraint("attempts >= 0 AND maximum_attempts > 0"),
         Index("ix_jobs_claim", "status", "scheduled_at", "priority", "created_at"),
         Index("ix_jobs_stale", "status", "lease_until"),
         Index(
-            "ix_jobs_live_claim", text("priority DESC"), "scheduled_at", "created_at",
+            "ix_jobs_live_claim",
+            text("priority DESC"),
+            "scheduled_at",
+            "created_at",
             postgresql_where=text("status IN ('queued', 'retrying')"),
         ),
     )
@@ -312,7 +364,9 @@ class WorkerState(Base):
 
 class IngestionRun(Identifier, Base):
     __tablename__ = "ingestion_runs"
-    library_id: Mapped[UUID | None] = mapped_column(ForeignKey("libraries.id"), index=True)
+    library_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("libraries.id"), index=True
+    )
     job_id: Mapped[UUID | None] = mapped_column(ForeignKey("jobs.id"))
     status: Mapped[str] = mapped_column(String(32), default="running")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -348,18 +402,25 @@ class DeviceMapping(Identifier, Base):
     confidence: Mapped[float] = mapped_column(Float, default=0)
     verification_status: Mapped[str] = mapped_column(String(32), default="unverified")
     match_method: Mapped[str] = mapped_column(String(64), default="manual")
-    mapping_metadata: Mapped[dict[str, Any]] = mapped_column("metadata", JSON_TYPE, default=dict)
+    mapping_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSON_TYPE, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     __table_args__ = (
         UniqueConstraint("device_id", "asset_id", "local_identifier"),
         CheckConstraint("confidence >= 0 AND confidence <= 1"),
         Index("ix_device_mappings_target", "device_id", "local_identifier"),
         Index(
-            "ix_device_mappings_asset_verification", "device_id", "asset_id",
+            "ix_device_mappings_asset_verification",
+            "device_id",
+            "asset_id",
             "verification_status",
         ),
         Index(
-            "uq_verified_device_target", "device_id", "local_identifier", unique=True,
+            "uq_verified_device_target",
+            "device_id",
+            "local_identifier",
+            unique=True,
             postgresql_where=text("verification_status = 'verified'"),
         ),
     )
@@ -376,8 +437,10 @@ class MetadataSnapshot(Identifier, Base):
     __table_args__ = (
         Index("ix_metadata_snapshot_asset_source", "asset_id", "source", "created_at"),
         Index(
-            "ix_photokit_snapshot_device_local", "device_id",
-            text("(payload ->> 'local_identifier')"), text("created_at DESC"),
+            "ix_photokit_snapshot_device_local",
+            "device_id",
+            text("(payload ->> 'local_identifier')"),
+            text("created_at DESC"),
             postgresql_where=text("source = 'photokit'"),
         ),
     )
@@ -386,7 +449,9 @@ class MetadataSnapshot(Identifier, Base):
 class SyncOperation(Identifier, Base):
     __tablename__ = "sync_operations"
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), index=True)
-    target_device_id: Mapped[UUID] = mapped_column(ForeignKey("bridge_devices.id"), index=True)
+    target_device_id: Mapped[UUID] = mapped_column(
+        ForeignKey("bridge_devices.id"), index=True
+    )
     operation_type: Mapped[str] = mapped_column(String(64), default="keywords_delta")
     desired_revision: Mapped[str] = mapped_column(String(128))
     expected_revision: Mapped[str] = mapped_column(String(128))
@@ -401,10 +466,12 @@ class SyncOperation(Identifier, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (
-        CheckConstraint("status IN ('pending','claimed','mapping_required',"
-                        "'awaiting_approval','processing','applied_on_device',"
-                        "'awaiting_cloud_confirmation','completed','conflict','failed',"
-                        "'cancelled')"),
+        CheckConstraint(
+            "status IN ('pending','claimed','mapping_required',"
+            "'awaiting_approval','processing','applied_on_device',"
+            "'awaiting_cloud_confirmation','completed','conflict','failed',"
+            "'cancelled')"
+        ),
         Index("ix_sync_operations_claim", "target_device_id", "status", "lease_until"),
         CheckConstraint("attempts >= 0", name="ck_sync_attempts"),
     )
@@ -417,7 +484,9 @@ class AuditEvent(Identifier, Base):
     asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("assets.id"), index=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
     correlation_id: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
 
 
 class Album(Identifier, Timestamps, Base):
@@ -430,7 +499,9 @@ class Album(Identifier, Timestamps, Base):
 
 class AlbumAsset(Base):
     __tablename__ = "album_assets"
-    album_id: Mapped[UUID] = mapped_column(ForeignKey("albums.id", ondelete="CASCADE"), primary_key=True)
+    album_id: Mapped[UUID] = mapped_column(
+        ForeignKey("albums.id", ondelete="CASCADE"), primary_key=True
+    )
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), primary_key=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     position: Mapped[int] = mapped_column(Integer, default=0)
@@ -449,7 +520,9 @@ class DuplicateGroup(Identifier, Base):
 
 class DuplicateMember(Base):
     __tablename__ = "duplicate_members"
-    group_id: Mapped[UUID] = mapped_column(ForeignKey("duplicate_groups.id", ondelete="CASCADE"), primary_key=True)
+    group_id: Mapped[UUID] = mapped_column(
+        ForeignKey("duplicate_groups.id", ondelete="CASCADE"), primary_key=True
+    )
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), primary_key=True)
     similarity: Mapped[float] = mapped_column(Float, default=1)
     quality_rank: Mapped[int | None] = mapped_column(Integer)
@@ -460,7 +533,9 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[Any] = mapped_column(JSON_TYPE)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class SavedSearch(Identifier, Timestamps, Base):

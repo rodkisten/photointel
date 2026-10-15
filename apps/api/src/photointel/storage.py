@@ -5,9 +5,9 @@ import re
 import tempfile
 from functools import lru_cache
 from hashlib import sha256
-from uuid import UUID
 from pathlib import Path, PurePosixPath
 from typing import Protocol
+from uuid import UUID
 
 import boto3
 from botocore.config import Config
@@ -27,15 +27,21 @@ class Storage(Protocol):
 
 def validate_key(key: str) -> str:
     if (
-        not key or len(key) > 1024 or "\\" in key or "\x00" in key
-        or key.startswith("/") or any(part in {"", ".", ".."} for part in key.split("/"))
+        not key
+        or len(key) > 1024
+        or "\\" in key
+        or "\x00" in key
+        or key.startswith("/")
+        or any(part in {"", ".", ".."} for part in key.split("/"))
         or not re.fullmatch(r"[A-Za-z0-9_./-]+", key)
     ):
         raise AppError(ErrorCode.INVALID_REQUEST, "Chave de armazenamento inválida", 400)
     return str(PurePosixPath(key))
 
 
-def object_key(asset_id: str, revision: str, variant: str, extension: str = "webp") -> str:
+def object_key(
+    asset_id: str, revision: str, variant: str, extension: str = "webp"
+) -> str:
     identifier = str(UUID(str(asset_id)))
     safe_revision = sha256(revision.encode()).hexdigest()[:24]
     allowed = {"thumbnail_small", "thumbnail_medium", "preview_large", "inference_input"}
@@ -79,7 +85,9 @@ class LocalStorage:
             with self._path(key).open("rb") as handle:
                 data = handle.read(self.max_read_bytes + 1)
             if len(data) > self.max_read_bytes:
-                raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Imagem excede limite local", 503)
+                raise AppError(
+                    ErrorCode.STORAGE_UNAVAILABLE, "Imagem excede limite local", 503
+                )
             return data
         except FileNotFoundError as exc:
             raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc
@@ -101,28 +109,47 @@ class LocalStorage:
 
 class S3Storage:
     def __init__(
-        self, endpoint: str, bucket: str, access_key: str, secret_key: str,
-        region: str = "auto", max_read_bytes: int = 20 * 1024 * 1024,
+        self,
+        endpoint: str,
+        bucket: str,
+        access_key: str,
+        secret_key: str,
+        region: str = "auto",
+        max_read_bytes: int = 20 * 1024 * 1024,
     ) -> None:
         self.bucket = bucket
         self.max_read_bytes = max_read_bytes
         self.client = boto3.client(
-            "s3", endpoint_url=endpoint, aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key, region_name=region,
-            config=Config(signature_version="s3v4", retries={"max_attempts": 3},
-                          connect_timeout=10, read_timeout=30),
+            "s3",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+            config=Config(
+                signature_version="s3v4",
+                retries={"max_attempts": 3},
+                connect_timeout=10,
+                read_timeout=30,
+            ),
         )
 
     def put(self, key: str, data: bytes, mime: str) -> None:
         if len(data) > self.max_read_bytes:
-            raise AppError(ErrorCode.INVALID_REQUEST, "Imagem excede limite configurado", 413)
+            raise AppError(
+                ErrorCode.INVALID_REQUEST, "Imagem excede limite configurado", 413
+            )
         try:
             self.client.put_object(
-                Bucket=self.bucket, Key=validate_key(key), Body=data, ContentType=mime,
+                Bucket=self.bucket,
+                Key=validate_key(key),
+                Body=data,
+                ContentType=mime,
                 CacheControl="private, no-store",
             )
         except (BotoCoreError, ClientError) as exc:
-            raise AppError(ErrorCode.R2_UPLOAD_FAILED, "Falha ao salvar imagem privada", 503) from exc
+            raise AppError(
+                ErrorCode.R2_UPLOAD_FAILED, "Falha ao salvar imagem privada", 503
+            ) from exc
 
     def get(self, key: str) -> bytes:
         try:
@@ -130,49 +157,70 @@ class S3Storage:
             with response["Body"] as body:
                 if response.get("ContentLength", 0) > self.max_read_bytes:
                     raise AppError(
-                        ErrorCode.STORAGE_UNAVAILABLE, "Imagem excede limite configurado", 503,
+                        ErrorCode.STORAGE_UNAVAILABLE,
+                        "Imagem excede limite configurado",
+                        503,
                     )
                 data = body.read(self.max_read_bytes + 1)
             if len(data) > self.max_read_bytes:
                 raise AppError(
-                    ErrorCode.STORAGE_UNAVAILABLE, "Imagem excede limite configurado", 503,
+                    ErrorCode.STORAGE_UNAVAILABLE,
+                    "Imagem excede limite configurado",
+                    503,
                 )
             return data
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
                 raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc
-            raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
         except BotoCoreError as exc:
-            raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
 
     def delete(self, key: str) -> None:
         try:
             self.client.delete_object(Bucket=self.bucket, Key=validate_key(key))
         except (BotoCoreError, ClientError) as exc:
-            raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Limpeza temporária falhou", 503) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Limpeza temporária falhou", 503
+            ) from exc
 
     def exists(self, key: str) -> bool:
         try:
             self.client.head_object(Bucket=self.bucket, Key=validate_key(key))
             return True
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404", "NotFound"}:
+            if exc.response.get("Error", {}).get("Code") in {
+                "NoSuchKey",
+                "404",
+                "NotFound",
+            }:
                 return False
-            raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
         except BotoCoreError as exc:
-            raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
 
     def presign_get(self, key: str, expires: int = 60) -> str:
         if not 10 <= expires <= 300:
             raise AppError(ErrorCode.INVALID_REQUEST, "Expiração inválida", 400)
         try:
             return self.client.generate_presigned_url(
-                "get_object", Params={"Bucket": self.bucket, "Key": validate_key(key)},
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": validate_key(key)},
                 ExpiresIn=expires,
             )
         except (BotoCoreError, ClientError) as exc:
             raise AppError(
-                ErrorCode.STORAGE_UNAVAILABLE, "Autorização de mídia indisponível", 503,
+                ErrorCode.STORAGE_UNAVAILABLE,
+                "Autorização de mídia indisponível",
+                503,
             ) from exc
 
 
@@ -181,10 +229,16 @@ def get_storage() -> Storage:
     settings = get_settings()
     if settings.storage_backend == "local":
         return LocalStorage(settings.storage_local_directory, settings.media_max_bytes)
-    assert settings.storage_endpoint and settings.storage_access_key and settings.storage_secret_key
+    assert (
+        settings.storage_endpoint
+        and settings.storage_access_key
+        and settings.storage_secret_key
+    )
     return S3Storage(
-        endpoint=settings.storage_endpoint, bucket=settings.storage_bucket,
+        endpoint=settings.storage_endpoint,
+        bucket=settings.storage_bucket,
         access_key=settings.storage_access_key.get_secret_value(),
         secret_key=settings.storage_secret_key.get_secret_value(),
-        region=settings.storage_region, max_read_bytes=settings.media_max_bytes,
+        region=settings.storage_region,
+        max_read_bytes=settings.media_max_bytes,
     )

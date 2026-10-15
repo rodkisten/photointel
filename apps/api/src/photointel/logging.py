@@ -10,10 +10,28 @@ from uuid import UUID
 import structlog
 
 SENSITIVE_KEYS = {
-    "password", "secret", "token", "authorization", "cookie", "credential",
-    "image", "image_bytes", "image_payload", "photo", "embedding", "keywords",
-    "tags", "raw_predictions", "query", "search_query", "latitude", "longitude",
-    "database_url", "dsn", "private_key", "access_key",
+    "password",
+    "secret",
+    "token",
+    "authorization",
+    "cookie",
+    "credential",
+    "image",
+    "image_bytes",
+    "image_payload",
+    "photo",
+    "embedding",
+    "keywords",
+    "tags",
+    "raw_predictions",
+    "query",
+    "search_query",
+    "latitude",
+    "longitude",
+    "database_url",
+    "dsn",
+    "private_key",
+    "access_key",
 }
 SENSITIVE_PATTERNS = re.compile(
     r"(?i)(bearer\s+)[^\s]+|((?:password|token|secret|cookie)[=:]\s*)[^\s,;]+"
@@ -26,9 +44,9 @@ JWT_VALUE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
 def redact_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: "[redacted]" if any(
-                part in str(key).lower() for part in SENSITIVE_KEYS
-            ) else redact_value(item)
+            key: "[redacted]"
+            if any(part in str(key).lower() for part in SENSITIVE_KEYS)
+            else redact_value(item)
             for key, item in value.items()
         }
     if isinstance(value, (list, tuple)):
@@ -37,7 +55,8 @@ def redact_value(value: Any) -> Any:
         return "[binary redacted]"
     if isinstance(value, str):
         value = SENSITIVE_PATTERNS.sub(
-            lambda match: (match.group(1) or match.group(2) or "") + "[redacted]", value,
+            lambda match: (match.group(1) or match.group(2) or "") + "[redacted]",
+            value,
         )
         value = SIGNED_URL.sub("[private URL redacted]", value)
         value = CREDENTIAL_URL.sub("[credential URL redacted]", value)
@@ -51,13 +70,16 @@ def redact_value(value: Any) -> Any:
 
 
 def redact_log(
-    _: Any, __: str, event_dict: MutableMapping[str, Any],
+    _: Any,
+    __: str,
+    event_dict: MutableMapping[str, Any],
 ) -> dict[str, Any]:
     exception = event_dict.pop("exc_info", None)
     event_dict.pop("stack_info", None)
     if exception:
         event_dict["exception_type"] = (
-            exception[0].__name__ if isinstance(exception, tuple) and exception[0]
+            exception[0].__name__
+            if isinstance(exception, tuple) and exception[0]
             else "Exception"
         )
     return cast(dict[str, Any], redact_value(dict(event_dict)))

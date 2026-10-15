@@ -35,17 +35,30 @@ def command_stage(name: str, command: list[str], timeout: int = 1200) -> dict[st
     try:
         with log.open("w") as handle:
             result = subprocess.run(
-                command, cwd=ROOT, env=ENVIRONMENT, stdout=handle,
-                stderr=subprocess.STDOUT, timeout=timeout, check=False,
+                command,
+                cwd=ROOT,
+                env=ENVIRONMENT,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+                check=False,
             )
         status = "passed" if result.returncode == 0 else "failed"
-        return {"stage": name, "status": status, "exit_code": result.returncode,
-                "elapsed_seconds": round(time.monotonic() - started, 3),
-                "log": str(log)}
+        return {
+            "stage": name,
+            "status": status,
+            "exit_code": result.returncode,
+            "elapsed_seconds": round(time.monotonic() - started, 3),
+            "log": str(log),
+        }
     except (OSError, subprocess.TimeoutExpired) as error:
-        return {"stage": name, "status": "failed", "error_type": type(error).__name__,
-                "elapsed_seconds": round(time.monotonic() - started, 3),
-                "log": str(log)}
+        return {
+            "stage": name,
+            "status": "failed",
+            "error_type": type(error).__name__,
+            "elapsed_seconds": round(time.monotonic() - started, 3),
+            "log": str(log),
+        }
 
 
 def fetch(url: str, filename: str) -> dict[str, Any]:
@@ -84,14 +97,21 @@ def model_stage(model: str, label: str) -> list[dict[str, Any]]:
     (RESEARCH / f"{label}-revision.txt").write_text(revision + "\n")
     available = {entry["rfilename"] for entry in payload.get("siblings", [])}
     for filename in (
-        "config.json", "preprocessor_config.json", "tokenizer_config.json",
-        "README.md", "LICENSE", "LICENSE.txt", "top_tags.txt",
+        "config.json",
+        "preprocessor_config.json",
+        "tokenizer_config.json",
+        "README.md",
+        "LICENSE",
+        "LICENSE.txt",
+        "top_tags.txt",
     ):
         if filename in available:
-            results.append(fetch(
-                f"https://huggingface.co/{model}/resolve/{revision}/{filename}",
-                f"{label}-{filename.replace('/', '_')}",
-            ))
+            results.append(
+                fetch(
+                    f"https://huggingface.co/{model}/resolve/{revision}/{filename}",
+                    f"{label}-{filename.replace('/', '_')}",
+                )
+            )
     return results
 
 
@@ -120,32 +140,48 @@ def python_stage() -> list[dict[str, Any]]:
             "[(p/'icloudpd-source'/str(f)).parent.mkdir(parents=True,exist_ok=True) "
             "or shutil.copy(d.locate_file(f),p/'icloudpd-source'/str(f)) for f in files]"
         )
-        results.append(command_stage(
-            "icloudpd-source", [uv, "run", "--no-sync", "python", "-c", inspect_code],
-            timeout=60,
-        ))
+        results.append(
+            command_stage(
+                "icloudpd-source",
+                [uv, "run", "--no-sync", "python", "-c", inspect_code],
+                timeout=60,
+            )
+        )
     return results
 
 
 def node_stage() -> list[dict[str, Any]]:
     npm = shutil.which("npm")
     if not npm:
-        return [{
-            "stage": "npm-install", "status": "failed", "error_type": "npm_not_installed",
-        }]
-    results = [command_stage(
-        "npm-install", [npm, "--prefix", "apps/web", "install"]
-    )]
+        return [
+            {
+                "stage": "npm-install",
+                "status": "failed",
+                "error_type": "npm_not_installed",
+            }
+        ]
+    results = [command_stage("npm-install", [npm, "--prefix", "apps/web", "install"])]
     if results[0]["status"] == "passed":
         chromium = shutil.which("chromium") or shutil.which("chromium-browser")
         if chromium:
             results.append(command_stage("system-chromium", [chromium, "--version"]))
             (RESEARCH / "chromium-executable.txt").write_text(chromium + "\n")
         else:
-            results.append(command_stage("playwright-chromium", [
-                npm, "exec", "--prefix", "apps/web", "--", "playwright",
-                "install", "chromium",
-            ]))
+            results.append(
+                command_stage(
+                    "playwright-chromium",
+                    [
+                        npm,
+                        "exec",
+                        "--prefix",
+                        "apps/web",
+                        "--",
+                        "playwright",
+                        "install",
+                        "chromium",
+                    ],
+                )
+            )
     return results
 
 
@@ -153,28 +189,69 @@ def docker_stage() -> list[dict[str, Any]]:
     # Check only the managed daemon, preserving registry/proxy configuration.
     docker = shutil.which("docker")
     if not docker:
-        return [{
-            "stage": "docker-info", "status": "failed",
-            "error_type": "docker_not_installed",
-        }]
-    check = command_stage("docker-info", [
-        "env", "-u", "DOCKER_HOST", "-u", "DOCKER_CONTEXT", "-u", "DOCKER_TLS",
-        "-u", "DOCKER_TLS_VERIFY", "-u", "DOCKER_CERT_PATH", docker,
-        "--host=unix:///var/run/docker.sock", "info", "--format", "{{.ServerVersion}}",
-    ], timeout=30)
+        return [
+            {
+                "stage": "docker-info",
+                "status": "failed",
+                "error_type": "docker_not_installed",
+            }
+        ]
+    check = command_stage(
+        "docker-info",
+        [
+            "env",
+            "-u",
+            "DOCKER_HOST",
+            "-u",
+            "DOCKER_CONTEXT",
+            "-u",
+            "DOCKER_TLS",
+            "-u",
+            "DOCKER_TLS_VERIFY",
+            "-u",
+            "DOCKER_CERT_PATH",
+            docker,
+            "--host=unix:///var/run/docker.sock",
+            "info",
+            "--format",
+            "{{.ServerVersion}}",
+        ],
+        timeout=30,
+    )
     results = [check]
     if check["status"] == "passed":
-        results.append(command_stage(
-            "setup-env", [sys.executable, "infra/scripts/setup-env.py"]
-        ))
-        results.append(command_stage("base-services", [
-            "bash", "infra/scripts/compose.sh", "up", "-d", "postgres", "minio", "bucket",
-            "permissions",
-        ]))
+        results.append(
+            command_stage("setup-env", [sys.executable, "infra/scripts/setup-env.py"])
+        )
+        results.append(
+            command_stage(
+                "base-services",
+                [
+                    "bash",
+                    "infra/scripts/compose.sh",
+                    "up",
+                    "-d",
+                    "postgres",
+                    "minio",
+                    "bucket",
+                    "permissions",
+                ],
+            )
+        )
         if results[-1]["status"] == "passed":
-            results.append(command_stage("base-services-status", [
-                "bash", "infra/scripts/compose.sh", "ps", "--format", "json",
-            ], timeout=30))
+            results.append(
+                command_stage(
+                    "base-services-status",
+                    [
+                        "bash",
+                        "infra/scripts/compose.sh",
+                        "ps",
+                        "--format",
+                        "json",
+                    ],
+                    timeout=30,
+                )
+            )
     return results
 
 
@@ -204,13 +281,18 @@ def reference_stage() -> list[dict[str, Any]]:
         ("https://modal.com/docs/reference/modal.Cls", "modal-cls.html"),
     ]
     for item in (
-        "phasset", "phphotolibrary", "phassetextendedmetadata", "phassetchangerequest"
+        "phasset",
+        "phphotolibrary",
+        "phassetextendedmetadata",
+        "phassetchangerequest",
     ):
-        references.append((
-            "https://developer.apple.com/tutorials/data/documentation/"
-            f"photos/{item}.json",
-            f"apple-{item}.json",
-        ))
+        references.append(
+            (
+                "https://developer.apple.com/tutorials/data/documentation/"
+                f"photos/{item}.json",
+                f"apple-{item}.json",
+            )
+        )
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         return list(executor.map(lambda value: fetch(*value), references))
 
@@ -233,17 +315,30 @@ def main() -> int:
             try:
                 results[name] = future.result()
             except Exception as error:
-                results[name] = [{
-                    "stage": name, "status": "failed", "error_type": type(error).__name__,
-                }]
+                results[name] = [
+                    {
+                        "stage": name,
+                        "status": "failed",
+                        "error_type": type(error).__name__,
+                    }
+                ]
             passed = sum(item.get("status") == "passed" for item in results[name])
             print(f"{name}: {passed}/{len(results[name])} stages passed", flush=True)
-            (RESEARCH / "bootstrap-report.json").write_text(json.dumps({
-                "started_at": started, "updated_at": datetime.now(UTC).isoformat(),
-                "results": results,
-            }, indent=2) + "\n")
+            (RESEARCH / "bootstrap-report.json").write_text(
+                json.dumps(
+                    {
+                        "started_at": started,
+                        "updated_at": datetime.now(UTC).isoformat(),
+                        "results": results,
+                    },
+                    indent=2,
+                )
+                + "\n"
+            )
     required = [
-        *results.get("python", []), *results.get("node", []), *results.get("docker", [])
+        *results.get("python", []),
+        *results.get("node", []),
+        *results.get("docker", []),
     ]
     passed = required and all(item.get("status") == "passed" for item in required)
     return 0 if passed else 1

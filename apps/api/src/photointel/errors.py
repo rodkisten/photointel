@@ -52,8 +52,13 @@ class AppError(Exception):
 def error_response(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message,
-                           "details": exc.details,
-                           "correlation_id": getattr(request.state, "correlation_id", None)}},
+        content={
+            "error": {
+                "code": exc.code,
+                "message": exc.message,
+                "details": exc.details,
+                "correlation_id": getattr(request.state, "correlation_id", None),
+            }
+        },
         headers={"Cache-Control": "no-store"},
     )

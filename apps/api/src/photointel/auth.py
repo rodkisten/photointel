@@ -37,7 +37,9 @@ def issuer_for(settings: Settings) -> str:
     return f"https://{domain}"
 
 
-async def fetch_keys(issuer: str, cache_seconds: int, force: bool = False) -> list[dict[str, Any]]:
+async def fetch_keys(
+    issuer: str, cache_seconds: int, force: bool = False
+) -> list[dict[str, Any]]:
     async with _cache_lock:
         cached = _key_cache.get(issuer)
         now = time.monotonic()
@@ -57,13 +59,18 @@ async def fetch_keys(issuer: str, cache_seconds: int, force: bool = False) -> li
                     raise ValueError("Invalid JWT key response")
                 keys = payload.get("keys", [])
             if (
-                not isinstance(keys, list) or not 1 <= len(keys) <= 64
+                not isinstance(keys, list)
+                or not 1 <= len(keys) <= 64
                 or any(not isinstance(key, dict) for key in keys)
             ):
                 raise ValueError("No valid JWT keys")
         except (httpx.HTTPError, ValueError, TypeError) as exc:
-            raise AppError(ErrorCode.UNAUTHORIZED, "Validação Access indisponível", 503) from exc
-        _key_cache[issuer] = KeyCache(keys=keys, expires_at=time.monotonic() + cache_seconds)
+            raise AppError(
+                ErrorCode.UNAUTHORIZED, "Validação Access indisponível", 503
+            ) from exc
+        _key_cache[issuer] = KeyCache(
+            keys=keys, expires_at=time.monotonic() + cache_seconds
+        )
         return keys
 
 
@@ -75,20 +82,26 @@ async def validate_access_token(token: str, settings: Settings) -> Identity:
         header = jwt.get_unverified_header(token)
         key_id = header.get("kid")
         if (
-            header.get("alg") != "RS256" or not isinstance(key_id, str)
+            header.get("alg") != "RS256"
+            or not isinstance(key_id, str)
             or not 1 <= len(key_id) <= 256
         ):
             raise jwt.InvalidTokenError("Invalid key selection")
         keys = await fetch_keys(issuer, settings.access_jwks_cache_seconds)
         key = next((k for k in keys if k.get("kid") == key_id), None)
         if key is None:
-            keys = await fetch_keys(issuer, settings.access_jwks_cache_seconds, force=True)
+            keys = await fetch_keys(
+                issuer, settings.access_jwks_cache_seconds, force=True
+            )
             key = next((k for k in keys if k.get("kid") == key_id), None)
         if key is None:
             raise jwt.InvalidTokenError("Unknown key")
         signing_key = jwt.PyJWK.from_dict(key, algorithm="RS256").key
         claims = jwt.decode(
-            token, signing_key, algorithms=["RS256"], issuer=issuer,
+            token,
+            signing_key,
+            algorithms=["RS256"],
+            issuer=issuer,
             audience=settings.access_audience,
             options={"require": ["exp", "iat", "iss", "aud", "sub", "email"]},
             leeway=10,
@@ -98,7 +111,9 @@ async def validate_access_token(token: str, settings: Settings) -> Identity:
             raise AppError(ErrorCode.FORBIDDEN, "Identidade não autorizada", 403)
         return Identity(subject=str(claims["sub"]), email=email)
     except (jwt.PyJWTError, KeyError, ValueError, TypeError) as exc:
-        raise AppError(ErrorCode.UNAUTHORIZED, "Autenticação inválida ou expirada", 401) from exc
+        raise AppError(
+            ErrorCode.UNAUTHORIZED, "Autenticação inválida ou expirada", 401
+        ) from exc
 
 
 def check_origin(request: Request, settings: Settings) -> None:
@@ -112,7 +127,9 @@ def check_origin(request: Request, settings: Settings) -> None:
     if origin and origin.rstrip("/") not in allowed:
         raise AppError(ErrorCode.FORBIDDEN, "Origem da requisição não autorizada", 403)
     if settings.is_production and not origin and not explicit_token:
-        raise AppError(ErrorCode.FORBIDDEN, "Origem obrigatória para operações de escrita", 403)
+        raise AppError(
+            ErrorCode.FORBIDDEN, "Origem obrigatória para operações de escrita", 403
+        )
 
 
 async def require_identity(request: Request) -> Identity:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Create a private development configuration without overwriting user values."""
+
 import os
 import secrets
 from pathlib import Path

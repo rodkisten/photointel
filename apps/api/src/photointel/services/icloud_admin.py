@@ -17,10 +17,18 @@ from photointel.services.ingestion import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Administração segura do iCloud")
-    parser.add_argument("command", choices=(
-        "authenticate", "verify", "reauthenticate", "libraries",
-        "clear", "status", "test",
-    ))
+    parser.add_argument(
+        "command",
+        choices=(
+            "authenticate",
+            "verify",
+            "reauthenticate",
+            "libraries",
+            "clear",
+            "status",
+            "test",
+        ),
+    )
     parser.add_argument("--confirm-clear-session", action="store_true")
     args = parser.parse_args()
     settings = get_settings()
@@ -45,10 +53,18 @@ def main() -> None:
         if not sys.stdin.isatty():
             parser.error("Autenticação requer terminal interativo para senha e 2FA")
         # Exact v1.32.3 flags; password is requested only by the console provider.
-        command = ["icloudpd", "--username", settings.icloud_account,
-                   "--cookie-directory", str(settings.icloud_session_directory),
-                   "--password-provider", "console", "--mfa-provider", "console",
-                   "--auth-only"]
+        command = [
+            "icloudpd",
+            "--username",
+            settings.icloud_account,
+            "--cookie-directory",
+            str(settings.icloud_session_directory),
+            "--password-provider",
+            "console",
+            "--mfa-provider",
+            "console",
+            "--auth-only",
+        ]
         try:
             result = subprocess.run(command, check=False)
         except FileNotFoundError:
@@ -57,7 +73,9 @@ def main() -> None:
             _safe_session_directory(settings)
         if result.returncode:
             record_authentication(
-                settings, "expired", "Login não concluiu; tente novamente no terminal",
+                settings,
+                "expired",
+                "Login não concluiu; tente novamente no terminal",
             )
             raise SystemExit(result.returncode)
     try:
@@ -73,16 +91,29 @@ def main() -> None:
                 )
         print(json.dumps(result_json, ensure_ascii=False))
     except AppError as exc:
-        print(json.dumps({"state": "unavailable", "error_code": exc.code,
-                          "message": exc.message}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {"state": "unavailable", "error_code": exc.code, "message": exc.message},
+                ensure_ascii=False,
+            )
+        )
         raise SystemExit(1) from None
     except Exception as exc:
         # Avoid private account data, cookie paths, bearer URLs, or tracebacks.
         record_authentication(
-            settings, "unavailable", "Falha ao verificar acesso; verifique rede e sessão",
+            settings,
+            "unavailable",
+            "Falha ao verificar acesso; verifique rede e sessão",
         )
-        print(json.dumps({"state": "unavailable", "error_code": "ICLOUD_ACCESS_DENIED",
-                          "exception_type": type(exc).__name__}))
+        print(
+            json.dumps(
+                {
+                    "state": "unavailable",
+                    "error_code": "ICLOUD_ACCESS_DENIED",
+                    "exception_type": type(exc).__name__,
+                }
+            )
+        )
         raise SystemExit(1) from None
 
 

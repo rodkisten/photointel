@@ -3,7 +3,7 @@ import { Check, ChevronLeft, ChevronRight, ExternalLink, Info, Maximize2,
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request, useAction, useApi } from '../api/client';
-import type { Asset, AssetDetail, DuplicateGroup, Info as InfoData,
+import type { Asset, AssetDetail, Capabilities, DuplicateGroup, Info as InfoData,
   Page, SearchPage } from '../api/types';
 import { bytes, date, number, text } from '../lib/format';
 import { useUi } from '../lib/store';
@@ -16,6 +16,9 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
 }) {
   const query = useApi<AssetDetail>(`/v1/assets/${id}`);
   const duplicate = useApi<Page<DuplicateGroup>>(`/v1/assets/${id}/duplicates`);
+  const capabilities = useApi<Capabilities>('/v1/system/capabilities');
+  const semantic = capabilities.data?.semantic_search;
+  const semanticReady = ['operational', 'test_only'].includes(semantic?.state ?? '');
   const [details, setDetails] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [keyword, setKeyword] = useState('');
@@ -126,9 +129,10 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
               <DetailList data={asset.ranking} /></div>}
           </section>
           <section className="viewer-section"><div className="viewer-tab"><h3>Fotografias semelhantes</h3>
-            <Button variant="ghost" size="sm" disabled={loadingSimilar} onClick={() => void loadSimilar()}>
+            <Button variant="ghost" size="sm" disabled={loadingSimilar || !semanticReady} onClick={() => void loadSimilar()}>
               <Search size={12} />Buscar</Button></div>
-            <p className="field-help">Busca real pelos embeddings do mesmo modelo.</p>
+            <p className="field-help">{semanticReady ? 'Busca real pelos embeddings do mesmo modelo.' :
+              `Indisponível: ${semantic?.reason ?? 'consultando configuração'}.`}</p>
             {similarError && <ErrorState error={similarError} />}
             {similar && <div className="photo-strip">{similar.items.map((photo) => <button key={photo.id}
               onClick={() => onNavigate(photo.id)} aria-label={`Abrir ${photo.filename}`}>

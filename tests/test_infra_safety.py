@@ -58,9 +58,11 @@ def test_production_runtime_is_private_and_excludes_database_admin_secrets(
     assert not any(
         line.startswith(("POSTGRES_", "MIGRATION_DATABASE_URL=")) for line in lines
     )
-    pepper = next(line.partition("=")[2] for line in lines if line.startswith(
-        "BRIDGE_TOKEN_PEPPER="
-    ))
+    pepper = next(
+        line.partition("=")[2]
+        for line in lines
+        if line.startswith("BRIDGE_TOKEN_PEPPER=")
+    )
     assert len(pepper) == 64
     assert pepper not in result.stdout + result.stderr
     target.write_text("PRESERVE=operator-configuration\n")
@@ -107,7 +109,9 @@ def test_cleanup_only_removes_expired_regular_temporary_files(tmp_path: Path):
     old = time.time() - 48 * 3600
     os.utime(stale, (old, old))
     subprocess.run(
-        [sys.executable, str(script), "--apply"], cwd=tmp_path, check=True,
+        [sys.executable, str(script), "--apply"],
+        cwd=tmp_path,
+        check=True,
         capture_output=True,
     )
     assert not stale.exists()
@@ -120,18 +124,26 @@ def test_e2e_runner_refuses_production_or_real_inference():
     configurations = [
         {"APP_ENV": "production", "INFERENCE_BACKEND": "test"},
         {"APP_ENV": "test", "INFERENCE_BACKEND": "modal"},
-        {"APP_ENV": "test", "INFERENCE_BACKEND": "test",
-         "JOYTAG_MODEL_REVISION": "a" * 40},
+        {
+            "APP_ENV": "test",
+            "INFERENCE_BACKEND": "test",
+            "JOYTAG_MODEL_REVISION": "a" * 40,
+        },
     ]
     for overrides in configurations:
         environment = dict(
-            os.environ, GPU_ENABLED="true",
-            JOYTAG_MODEL_REVISION="1" * 40, SIGLIP_MODEL_REVISION="2" * 40,
+            os.environ,
+            GPU_ENABLED="true",
+            JOYTAG_MODEL_REVISION="1" * 40,
+            SIGLIP_MODEL_REVISION="2" * 40,
         )
         environment.update(overrides)
         result = subprocess.run(
             ["bash", str(ROOT / "infra/scripts/run-e2e.sh")],
-            env=environment, capture_output=True, text=True, timeout=5,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         assert result.returncode == 2
         assert "E2E exige" in result.stderr

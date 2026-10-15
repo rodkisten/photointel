@@ -176,30 +176,19 @@ jobs:
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: |
-          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
-          uv run --no-sync python - <<'PY'
-          import os
-          import time
-          import boto3
-          client = boto3.client("s3", endpoint_url=os.environ["STORAGE_ENDPOINT"],
-              aws_access_key_id=os.environ["STORAGE_ACCESS_KEY"],
-              aws_secret_access_key=os.environ["STORAGE_SECRET_KEY"],
-              region_name="us-east-1")
-          for attempt in range(30):
-              try:
-                  client.list_buckets()
-                  break
-              except Exception:
-                  if attempt == 29:
-                      raise
-                  time.sleep(2)
-          client.create_bucket(Bucket=os.environ["STORAGE_BUCKET"])
-          PY
+          docker build -f infra/docker/minio.Dockerfile -t photointel-minio:ci .
+          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
+          uv run --no-sync python infra/scripts/init-private-bucket.py
       - name: Apply actual PostgreSQL migrations
         id: migrate
         if: steps.storage.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: Verify real dump and restore using isolated synthetic databases
+        id: restore
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
       - name: Provision limited application role after privileged migrations
         id: app_role
         if: steps.migrate.outcome == 'success'
@@ -268,7 +257,7 @@ jobs:
           WORKER_SMOKE_OUTCOME: ${{ steps.worker_smoke.outcome }}
           ICLOUD_HELP_OUTCOME: ${{ steps.icloud_help.outcome }}
           CHECK_OUTCOMES: >-
-            {"python_install":"${{ steps.python_install.outcome }}","node_install":"${{ steps.node_install.outcome }}","openapi":"${{ steps.openapi.outcome }}","contracts":"${{ steps.contracts.outcome }}","python_lint":"${{ steps.python_lint.outcome }}","python_types":"${{ steps.python_types.outcome }}","python_tests":"${{ steps.python_tests.outcome }}","web_lint":"${{ steps.web_lint.outcome }}","web_types":"${{ steps.web_types.outcome }}","web_tests":"${{ steps.web_tests.outcome }}","web_build":"${{ steps.web_build.outcome }}","storage":"${{ steps.storage.outcome }}","migrate":"${{ steps.migrate.outcome }}","app_role":"${{ steps.app_role.outcome }}","integration":"${{ steps.integration.outcome }}","e2e":"${{ steps.e2e.outcome }}","benchmark":"${{ steps.benchmark.outcome }}","api_build":"${{ steps.api_build.outcome }}","security":"${{ steps.security.outcome }}"}
+            {"python_install":"${{ steps.python_install.outcome }}","node_install":"${{ steps.node_install.outcome }}","openapi":"${{ steps.openapi.outcome }}","contracts":"${{ steps.contracts.outcome }}","python_lint":"${{ steps.python_lint.outcome }}","python_types":"${{ steps.python_types.outcome }}","python_tests":"${{ steps.python_tests.outcome }}","web_lint":"${{ steps.web_lint.outcome }}","web_types":"${{ steps.web_types.outcome }}","web_tests":"${{ steps.web_tests.outcome }}","web_build":"${{ steps.web_build.outcome }}","storage":"${{ steps.storage.outcome }}","migrate":"${{ steps.migrate.outcome }}","restore":"${{ steps.restore.outcome }}","app_role":"${{ steps.app_role.outcome }}","integration":"${{ steps.integration.outcome }}","e2e":"${{ steps.e2e.outcome }}","benchmark":"${{ steps.benchmark.outcome }}","api_build":"${{ steps.api_build.outcome }}","security":"${{ steps.security.outcome }}"}
         run: |
           python3 - <<'PY'
           import json

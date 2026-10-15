@@ -1,19 +1,18 @@
 """Versioned application contracts, exported as OpenAPI for the PWA."""
 
 from datetime import datetime
-from typing import Any, Generic, Literal, TypeVar
+from math import isfinite
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-T = TypeVar("T")
 
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
 
-class Page(Contract, Generic[T]):
+class Page[T](Contract):
     items: list[T]
     next_cursor: str | None = None
 
@@ -134,8 +133,12 @@ class TagPatch(Contract):
     @model_validator(mode="after")
     def required_fields_cannot_be_cleared(self) -> "TagPatch":
         for key in self.model_fields_set & {
-            "display_name", "category", "enabled", "minimum_confidence",
-            "is_sensitive", "sync_eligible",
+            "display_name",
+            "category",
+            "enabled",
+            "minimum_confidence",
+            "is_sensitive",
+            "sync_eligible",
         }:
             if getattr(self, key) is None:
                 raise ValueError(f"{key} cannot be null")
@@ -144,8 +147,19 @@ class TagPatch(Contract):
 
 class FilterNode(Contract):
     op: Literal[
-        "and", "or", "not", "tag", "text", "date", "number", "media_type",
-        "source", "album", "duplicate", "quality", "screenshots",
+        "and",
+        "or",
+        "not",
+        "tag",
+        "text",
+        "date",
+        "number",
+        "media_type",
+        "source",
+        "album",
+        "duplicate",
+        "quality",
+        "screenshots",
     ]
     children: list["FilterNode"] = Field(default_factory=list, max_length=30)
     key: str | None = Field(default=None, max_length=64)
@@ -163,22 +177,53 @@ class FilterNode(Contract):
                 raise ValueError("Boolean groups need children; NOT needs one child")
         elif self.children:
             raise ValueError("Leaf filters cannot contain children")
-        if self.op in {"tag", "text", "media_type", "source", "album"}:
-            if not isinstance(self.value, str) or not self.value or len(self.value) > 500:
-                raise ValueError("Filter needs a bounded string value")
+        if self.op in {"tag", "text", "media_type", "source", "album"} and (
+            not isinstance(self.value, str) or not self.value or len(self.value) > 500
+        ):
+            raise ValueError("Filter needs a bounded string value")
+        if self.op == "media_type" and self.value not in {"image", "video", "live_photo"}:
+            raise ValueError("Invalid media type")
+        if (
+            self.op in {"duplicate", "screenshots"}
+            and self.value is not None
+            and (not isinstance(self.value, bool))
+        ):
+            raise ValueError("Boolean filters need a boolean value")
         if self.op == "number" and self.key not in {
-            "width", "height", "filesize", "duration",
+            "width",
+            "height",
+            "filesize",
+            "duration",
         }:
             raise ValueError("Invalid numeric field")
-        if self.op == "date" and self.key not in {"captured_at", "added_at", "created_at"}:
+        if self.op == "date" and self.key not in {
+            "captured_at",
+            "added_at",
+            "created_at",
+        }:
             raise ValueError("Invalid date field")
         if self.op == "quality" and self.key not in {
-            "sharpness", "brightness", "contrast", "resolution", "score",
+            "sharpness",
+            "brightness",
+            "contrast",
+            "resolution",
+            "score",
         }:
             raise ValueError("Invalid quality field")
-        if self.op in {"number", "quality"} and self.value is None:
-            if self.minimum is None and self.maximum is None:
+        if self.op in {"number", "quality"}:
+            if self.value is None and self.minimum is None and self.maximum is None:
                 raise ValueError("Numeric filters need a value or range")
+            for number in (self.value, self.minimum, self.maximum):
+                if number is not None and (
+                    isinstance(number, bool) or not isfinite(float(number))
+                ):
+                    raise ValueError("Numeric filters need finite numbers")
+            if (
+                self.minimum is not None
+                and self.maximum is not None
+                and (float(self.minimum) > float(self.maximum))
+            ):
+                raise ValueError("Minimum exceeds maximum")
         if self.op == "date" and self.minimum is None and self.maximum is None:
             raise ValueError("Date filters need a range")
         return self
@@ -188,7 +233,11 @@ class SearchRequest(Contract):
     query: str | None = Field(default=None, min_length=1, max_length=1000)
     filter: FilterNode | None = None
     sort: Literal[
-        "captured_desc", "added_desc", "relevance", "quality_desc", "filesize_asc",
+        "captured_desc",
+        "added_desc",
+        "relevance",
+        "quality_desc",
+        "filesize_asc",
     ] = "captured_desc"
     limit: int = Field(default=60, ge=1, le=200)
     cursor: str | None = Field(default=None, max_length=4096)
@@ -284,8 +333,11 @@ class JobOut(Contract):
 
 
 ReindexJobType = Literal[
-    "joytag_inference", "embedding_inference", "duplicate_analysis",
-    "quality_analysis", "thumbnail_generate",
+    "joytag_inference",
+    "embedding_inference",
+    "duplicate_analysis",
+    "quality_analysis",
+    "thumbnail_generate",
 ]
 
 
@@ -310,15 +362,29 @@ class IngestionInput(Contract):
 
 class CategoryRule(Contract):
     enabled: bool = True
-    minimum_confidence: float = Field(default=.4, ge=0, le=1)
+    minimum_confidence: float = Field(default=0.4, ge=0, le=1)
 
 
 class TaxonomyOverride(Contract):
-    category: Literal[
-        "person", "body", "face_hair", "clothing", "clothing_bulge", "pose_action",
-        "sexual_action", "genitals", "penis", "environment", "objects", "composition",
-        "visual", "other",
-    ] | None = None
+    category: (
+        Literal[
+            "person",
+            "body",
+            "face_hair",
+            "clothing",
+            "clothing_bulge",
+            "pose_action",
+            "sexual_action",
+            "genitals",
+            "penis",
+            "environment",
+            "objects",
+            "composition",
+            "visual",
+            "other",
+        ]
+        | None
+    ) = None
     display_name: str | None = Field(default=None, min_length=1, max_length=255)
     is_sensitive: bool | None = None
     aliases: list[str] = Field(default_factory=list, max_length=30)
@@ -353,16 +419,33 @@ class SettingsPatch(Contract):
     gpu_monthly_budget: float | None = Field(default=None, ge=0, le=10000)
     temporary_retention_hours: int | None = Field(default=None, ge=1, le=8760)
     apple_keyword_sync_mode: Literal["manual", "disabled"] | None = None
-    taxonomy_categories: dict[str, CategoryRule] | None = Field(default=None, max_length=14)
-    taxonomy_overrides: dict[str, TaxonomyOverride] | None = Field(default=None, max_length=1000)
-    taxonomy_compound_rules: list[CompoundRule] | None = Field(default=None, max_length=100)
+    taxonomy_categories: dict[str, CategoryRule] | None = Field(
+        default=None, max_length=14
+    )
+    taxonomy_overrides: dict[str, TaxonomyOverride] | None = Field(
+        default=None, max_length=1000
+    )
+    taxonomy_compound_rules: list[CompoundRule] | None = Field(
+        default=None, max_length=100
+    )
 
     @model_validator(mode="after")
     def taxonomy_keys(self) -> "SettingsPatch":
         categories = {
-            "person", "body", "face_hair", "clothing", "clothing_bulge", "pose_action",
-            "sexual_action", "genitals", "penis", "environment", "objects", "composition",
-            "visual", "other",
+            "person",
+            "body",
+            "face_hair",
+            "clothing",
+            "clothing_bulge",
+            "pose_action",
+            "sexual_action",
+            "genitals",
+            "penis",
+            "environment",
+            "objects",
+            "composition",
+            "visual",
+            "other",
         }
         if self.taxonomy_categories and set(self.taxonomy_categories) - categories:
             raise ValueError("Unknown taxonomy category")

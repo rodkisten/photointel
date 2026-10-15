@@ -59,6 +59,6 @@ describe('structured search rules', () => {
     expect(nested).toHaveValue('or');
     await user.selectOptions(screen.getByLabelText('Operador do grupo nível 1'), 'not');
     expect(screen.queryByLabelText('Operador do grupo nível 2')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Regra', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Regra' })).toBeNull();
   });
 });

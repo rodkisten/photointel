@@ -26,6 +26,7 @@ _requests: dict[str, deque[float]] = defaultdict(deque)
 async def lifespan(app: FastAPI) -> Any:
     settings = get_settings()  # Revalidate startup invariants before serving traffic.
     from photointel.logging import configure_logging
+
     configure_logging(settings.log_level)
     logger.info("api_started", extra={"environment": settings.app_env})
     yield
@@ -35,7 +36,8 @@ async def lifespan(app: FastAPI) -> Any:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Photo Intelligence Cloud", version="1.0.0",
+        title="Photo Intelligence Cloud",
+        version="1.0.0",
         description="Catálogo privado, metadata, jobs e inteligência visual.",
         lifespan=lifespan,
         docs_url=None if settings.is_production else "/docs",
@@ -44,9 +46,16 @@ def create_app() -> FastAPI:
     )
     origins = list({settings.frontend_origin, *settings.cors_origins})
     app.add_middleware(
-        CORSMiddleware, allow_origins=origins, allow_credentials=True,
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Cf-Access-Jwt-Assertion", "Authorization", "Last-Event-ID"],
+        allow_headers=[
+            "Content-Type",
+            "Cf-Access-Jwt-Assertion",
+            "Authorization",
+            "Last-Event-ID",
+        ],
     )
 
     @app.exception_handler(AppError)
@@ -54,46 +63,80 @@ def create_app() -> FastAPI:
         return error_response(request, exc)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    async def validation_error(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
         # Validation inputs may contain credentials; do not serialize Pydantic input/ctx.
-        issues = [{"path": list(item["loc"]), "type": item["type"]}
-                  for item in exc.errors()[:100]]
-        return error_response(request, AppError(
-            ErrorCode.INVALID_REQUEST, "Dados inválidos", 422, {"issues": issues},
-        ))
+        issues = [
+            {"path": list(item["loc"]), "type": item["type"]}
+            for item in exc.errors()[:100]
+        ]
+        return error_response(
+            request,
+            AppError(
+                ErrorCode.INVALID_REQUEST,
+                "Dados inválidos",
+                422,
+                {"issues": issues},
+            ),
+        )
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-        logger.error("request_failed", extra={
-            "correlation_id": request.state.correlation_id,
-            "exception_type": type(exc).__name__,
-        })
-        return error_response(request, AppError(
-            ErrorCode.INTERNAL_ERROR, "Falha interna; consulte o diagnóstico pelo ID", 500,
-        ))
+        logger.error(
+            "request_failed",
+            extra={
+                "correlation_id": request.state.correlation_id,
+                "exception_type": type(exc).__name__,
+            },
+        )
+        return error_response(
+            request,
+            AppError(
+                ErrorCode.INTERNAL_ERROR,
+                "Falha interna; consulte o diagnóstico pelo ID",
+                500,
+            ),
+        )
 
     @app.middleware("http")
     async def protection(request: Request, call_next: Any) -> Any:
         import time
+
         request.state.correlation_id = str(uuid4())
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 length = int(request.headers.get("content-length", "0"))
             except ValueError:
-                return error_response(request, AppError(
-                    ErrorCode.INVALID_REQUEST, "Tamanho de requisição inválido", 400,
-                ))
+                return error_response(
+                    request,
+                    AppError(
+                        ErrorCode.INVALID_REQUEST,
+                        "Tamanho de requisição inválido",
+                        400,
+                    ),
+                )
             if length > 1024 * 1024:
-                return error_response(request, AppError(
-                    ErrorCode.INVALID_REQUEST, "Requisição excede 1 MiB", 413,
-                ))
+                return error_response(
+                    request,
+                    AppError(
+                        ErrorCode.INVALID_REQUEST,
+                        "Requisição excede 1 MiB",
+                        413,
+                    ),
+                )
             # Bound chunked bodies too. No original photos are uploaded via this API.
             collected = bytearray()
             async for chunk in request.stream():
                 if len(collected) + len(chunk) > 1024 * 1024:
-                    return error_response(request, AppError(
-                        ErrorCode.INVALID_REQUEST, "Requisição excede 1 MiB", 413,
-                    ))
+                    return error_response(
+                        request,
+                        AppError(
+                            ErrorCode.INVALID_REQUEST,
+                            "Requisição excede 1 MiB",
+                            413,
+                        ),
+                    )
                 collected.extend(chunk)
             request._body = bytes(collected)
             client = request.client.host if request.client else "unknown"
@@ -102,13 +145,21 @@ def create_app() -> FastAPI:
             while attempts and attempts[0] < now - 60:
                 attempts.popleft()
             if len(attempts) >= 120:
-                return error_response(request, AppError(
-                    ErrorCode.RATE_LIMITED, "Muitas operações; aguarde um minuto", 429,
-                ))
+                return error_response(
+                    request,
+                    AppError(
+                        ErrorCode.RATE_LIMITED,
+                        "Muitas operações; aguarde um minuto",
+                        429,
+                    ),
+                )
             attempts.append(now)
             if len(_requests) > 10000:
-                expired = [key for key, values in _requests.items()
-                           if not values or values[-1] < now - 60]
+                expired = [
+                    key
+                    for key, values in _requests.items()
+                    if not values or values[-1] < now - 60
+                ]
                 for key in expired:
                     _requests.pop(key, None)
         response = await call_next(request)
@@ -133,15 +184,19 @@ def create_app() -> FastAPI:
                 await asyncio.to_thread(storage.client.head_bucket, Bucket=storage.bucket)
         except Exception as exc:
             raise AppError(
-                ErrorCode.DATABASE_UNAVAILABLE, "Dependência indisponível", 503,
+                ErrorCode.DATABASE_UNAVAILABLE,
+                "Dependência indisponível",
+                503,
             ) from exc
         return {"status": "ready"}
 
     from photointel.routers.catalog import router as catalog
     from photointel.routers.operations import router as operations
+
     app.include_router(catalog, prefix="/v1")
     app.include_router(operations, prefix="/v1")
     from photointel.routers.bridge import router as bridge
+
     app.include_router(bridge, prefix="/v1")
     return app
 

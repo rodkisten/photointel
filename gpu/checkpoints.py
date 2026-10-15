@@ -44,7 +44,8 @@ def inspect_model(client: httpx.Client, model_id: str) -> dict[str, Any]:
     response.raise_for_status()
     config = response.json()
     result = {
-        "model_id": model_id, "revision": revision,
+        "model_id": model_id,
+        "revision": revision,
         "license": metadata.get("cardData", {}).get("license", "not_declared"),
         "config": config,
     }
@@ -65,7 +66,8 @@ def inspect_model(client: httpx.Client, model_id: str) -> dict[str, Any]:
             raise ValueError("Text checkpoint requires a database vector migration")
         result["embedding_dimension"] = EMBEDDING_DIMENSION
         result["sparse_config_defaults"] = {
-            "source": CONFIG_DEFAULTS_SOURCE, "source_git_blob": CONFIG_DEFAULTS_BLOB,
+            "source": CONFIG_DEFAULTS_SOURCE,
+            "source_git_blob": CONFIG_DEFAULTS_BLOB,
         }
     return result
 
@@ -75,15 +77,21 @@ def main() -> None:
         description="Verificar metadados públicos; sem pesos/GPU",
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("reports/model-evidence.json"),
+        "--output",
+        type=Path,
+        default=Path("reports/model-evidence.json"),
     )
     arguments = parser.parse_args()
     with httpx.Client(timeout=30, follow_redirects=True) as client:
         report = {
             "verified_at": datetime.now(UTC).isoformat(),
-            "models": [inspect_model(client, name) for name in [
-                "fancyfeast/joytag", "google/siglip2-base-patch16-224",
-            ]],
+            "models": [
+                inspect_model(client, name)
+                for name in [
+                    "fancyfeast/joytag",
+                    "google/siglip2-base-patch16-224",
+                ]
+            ],
         }
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(json.dumps(report, indent=2) + "\n")

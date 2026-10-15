@@ -1,23 +1,27 @@
 """Validated settings. External integrations are disabled until configured."""
 
+import re
 from functools import lru_cache
 from pathlib import Path
-import re
-from urllib.parse import urlsplit
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", case_sensitive=False
+    )
 
     app_env: Literal["development", "test", "production"] = "development"
     auth_mode: Literal["local", "cloudflare"] = "local"
     frontend_origin: str = "http://localhost:5173"
     api_origin: str = "http://localhost:8000"
-    database_url: str = "postgresql+asyncpg://photointel:local-only@localhost:5432/photointel"
+    database_url: str = (
+        "postgresql+asyncpg://photointel:local-only@localhost:5432/photointel"
+    )
     migration_database_url: str | None = None
     log_level: str = "INFO"
     access_team_domain: str = ""
@@ -92,8 +96,12 @@ class Settings(BaseSettings):
     def validate_origin(cls, value: str) -> str:
         parsed = urlsplit(value)
         if (
-            parsed.scheme not in {"http", "https"} or not parsed.hostname
-            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
             or parsed.path not in {"", "/"}
         ):
             raise ValueError("Application origins must be HTTP(S) origins without paths")
@@ -125,9 +133,16 @@ class Settings(BaseSettings):
         if self.app_env == "production":
             if self.auth_mode != "cloudflare":
                 raise ValueError("Production requires AUTH_MODE=cloudflare")
-            if not all((self.access_team_domain, self.access_audience,
-                        self.access_allowed_emails)):
-                raise ValueError("Configure Access team domain, audience and email allowlist")
+            if not all(
+                (
+                    self.access_team_domain,
+                    self.access_audience,
+                    self.access_allowed_emails,
+                )
+            ):
+                raise ValueError(
+                    "Configure Access team domain, audience and email allowlist"
+                )
             if not self.frontend_origin.startswith("https://"):
                 raise ValueError("Production FRONTEND_ORIGIN requires HTTPS")
             if not self.api_origin.startswith("https://"):
@@ -136,10 +151,13 @@ class Settings(BaseSettings):
                 raise ValueError("Production DATABASE_URL must replace local credentials")
             if self.storage_backend == "local":
                 raise ValueError("Production requires private S3/R2 object storage")
-            if not self.bridge_token_pepper or len(
-                self.bridge_token_pepper.get_secret_value()
-            ) < 32:
-                raise ValueError("Production BRIDGE_TOKEN_PEPPER must contain 32+ characters")
+            if (
+                not self.bridge_token_pepper
+                or len(self.bridge_token_pepper.get_secret_value()) < 32
+            ):
+                raise ValueError(
+                    "Production BRIDGE_TOKEN_PEPPER must contain 32+ characters"
+                )
         if self.storage_backend != "local" and not all(
             (self.storage_endpoint, self.storage_access_key, self.storage_secret_key)
         ):
@@ -148,15 +166,28 @@ class Settings(BaseSettings):
             re.fullmatch(r"[a-f0-9]{40}", revision)
             for revision in (self.joytag_model_revision, self.siglip_model_revision)
         ):
-            raise ValueError("GPU inference requires exact 40-character checkpoint revisions")
-        if self.gpu_enabled and self.inference_backend == "modal" and not all(
-            (self.modal_endpoint, self.modal_token, self.modal_proxy_key, self.modal_proxy_secret)
-        ):
             raise ValueError(
-                "Modal inference requires endpoint, application token and proxy credentials"
+                "GPU inference requires exact 40-character checkpoint revisions"
             )
         if (
-            self.app_env == "production" and self.storage_endpoint
+            self.gpu_enabled
+            and self.inference_backend == "modal"
+            and not all(
+                (
+                    self.modal_endpoint,
+                    self.modal_token,
+                    self.modal_proxy_key,
+                    self.modal_proxy_secret,
+                )
+            )
+        ):
+            raise ValueError(
+                "Modal inference requires endpoint, application token "
+                "and proxy credentials"
+            )
+        if (
+            self.app_env == "production"
+            and self.storage_endpoint
             and not self.storage_endpoint.startswith("https://")
         ):
             raise ValueError("Production object storage endpoint requires HTTPS")
@@ -166,7 +197,9 @@ class Settings(BaseSettings):
             if self.modal_token and len(self.modal_token.get_secret_value()) < 32:
                 raise ValueError("MODAL_TOKEN must contain at least 32 characters")
         if self.job_heartbeat_seconds >= self.job_lease_seconds:
-            raise ValueError("JOB_HEARTBEAT_SECONDS must be shorter than JOB_LEASE_SECONDS")
+            raise ValueError(
+                "JOB_HEARTBEAT_SECONDS must be shorter than JOB_LEASE_SECONDS"
+            )
         return self
 
     @property

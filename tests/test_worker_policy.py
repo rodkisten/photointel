@@ -9,8 +9,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from PIL import Image
-
 from photointel.config import Settings
 from photointel.errors import AppError
 from photointel.models import Asset, utcnow
@@ -24,6 +22,7 @@ from photointel.services.ingestion import (
 )
 from photointel.services.jobs import retry_delay
 from photointel.services.media import decode_media, source_path
+from PIL import Image
 
 
 def test_real_decode_normalizes_orientation_and_strips_exif(tmp_path: Path) -> None:
@@ -61,17 +60,25 @@ def test_source_manifest_cannot_escape_processing_root(tmp_path: Path) -> None:
     settings = Settings(temp_directory=tmp_path / "processing")
     private = tmp_path / "private.jpg"
     private.write_bytes(b"private")
-    asset = Asset(library_id=uuid4(), source_asset_key="x", filename="x.jpg",
-                  source_metadata={
-                      "fixture": True, "cache_relative_path": "../../private.jpg",
-                  })
+    asset = Asset(
+        library_id=uuid4(),
+        source_asset_key="x",
+        filename="x.jpg",
+        source_metadata={
+            "fixture": True,
+            "cache_relative_path": "../../private.jpg",
+        },
+    )
     with pytest.raises(AppError):
         source_path(asset, settings)
 
 
 def test_cookies_never_imply_valid_session(tmp_path: Path) -> None:
-    settings = Settings(icloud_enabled=True, icloud_account="fixture@example.invalid",
-                        icloud_session_directory=tmp_path)
+    settings = Settings(
+        icloud_enabled=True,
+        icloud_account="fixture@example.invalid",
+        icloud_session_directory=tmp_path,
+    )
     (tmp_path / "cookies").write_text("exists")
     assert authentication_state(settings)["valid"] is False
     record_authentication(settings, "valid", "Online verification succeeded")
@@ -88,9 +95,12 @@ def test_duplicate_similarity_does_not_define_identity() -> None:
     assert hash_distance("0000000000000000", "0000000000000003") == 2
     with pytest.raises(ValueError):
         hash_distance("ffff", "0000")
-    assert revision_hash({"id": "a", "size": 10}) == revision_hash({
-        "size": 10, "id": "a",
-    })
+    assert revision_hash({"id": "a", "size": 10}) == revision_hash(
+        {
+            "size": 10,
+            "id": "a",
+        }
+    )
     assert revision_hash({"id": "a"}) != revision_hash({"id": "b"})
     assert retry_delay(1).total_seconds() == 5
     assert retry_delay(100).total_seconds() == 3600
@@ -133,6 +143,7 @@ def test_error_taxonomy_does_not_return_private_exception() -> None:
 
 def test_pending_jobs_skip_superseded_input_revisions() -> None:
     from photointel.services.worker import superseded_reason
+
     assert superseded_reason({}, "c2", "r2") is None
     assert superseded_reason({"content_revision": "c2"}, "c2", "r2") is None
     assert superseded_reason({"content_revision": "c1"}, "c2", "r2") == (
@@ -144,8 +155,11 @@ def test_pending_jobs_skip_superseded_input_revisions() -> None:
 
 
 def test_auth_proof_is_scoped_to_account_and_library(tmp_path: Path) -> None:
-    settings = Settings(icloud_enabled=True, icloud_account="first@example.invalid",
-                        icloud_session_directory=tmp_path)
+    settings = Settings(
+        icloud_enabled=True,
+        icloud_account="first@example.invalid",
+        icloud_session_directory=tmp_path,
+    )
     record_authentication(settings, "valid", "Online check")
     assert authentication_state(settings)["valid"] is True
     other = settings.model_copy(update={"icloud_account": "other@example.invalid"})

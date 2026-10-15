@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fingerprint a small synthetic restore fixture; not a large-library benchmark."""
+
 import hashlib
 import json
 import os

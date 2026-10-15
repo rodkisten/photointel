@@ -18,6 +18,10 @@ const asset = (index: number): Asset => ({
   thumbnail_url: `/v1/assets/asset-${index}/media/thumbnail_small`,
 });
 
+const pathname = (input: RequestInfo | URL) => new URL(
+  input instanceof Request ? input.url : String(input), window.location.origin,
+).pathname;
+
 function show() {
   const client = new QueryClient({ defaultOptions: {
     queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
@@ -33,7 +37,7 @@ describe('private virtualized gallery', () => {
     useUi.setState({ selected: new Set(), selecting: false, density: 1, toast: null });
     vi.stubGlobal('fetch', fetcher);
     fetcher.mockImplementation(async (input) => Response.json(
-      String(input).startsWith('/v1/search')
+      pathname(input) === '/v1/search'
         ? { items: Array.from({ length: 1000 }, (_, index) => asset(index)),
           next_cursor: null, explanation: {} }
         : { items: [], next_cursor: null },
@@ -63,7 +67,7 @@ describe('private virtualized gallery', () => {
     const user = userEvent.setup();
     show();
     await screen.findByRole('button', { name: 'fixture-0.jpg' });
-    await user.click(screen.getByRole('button', { name: 'Selecionar', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Selecionar' }));
     await user.click(screen.getByRole('button', { name: 'fixture-0.jpg' }));
     expect(screen.getByRole('button', { name: 'fixture-0.jpg' })).toHaveAttribute(
       'aria-pressed', 'true',
@@ -71,10 +75,10 @@ describe('private virtualized gallery', () => {
     await user.click(screen.getByRole('button', { name: 'Keyword' }));
     expect(screen.getByRole('dialog', { name: 'Adicionar palavras-chave' })).toBeVisible();
     await user.type(screen.getByLabelText('Palavras-chave separadas por vírgula'), 'viagem, praia');
-    await user.click(screen.getByRole('button', { name: 'Salvar', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith(
-      '/v1/assets/bulk/tags', expect.objectContaining({
-        method: 'POST', body: JSON.stringify({ asset_ids: ['asset-0'], add: ['viagem', 'praia'] }),
+      '/v1/assets/tags', expect.objectContaining({
+        method: 'PATCH', body: JSON.stringify({ asset_ids: ['asset-0'], add: ['viagem', 'praia'] }),
       }),
     ));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -82,7 +86,7 @@ describe('private virtualized gallery', () => {
   });
 
   it('shows a recoverable API error and never exposes a provider response body', async () => {
-    fetcher.mockImplementation(async (input) => String(input).startsWith('/v1/search')
+    fetcher.mockImplementation(async (input) => pathname(input) === '/v1/search'
       ? new Response('<html>private gateway internals</html>', { status: 503 })
       : Response.json({ items: [], next_cursor: null }));
     show();
@@ -91,7 +95,7 @@ describe('private virtualized gallery', () => {
     expect(alert).not.toHaveTextContent('private gateway internals');
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     await waitFor(() => expect(fetcher.mock.calls.filter(
-      ([input]) => String(input).startsWith('/v1/search'),
+      ([input]) => pathname(input) === '/v1/search',
     ).length).toBeGreaterThan(1));
   });
 

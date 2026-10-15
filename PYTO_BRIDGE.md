@@ -73,10 +73,46 @@ python bridge.py --config /caminho/photointel-bridge.json status
 ```
 
 O arquivo local contém URL, UUID do dispositivo e checkpoint; não contém o
-token. A credencial é armazenada no módulo Keychain do Pyto, com o serviço
-`photo-intelligence-cloud.bridge`. Caso `get_password`/`set_password` não estejam
-disponíveis, a execução falha com `KEYCHAIN_UNAVAILABLE`; não há fallback para
-texto puro. Use uma distribuição Pyto compatível antes de matricular o aparelho.
+token. `SecurityKeychain` usa `ctypes` e as APIs C públicas de
+`Security.framework`: `SecItemCopyMatching`, `SecItemUpdate` e `SecItemAdd`.
+O serviço é `photo-intelligence-cloud.bridge` e a conta é a origem HTTPS.
+O atributo `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` permite leitura com o
+iPhone desbloqueado e impede migração da credencial para outro aparelho.
+Trocar ou restaurar o iPhone exige nova matrícula.
+
+`doctor` faz uma consulta sem gravar credenciais. `credential_storage=query_available`
+confirma somente que essa consulta foi aceita pelo runtime; não representa um
+cadastro bem-sucedido. `enroll` repete a consulta antes de consumir o código,
+grava a credencial recebida e a lê novamente antes de salvar o UUID local.
+Se a gravação falhar depois do consumo do código, revogue o dispositivo na web
+e gere um código novo. Nenhuma credencial aparece na saída JSON.
+
+Se a biblioteca nativa estiver inacessível ou o sandbox negar acesso, o comando
+retorna `KEYCHAIN_UNAVAILABLE` com um `OSStatus` quando disponível. Um Keychain
+bloqueado retorna `KEYCHAIN_LOCKED`; desbloqueie o iPhone e execute Pyto em
+primeiro plano. Uma leitura incompatível ou gravação não confirmada retorna
+`KEYCHAIN_INVALID_DATA` ou `KEYCHAIN_VERIFICATION_FAILED`.
+Não existe fallback para arquivo, `NSUserDefaults` ou o módulo `userkeys` do
+Pyto. O módulo `keychain` com `get_password`/`set_password` pertence a outros
+ambientes Python iOS e não é pressuposto por esta implementação.
+
+**Validação pendente em hardware:** os testes portáveis exercitam status de
+falha, rotação, concorrência, limites e confirmação da persistência com um
+adaptador exclusivo de testes. Eles não executam Security.framework. Antes de
+usar em uma biblioteca pessoal, execute `doctor`, uma matrícula, `status`,
+feche/reabra o Pyto e repita `status` no iPhone. Confirme também a recusa de
+acesso com o aparelho bloqueado; não declare a integração operacional antes
+desse teste real.
+
+Referências públicas do armazenamento:
+
+- https://developer.apple.com/documentation/security/secitemcopymatching(_:_:)
+- https://developer.apple.com/documentation/security/secitemadd(_:_:)
+- https://developer.apple.com/documentation/security/secitemupdate(_:_:)
+- https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly
+- https://developer.apple.com/documentation/corefoundation/cfdictionarycreatemutable(_:_:_:_:)
+- https://github.com/ColdGrub1384/Pyto/blob/main/docs/Objective-C.rst
+- https://github.com/ColdGrub1384/Pyto/blob/main/Lib/userkeys.py
 
 Se Cloudflare Access estiver na frente de toda a origem, a matrícula e os
 endpoints `/v1/bridge/*` precisam de uma política apropriada para clientes

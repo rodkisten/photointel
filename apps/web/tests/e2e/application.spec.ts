@@ -34,7 +34,8 @@ async function openFixture(page: Page) {
   const viewer = page.getByRole('dialog', { name: fixtures[0].filename, exact: true });
   await expect(viewer).toBeVisible();
   // This control opens the mobile bottom sheet; metadata is always visible on desktop.
-  await viewer.getByRole('button', { name: 'Informações', exact: true }).click();
+  const information = viewer.getByRole('button', { name: 'Informações', exact: true });
+  if (await information.isVisible()) await information.click();
   return viewer;
 }
 
@@ -164,7 +165,8 @@ test('07 persists a manual keyword with user provenance', async ({ page, request
     expect.objectContaining({ canonical_key: keyword, origin: 'user', user_status: 'approved' }),
   ]));
   await page.reload();
-  await page.getByRole('dialog').getByRole('button', { name: 'Informações', exact: true }).click();
+  const information = page.getByRole('dialog').getByRole('button', { name: 'Informações', exact: true });
+  if (await information.isVisible()) await information.click();
   await expect(page.getByRole('dialog').getByText(keyword, { exact: true })).toBeVisible();
 });
 

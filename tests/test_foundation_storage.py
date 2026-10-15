@@ -9,16 +9,27 @@ from uuid import uuid4
 import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError
 from botocore.response import StreamingBody
-
 from photointel.errors import AppError
 from photointel.storage import LocalStorage, S3Storage, object_key, validate_key
 
 
-@pytest.mark.parametrize("key", [
-    "../secret", "/etc/passwd", "assets/../secret", "assets//photo", "a/./b",
-    "a\\b", "", "a\x00b", "http://evil.invalid/photo", "a\nb", "a?signature=secret",
-    "a/%2e%2e/b",
-])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "../secret",
+        "/etc/passwd",
+        "assets/../secret",
+        "assets//photo",
+        "a/./b",
+        "a\\b",
+        "",
+        "a\x00b",
+        "http://evil.invalid/photo",
+        "a\nb",
+        "a?signature=secret",
+        "a/%2e%2e/b",
+    ],
+)
 def test_invalid_keys_are_rejected(key: str) -> None:
     with pytest.raises(AppError):
         validate_key(key)
@@ -123,7 +134,8 @@ def test_s3_provider_errors_are_safe_public_errors() -> None:
     assert caught.value.code == "STORAGE_UNAVAILABLE"
     assert "provider-secret" not in caught.value.message
     storage.client.get_object.side_effect = ClientError(
-        {"Error": {"Code": "NoSuchKey"}}, "GetObject",
+        {"Error": {"Code": "NoSuchKey"}},
+        "GetObject",
     )
     with pytest.raises(AppError) as caught:
         storage.get("assets/test.webp")

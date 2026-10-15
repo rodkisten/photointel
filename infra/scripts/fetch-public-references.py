@@ -35,10 +35,17 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=len(tasks)) as executor:
             results[name] = future.result()
         except Exception as error:
             results[name] = [{"status": "failed", "error_type": type(error).__name__}]
-(args.output / "reference-status.json").write_text(json.dumps({
-    "executed_at": datetime.now(UTC).isoformat(), "sources": results,
-    "model_weights_downloaded": False,
-}, indent=2) + "\n")
+(args.output / "reference-status.json").write_text(
+    json.dumps(
+        {
+            "executed_at": datetime.now(UTC).isoformat(),
+            "sources": results,
+            "model_weights_downloaded": False,
+        },
+        indent=2,
+    )
+    + "\n"
+)
 for name, entries in results.items():
     successes = sum(entry.get("status") == "passed" for entry in entries)
     print(f"{name}: {successes}/{len(entries)} references fetched")

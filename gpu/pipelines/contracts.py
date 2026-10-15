@@ -63,7 +63,8 @@ class TextRequest(StrictModel):
 
 class TextEmbedding(StrictModel):
     embedding: list[float] = Field(
-        min_length=EMBEDDING_DIMENSION, max_length=EMBEDDING_DIMENSION,
+        min_length=EMBEDDING_DIMENSION,
+        max_length=EMBEDDING_DIMENSION,
     )
     model_revision: str
     runtime_ms: float = Field(ge=0)
@@ -72,7 +73,7 @@ class TextEmbedding(StrictModel):
     @classmethod
     def normalized_embedding(cls, value: list[float]) -> list[float]:
         norm = math.sqrt(sum(x * x for x in value))
-        if not math.isfinite(norm) or abs(norm - 1) > .002:
+        if not math.isfinite(norm) or abs(norm - 1) > 0.002:
             raise ValueError("Expected finite, normalized embedding")
         return value
 

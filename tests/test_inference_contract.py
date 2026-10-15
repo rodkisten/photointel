@@ -5,25 +5,31 @@ import io
 from uuid import uuid4
 
 import pytest
-from PIL import Image
-from pydantic import ValidationError
-
-from gpu.models.adapters import decode_image
-from gpu.pipelines.contracts import ImageResult, ModelSpec, TextEmbedding
 from photointel.config import Settings
 from photointel.errors import AppError
 from photointel.services.inference import (
     embed_text,
     image_inference,
-    test_vector as make_test_vector,
     validate_spending,
 )
+from photointel.services.inference import (
+    test_vector as make_test_vector,
+)
+from PIL import Image
+from pydantic import ValidationError
+
+from gpu.models.adapters import decode_image
+from gpu.pipelines.contracts import ImageResult, ModelSpec, TextEmbedding
 
 
 def configured(**changes) -> Settings:
     return Settings(
-        _env_file=None, app_env="test", inference_backend="test", gpu_enabled=True,
-        joytag_model_revision="a" * 40, siglip_model_revision="b" * 40,
+        _env_file=None,
+        app_env="test",
+        inference_backend="test",
+        gpu_enabled=True,
+        joytag_model_revision="a" * 40,
+        siglip_model_revision="b" * 40,
         **changes,
     )
 
@@ -33,7 +39,7 @@ def test_checkpoint_requires_immutable_revisions() -> None:
         ModelSpec(joytag_revision="main", siglip_revision="b" * 40)
 
 
-@pytest.mark.parametrize("vector", [[0.] * 768, [1.] * 768, [float("nan")] * 768])
+@pytest.mark.parametrize("vector", [[0.0] * 768, [1.0] * 768, [float("nan")] * 768])
 def test_invalid_vectors_rejected(vector: list[float]) -> None:
     with pytest.raises(ValidationError):
         TextEmbedding(embedding=vector, model_revision="b" * 40, runtime_ms=1)
@@ -41,16 +47,21 @@ def test_invalid_vectors_rejected(vector: list[float]) -> None:
 
 def test_embedding_dimension_validated() -> None:
     with pytest.raises(ValidationError):
-        TextEmbedding(embedding=[1.], model_revision="b" * 40, runtime_ms=1)
+        TextEmbedding(embedding=[1.0], model_revision="b" * 40, runtime_ms=1)
 
 
-@pytest.mark.parametrize("probability", [-.1, 1.1, float("inf"), float("nan")])
+@pytest.mark.parametrize("probability", [-0.1, 1.1, float("inf"), float("nan")])
 def test_invalid_probabilities_rejected(probability: float) -> None:
     with pytest.raises(ValidationError):
         ImageResult(
-            asset_id=uuid4(), input_revision="1", model_revision="b" * 40,
-            joytag_revision="a" * 40, embedding=make_test_vector(b"test"),
-            probabilities={"sky": probability}, runtime_ms=1, joytag_runtime_ms=1,
+            asset_id=uuid4(),
+            input_revision="1",
+            model_revision="b" * 40,
+            joytag_revision="a" * 40,
+            embedding=make_test_vector(b"test"),
+            probabilities={"sky": probability},
+            runtime_ms=1,
+            joytag_runtime_ms=1,
         )
 
 
@@ -97,9 +108,12 @@ async def test_explicit_test_adapter_has_normalized_deterministic_embeddings() -
 async def test_test_adapter_rejected_if_validation_bypassed() -> None:
     unsafe = configured().model_copy(update={"app_env": "production"})
     from gpu.pipelines.contracts import ImageInput, ImageRequest
+
     request = ImageRequest(
         models=ModelSpec(joytag_revision="a" * 40, siglip_revision="b" * 40),
-        images=[ImageInput(asset_id=uuid4(), input_revision="1", image_base64="dGVzdGluZw==")],
+        images=[
+            ImageInput(asset_id=uuid4(), input_revision="1", image_base64="dGVzdGluZw==")
+        ],
     )
     with pytest.raises(AppError, match="restrito"):
         await image_inference(request, unsafe)

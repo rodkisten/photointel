@@ -19,7 +19,8 @@ def upgrade() -> None:
         WHERE source = 'photokit'
     """)
     op.create_index(
-        "ix_device_mappings_asset_verification", "device_mappings",
+        "ix_device_mappings_asset_verification",
+        "device_mappings",
         ["device_id", "asset_id", "verification_status"],
     )
 

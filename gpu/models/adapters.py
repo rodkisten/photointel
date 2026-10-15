@@ -36,7 +36,10 @@ def decode_image(encoded: str) -> Image.Image:
             source.load()
             return ImageOps.exif_transpose(source).convert("RGB")
     except (
-        binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombError,
+        binascii.Error,
+        UnidentifiedImageError,
+        OSError,
+        Image.DecompressionBombError,
     ) as exc:
         raise ValueError("Invalid or corrupt inference image") from exc
 
@@ -53,8 +56,9 @@ def joytag_prepare(image: Image.Image, size: int) -> Any:
         square = square.resize((size, size), Image.Resampling.BICUBIC)
     tensor = tvf.pil_to_tensor(square).float() / 255
     return tvf.normalize(
-        tensor, mean=[.48145466, .4578275, .40821073],
-        std=[.26862954, .26130258, .27577711],
+        tensor,
+        mean=[0.48145466, 0.4578275, 0.40821073],
+        std=[0.26862954, 0.26130258, 0.27577711],
     )
 
 
@@ -77,17 +81,24 @@ class RealModels:
         self.text_cache: OrderedDict[str, TextEmbedding] = OrderedDict()
         for revision in (models.joytag_revision, models.siglip_revision):
             validate_revision(revision)
-        joy_path = Path(snapshot_download(
-            repo_id=models.joytag_model_id, revision=models.joytag_revision,
-            cache_dir=str(cache), allow_patterns=[
-                "config.json", "model.safetensors", "top_tags.txt",
-            ],
-        ))
+        joy_path = Path(
+            snapshot_download(
+                repo_id=models.joytag_model_id,
+                revision=models.joytag_revision,
+                cache_dir=str(cache),
+                allow_patterns=[
+                    "config.json",
+                    "model.safetensors",
+                    "top_tags.txt",
+                ],
+            )
+        )
         # Unsafe pickle checkpoints are deliberately unsupported.
         if not (joy_path / "model.safetensors").is_file():
             raise ValueError("Pinned JoyTag checkpoint must contain model.safetensors")
         self.vocabulary = [
-            tag.strip() for tag in (joy_path / "top_tags.txt").read_text().splitlines()
+            tag.strip()
+            for tag in (joy_path / "top_tags.txt").read_text().splitlines()
             if tag.strip()
         ]
         config = json.loads((joy_path / "config.json").read_text())
@@ -95,14 +106,22 @@ class RealModels:
             raise ValueError("JoyTag checkpoint vocabulary dimension mismatch")
         self.joytag = VisionModel.load_model(joy_path, device=device).eval()
         self.processor = AutoProcessor.from_pretrained(
-            models.siglip_model_id, revision=models.siglip_revision,
-            cache_dir=str(cache), trust_remote_code=False,
+            models.siglip_model_id,
+            revision=models.siglip_revision,
+            cache_dir=str(cache),
+            trust_remote_code=False,
         )
-        self.siglip = AutoModel.from_pretrained(
-            models.siglip_model_id, revision=models.siglip_revision,
-            cache_dir=str(cache), trust_remote_code=False,
-            use_safetensors=True,
-        ).to(device).eval()
+        self.siglip = (
+            AutoModel.from_pretrained(
+                models.siglip_model_id,
+                revision=models.siglip_revision,
+                cache_dir=str(cache),
+                trust_remote_code=False,
+                use_safetensors=True,
+            )
+            .to(device)
+            .eval()
+        )
         # The DB migration uses vector(768) for this exact supported checkpoint.
         # Validate checkpoint config rather than assuming every SigLIP variant matches.
         vision_dim = self.siglip.config.vision_config.hidden_size
@@ -130,11 +149,11 @@ class RealModels:
         started = time.perf_counter()
         results: list[ImageResult] = []
         for offset in range(0, len(request.images), request.batch_size):
-            items = request.images[offset:offset + request.batch_size]
+            items = request.images[offset : offset + request.batch_size]
             images = [decode_image(item.image_base64) for item in items]
-            image_batch = self.torch.stack([
-                joytag_prepare(image, self.joytag.image_size) for image in images
-            ]).to(self.device)
+            image_batch = self.torch.stack(
+                [joytag_prepare(image, self.joytag.image_size) for image in images]
+            ).to(self.device)
             self._sync()
             tag_started = time.perf_counter()
             with self.torch.inference_mode(), self._autocast():
@@ -146,26 +165,39 @@ class RealModels:
             embed_started = time.perf_counter()
             with self.torch.inference_mode(), self._autocast():
                 features = self.siglip.get_image_features(**inputs)
-                embeddings = self.torch.nn.functional.normalize(
-                    features.float(), dim=-1,
-                ).cpu().tolist()
+                embeddings = (
+                    self.torch.nn.functional.normalize(
+                        features.float(),
+                        dim=-1,
+                    )
+                    .cpu()
+                    .tolist()
+                )
             self._sync()
             embedding_ms = (time.perf_counter() - embed_started) * 1000 / len(items)
             for item, prediction, embedding in zip(
-                items, probabilities, embeddings, strict=True,
+                items,
+                probabilities,
+                embeddings,
+                strict=True,
             ):
                 if len(prediction) != len(self.vocabulary):
                     raise ValueError("JoyTag output dimension mismatch")
-                results.append(ImageResult(
-                    asset_id=item.asset_id, input_revision=item.input_revision,
-                    model_revision=self.spec.siglip_revision,
-                    joytag_revision=self.spec.joytag_revision,
-                    embedding=embedding,
-                    probabilities=dict(zip(self.vocabulary, prediction, strict=True)),
-                    runtime_ms=embedding_ms, joytag_runtime_ms=joytag_ms,
-                ))
+                results.append(
+                    ImageResult(
+                        asset_id=item.asset_id,
+                        input_revision=item.input_revision,
+                        model_revision=self.spec.siglip_revision,
+                        joytag_revision=self.spec.joytag_revision,
+                        embedding=embedding,
+                        probabilities=dict(zip(self.vocabulary, prediction, strict=True)),
+                        runtime_ms=embedding_ms,
+                        joytag_runtime_ms=joytag_ms,
+                    )
+                )
         response = ImageResponse(
-            results=results, total_runtime_ms=(time.perf_counter() - started) * 1000,
+            results=results,
+            total_runtime_ms=(time.perf_counter() - started) * 1000,
         )
         self.result_cache[identity] = response
         while len(self.result_cache) > 8:
@@ -181,17 +213,26 @@ class RealModels:
         started = time.perf_counter()
         # SigLIP's processor uses its pinned tokenizer, max_length padding and EOS.
         inputs = self.processor(
-            text=[text], padding="max_length", truncation=True,
-            max_length=64, return_tensors="pt",
+            text=[text],
+            padding="max_length",
+            truncation=True,
+            max_length=64,
+            return_tensors="pt",
         ).to(self.device)
         with self.torch.inference_mode(), self._autocast():
             feature = self.siglip.get_text_features(**inputs)
-            vector = self.torch.nn.functional.normalize(
-                feature.float(), dim=-1,
-            )[0].cpu().tolist()
+            vector = (
+                self.torch.nn.functional.normalize(
+                    feature.float(),
+                    dim=-1,
+                )[0]
+                .cpu()
+                .tolist()
+            )
         self._sync()
         result = TextEmbedding(
-            embedding=vector, model_revision=self.spec.siglip_revision,
+            embedding=vector,
+            model_revision=self.spec.siglip_revision,
             runtime_ms=(time.perf_counter() - started) * 1000,
         )
         self.text_cache[identity] = result
