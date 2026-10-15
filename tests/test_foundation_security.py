@@ -120,6 +120,7 @@ async def test_local_auth_is_explicitly_development_only(
 def production(**overrides: Any) -> Settings:
     values = {
         "_env_file": None, "app_env": "production", "auth_mode": "cloudflare",
+        "inference_backend": "modal", "gpu_enabled": False,
         "frontend_origin": "https://photos.example.invalid",
         "api_origin": "https://photos.example.invalid",
         "database_url": "postgresql+asyncpg://private:strong@database/catalog",

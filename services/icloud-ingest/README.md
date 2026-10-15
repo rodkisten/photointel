@@ -49,3 +49,14 @@ ordenação Apple exigem rotações periódicas e não podem disparar exclusões
 
 Fixtures controladas usam `generate_fixtures()` e são explicitamente identificadas
 como demonstração; resultados AI sintéticos só existem com `APP_ENV=test`.
+
+Descobertas simultâneas da mesma conta/biblioteca são serializadas por lock
+transacional PostgreSQL, protegendo cursor e arquivos parciais. Todo acesso a
+objetos do downloader, inclusive propriedades potencialmente lazy, ocorre na
+fronteira síncrona executada em thread, preservando o event loop do heartbeat.
+Retomada de HTTP Range exige `Content-Range` compatível com offset e tamanho.
+
+Renomear ou corrigir metadados de um asset não muda sua revisão de conteúdo.
+Snapshots separados de metadados registram essas alterações sem baixar a mesma
+representação novamente. A prova de autenticação é vinculada à conta e à
+biblioteca selecionadas, além do limite de validade temporal.

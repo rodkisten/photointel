@@ -42,6 +42,32 @@ def test_setup_creates_private_credentials_and_preserves_configuration(tmp_path:
     assert stat.S_IMODE((tmp_path / "var" / "icloud-session").stat().st_mode) == 0o700
 
 
+def test_production_runtime_is_private_and_excludes_database_admin_secrets(
+    tmp_path: Path,
+):
+    script = copied_script(tmp_path, "prepare-production-env.py")
+    shutil.copy(ROOT / ".env.runtime.example", tmp_path / ".env.runtime.example")
+    result = subprocess.run(
+        [sys.executable, str(script)], check=True, capture_output=True, text=True
+    )
+    target = tmp_path / ".env.runtime"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+    lines = target.read_text().splitlines()
+    assert "APP_ENV=production" in lines
+    assert "AUTH_MODE=cloudflare" in lines
+    assert not any(
+        line.startswith(("POSTGRES_", "MIGRATION_DATABASE_URL=")) for line in lines
+    )
+    pepper = next(line.partition("=")[2] for line in lines if line.startswith(
+        "BRIDGE_TOKEN_PEPPER="
+    ))
+    assert len(pepper) == 64
+    assert pepper not in result.stdout + result.stderr
+    target.write_text("PRESERVE=operator-configuration\n")
+    subprocess.run([sys.executable, str(script)], check=True, capture_output=True)
+    assert target.read_text() == "PRESERVE=operator-configuration\n"
+
+
 def test_cleanup_refuses_another_directory_and_symlinks(tmp_path: Path):
     script = copied_script(tmp_path, "cleanup-temp.py")
     originals = tmp_path / "originals" / "processing"
@@ -88,3 +114,24 @@ def test_cleanup_only_removes_expired_regular_temporary_files(tmp_path: Path):
     assert fresh.exists()
     assert original.read_bytes() == b"original"
     assert (directory / "linked.heic").is_symlink()
+
+
+def test_e2e_runner_refuses_production_or_real_inference():
+    configurations = [
+        {"APP_ENV": "production", "INFERENCE_BACKEND": "test"},
+        {"APP_ENV": "test", "INFERENCE_BACKEND": "modal"},
+        {"APP_ENV": "test", "INFERENCE_BACKEND": "test",
+         "JOYTAG_MODEL_REVISION": "a" * 40},
+    ]
+    for overrides in configurations:
+        environment = dict(
+            os.environ, GPU_ENABLED="true",
+            JOYTAG_MODEL_REVISION="1" * 40, SIGLIP_MODEL_REVISION="2" * 40,
+        )
+        environment.update(overrides)
+        result = subprocess.run(
+            ["bash", str(ROOT / "infra/scripts/run-e2e.sh")],
+            env=environment, capture_output=True, text=True, timeout=5,
+        )
+        assert result.returncode == 2
+        assert "E2E exige" in result.stderr

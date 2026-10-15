@@ -711,7 +711,8 @@ async def status(session: DB, identity: User) -> dict[str, Any]:
     counts = (await session.execute(select(SyncOperation.status, func.count()).group_by(
         SyncOperation.status))).all()
     return {"devices": [device_out(device) for device in devices],
-            "operations": dict(counts), "mode": get_settings().apple_keyword_sync_mode,
+            "operations": {status: count for status, count in counts},
+            "mode": get_settings().apple_keyword_sync_mode,
             "bulk_write_enabled": get_settings().apple_bulk_write_enabled,
             "cloud_confirmation_available": False,
             "keyword_write_note": "Pyto v1 é somente leitura; API Beta depende de validação no dispositivo."}
@@ -722,4 +723,5 @@ async def device_status(session: DB, device: Device) -> dict[str, Any]:
     counts = (await session.execute(select(SyncOperation.status, func.count()).where(
         SyncOperation.target_device_id == device.id).group_by(SyncOperation.status))).all()
     await session.commit()
-    return {"device": device_out(device), "operations": dict(counts)}
+    return {"device": device_out(device),
+            "operations": {status: count for status, count in counts}}

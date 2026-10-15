@@ -198,7 +198,7 @@ async def benchmark(count: int, output: Path) -> dict[str, Any]:
 
 
 async def doctor() -> dict[str, Any]:
-    from photointel.storage import get_storage
+    from photointel.storage import S3Storage, get_storage
     settings = get_settings()
     checks: dict[str, Any] = {}
     try:
@@ -209,7 +209,7 @@ async def doctor() -> dict[str, Any]:
         checks["database"] = {"state": "unavailable", "error_type": type(exc).__name__}
     try:
         storage = get_storage()
-        if hasattr(storage, "client"):
+        if isinstance(storage, S3Storage):
             await asyncio.to_thread(storage.client.head_bucket, Bucket=storage.bucket)
         checks["storage"] = "ready"
     except Exception as exc:

@@ -79,3 +79,4 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "- Commit: [\`$sha\`](${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/commit/$sha)"
   } >> "$GITHUB_STEP_SUMMARY"
 fi
+

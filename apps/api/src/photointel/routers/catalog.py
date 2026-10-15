@@ -267,9 +267,9 @@ async def tag_categories(session: Session) -> dict[str, Any]:
     settings = await effective_settings(session)
     stored = await session.get(Setting, "taxonomy_categories")
     rules = stored.value if stored else {}
-    counts = dict((await session.execute(select(
+    counts = {category: count for category, count in (await session.execute(select(
         Tag.category, func.count(Tag.id)
-    ).group_by(Tag.category))).all())
+    ).group_by(Tag.category))).all()}
     visible = await sensitive_visible(session)
     return {"items": [
         {"key": key, "name": names[key], "count": counts.get(key, 0),

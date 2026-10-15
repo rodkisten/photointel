@@ -124,13 +124,15 @@ async def heartbeat(
 
 async def worker_seen(
     session: AsyncSession, worker_id: str, job_id: UUID | None = None,
+    *, busy: bool = False,
 ) -> None:
+    status = "running" if job_id or busy else "idle"
     await session.execute(insert(WorkerState).values(
         id=worker_id, last_seen=utcnow(), current_job_id=job_id,
-        status="running" if job_id else "idle", capabilities=sorted(JOB_TYPES),
+        status=status, capabilities=sorted(JOB_TYPES),
     ).on_conflict_do_update(index_elements=[WorkerState.id], set_={
         "last_seen": utcnow(), "current_job_id": job_id,
-        "status": "running" if job_id else "idle",
+        "status": status,
     }))
 
 
@@ -145,9 +147,13 @@ async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
     ).with_for_update().execution_options(populate_existing=True))
     if not batch:
         return
-    counts = dict((await session.execute(select(Job.status, func.count()).where(
-        Job.batch_id == batch_id,
-    ).group_by(Job.status))).all())
+    counts: dict[str, int] = {
+        status: count for status, count in (await session.execute(
+            select(Job.status, func.count()).where(
+                Job.batch_id == batch_id,
+            ).group_by(Job.status),
+        )).all()
+    }
     # Asset counters stay meaningful even when one asset has many pipeline jobs.
     per_asset = select(
         Job.asset_id,

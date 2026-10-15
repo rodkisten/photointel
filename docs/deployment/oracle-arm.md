@@ -61,7 +61,7 @@ NOCREATEROLE/NOBYPASSRLS e concede CRUD nas tabelas, uso de sequências e grants
 padrão para objetos criados pelo papel bootstrap. Rode novamente após migrações
 se forem usados outros donos de objetos; nesse caso ajuste os grants padrão ao
 papel real de migração. API/worker não recebem a senha administrativa. Não use
-o papel de aplicação como proprietário do banco, schema ou de papéis privilegiados.
+o papel de aplicação como proprietário do banco/schema nem membro de papéis privilegiados.
 
 No ambiente Codex gerenciado, builds precisam da CA do proxy fornecida com
 `--secret id=build_ca,src=/etc/ssl/certs/ca-certificates.crt`. Preserve proxy,

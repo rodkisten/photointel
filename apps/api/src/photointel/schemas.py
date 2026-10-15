@@ -283,12 +283,19 @@ class JobOut(Contract):
     created_at: datetime
 
 
+ReindexJobType = Literal[
+    "joytag_inference", "embedding_inference", "duplicate_analysis",
+    "quality_analysis", "thumbnail_generate",
+]
+
+
+def default_reindex_types() -> list[ReindexJobType]:
+    return ["joytag_inference", "embedding_inference"]
+
+
 class ReindexInput(Contract):
     asset_ids: list[UUID] = Field(default_factory=list, max_length=1000)
-    job_types: list[Literal[
-        "joytag_inference", "embedding_inference", "duplicate_analysis",
-        "quality_analysis", "thumbnail_generate",
-    ]] = Field(default_factory=lambda: ["joytag_inference", "embedding_inference"])
+    job_types: list[ReindexJobType] = Field(default_factory=default_reindex_types)
     limit: int = Field(default=100, ge=1, le=10000)
     confirm_large_batch: bool = False
 

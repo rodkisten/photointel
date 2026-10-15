@@ -129,3 +129,54 @@ def test_error_taxonomy_does_not_return_private_exception() -> None:
     )
     assert code == "ICLOUD_ACCESS_DENIED"
     assert "secret" not in message
+
+
+def test_pending_jobs_skip_superseded_input_revisions() -> None:
+    from photointel.services.worker import superseded_reason
+    assert superseded_reason({}, "c2", "r2") is None
+    assert superseded_reason({"content_revision": "c2"}, "c2", "r2") is None
+    assert superseded_reason({"content_revision": "c1"}, "c2", "r2") == (
+        "superseded_content_revision"
+    )
+    assert superseded_reason({"representation_revision": "r1"}, "c2", "r2") == (
+        "superseded_representation_revision"
+    )
+
+
+def test_auth_proof_is_scoped_to_account_and_library(tmp_path: Path) -> None:
+    settings = Settings(icloud_enabled=True, icloud_account="first@example.invalid",
+                        icloud_session_directory=tmp_path)
+    record_authentication(settings, "valid", "Online check")
+    assert authentication_state(settings)["valid"] is True
+    other = settings.model_copy(update={"icloud_account": "other@example.invalid"})
+    assert authentication_state(other)["valid"] is False
+    other = settings.model_copy(update={"icloud_library": "OtherLibrary"})
+    assert authentication_state(other)["valid"] is False
+
+
+def test_resume_rejects_wrong_range_before_appending(tmp_path: Path) -> None:
+    settings = Settings(max_download_bytes=1024)
+    adapter = ICloudAdapter(settings)
+    adapter.client = SimpleNamespace(session=object())
+    partial = tmp_path / "download.part"
+    partial.write_bytes(b"x" * 512)
+
+    class Response:
+        status_code = 206
+        headers = {"Content-Range": "bytes 0-511/1024", "Content-Length": "512"}
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def iter_content(self, chunk_size: int) -> list[bytes]:
+            raise AssertionError("Invalid range must be rejected before reading payload")
+
+        def close(self) -> None:
+            pass
+
+    photo = SimpleNamespace(download=lambda *args, **kwargs: Response())
+    version = SimpleNamespace(size=1024, url="https://private.invalid/not-logged")
+    with pytest.raises(AppError, match="não corresponde"):
+        adapter.download(photo, version, tmp_path / "download.image")
+    assert partial.read_bytes() == b"x" * 512
+    assert not (tmp_path / "download.image").exists()

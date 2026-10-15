@@ -94,7 +94,7 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --frozen --group ingest
       - name: Start private local object storage
-        run: docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+        run: docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
       - name: Wait for storage and create private bucket
         run: |
           uv run python - <<'PY'
@@ -122,25 +122,15 @@ jobs:
       - run: npm --prefix apps/web ci
       - run: npx --prefix apps/web playwright install --with-deps chromium
       - name: Browser E2E against real API and synthetic media
-        run: |
-          uv run python -m photointel.cli seed --synthetic-assets 12
-          uv run uvicorn photointel.main:app --host 127.0.0.1 --port 8000 > /tmp/photointel-api.log 2>&1 &
-          api_process_id=$!
-          trap 'kill "$api_process_id" 2>/dev/null || true' EXIT
-          uv run python - <<'PY'
-          import time
-          import urllib.error
-          import urllib.request
-          for attempt in range(30):
-              try:
-                  urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=2)
-                  break
-              except (OSError, urllib.error.URLError):
-                  if attempt == 29:
-                      raise
-                  time.sleep(1)
-          PY
-          npm --prefix apps/web run test:e2e
+        run: bash infra/scripts/run-e2e.sh
+        env:
+          APP_ENV: test
+          INFERENCE_BACKEND: test
+          FRONTEND_ORIGIN: http://127.0.0.1:4173
+          API_ORIGIN: http://127.0.0.1:8000
+          GPU_ENABLED: 'true'
+          JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
+          SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
       - uses: actions/upload-artifact@v4
         if: always()
         with: {name: integration-results, path: reports/integration.xml}
@@ -149,7 +139,7 @@ jobs:
         with: {name: browser-results, path: apps/web/playwright-report}
   images:
     needs: locks
-    if: needs.locks.outputs.ready == 'true'
+    if: needs.locks.outputs.ready == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

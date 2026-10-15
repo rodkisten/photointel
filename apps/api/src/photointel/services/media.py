@@ -244,7 +244,11 @@ async def process_asset(
     }
     await store_variants(session, asset, processed.variants, revision)
     asset.ingestion_status = "completed"
-    asset.source_metadata = {**asset.source_metadata, "processed_at": utcnow().isoformat()}
+    asset.source_metadata = {
+        **{key: value for key, value in asset.source_metadata.items()
+           if key != "cache_retired_at"},
+        "processed_at": utcnow().isoformat(),
+    }
     asset.last_error = None
     await session.flush()
     return {"bytes_processed": processed.quality["file_bytes"],
@@ -312,7 +316,8 @@ async def verify_media_stage(
         complete = len(rows) == 3 and all(row.object_key for row in rows)
         if complete:
             complete = all(await asyncio.gather(*[
-                asyncio.to_thread(get_storage().exists, str(row.object_key)) for row in rows
+                asyncio.to_thread(get_storage().exists, str(row.object_key))
+                for row in rows
             ]))
     else:
         raise ValueError("Unsupported media stage")
@@ -326,7 +331,7 @@ async def verify_media_stage(
         if stage == "hash_generate":
             raise AppError(
                 ErrorCode.MEDIA_DECODE_FAILED,
-                "Cache retirado: hash preservado; representação original não foi relida", 409,
+                "Cache retirado: hash preservado; representação não foi relida", 409,
             ) from None
         return await rebuild_from_preview(session, asset, settings, stage)
     result = await process_asset(session, asset, settings)
@@ -340,11 +345,12 @@ async def rebuild_from_preview(
     preview = await session.scalar(select(AssetResource).where(
         AssetResource.asset_id == asset.id,
         AssetResource.revision == asset.representation_revision,
-        AssetResource.resource_type == "preview_large", AssetResource.status == "available",
+        AssetResource.resource_type == "preview_large",
+        AssetResource.status == "available",
     ))
     if preview is None or not preview.object_key:
         raise AppError(ErrorCode.MEDIA_DECODE_FAILED,
-                       "Preview e cache indisponíveis; restaure o armazenamento privado", 409)
+                       "Preview e cache indisponíveis; restaure o storage privado", 409)
     data = await asyncio.to_thread(get_storage().get, preview.object_key)
     if len(data) > settings.media_max_bytes:
         raise AppError(ErrorCode.MEDIA_DECODE_FAILED, "Preview excede limite configurado")
@@ -353,7 +359,9 @@ async def rebuild_from_preview(
     )
 
     def decode_preview() -> ProcessedMedia:
-        with tempfile.NamedTemporaryFile(dir=settings.temp_directory, suffix=".image") as handle:
+        with tempfile.NamedTemporaryFile(
+            dir=settings.temp_directory, suffix=".image",
+        ) as handle:
             os.chmod(handle.name, 0o600)
             handle.write(data)
             handle.flush()
@@ -362,7 +370,8 @@ async def rebuild_from_preview(
     processed = await asyncio.to_thread(decode_preview)
     if stage == "thumbnail_generate":
         await store_variants(session, asset, [
-            variant for variant in processed.variants if variant.variant != "preview_large"
+            variant for variant in processed.variants
+            if variant.variant != "preview_large"
         ], asset.representation_revision)
     else:
         asset.quality = {**processed.quality, "analysis_source": "retained_preview",

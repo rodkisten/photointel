@@ -142,7 +142,9 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
         )
     if job.job_type in ("joytag_inference", "embedding_inference"):
         from photointel.services.inference import infer_assets
-        return await infer_assets(session, [asset.id], settings)
+        return await infer_assets(
+            session, [asset.id], settings, force=bool(job.payload.get("force")),
+        )
     if job.job_type == "apple_sync":
         # Device work is retained in sync_operations. This worker cannot use PhotoKit.
         from photointel.models import SyncOperation
@@ -293,13 +295,17 @@ async def run_worker() -> None:
             async with SessionLocal() as session:
                 settings = await effective_settings(session)
                 capacity = settings.worker_concurrency - len(active)
-                await worker_seen(session, worker_id)
                 jobs = await claim_jobs(
                     session, worker_id, capacity, exclude_types=gpu_types,
                 ) if capacity > 0 else []
                 gpu_jobs = await claim_jobs(
                     session, worker_id, min(settings.batch_size, 32), job_types=gpu_types,
                 ) if gpu_task is None or gpu_task.done() else []
+                current = jobs[0].id if jobs else gpu_jobs[0].id if gpu_jobs else None
+                await worker_seen(
+                    session, worker_id, current,
+                    busy=bool(active or (gpu_task and not gpu_task.done())),
+                )
                 await session.commit()
             for job in jobs:
                 active.add(asyncio.create_task(execute_job(job.id, worker_id)))
@@ -339,6 +345,8 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
             ).order_by(Job.asset_id))).all())
             if len(jobs) != len(job_ids):
                 raise LeaseLost()
+            if any(job.asset_id is None for job in jobs):
+                raise AppError(ErrorCode.INVALID_REQUEST, "Inferência exige asset_id")
             asset_ids = sorted({job.asset_id for job in jobs if job.asset_id}, key=str)
             for asset_id in asset_ids:
                 await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {
@@ -356,9 +364,13 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
                 ) for job in jobs if job.asset_id
             }
             eligible = [job for job in jobs if job.asset_id and not skipped.get(job.id)]
-            eligible_ids = sorted({job.asset_id for job in eligible if job.asset_id}, key=str)
+            eligible_ids = sorted(
+                {job.asset_id for job in eligible if job.asset_id}, key=str,
+            )
             result = await infer_assets(
                 session, eligible_ids, await effective_settings(session),
+                force_asset_ids={job.asset_id for job in eligible
+                                 if job.asset_id and job.payload.get("force")},
             ) if eligible_ids else {"completed": 0, "skipped": len(jobs)}
             await session.flush()
             fenced = (await session.execute(update(Job).where(
@@ -392,10 +404,10 @@ async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
     except Exception as exc:
         code = exc.code if isinstance(exc, AppError) else str(ErrorCode.INFERENCE_FAILED)
         async with SessionLocal() as session:
-            jobs = (await session.scalars(select(Job).where(
+            jobs = list((await session.scalars(select(Job).where(
                 Job.id.in_(job_ids), Job.worker_id == worker_id, Job.status.in_(ACTIVE),
                 Job.lease_until > utcnow(),
-            ).with_for_update())).all()
+            ).with_for_update())).all())
             for job in jobs:
                 job.status = ("failed" if job.attempts >= job.maximum_attempts
                               else "retrying")

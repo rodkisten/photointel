@@ -373,7 +373,7 @@ async def persist_tags(
         by_key = {tag.canonical_key: tag for tag in existing}
         targets = await resolve_tag_targets(session, list(existing))
         rows_by_id: dict[UUID, dict[str, Any]] = {}
-        aliases = []
+        aliases: list[dict[str, Any]] = []
         for mapped, probability in predictions:
             original = by_key[mapped.canonical_key]
             tag = targets[original.id]
@@ -418,6 +418,7 @@ async def persist_tags(
 
 async def infer_assets(
     session: AsyncSession, asset_ids: list[UUID], settings: Settings,
+    *, force: bool = False, force_asset_ids: set[UUID] | None = None,
 ) -> dict[str, Any]:
     validate_spending(settings, len(asset_ids))
     if len(set(asset_ids)) != len(asset_ids):
@@ -437,7 +438,10 @@ async def infer_assets(
         InferenceRun.model_id.in_([joytag_id, siglip_id]),
     ))).all()
     done = set(existing)
-    pending = [asset for asset in assets if not all(
+    forced = set(asset_ids) if force else (force_asset_ids or set())
+    if forced - set(asset_ids):
+        raise AppError(ErrorCode.INVALID_REQUEST, "Reprocessamento fora do lote", 422)
+    pending = [asset for asset in assets if asset.id in forced or not all(
         (asset.id, model_id, asset.representation_revision) in done
         for model_id in (joytag_id, siglip_id)
     )]

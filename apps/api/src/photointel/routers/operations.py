@@ -206,9 +206,11 @@ async def batch_detail(batch_id: UUID, session: Session) -> dict[str, Any]:
     batch = await session.get(JobBatch, batch_id)
     if not batch:
         raise AppError(ErrorCode.NOT_FOUND, "Lote não encontrado", 404)
-    counts = dict((await session.execute(select(Job.status, func.count(Job.id)).where(
+    counts = {status: count for status, count in (await session.execute(select(
+        Job.status, func.count(Job.id)
+    ).where(
         Job.batch_id == batch_id
-    ).group_by(Job.status))).all())
+    ).group_by(Job.status))).all()}
     return {**row_dict(batch), "job_counts": counts}
 
 
@@ -405,9 +407,9 @@ async def statistics(session: Session) -> dict[str, Any]:
         func.count(Asset.id).filter(Asset.classification_status == "completed"),
         func.count(Asset.id).filter(Asset.ingestion_status == "completed"),
     ))).one()
-    job_counts = dict((await session.execute(select(
+    job_counts = {status: count for status, count in (await session.execute(select(
         Job.status, func.count(Job.id)
-    ).group_by(Job.status))).all())
+    ).group_by(Job.status))).all()}
     timing = (await session.execute(select(
         func.avg(func.extract("epoch", Job.finished_at - Job.started_at)),
         func.count(Job.id),

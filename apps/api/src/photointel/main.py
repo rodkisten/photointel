@@ -16,7 +16,7 @@ from sqlalchemy import text
 from photointel.config import get_settings
 from photointel.database import SessionLocal, engine
 from photointel.errors import AppError, ErrorCode, error_response
-from photointel.storage import get_storage
+from photointel.storage import S3Storage, get_storage
 
 logger = logging.getLogger("photointel.api")
 _requests: dict[str, deque[float]] = defaultdict(deque)
@@ -129,7 +129,7 @@ def create_app() -> FastAPI:
             async with SessionLocal() as session:
                 await session.execute(text("SELECT 1"))
             storage = get_storage()
-            if hasattr(storage, "client"):
+            if isinstance(storage, S3Storage):
                 await asyncio.to_thread(storage.client.head_bucket, Bucket=storage.bucket)
         except Exception as exc:
             raise AppError(

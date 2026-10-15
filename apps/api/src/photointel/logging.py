@@ -2,8 +2,9 @@
 
 import logging
 import re
+from collections.abc import MutableMapping
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import structlog
@@ -49,7 +50,9 @@ def redact_value(value: Any) -> Any:
     return f"[{type(value).__name__} omitted]"
 
 
-def redact_log(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+def redact_log(
+    _: Any, __: str, event_dict: MutableMapping[str, Any],
+) -> dict[str, Any]:
     exception = event_dict.pop("exc_info", None)
     event_dict.pop("stack_info", None)
     if exception:
@@ -57,7 +60,7 @@ def redact_log(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
             exception[0].__name__ if isinstance(exception, tuple) and exception[0]
             else "Exception"
         )
-    return redact_value(event_dict)  # type: ignore[no-any-return]
+    return cast(dict[str, Any], redact_value(dict(event_dict)))
 
 
 def configure_logging(level: str = "INFO") -> None:

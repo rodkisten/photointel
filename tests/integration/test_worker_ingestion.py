@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.database import engine
+from photointel.errors import AppError
 from photointel.models import Asset, AssetResource, Job, JobBatch, utcnow
 from photointel.services.fixtures import generate_fixtures
 from photointel.services.ingestion import ingest_fixture_directory
@@ -96,3 +97,103 @@ async def test_fixture_import_has_durable_jobs_private_variants_and_no_duplicate
         Job.job_type == "media_download",
     ))
     assert count == 2
+
+
+async def test_changed_source_refreshes_metadata_and_fences_old_work(
+    session: AsyncSession,
+) -> None:
+    from datetime import UTC, datetime
+    from photointel.services.ingestion import _library, _upsert_asset
+    library = await _library(session, "fixture", f"revision-{uuid4()}", "Revision test")
+    first, _ = await _upsert_asset(
+        session, library, source_key="asset", filename="before.jpg", revision="1",
+        metadata={"fixture": True}, size=100,
+    )
+    second, created = await _upsert_asset(
+        session, library, source_key="asset", filename="after.jpg", revision="2",
+        metadata={"fixture": True}, size=200,
+        captured_at=datetime(2020, 1, 1, tzinfo=UTC),
+    )
+    assert not created and first.id == second.id
+    assert second.filesize == 200 and second.filename == "after.jpg"
+    assert second.captured_at.year == 2020
+    jobs = (await session.scalars(select(Job).where(Job.asset_id == first.id))).all()
+    assert {job.payload["content_revision"] for job in jobs} == {"1", "2"}
+    unavailable, _ = await _upsert_asset(
+        session, library, source_key="missing-representation", filename="raw.dng",
+        revision="1", metadata={"representation_unavailable": "medium_missing"},
+        size=9999,
+    )
+    assert await session.scalar(select(func.count()).select_from(Job).where(
+        Job.asset_id == unavailable.id,
+    )) == 0
+
+
+async def test_preview_rebuild_preserves_source_identity_after_cache_retirement(
+    session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from photointel.config import Settings
+    from photointel.services.media import source_path, verify_media_stage
+    settings = Settings(temp_directory=tmp_path / "processing")
+
+    async def configuration(database: AsyncSession) -> Settings:
+        return settings
+
+    monkeypatch.setattr("photointel.services.ingestion.effective_settings", configuration)
+    storage = LocalStorage(tmp_path / "private")
+    monkeypatch.setattr("photointel.services.media.get_storage", lambda: storage)
+    source = tmp_path / "fixture-art"
+    generate_fixtures(source, 1)
+    result = await ingest_fixture_directory(session, source, limit=1, process_inline=True)
+    asset = await session.scalar(select(Asset).where(
+        Asset.library_id == UUID(result["library_id"]),
+    ).limit(1))
+    assert asset is not None
+    source_hash, revision = asset.sha256, asset.representation_revision
+    small = await session.scalar(select(AssetResource).where(
+        AssetResource.asset_id == asset.id,
+        AssetResource.resource_type == "thumbnail_small",
+    ))
+    assert small is not None and small.object_key
+    storage.delete(small.object_key)
+    source_path(asset, settings).unlink()
+    rebuilt = await verify_media_stage(
+        session, asset, settings, "thumbnail_generate", force=True,
+    )
+    assert rebuilt["source"] == "retained_preview"
+    assert storage.exists(small.object_key)
+    assert asset.sha256 == source_hash and asset.representation_revision == revision
+    with pytest.raises(AppError, match="Cache retirado"):
+        await verify_media_stage(session, asset, settings, "hash_generate", force=True)
+
+
+async def test_exact_group_is_invalidated_when_representation_changes(
+    session: AsyncSession,
+) -> None:
+    from photointel.models import DuplicateGroup, DuplicateMember
+    from photointel.services.duplicates import (
+        analyze_duplicates, invalidate_duplicate_memberships,
+    )
+    from photointel.services.ingestion import _library
+    library = await _library(session, "fixture", f"edited-{uuid4()}", "Edited duplicate")
+    assets = [Asset(
+        library_id=library.id, source_asset_key=f"copy-{index}", filename="same.jpg",
+        sha256="a" * 64, phash="0" * 16, width=100 + index, height=100,
+        quality={"sharpness_laplacian_variance": 10}, ingestion_status="completed",
+    ) for index in range(3)]
+    session.add_all(assets)
+    await session.flush()
+    result = await analyze_duplicates(session, assets[2])
+    identifier = UUID(result["groups"][0])
+    await invalidate_duplicate_memberships(session, assets[2].id)
+    await session.flush()
+    assert await session.scalar(select(func.count()).select_from(DuplicateMember).where(
+        DuplicateMember.group_id == identifier,
+    )) == 2
+    representative = await session.scalar(select(
+        DuplicateGroup.representative_asset_id,
+    ).where(DuplicateGroup.id == identifier))
+    assert representative != assets[2].id
+    assert await session.scalar(select(func.count()).select_from(Asset).where(
+        Asset.library_id == library.id,
+    )) == 3

@@ -67,11 +67,11 @@ class Settings(BaseSettings):
     gpu_daily_budget: float = Field(default=2, ge=0)
     gpu_monthly_budget: float = Field(default=10, ge=0)
     joytag_model_id: str = "fancyfeast/joytag"
-    joytag_model_revision: str = ""
+    joytag_model_revision: str = "6b7f16331a6ccf0fdce37d5a9564715f6e772b22"
     joytag_threshold: float = Field(default=0.4, ge=0, le=1)
     joytag_max_tags: int = Field(default=80, ge=1, le=1000)
     siglip_model_id: str = "google/siglip2-base-patch16-224"
-    siglip_model_revision: str = ""
+    siglip_model_revision: str = "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2"
     siglip_embedding_dimension: Literal[768] = 768
     model_cache_directory: Path = Path("var/model-cache")
     thumbnail_small_size: int = Field(default=240, ge=32, le=2048)
@@ -155,9 +155,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Modal inference requires endpoint, application token and proxy credentials"
             )
-        if self.app_env == "production" and self.storage_endpoint:
-            if not self.storage_endpoint.startswith("https://"):
-                raise ValueError("Production object storage endpoint requires HTTPS")
+        if (
+            self.app_env == "production" and self.storage_endpoint
+            and not self.storage_endpoint.startswith("https://")
+        ):
+            raise ValueError("Production object storage endpoint requires HTTPS")
         if self.gpu_enabled and self.inference_backend == "modal":
             if not self.modal_endpoint.startswith("https://"):
                 raise ValueError("Modal endpoint requires HTTPS")

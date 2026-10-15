@@ -11,6 +11,28 @@ import httpx
 
 from gpu.pipelines.contracts import EMBEDDING_DIMENSION, validate_revision
 
+CONFIG_DEFAULTS_SOURCE = (
+    "https://github.com/huggingface/transformers/blob/v4.57.6/"
+    "src/transformers/models/siglip/configuration_siglip.py"
+)
+CONFIG_DEFAULTS_BLOB = "0c182014fa272bb53b9e597894daa104a864a2c9"
+
+
+def siglip_dimensions(config: dict[str, Any]) -> tuple[int, int]:
+    """Resolve the sparse checkpoint using verified Transformers 4.57.6 defaults.
+
+    The selected SigLIP 2 checkpoint serializes only values differing from SiglipConfig.
+    RealModels also checks the fully instantiated model config before any inference.
+    """
+    if config.get("model_type") != "siglip":
+        raise ValueError("Unsupported checkpoint configuration architecture")
+    vision = config.get("vision_config", {})
+    text = config.get("text_config", {})
+    vision_dimension = int(vision.get("hidden_size", 768))
+    text_hidden = int(text.get("hidden_size", 768))
+    text_dimension = int(text.get("projection_size") or text_hidden)
+    return vision_dimension, text_dimension
+
 
 def inspect_model(client: httpx.Client, model_id: str) -> dict[str, Any]:
     response = client.get(f"https://huggingface.co/api/models/{model_id}")
@@ -36,11 +58,15 @@ def inspect_model(client: httpx.Client, model_id: str) -> dict[str, Any]:
         result["vocabulary_sha256"] = hashlib.sha256(vocabulary.content).hexdigest()
         result["image_size"] = config["image_size"]
     else:
-        if config["vision_config"]["hidden_size"] != EMBEDDING_DIMENSION:
+        vision_dimension, text_dimension = siglip_dimensions(config)
+        if vision_dimension != EMBEDDING_DIMENSION:
             raise ValueError("Image checkpoint requires a database vector migration")
-        if config["text_config"]["hidden_size"] != EMBEDDING_DIMENSION:
+        if text_dimension != EMBEDDING_DIMENSION:
             raise ValueError("Text checkpoint requires a database vector migration")
         result["embedding_dimension"] = EMBEDDING_DIMENSION
+        result["sparse_config_defaults"] = {
+            "source": CONFIG_DEFAULTS_SOURCE, "source_git_blob": CONFIG_DEFAULTS_BLOB,
+        }
     return result
 
 

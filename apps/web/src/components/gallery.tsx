@@ -4,8 +4,9 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { request, useAction, useApi } from '../api/client';
-import type { Album, Asset, Page, SearchPage, SearchRequest } from '../api/types';
+import { useAction, useApi } from '../api/client';
+import { searchAssets } from '../api/generated-client';
+import type { Album, Asset, Page, SearchRequest } from '../api/types';
 import { date, number } from '../lib/format';
 import { useUi } from '../lib/store';
 import { Empty, ErrorState, PrivateImage, Skeleton } from './common';
@@ -31,9 +32,7 @@ export function Gallery({ search, compact = false, albumId }: {
   const remove = useAction(undefined, 'DELETE');
   const albums = useApi<Page<Album>>('/v1/albums?limit=100');
   const query = useInfiniteQuery({ queryKey: ['gallery', search], initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => request<SearchPage>('/v1/search', {
-      method: 'POST', body: JSON.stringify({ ...search, cursor: pageParam }),
-    }), getNextPageParam: (page) => page.next_cursor ?? undefined });
+    queryFn: ({ pageParam }) => searchAssets({ ...search, cursor: pageParam }), getNextPageParam: (page) => page.next_cursor ?? undefined });
   const assets = query.data?.pages.flatMap((page) => page.items) ?? [];
   const columns = width < 600 ? [3, 4, 2][density] : width < 1000 ? [5, 7, 4][density] : [7, 10, 5][density];
   const rowCount = Math.ceil(assets.length / columns);
@@ -60,7 +59,7 @@ export function Gallery({ search, compact = false, albumId }: {
   }
   async function applyBulk() {
     if (bulk === 'tag' && keyword.trim()) {
-      await mutation.mutateAsync({ url: '/v1/assets/bulk/tags', body: {
+      await mutation.mutateAsync({ url: '/v1/assets/tags', body: {
         asset_ids: [...selected], add: keyword.split(',').map((key) => key.trim()).filter(Boolean),
       } });
     } else if (bulk === 'album' && album) {

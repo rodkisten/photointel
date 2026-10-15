@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -17,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.config import Settings
 from photointel.errors import AppError, ErrorCode
-from photointel.models import Asset, AssetResource, IngestionRun, Library, Setting, utcnow
+from photointel.models import (
+    Asset, AssetResource, IngestionRun, Library, MetadataSnapshot, Setting, utcnow,
+)
 from photointel.services.identity import revision_hash
 from photointel.services.jobs import enqueue_job
 from photointel.services.runtime_settings import effective_settings
@@ -122,18 +125,29 @@ async def _upsert_asset(
     ).with_for_update())
     assert asset is not None
     changed = created is not None or asset.content_revision != revision
+    asset.filename = filename
+    if size is not None:
+        asset.filesize = size
+    if captured_at is not None:
+        asset.captured_at = captured_at
+    if added_at is not None:
+        asset.added_at = added_at
+    asset.media_type = media_type
+    asset.source_account = metadata.get("source_account")
     if changed:
         asset.content_revision = revision
         asset.source_metadata = metadata
-        asset.filename = filename
-        asset.filesize = size
-        asset.captured_at, asset.added_at = captured_at, added_at
-        asset.media_type = media_type
-        asset.source_account = metadata.get("source_account")
         asset.ingestion_status = "pending"
         asset.classification_status = (
             "pending" if media_type == "image" else "not_applicable"
         )
+    else:
+        asset.source_metadata = {**asset.source_metadata, **metadata}
+        if not metadata.get("representation_unavailable"):
+            asset.source_metadata = {
+                key: value for key, value in asset.source_metadata.items()
+                if key != "representation_unavailable"
+            }
     asset.visibility_status = "active"
     asset.missing_scan_count = 0
     if changed or asset.ingestion_status != "completed":
@@ -143,6 +157,14 @@ async def _upsert_asset(
                 f"media_download:{asset.id}:{revision}", batch_id,
             )
     return asset, created is not None
+
+
+def fixture_content_hash(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 async def ingest_fixture_directory(
@@ -171,9 +193,7 @@ async def ingest_fixture_directory(
                 or transferred + size > settings.max_run_download_bytes):
             skipped += 1
             continue
-        digest = await asyncio.to_thread(
-            lambda p=file: sha256(p.read_bytes()).hexdigest(),
-        )
+        digest = await asyncio.to_thread(fixture_content_hash, file)
         canonical_root = (settings.temp_directory / "fixtures").resolve()
         canonical_root.mkdir(parents=True, exist_ok=True, mode=0o700)
         canonical_path = canonical_root / file.name
@@ -227,7 +247,7 @@ async def schedule_due_ingestion(session: AsyncSession) -> None:
 
 @dataclass(frozen=True)
 class RemoteAsset:
-    """Whitelisted snapshot. All potentially lazy downloader properties run in a thread."""
+    """Whitelisted snapshot; lazy downloader properties run in a thread."""
 
     source_key: str
     filename: str
@@ -382,6 +402,18 @@ class ICloudAdapter:
             response.raise_for_status()
             if offset and response.status_code != 206:
                 offset = 0
+            if response.status_code == 206:
+                match = re.fullmatch(
+                    r"bytes (\d+)-(\d+)/(\d+)",
+                    response.headers.get("Content-Range", ""),
+                )
+                if not match:
+                    raise AppError(ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                                   "Resposta parcial sem Content-Range válido")
+                start, end, total = (int(value) for value in match.groups())
+                if start != offset or total != version.size or not start <= end < total:
+                    raise AppError(ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                                   "Resposta parcial não corresponde ao arquivo esperado")
             advertised = response.headers.get("Content-Length")
             if advertised and int(advertised) + offset > self.settings.max_download_bytes:
                 raise AppError(
@@ -482,19 +514,40 @@ async def ingest_icloud(
             "id": remote.source_key, "original_bytes": remote.original_size,
             "representation_checksum": remote.representation_checksum,
             "representation_bytes": remote.representation_size,
-            "filename": remote.filename, "captured_at": remote.captured_at,
-            "added_at": remote.added_at,
         })
-        relative = f"{sha256(remote.source_key.encode()).hexdigest()}/{metadata_revision}.image"
+        source_snapshot = {
+            "filename": remote.filename, "original_bytes": remote.original_size,
+            "captured_at": remote.captured_at.isoformat() if remote.captured_at else None,
+            "added_at": remote.added_at.isoformat() if remote.added_at else None,
+            "dimensions": remote.dimensions, "content_revision": metadata_revision,
+        }
+        source["metadata_revision"] = revision_hash(source_snapshot)
+        identity_hash = sha256(remote.source_key.encode()).hexdigest()
+        relative = f"{identity_hash}/{metadata_revision}.image"
         source["cache_relative_path"] = relative
         existing = await session.scalar(select(Asset).where(
             Asset.library_id == library.id, Asset.source_asset_key == remote.source_key,
         ))
+        snapshot_changed = (existing is None or existing.source_metadata.get(
+            "metadata_revision",
+        ) != source["metadata_revision"])
         if (existing and existing.content_revision == metadata_revision
                 and existing.ingestion_status == "completed"):
-            existing.source_metadata = {
-                **existing.source_metadata, "scan_token": scan_token,
-            }
+            if snapshot_changed:
+                session.add(MetadataSnapshot(
+                    asset_id=existing.id, source="icloud",
+                    revision_hash=source["metadata_revision"], payload=source_snapshot,
+                ))
+            existing.filename = remote.filename
+            if remote.original_size is not None:
+                existing.filesize = remote.original_size
+            if remote.captured_at is not None:
+                existing.captured_at = remote.captured_at
+            if remote.added_at is not None:
+                existing.added_at = remote.added_at
+            if remote.dimensions:
+                existing.width, existing.height = remote.dimensions
+            existing.source_metadata = {**existing.source_metadata, **source}
             existing.visibility_status = "active"
             existing.missing_scan_count = 0
             skipped += 1
@@ -533,6 +586,11 @@ async def ingest_icloud(
             added_at=remote.added_at,
             batch_id=batch_id,
         )
+        if snapshot_changed:
+            session.add(MetadataSnapshot(
+                asset_id=asset.id, source="icloud", revision_hash=source["metadata_revision"],
+                payload=source_snapshot,
+            ))
         # Linked Live Photo video resources stay under this asset; no video
         # download is needed for v1 image inference.
         for size_name, byte_size in remote.live_resources:
