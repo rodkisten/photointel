@@ -1,0 +1,56 @@
+[project]
+name = "photo-intelligence-cloud"
+version = "1.0.0"
+description = "Private, self-hosted photo intelligence"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1", "uvicorn[standard]>=0.34,<1", "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3", "sqlalchemy[asyncio]>=2.0.38,<2.1",
+  "alembic>=1.14,<2", "asyncpg>=0.30,<1", "psycopg[binary]>=3.2,<4",
+  "pgvector>=0.3.6,<1", "pillow>=11,<13", "pillow-heif>=0.21,<2",
+  "opencv-python-headless>=4.11,<5", "imagehash>=4.3,<5", "numpy>=2,<3",
+  "httpx>=0.28,<1", "boto3>=1.36,<2", "structlog>=25,<27",
+  "pyjwt[crypto]>=2.10,<3", "python-multipart>=0.0.20,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10", "pytest-asyncio>=0.25,<2", "pytest-cov>=6,<8",
+  "ruff>=0.11,<1", "mypy>=1.15,<2", "types-boto3[s3]>=1.36,<2",
+  "aiosqlite>=0.21,<1", "respx>=0.22,<1",
+]
+gpu = ["modal>=1,<2", "torch>=2.6,<3", "torchvision>=0.21,<1", "transformers>=4.51,<5", "huggingface-hub>=0.30,<1", "safetensors>=0.5,<1", "einops>=0.8,<1", "sentencepiece>=0.2,<1"]
+ingest = ["icloudpd==1.32.3"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apps/api/src/photointel", "gpu", "bridges"]
+
+[tool.ruff]
+line-length = 90
+target-version = "py312"
+extend-exclude = ["gpu/models/joytag_upstream.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
+testpaths = ["tests"]
+markers = ["integration: requires PostgreSQL and object storage", "gpu: requires real model checkpoints and GPU", "e2e: full application"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+check_untyped_defs = true
+exclude = ["infra/migrations", "gpu/models/joytag_upstream.py"]
+
+[[tool.mypy.overrides]]
+module = "gpu.models.joytag_upstream"
+ignore_errors = true

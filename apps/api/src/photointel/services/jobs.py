@@ -1,0 +1,163 @@
+"""Durable PostgreSQL jobs: transactional claim, leases, fences, and replay events."""
+
+from datetime import timedelta
+from typing import Any
+from uuid import UUID, uuid4
+
+from sqlalchemy import exists, select, update
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from photointel.config import get_settings
+from photointel.models import Job, JobBatch, JobEvent, WorkerState, utcnow
+
+JOB_TYPES = frozenset({
+    "icloud_discovery", "media_download", "metadata_extract", "thumbnail_generate",
+    "hash_generate", "joytag_inference", "embedding_inference", "duplicate_analysis",
+    "quality_analysis", "apple_sync",
+})
+ACTIVE = ("preparing", "running")
+TERMINAL = ("completed", "failed", "cancelled")
+
+
+async def enqueue_job(
+    session: AsyncSession, job_type: str, asset_id: UUID | None = None,
+    payload: dict[str, Any] | None = None, idempotency_key: str | None = None,
+    batch_id: UUID | None = None, *, priority: int = 0,
+) -> Job:
+    if job_type not in JOB_TYPES:
+        raise ValueError("Unsupported job type")
+    key = idempotency_key or f"manual:{job_type}:{uuid4()}"
+    statement = insert(Job).values(
+        id=uuid4(), job_type=job_type, asset_id=asset_id, payload=payload or {},
+        idempotency_key=key, batch_id=batch_id, priority=priority,
+    ).on_conflict_do_nothing(index_elements=[Job.idempotency_key]).returning(Job.id)
+    created = (await session.execute(statement)).scalar_one_or_none()
+    job = await session.scalar(select(Job).where(Job.idempotency_key == key))
+    assert job is not None
+    if created:
+        session.add(JobEvent(
+            job_id=job.id, status="queued", payload={"job_type": job_type},
+        ))
+    return job
+
+
+def retry_delay(attempts: int) -> timedelta:
+    return timedelta(seconds=min(3600, 5 * 2 ** min(max(0, attempts - 1), 10)))
+
+
+async def recover_stale_jobs(session: AsyncSession, limit: int = 100) -> int:
+    rows = (await session.scalars(select(Job).where(
+        Job.status.in_(ACTIVE), Job.lease_until < utcnow(),
+    ).order_by(Job.lease_until).limit(limit).with_for_update(skip_locked=True))).all()
+    for job in rows:
+        job.status = "failed" if job.attempts >= job.maximum_attempts else "retrying"
+        job.scheduled_at = utcnow() + retry_delay(job.attempts)
+        job.error_code = "WORKER_LEASE_EXPIRED"
+        job.error_details = {
+            "message": "Worker desconectou; lease recuperado com segurança",
+        }
+        job.lease_until = None
+        job.worker_id = None
+        if job.status == "failed":
+            job.finished_at = utcnow()
+        session.add(JobEvent(job_id=job.id, status=job.status,
+                             payload={"error_code": job.error_code}))
+    return len(rows)
+
+
+async def claim_jobs(
+    session: AsyncSession, worker_id: str, limit: int = 1, *,
+    job_types: tuple[str, ...] | None = None, exclude_types: tuple[str, ...] = (),
+) -> list[Job]:
+    await recover_stale_jobs(session)
+    paused_batch = exists(select(JobBatch.id).where(
+        JobBatch.id == Job.batch_id, JobBatch.status.in_(("paused", "cancelled")),
+    ))
+    filters = [
+        Job.status.in_(("queued", "retrying")), Job.scheduled_at <= utcnow(),
+        Job.attempts < Job.maximum_attempts, ~paused_batch,
+    ]
+    if job_types:
+        filters.append(Job.job_type.in_(job_types))
+    if exclude_types:
+        filters.append(Job.job_type.not_in(exclude_types))
+    rows = (await session.scalars(select(Job).where(
+        *filters,
+    ).order_by(Job.priority.desc(), Job.created_at, Job.id).limit(min(32, max(1, limit)))
+        .with_for_update(skip_locked=True))).all()
+    for job in rows:
+        job.status = "running"
+        job.worker_id = worker_id
+        job.attempts += 1
+        job.started_at = job.started_at or utcnow()
+        job.heartbeat_at = utcnow()
+        job.lease_until = utcnow() + timedelta(seconds=get_settings().job_lease_seconds)
+        job.error_code = None
+        job.error_details = None
+        session.add(JobEvent(job_id=job.id, status="running",
+                             payload={"attempts": job.attempts}))
+    return list(rows)
+
+
+async def heartbeat(
+    session: AsyncSession, job_id: UUID, worker_id: str,
+) -> bool:
+    result = await session.execute(update(Job).where(
+        Job.id == job_id, Job.worker_id == worker_id, Job.status.in_(ACTIVE),
+        Job.lease_until > utcnow(),
+    ).values(heartbeat_at=utcnow(), lease_until=utcnow() + timedelta(
+        seconds=get_settings().job_lease_seconds,
+    )).returning(Job.id))
+    return result.scalar_one_or_none() is not None
+
+
+async def worker_seen(
+    session: AsyncSession, worker_id: str, job_id: UUID | None = None,
+) -> None:
+    await session.execute(insert(WorkerState).values(
+        id=worker_id, last_seen=utcnow(), current_job_id=job_id,
+        status="running" if job_id else "idle", capabilities=sorted(JOB_TYPES),
+    ).on_conflict_do_update(index_elements=[WorkerState.id], set_={
+        "last_seen": utcnow(), "current_job_id": job_id,
+        "status": "running" if job_id else "idle",
+    }))
+
+
+async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
+    if not batch_id:
+        return
+    from sqlalchemy import func
+    batch = await session.get(JobBatch, batch_id)
+    if not batch:
+        return
+    counts = dict((await session.execute(select(Job.status, func.count()).where(
+        Job.batch_id == batch_id,
+    ).group_by(Job.status))).all())
+    # Asset counters stay meaningful even when one asset has many pipeline jobs.
+    per_asset = select(
+        Job.asset_id,
+        func.count().filter(Job.status.not_in(TERMINAL)).label("pending"),
+        func.count().filter(Job.status == "failed").label("failed"),
+        func.count().filter(Job.status == "cancelled").label("cancelled"),
+    ).where(Job.batch_id == batch_id, Job.asset_id.is_not(None)).group_by(
+        Job.asset_id,
+    ).subquery()
+    aggregate = (await session.execute(select(
+        func.count().label("total"),
+        func.count().filter((per_asset.c.pending == 0) & (per_asset.c.failed == 0)
+                            & (per_asset.c.cancelled == 0)).label("completed"),
+        func.count().filter(per_asset.c.failed > 0).label("failed"),
+        func.count().filter((per_asset.c.cancelled > 0)
+                            & (per_asset.c.failed == 0)).label("skipped"),
+    ).select_from(per_asset))).one()
+    batch.total_assets = max(batch.total_assets, aggregate.total)
+    batch.completed, batch.failed, batch.skipped = (
+        aggregate.completed, aggregate.failed, aggregate.skipped,
+    )
+    batch.counters = {**batch.counters, "jobs_by_status": counts}
+    if batch.status not in ("paused", "cancelled"):
+        pending = sum(counts.get(state, 0) for state in (
+            "queued", "retrying", "running", "preparing", "paused",
+        ))
+        batch.status = "running" if pending else "failed" if batch.failed else "completed"

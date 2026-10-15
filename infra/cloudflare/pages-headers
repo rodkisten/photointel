@@ -1,0 +1,7 @@
+# Copie para apps/web/public/_headers ao publicar no Pages.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cache-Control: private, no-store
