@@ -183,4 +183,4 @@ jobs:
         if: ${{ always() && steps.checkout.outcome == 'success' && steps.ssh.outcome == 'success' }}
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: bash scripts/commit-session.sh
+        run: bash commit-session.sh
