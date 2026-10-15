@@ -1,83 +1,142 @@
-
-name: Dev Environment SSH
+name: Dev Environment (SSH + Make)
 
 on:
   workflow_dispatch:
+    inputs:
+      command:
+        description: "Choose a Make target, or open an SSH session"
+        required: true
+        type: choice
+        default: ssh
+        options:
+          - ssh
+          - setup
+          - info
+          - check
+          - test
+          - lint
+          - build
+          - clean
+      session_minutes:
+        description: "SSH session duration (only used for ssh)"
+        required: true
+        type: choice
+        default: "60"
+        options:
+          - "30"
+          - "60"
+          - "120"
+          - "180"
 
 permissions:
   contents: read
 
 concurrency:
-  group: dev-ssh
+  group: dev-ssh-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   development:
+    name: development
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 195
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: requirements.txt
+          # Do not use setup-python's lockfile-based caching here.
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          # Avoid automatic npm caching when no lockfile exists.
+          package-manager-cache: false
 
-      - name: Install Python dependencies
+      - name: Restore Python pip cache
+        if: ${{ hashFiles('requirements.txt', 'pyproject.toml') != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-python313-pip-${{ hashFiles('requirements.txt', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-python313-pip-
+
+      - name: Restore Node.js npm cache
+        if: ${{ hashFiles('package.json') != '' }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node24-npm-${{ hashFiles('package-lock.json', 'npm-shrinkwrap.json', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-npm-
+
+      - name: Install Make and development tools
         run: |
-          if [ -f requirements.txt ]; then
-            python -m pip install -r requirements.txt
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            make git curl jq wget unzip tmux htop ripgrep
+          make --version | head -n 1
+
+      - name: Install project dependencies
+        if: ${{ inputs.command != 'setup' && inputs.command != 'info' && inputs.command != 'clean' }}
+        run: make setup
+
+      - name: Run Make command
+        if: ${{ inputs.command != 'ssh' }}
+        env:
+          MAKE_TARGET: ${{ inputs.command }}
+        run: make "$MAKE_TARGET"
+
+      - name: Verify SSH secret
+        if: ${{ inputs.command == 'ssh' }}
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+        run: |
+          if [[ -z "$TAILSCALE_AUTHKEY" ]]; then
+            echo "::error::Missing repository secret TS_AUTHKEY"
+            exit 1
           fi
-
-      - name: Install Node dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          fi
-
-      - name: Install development tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git \
-            curl \
-            jq \
-            wget \
-            unzip \
-            tmux \
-            htop \
-            ripgrep
 
       - name: Connect Tailscale
+        if: ${{ inputs.command == 'ssh' }}
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
-      - name: Enable SSH
+      - name: Enable Tailscale SSH
+        if: ${{ inputs.command == 'ssh' }}
+        id: ssh
         run: |
           sudo tailscale set --ssh
-
-          echo "================================"
-          echo "SSH CONNECTION"
-          echo "================================"
-          echo "IP: $(tailscale ip -4)"
-          echo "USER: $(whoami)"
-          echo "COMMAND:"
-          echo "ssh $(whoami)@$(tailscale ip -4)"
-          echo "================================"
+          ip="$(tailscale ip -4 | head -n 1)"
+          if [[ -z "$ip" ]]; then
+            echo "::error::Tailscale did not provide an IPv4 address"
+            exit 1
+          fi
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          echo "user=$(whoami)" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "========================================"
+          echo "CONNECT FROM YOUR IPHONE (TAILSCALE ON):"
+          echo "ssh $(whoami)@$ip"
+          echo "========================================"
+          echo ""
+          echo "Working directory: $GITHUB_WORKSPACE"
+          echo "Run: make help"
+          echo "Use tmux to keep programs running across SSH reconnects."
 
       - name: Keep SSH session alive
-        run: |
-          echo "SSH available for 60 minutes."
-          sleep 3600
+        if: ${{ inputs.command == 'ssh' }}
+        env:
+          SESSION_MINUTES: ${{ inputs.session_minutes }}
+        run: make keepalive
