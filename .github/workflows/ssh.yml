@@ -1,0 +1,83 @@
+
+name: Dev Environment SSH
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-ssh
+  cancel-in-progress: true
+
+jobs:
+  development:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          fi
+
+      - name: Install development tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            curl \
+            jq \
+            wget \
+            unzip \
+            tmux \
+            htop \
+            ripgrep
+
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
+      - name: Enable SSH
+        run: |
+          sudo tailscale set --ssh
+
+          echo "================================"
+          echo "SSH CONNECTION"
+          echo "================================"
+          echo "IP: $(tailscale ip -4)"
+          echo "USER: $(whoami)"
+          echo "COMMAND:"
+          echo "ssh $(whoami)@$(tailscale ip -4)"
+          echo "================================"
+
+      - name: Keep SSH session alive
+        run: |
+          echo "SSH available for 60 minutes."
+          sleep 3600
