@@ -16,7 +16,7 @@ SESSION_MINUTES ?= 60
 help:
 	@printf '%s\n' \
 	  'Photo Intelligence Cloud — available commands:' \
-	  '  make setup              Prepare .env, install uv and npm dependencies' \
+	  '  make setup              Prepare .env, install uv and npm (creates missing lockfiles)' \
 	  '  make dev                Start services with Docker Compose' \
 	  '  make stop               Stop services' \
 	  '  make migrate            Apply Alembic migrations' \
@@ -42,7 +42,16 @@ help:
 
 setup:
 	python3 infra/scripts/setup-env.py
-	$(UV) sync --frozen --group ingest
+	@if [[ ! -f pyproject.toml ]]; then \
+	  echo '[setup] ERROR: pyproject.toml not found in repository root' >&2; \
+	  exit 1; \
+	elif [[ -f uv.lock ]]; then \
+	  echo '[setup] uv.lock found; installing frozen dependencies'; \
+	  $(UV) sync --frozen --group ingest; \
+	else \
+	  echo '[setup] uv.lock absent; resolving dependencies and generating uv.lock'; \
+	  $(UV) sync --group ingest; \
+	fi
 	@if [[ -f apps/web/package-lock.json || -f apps/web/npm-shrinkwrap.json ]]; then \
 	  $(NPM) ci; \
 	elif [[ -f apps/web/package.json ]]; then \
