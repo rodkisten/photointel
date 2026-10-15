@@ -77,7 +77,7 @@ jobs:
           python-version: "3.13"
 
       - name: Setup uv with persistent cache
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
           cache-local-path: /tmp/photointel-uv-cache
@@ -127,6 +127,9 @@ jobs:
 
       - name: Install project dependencies
         if: ${{ inputs.command != 'setup' && inputs.command != 'help' && inputs.command != 'info' && inputs.command != 'stop' && inputs.command != 'cleanup' }}
+        # SSH is a recovery shell too: allow login even if project installation fails.
+        # Non-interactive Make commands continue to fail fast when setup fails.
+        continue-on-error: ${{ inputs.command == 'ssh' }}
         run: make setup
 
       - name: Run Make command
@@ -135,21 +138,24 @@ jobs:
           MAKE_TARGET: ${{ inputs.command }}
         run: make "$MAKE_TARGET"
 
-      - name: Verify SSH secret
+      - name: Verify Tailscale OAuth secrets
         if: ${{ inputs.command == 'ssh' }}
         env:
-          TAILSCALE_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
         run: |
-          if [[ -z "$TAILSCALE_AUTHKEY" ]]; then
-            echo '::error::Missing repository secret TS_AUTHKEY'
+          if [[ -z "$TS_OAUTH_CLIENT_ID" || -z "$TS_OAUTH_SECRET" ]]; then
+            echo '::error::Create TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET under repository Actions secrets.'
             exit 1
           fi
 
-      - name: Connect Tailscale
+      - name: Connect Tailscale using OAuth
         if: ${{ inputs.command == 'ssh' }}
         uses: tailscale/github-action@v4
         with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
 
       - name: Enable Tailscale SSH
         if: ${{ inputs.command == 'ssh' }}
@@ -183,5 +189,4 @@ jobs:
         if: ${{ always() && steps.checkout.outcome == 'success' && steps.ssh.outcome == 'success' }}
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: bash commit-session.sh
-
+        run: bash scripts/commit-session.sh
