@@ -21,7 +21,7 @@ x-runtime: &runtime
     - icloud-session:/data/icloud-session
     - icloud-downloads:/data/icloud-downloads
   read_only: true
-  tmpfs: [/tmp:rw,noexec,nosuid,size=256m]
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=256m"]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   restart: unless-stopped
@@ -136,7 +136,7 @@ services:
       timeout: 5s
       retries: 5
     read_only: true
-    tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     mem_limit: 128m

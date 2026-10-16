@@ -1,14 +1,41 @@
 """Local infrastructure safety checks require no Docker/network/services."""
 
+import ast
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_compose_tmpfs_options_form_one_absolute_mount():
+    for configuration in sorted((ROOT / "infra" / "docker").glob("compose.*.yml")):
+        declarations = re.findall(
+            r"^\s*tmpfs:\s*(\[[^\n]+\])\s*$", configuration.read_text(), re.MULTILINE
+        )
+        assert declarations, f"No tmpfs declarations found in {configuration.name}"
+        sizes = []
+        for declaration in declarations:
+            # Quoted Python/JSON string lists are also YAML flow lists. Requiring
+            # quoting prevents YAML from splitting comma-separated mount options.
+            mounts = ast.literal_eval(declaration)
+            assert isinstance(mounts, list) and len(mounts) == 1
+            mount = mounts[0]
+            assert isinstance(mount, str)
+            target, separator, options = mount.partition(":")
+            assert separator and PurePosixPath(target).is_absolute()
+            assert target == "/tmp"
+            flags = set(options.split(","))
+            assert {"rw", "noexec", "nosuid"} <= flags
+            size = flags - {"rw", "noexec", "nosuid"}
+            assert len(size) == 1 and size <= {"size=64m", "size=256m"}
+            sizes.extend(size)
+        assert sorted(sizes) == ["size=256m", "size=64m"]
 
 
 def copied_script(tmp_path: Path, filename: str) -> Path:

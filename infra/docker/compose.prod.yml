@@ -15,7 +15,7 @@ x-runtime: &runtime
     - ../../var/icloud-session:/data/icloud-session
     - ../../var/icloud-downloads:/data/icloud-downloads
   read_only: true
-  tmpfs: [/tmp:rw,noexec,nosuid,size=256m]
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=256m"]
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
   restart: unless-stopped
@@ -94,7 +94,7 @@ services:
     image: ${PHOTOINTEL_WEB_IMAGE:?set a versioned web image}
     depends_on: {api: {condition: service_healthy}}
     read_only: true
-    tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
