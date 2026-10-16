@@ -70,6 +70,8 @@ de cobrança do provedor. Revise [docs/MODAL_SETUP.md](docs/MODAL_SETUP.md).
 - [OPERATIONS.md](OPERATIONS.md): operação diária, recuperação e custos.
 - [docs/operations/benchmarks.md](docs/operations/benchmarks.md): medições reproduzíveis.
 - [LIMITATIONS.md](LIMITATIONS.md): limitações externas e critérios de validação.
+- [docs/VALIDATION.md](docs/VALIDATION.md): testes e medições realmente executados.
+- [docs/DELIVERY.md](docs/DELIVERY.md): mapa, matriz de capacidades, comandos e checklist iPhone.
 
 Arquivos `reports/` são evidência apenas quando produzidos por uma execução
 real. A presença de um workflow, configuração ou teste não significa implantação,

@@ -5,7 +5,12 @@
 Existem adaptadores reais PyTorch para JoyTag e SigLIP 2, protocolo HTTP validado,
 aplicação Modal implantável e persistência transacional PostgreSQL. Instalar ou
 executar testes comuns não baixa checkpoints nem inicia uma GPU. Sem credenciais
-Modal e execução explícita, inferência real permanece **não validada neste ambiente**.
+Modal e execução explícita, o caminho Modal/CUDA permanece **não validado**.
+O smoke CPU com pesos reais passou no GitHub Actions (run `38830862284`): uma
+imagem sintética, 5.813 probabilidades JoyTag e vetores SigLIP 2 de 768 dimensões,
+com persistência confirmada em nova sessão PostgreSQL. Consulte a
+[evidência CPU](docs/evidence/real-cpu-model-validation.json). O teste não alocou
+GPU, não chamou Modal e não é um benchmark de qualidade ou de biblioteca real.
 
 JoyTag usa a arquitetura oficial, vocabulário `top_tags.txt`, sigmoid independente
 por tag e o pré-processamento oficial. Nunca é substituído por um classificador

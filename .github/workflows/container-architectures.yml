@@ -1,0 +1,176 @@
+name: Validate container architectures
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [validation/container-architectures]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-architectures-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-run:
+    name: ${{ matrix.component }} / linux/${{ matrix.architecture }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        component: [api, web, minio]
+        architecture: [amd64, arm64]
+    env:
+      VALIDATION_IMAGE: photointel-validation:${{ matrix.component }}-${{ matrix.architecture }}
+      VALIDATION_PLATFORM: linux/${{ matrix.architecture }}
+      VALIDATION_COMPONENT: ${{ matrix.component }}
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Register ARM64 user-mode emulation
+        if: matrix.architecture == 'arm64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and load the target architecture without publishing
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/${{ matrix.component }}.Dockerfile
+          platforms: linux/${{ matrix.architecture }}
+          tags: ${{ env.VALIDATION_IMAGE }}
+          load: true
+          push: false
+          cache-from: type=gha,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }}
+          cache-to: type=gha,mode=max,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }},ignore-error=true
+
+      - name: Record image architecture and source revision
+        env:
+          BUILD_IMAGE_ID: ${{ steps.image.outputs.imageid }}
+          BUILD_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          mkdir -p reports/container-architectures
+          docker image inspect "$VALIDATION_IMAGE" > reports/container-architectures/image-inspect.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          directory = Path("reports/container-architectures")
+          image = json.loads((directory / "image-inspect.json").read_text())[0]
+          actual = f"{image['Os']}/{image['Architecture']}"
+          expected = os.environ["VALIDATION_PLATFORM"]
+          if actual != expected:
+              raise SystemExit(f"Unexpected image platform: {actual}, expected {expected}")
+          record = {
+              "source_commit": os.environ["GITHUB_SHA"],
+              "component": os.environ["VALIDATION_COMPONENT"],
+              "platform": actual,
+              "image_id": os.environ["BUILD_IMAGE_ID"],
+              "build_digest": os.environ["BUILD_DIGEST"],
+              "execution": "qemu-user" if actual.endswith("arm64") else "native",
+              "pushed_to_registry": False,
+              "gpu_execution": False,
+          }
+          (directory / "build.json").write_text(json.dumps(record, indent=2) + "\n")
+          print(json.dumps(record))
+          PY
+
+      - name: Execute the API native-extension smoke test
+        if: matrix.component == 'api'
+        run: |
+          docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
+            --entrypoint python "$VALIDATION_IMAGE" -c '
+          import json
+          import platform
+          import cv2
+          import numpy as np
+          import pillow_heif
+          import psycopg
+          from PIL import Image
+
+          pillow_heif.register_heif_opener()
+          image = Image.new("RGB", (32, 24), (50, 100, 150))
+          gray = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
+          assert gray.shape == (24, 32)
+          assert float(cv2.Laplacian(gray, cv2.CV_64F).var()) == 0
+          assert ".heic" in Image.registered_extensions()
+          print(json.dumps({
+              "machine": platform.machine(),
+              "python": platform.python_version(),
+              "opencv": cv2.__version__,
+              "pillow_heif": pillow_heif.__version__,
+              "psycopg": psycopg.__version__,
+              "image_processing_and_quality_primitives": "passed",
+              "heif_plugin_registration": "passed",
+              "database_connection_attempted": False,
+          }))
+          ' | tee reports/container-architectures/runtime-api.json
+
+      - name: Execute the static web server and check its health endpoint
+        if: matrix.component == 'web'
+        run: |
+          docker run -d --name architecture-web --network none \
+            --add-host api:127.0.0.1 --platform "$VALIDATION_PLATFORM" \
+            "$VALIDATION_IMAGE"
+          healthy=false
+          for attempt in $(seq 1 30); do
+            if docker exec architecture-web wget -q -O - http://127.0.0.1:8080/health/web > reports/container-architectures/web-health.txt; then
+              healthy=true
+              break
+            fi
+            sleep 1
+          done
+          test "$healthy" = true
+          test "$(cat reports/container-architectures/web-health.txt)" = ok
+          docker exec architecture-web wget -q -O - http://127.0.0.1:8080/ > reports/container-architectures/web-index.html
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path("reports/container-architectures/web-index.html").read_text()
+          assert '<div id="root"></div>' in index
+          assert "/assets/" in index
+          print("Nginx health endpoint and the actual built application returned successfully.")
+          PY
+
+      - name: Execute the cross-compiled MinIO binary
+        if: matrix.component == 'minio'
+        run: |
+          docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
+            "$VALIDATION_IMAGE" --version | tee reports/container-architectures/runtime-minio.txt
+          python3 - <<'PY'
+          from pathlib import Path
+
+          output = Path("reports/container-architectures/runtime-minio.txt").read_text()
+          assert "2025-09-07T16:13:09Z" in output
+          print("The binary built from the pinned upstream source executed on the target platform.")
+          PY
+
+      - name: Capture web server diagnostics and stop the isolated container
+        if: always() && matrix.component == 'web'
+        run: |
+          if docker container inspect architecture-web > /dev/null 2>&1; then
+            mkdir -p reports/container-architectures
+            docker logs architecture-web > reports/container-architectures/web-server.log 2>&1
+            docker rm -f architecture-web
+          fi
+
+      - name: Upload architecture-specific execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-${{ matrix.component }}-${{ matrix.architecture }}
+          path: reports/container-architectures/
+          if-no-files-found: warn
+          retention-days: 14

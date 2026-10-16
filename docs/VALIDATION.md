@@ -109,6 +109,42 @@ Relatórios originais com amostras e planos: [10k](evidence/benchmark-10000.json
 consulta, cache possivelmente aquecido e latência cliente incluindo configuração
 de timeout. Não são garantias de latência no Oracle nem percentis de carga.
 
+## Inferência real validada em CPU
+
+[Real CPU 38830862284](https://github.com/rodkisten/photointel/actions/runs/38830862284)
+passou no commit `eb6b6b1`, em branch explícita `validation/real-cpu`, sem credenciais
+Modal ou GPU:
+
+- Pesos reais fixados: JoyTag retornou **5.813 probabilidades** finitas em [0,1].
+- SigLIP 2 retornou **768 dimensões**, norma da imagem 0,999999956.
+- Imagem e texto usaram a mesma revisão. Cossenos finitos para duas frases em
+  português: 0,11869 ("Paisagem com montanhas") e 0,04927 ("Fotografia de uma planta").
+- A gravação de ambos os inference runs e do embedding foi verificada numa
+  nova sessão PostgreSQL depois do commit.
+- PyTorch `2.14.1+cpu`, torchvision `0.29.1+cpu`, Transformers `4.57.6`;
+  duração observada 31,45 s incluindo carregamento dos modelos e teste.
+
+[Relatório original](evidence/real-cpu-model-validation.json). Uma imagem sintética
+não valida acurácia, abrangência multilíngue, CUDA, implantação Modal ou custos do
+provedor. As limitações de conta, hardware e bibliotecas reais continuam vigentes.
+
+## Gate completo aprovado
+
+[Bootstrap 38830845571](https://github.com/rodkisten/photointel/actions/runs/38830845571)
+e [Validate 38830845612](https://github.com/rodkisten/photointel/actions/runs/38830845612)
+passaram no checkpoint `eb6b6b1`:
+
+- 182 testes Python unitários e 34 de integração passaram.
+- 31 testes frontend passaram.
+- E2E Chromium: **31 passaram e 1 foi desmarcado**; a captura restrita a iPhone
+  é intencionalmente desmarcada no projeto desktop.
+- Todos os demais checks obrigatórios passaram, incluindo lint, tipos, contratos,
+  build, MinIO, migrations, restauração, papel SQL limitado, benchmarks e auditorias.
+
+[Outcomes originais](evidence/validation-core.json). São testes controlados com
+fixtures; não configuram nem validam iCloud, Access/R2 ou Modal de uma conta real.
+A inferência CPU real tem evidência separada e não usa o adapter determinístico.
+
 ## Como interpretar os artifacts
 
 O workflow bootstrap mantém passos independentes com `continue-on-error` para

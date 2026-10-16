@@ -36,6 +36,11 @@ Access allowlist, origens HTTPS, pepper e Tunnel token. GPU/iCloud podem permane
 desativados. Defina versões/digests de imagens em `PHOTOINTEL_IMAGE` e
 `PHOTOINTEL_WEB_IMAGE`; a imagem deve suportar `linux/arm64`.
 
+Antes de publicar imagens, execute a [validação explícita de containers nas duas
+arquiteturas](container-architectures.md). Ela constrói API, web e MinIO sem
+publicar no registry e executa verificações ARM64 em QEMU. Uma execução aprovada
+não substitui a validação do Compose no host Oracle real.
+
 Produção usa dois arquivos 0600: `.env` controla Compose/Tunnel/PostgreSQL e
 `.env.runtime` contém somente configuração e credenciais da aplicação. Não copie
 senha administrativa ou `MIGRATION_DATABASE_URL` para `.env.runtime`.
