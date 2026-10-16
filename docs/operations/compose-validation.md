@@ -11,6 +11,13 @@ credenciais locais aleatórias. Depois executa `make dev`, `make migrate`,
 O build usa o MinIO real compilado da revisão upstream fixada; o cache só evita
 compilar dependências novamente e não substitui o servidor por uma simulação.
 
+O wrapper `infra/scripts/compose.sh` usa `COMPOSE_BAKE=false` por padrão. O caminho
+BuildKit do Compose aceita o certificado configurado em `BUILD_CA_FILE` como secret
+de build sem a permissão adicional de filesystem que o Bake exige para arquivos
+fora do contexto. A verificação TLS permanece ativa, e o certificado não é copiado
+para o repositório. Habilitar Bake explicitamente exige configurar suas permissões
+de leitura separadamente.
+
 `make seed` roda dentro do contêiner API. As imagens sintéticas e os jobs usam o
 mesmo volume `processing` do worker, evitando caminhos que só existam no host.
 Para usar a CLI diretamente no host fora do Compose, configure um worker com
