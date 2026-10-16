@@ -40,7 +40,7 @@ HTTPS e R2/S3 privado. [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) e
 | `make setup` | Preserva `.env` existente; instala dependências dos lockfiles |
 | `make dev` | Compila e inicia o ambiente Compose local |
 | `make migrate` | Aplica Alembic no banco de `DATABASE_URL` |
-| `make seed ASSETS=100` | Cria catálogo sintético; não lê iCloud |
+| `make seed ASSETS=100` | Com Compose ativo, cria mídias sintéticas no volume compartilhado; não lê iCloud |
 | `make lint`, `make typecheck` | Verificações Python e TypeScript |
 | `make test` | Testes sem integrações externas e testes do frontend |
 | `make test-integration` | PostgreSQL real; serviço correspondente precisa estar disponível |

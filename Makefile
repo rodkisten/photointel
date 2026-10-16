@@ -71,7 +71,7 @@ migrate:
 	$(UV) run alembic -c infra/migrations/alembic.ini upgrade head
 
 seed:
-	$(UV) run python -m photointel.cli seed --synthetic-assets $(ASSETS)
+	$(COMPOSE) exec -T api python -m photointel.cli seed --synthetic-assets $(ASSETS)
 
 lint:
 	$(UV) run ruff check .

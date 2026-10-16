@@ -1,0 +1,35 @@
+# Validação do caminho local completo
+
+O workflow `Validate developer Compose` executa o caminho documentado em um runner
+isolado do GitHub Actions. Ele só inicia por `workflow_dispatch` ou push na branch
+`validation/compose`; não implanta produção, não usa credenciais externas, não
+autentica iCloud e mantém `GPU_ENABLED=false`.
+
+O exercício usa `make setup` com os lockfiles versionados e `.env` privado com
+credenciais locais aleatórias. Depois executa `make dev`, `make migrate`,
+`make seed ASSETS=16`, repete a importação, executa `make stop` e `make dev`.
+O build usa o MinIO real compilado da revisão upstream fixada; o cache só evita
+compilar dependências novamente e não substitui o servidor por uma simulação.
+
+`make seed` roda dentro do contêiner API. As imagens sintéticas e os jobs usam o
+mesmo volume `processing` do worker, evitando caminhos que só existam no host.
+Para usar a CLI diretamente no host fora do Compose, configure um worker com
+acesso ao mesmo `TEMP_DIRECTORY`; não misture o caminho local e o volume nomeado.
+
+O verificador exige saúde real de PostgreSQL, MinIO, API, worker, ingestion e
+frontend; a saúde dos dois processos em segundo plano usa seus heartbeats.
+Também exige o bundle web servido pelo Nginx, migrations reaplicáveis, galeria
+com 16 itens, três derivados privados por foto, jobs concluídos sem falhas,
+bucket sem listagem anônima, GET anônimo de um derivado real bloqueado com HTTP 403
+e tags de origem `import`. Nenhum inference run pode existir nesse exercício.
+
+Contagens e fingerprints de identidade, revisões, tags e bytes dos derivados
+devem permanecer iguais após a importação repetida e após o reinício. A evidência
+fica no artifact `developer-compose-validation`; ela contém somente saúde,
+contagens e hashes. `.env`, credenciais, fotos, metadados individuais e logs dos
+serviços não são publicados. O cleanup encerra apenas o projeto isolado do runner
+e preserva os volumes, sem `down -v`.
+
+A existência do workflow não comprova execução bem-sucedida. Consulte os resultados
+da execução e os arquivos JSON de cada fase. Essa validação não substitui um
+exercício no Oracle, autenticação Cloudflare, ingestão Apple ou inferência Modal.
