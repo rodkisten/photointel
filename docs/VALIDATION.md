@@ -1,8 +1,8 @@
 # Evidências de validação
 
 Este registro distingue implementação, execução controlada e integração externa.
-O projeto ainda está em validação v1; a existência do código não comprova o cenário
-de aceitação completo com iCloud, GPU e PhotoKit reais.
+As suítes locais controladas passaram; a existência do código não comprova o
+cenário de aceitação completo com iCloud, GPU e PhotoKit reais.
 
 ## Checkpoints publicados
 
@@ -145,6 +145,23 @@ passaram no checkpoint `eb6b6b1`:
 fixtures; não configuram nem validam iCloud, Access/R2 ou Modal de uma conta real.
 A inferência CPU real tem evidência separada e não usa o adapter determinístico.
 
+Os dois gates também passaram no checkpoint `194acb6`:
+[Bootstrap 38831565488](https://github.com/rodkisten/photointel/actions/runs/38831565488)
+e [Validate 38831565408](https://github.com/rodkisten/photointel/actions/runs/38831565408).
+
+## Navegação WebKit no perfil de iPhone
+
+[WebKit 38831575164](https://github.com/rodkisten/photointel/actions/runs/38831575164)
+passou no commit `194acb6`: **46 testes passaram, 2 foram desmarcados
+intencionalmente e nenhum falhou**. A execução reúne Chromium mobile/desktop e
+WebKit Linux no perfil iPhone 13; os 15 fluxos da aplicação passaram em WebKit.
+As duas capturas desmarcadas são restritas ao projeto Chromium mobile.
+
+O [relatório permanente](evidence/webkit-validation.json) registra o JUnit e o
+hash SHA256 do artifact conferido. Isso não valida Safari num iPhone físico,
+instalação da PWA, Keychain ou PhotoKit. As capturas de preview no artifact foram
+feitas em Chromium; não são capturas de Safari real.
+
 ## Como interpretar os artifacts
 
 O workflow bootstrap mantém passos independentes com `continue-on-error` para
@@ -168,15 +185,15 @@ procedural limitada. Não exporta imagens de uma biblioteca pessoal.
 | Integração | Implementado | Evidência ainda necessária |
 | --- | --- | --- |
 | iCloud | Adapter 1.32.3, sessão, limites, cursores e recuperação | Login/2FA, biblioteca e importação real de até 100 imagens |
-| JoyTag | Pipeline oficial, pesos fixados, probabilidades e persistência | Carregar pesos e executar smoke explícito real |
-| SigLIP 2 | Imagem/texto compatíveis 768D, persistência e busca SQL | Smoke real, qualidade de recuperação em português e custo |
+| JoyTag | Pipeline oficial e smoke com pesos reais em CPU aprovados | CUDA/Modal, qualidade na biblioteca real e custo |
+| SigLIP 2 | Imagem/texto 768D e persistência com pesos reais aprovados em CPU | CUDA/Modal, qualidade de recuperação em português e custo |
 | Modal | ASGI autenticado, cache, GPU e orçamentos | Deploy e chamada autenticada com credenciais reais |
 | Cloudflare | Validação JWT, Pages/Tunnel/R2 e configuração Access | Provisionar conta e testar login, mídia e credenciais de serviço |
 | Oracle ARM | Compose e runbooks de implantação | Build multiarch e exercício no host de destino |
 | Pyto | PhotoKit read, Keychain público, protocolo seguro | Permissão, entitlements e APIs no iPhone real |
 | Keywords Apple | Diffs, aprovações, conflitos e bloqueios | API disponível e adapter validado numa foto selecionada; bulk continua desabilitado |
 
-Metadados públicos dos checkpoints foram verificados sem baixar pesos: JoyTag
-com 5.813 tags e SigLIP 2 com dimensões padrão 768 conferidas na configuração
-Transformers fixada. Esses fatos estão versionados em `packages/configuration/`.
-Isso não comprova inferência real nem desempenho com 176 mil fotografias.
+Os metadados públicos dos checkpoints estão versionados em
+`packages/configuration/`. O smoke CPU separado conferiu efetivamente 5.813
+probabilidades JoyTag e embeddings SigLIP 2 de 768 dimensões com pesos reais.
+Isso não comprova processamento GPU nem inferência sobre 176 mil fotografias.

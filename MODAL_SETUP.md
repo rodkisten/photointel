@@ -83,6 +83,21 @@ probabilidades, dimensão, normalização e similaridade finita, e grava resulta
 no PostgreSQL. Uma execução repetida da mesma revisão reutiliza resultados.
 Uma mudança de revisão exige nova indexação; vetores incompatíveis não se misturam.
 
+Fotos importadas enquanto `GPU_ENABLED=false` não recebem jobs AI. Habilitar GPU
+e reiniciar não as reprocessa automaticamente. Após o smoke de uma única imagem,
+abra **Jobs → Processar lote**, selecione no máximo 100 fotos e confirme o lote.
+Em desenvolvimento local autenticado, o equivalente é:
+
+```bash
+curl --fail --request POST http://localhost:8000/v1/jobs/reindex \
+  --header 'Content-Type: application/json' \
+  --data '{"limit":100,"confirm_large_batch":false}'
+```
+
+Na produção use a PWA autenticada, evitando expor tokens em comandos ou logs.
+Confira resultados e custos estimados antes de ampliar a quantidade. O limite e
+os controles do provedor continuam independentes do estimador da aplicação.
+
 Para um experimento CPU real limitado, instale o grupo GPU e configure
 `INFERENCE_BACKEND=cpu`. Os mesmos checkpoints são usados, sem resultados
 fabricados. A RAM e o tempo de processamento ainda precisam ser medidos no host;

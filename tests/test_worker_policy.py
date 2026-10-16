@@ -1,7 +1,9 @@
 """Worker safety and real image processing policies without external accounts."""
 
+import hashlib
 import io
 import json
+import math
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -23,6 +25,7 @@ from photointel.services.ingestion import (
 from photointel.services.jobs import retry_delay
 from photointel.services.media import decode_media, source_path
 from PIL import Image
+from PIL.TiffImagePlugin import IFDRational
 
 
 def test_real_decode_normalizes_orientation_and_strips_exif(tmp_path: Path) -> None:
@@ -44,6 +47,78 @@ def test_real_decode_normalizes_orientation_and_strips_exif(tmp_path: Path) -> N
     assert len(result.phash) == 16
     assert 0 <= result.quality["brightness"] <= 1
     assert result.quality["heuristic"] is True
+
+
+def test_real_heif_roundtrip_preserves_source_and_generates_private_variants(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "synthetic-oriented.heic"
+    image = Image.new("RGB", (192, 96), (230, 40, 20))
+    image.paste((20, 40, 230), (96, 0, 192, 96))
+    exif = Image.Exif()
+    exif[274] = 6
+    exif[272] = "Synthetic HEIF fixture"
+    exif[34853] = {
+        1: "N",
+        2: (IFDRational(23), IFDRational(30), IFDRational(0)),
+        3: "W",
+        4: (IFDRational(46), IFDRational(37), IFDRational(0)),
+    }
+    # The media module registers the real pillow-heif encoder and decoder.
+    # A missing codec must fail this regression rather than skip required HEIF support.
+    image.save(path, format="HEIF", quality=95, exif=exif)
+    source_bytes = path.read_bytes()
+    with Image.open(path) as encoded:
+        assert encoded.format == "HEIF"
+
+    settings = Settings(
+        thumbnail_small_size=32,
+        thumbnail_medium_size=64,
+        preview_large_size=128,
+        inference_input_size=128,
+    )
+    result = decode_media(path, settings)
+
+    assert (result.width, result.height) == (96, 192)
+    assert result.metadata["camera"] == "Synthetic HEIF fixture"
+    assert result.metadata["latitude"] == pytest.approx(23.5)
+    assert result.metadata["longitude"] == pytest.approx(-(46 + 37 / 60))
+    expected_dimensions = {
+        "thumbnail_small": (16, 32),
+        "thumbnail_medium": (32, 64),
+        "preview_large": (64, 128),
+        "inference_input": (64, 128),
+    }
+    assert {variant.variant for variant in result.variants} == set(expected_dimensions)
+    assert len(result.variants) == 4
+    for variant in result.variants:
+        assert (variant.width, variant.height) == expected_dimensions[variant.variant]
+        with Image.open(io.BytesIO(variant.data)) as derived:
+            derived.load()
+            assert derived.size == (variant.width, variant.height)
+            assert derived.height == derived.width * 2
+            assert len(derived.getexif()) == 0
+            assert derived.format in {"WEBP", "JPEG"}
+            # EXIF rotation must happen once: source left/right becomes top/bottom.
+            rgb = derived.convert("RGB")
+            top = rgb.getpixel((derived.width // 2, derived.height // 4))
+            bottom = rgb.getpixel(
+                (derived.width // 2, derived.height * 3 // 4),
+            )
+            assert top[0] > top[2] + 100
+            assert bottom[2] > bottom[0] + 100
+
+    assert result.sha256 == hashlib.sha256(source_bytes).hexdigest()
+    assert len(result.phash) == 16
+    assert int(result.phash, 16) >= 0
+    assert result.quality["resolution"] == 96 * 192
+    assert result.quality["file_bytes"] == len(source_bytes)
+    for metric in ("brightness", "contrast", "sharpness", "score"):
+        assert math.isfinite(result.quality[metric])
+    assert 0 <= result.quality["brightness"] <= 1
+    assert 0 <= result.quality["contrast"] <= 1
+    assert result.quality["heuristic"] is True
+    assert path.read_bytes() == source_bytes
 
 
 def test_corrupt_or_oversized_images_fail_explicitly(tmp_path: Path) -> None:

@@ -94,6 +94,14 @@ do Bearer do dispositivo. O cliente envia `CF-Access-Client-Id` e
 matrícula de uso único e, depois, o Bearer do dispositivo para cada operação.
 Não copie o token administrativo Cloudflare para o iPhone ou para a PWA.
 
+Se usar a configuração local `infra/cloudflare/tunnel.example.yml`, adicione a
+audience da aplicação Bridge ao `originRequest.access.audTag`, junto da audience
+da API. São aplicações Access distintas; manter só a audience humana faz o
+`cloudflared` rejeitar o Service Auth antes de chegar à API. A validação da
+identidade humana na API continua restrita a `ACCESS_AUDIENCE`; as rotas Bridge
+exigem suas credenciais próprias. No túnel gerenciado, confira a configuração
+equivalente de validação Access no origin e teste as duas aplicações.
+
 Teste com credencial de serviço ausente/revogada e com Bearer inválido antes de
 inventariar fotos reais. Rotacione/revogue as duas credenciais separadamente.
 Essa configuração depende da conta Access e permanece não verificada até um

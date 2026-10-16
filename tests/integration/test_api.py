@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterator
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -12,6 +12,9 @@ from photointel.models import (
     Asset,
     AssetResource,
     AssetTag,
+    Embedding,
+    InferenceRun,
+    Job,
     Library,
     Tag,
 )
@@ -325,6 +328,136 @@ async def test_duplicate_tag_creation_is_a_conflict_not_a_database_error(
         json={"category": ""},
     )
     assert invalid.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "job_types",
+    [
+        ["joytag_inference", "embedding_inference"],
+        ["embedding_inference"],
+    ],
+)
+async def test_forced_reindex_infers_both_models_once_with_batch_size_one(
+    client: httpx.AsyncClient,
+    asset: Asset,
+    database: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    job_types: list[str],
+) -> None:
+    from photointel.config import Settings
+    from photointel.services import inference
+    from photointel.services.fixtures import generate_fixtures
+    from photointel.services.worker import _dispatch
+
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        auth_mode="local",
+        storage_backend="local",
+        inference_backend="test",
+        gpu_enabled=True,
+        batch_size=1,
+        joytag_model_revision="1" * 40,
+        siglip_model_revision="2" * 40,
+    )
+
+    async def configuration(_session: AsyncSession) -> Settings:
+        return settings
+
+    monkeypatch.setattr("photointel.routers.operations.effective_settings", configuration)
+    monkeypatch.setattr("photointel.services.worker.effective_settings", configuration)
+    storage = LocalStorage(tmp_path / "private")
+    monkeypatch.setattr(inference, "get_storage", lambda: storage)
+    directory = generate_fixtures(tmp_path / "fixtures", 1)
+    image_bytes = (directory / "fixture-000.jpg").read_bytes()
+    key = object_key(str(asset.id), asset.representation_revision, "preview_large")
+    storage.put(key, image_bytes, "image/jpeg")
+    database.add(
+        AssetResource(
+            asset_id=asset.id,
+            resource_type="preview_large",
+            object_key=key,
+            revision=asset.representation_revision,
+            status="available",
+            mime_type="image/jpeg",
+            byte_size=len(image_bytes),
+        )
+    )
+    await database.flush()
+    # Force must rerun an existing result once, rather than merely skipping it.
+    await inference.infer_assets(database, [asset.id], settings)
+    calls = 0
+    original_inference = inference.image_inference
+
+    async def counted_inference(request, configured):
+        nonlocal calls
+        calls += 1
+        return await original_inference(request, configured)
+
+    monkeypatch.setattr(inference, "image_inference", counted_inference)
+    response = await client.post(
+        "/v1/jobs/reindex",
+        json={
+            "asset_ids": [str(asset.id)],
+            "job_types": job_types,
+        },
+    )
+    assert response.status_code == 200
+    batch_id = UUID(response.json()["id"])
+    jobs = list(
+        (
+            await database.scalars(
+                select(Job)
+                .where(
+                    Job.batch_id == batch_id,
+                )
+                .order_by(Job.id)
+            )
+        ).all()
+    )
+    # Execute each durable job individually, as BATCH_SIZE=1 does in the worker.
+    for job in jobs:
+        assert job.payload["force"] is True
+        assert job.progress["inference_models"] == ["joytag", "siglip2"]
+        result = await _dispatch(database, job)
+        assert result["inference_models"] == ["joytag", "siglip2"]
+        assert result["completed"] == 1
+    await database.flush()
+    assert calls == 1
+    assert len(jobs) == 1
+    assert (
+        await database.scalar(
+            select(func.count())
+            .select_from(InferenceRun)
+            .where(
+                InferenceRun.asset_id == asset.id,
+                InferenceRun.status == "completed",
+            )
+        )
+        == 2
+    )
+    assert (
+        await database.scalar(
+            select(func.count())
+            .select_from(Embedding)
+            .where(
+                Embedding.asset_id == asset.id,
+            )
+        )
+        == 1
+    )
+    assert (
+        await database.scalar(
+            select(func.count())
+            .select_from(AssetTag)
+            .where(
+                AssetTag.asset_id == asset.id,
+                AssetTag.origin == "joytag",
+            )
+        )
+        > 0
+    )
 
 
 @pytest.mark.parametrize("path", ["/v1/tags", "/v1/albums", "/v1/duplicates"])

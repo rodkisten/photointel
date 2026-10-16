@@ -47,7 +47,8 @@ O estado mais recente de cada suíte está em [VALIDATION.md](VALIDATION.md).
 | Bridge enrollment/inventory/mapping/diffs/approval | Implementado e testado no protocolo API |
 | Pyto PhotoKit read, Keychain e Service Auth | Implementado; requer validação no iPhone/Access reais |
 | Escrita nativa de keywords em Pyto | Não implementada como operacional; adapter bloqueia até API/capability verificada |
-| ARM64 e WebKit Linux | Workflows explícitos implementados; consultar evidência da execução |
+| WebKit Linux em perfil iPhone | Implementado e testado; 15 fluxos passaram, sem validar hardware Apple |
+| Containers ARM64 | Workflows explícitos implementados; consultar evidência da execução |
 | Reconhecimento facial, OCR, vídeo AI e compartilhamento público | Não implementado; fora do escopo v1 |
 
 ## D. Comandos
@@ -82,6 +83,10 @@ make icloud-libraries
 make icloud-test
 ```
 
+Em produção use o mesmo ambiente/volume da implantação:
+`PHOTOINTEL_COMPOSE_MODE=prod make icloud-auth` e o mesmo prefixo para
+`icloud-verify`, `icloud-libraries` e `icloud-test`.
+
 Digite senha/2FA apenas no terminal interativo. Configure `ICLOUD_ACCOUNT` e
 `ICLOUD_ENABLED` no host. Na PWA inicie a importação limitada a 100. Em ambiente
 local autenticado, o equivalente é:
@@ -105,6 +110,9 @@ uv run --group gpu python -m gpu.smoke --asset-id UUID_SELECIONADO
 ```
 
 O último comando pode consumir créditos quando `INFERENCE_BACKEND=modal`.
+Depois do smoke numa imagem, use Jobs → Processar lote com limite 100 para fotos
+importadas enquanto GPU estava desabilitada; habilitar GPU não cria esses jobs
+retroativamente. Confira resultados e custos antes de ampliar o lote.
 O workflow CPU explícito não chama Modal. Instalação e testes comuns não iniciam
 inferência real automaticamente. Consulte [MODAL_SETUP.md](../MODAL_SETUP.md).
 

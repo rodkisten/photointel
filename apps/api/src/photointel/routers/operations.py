@@ -193,16 +193,30 @@ async def reindex(
     )
     session.add(batch)
     await session.flush()
+    requested_types = set(body.job_types)
+    job_types = set(requested_types)
+    if {"joytag_inference", "embedding_inference"} <= job_types:
+        # The adapter runs and persists both models together. Two forced jobs
+        # could enter separate worker batches and pay for the same work twice.
+        job_types.remove("embedding_inference")
     for asset in assets:
-        for job_type in set(body.job_types):
-            await enqueue_job(
+        for job_type in sorted(job_types):
+            inference = job_type.endswith("_inference")
+            payload: dict[str, Any] = {"force": True}
+            if inference:
+                payload["requested_job_types"] = sorted(
+                    kind for kind in requested_types if kind.endswith("_inference")
+                )
+            job = await enqueue_job(
                 session,
                 job_type=job_type,
                 asset_id=asset.id,
-                payload={"force": True},
+                payload=payload,
                 batch_id=batch.id,
                 idempotency_key=f"reindex:{batch.id}:{asset.id}:{job_type}",
             )
+            if inference:
+                job.progress = {"inference_models": ["joytag", "siglip2"]}
     audit(
         session,
         identity,

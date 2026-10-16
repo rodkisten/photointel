@@ -619,7 +619,12 @@ async def infer_assets(
         )
     ]
     if not pending:
-        return {"completed": 0, "skipped": len(assets), "gpu_runtime_ms": 0}
+        return {
+            "completed": 0,
+            "skipped": len(assets),
+            "gpu_runtime_ms": 0,
+            "inference_models": ["joytag", "siglip2"],
+        }
     resources = (
         await session.scalars(
             select(AssetResource).where(
@@ -722,6 +727,7 @@ async def infer_assets(
         "gpu_runtime_ms": response.total_runtime_ms,
         "bytes_transferred": bytes_transferred,
         "estimated_cost": estimated_cost(settings, len(pending)),
+        "inference_models": ["joytag", "siglip2"],
     }
 
 
