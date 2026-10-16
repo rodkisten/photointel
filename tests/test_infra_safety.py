@@ -5,6 +5,7 @@ import json
 import os
 import re
 import runpy
+import secrets
 import shutil
 import stat
 import subprocess
@@ -43,10 +44,12 @@ def test_compose_tmpfs_options_form_one_absolute_mount():
 
 def test_compose_diagnostics_exclude_raw_payloads_and_redact_actual_secrets():
     helper = runpy.run_path(str(ROOT / "infra/scripts/validate-compose.py"))
+    database_password = secrets.token_hex(24)
+    bridge_pepper = secrets.token_hex(32)
     values = {
-        "POSTGRES_PASSWORD": "db-password-123456",
-        "BRIDGE_TOKEN_PEPPER": "sensitive-pepper-456789",
-        "DATABASE_URL": "postgresql+asyncpg://operator:db-password-123456@localhost/db",
+        "POSTGRES_PASSWORD": database_password,
+        "BRIDGE_TOKEN_PEPPER": bridge_pepper,
+        "DATABASE_URL": f"postgresql+asyncpg://operator:{database_password}@localhost/db",
         "APP_ENV": "development",
     }
     output = "\n".join(
@@ -55,7 +58,7 @@ def test_compose_diagnostics_exclude_raw_payloads_and_redact_actual_secrets():
             'print("source-line-must-be-excluded")',
             'request={"photo":"private-image-must-be-excluded"}',
             "app_env",
-            "RuntimeError: db-password-123456 sensitive-pepper-456789 "
+            f"RuntimeError: {database_password} {bridge_pepper} "
             "postgresql+asyncpg://other:unknown-credential@postgres/db "
             "token=another-credential " + "A" * 120,
             "Value error, invalid configuration [type=value_error, "
@@ -65,8 +68,8 @@ def test_compose_diagnostics_exclude_raw_payloads_and_redact_actual_secrets():
     summaries = helper["diagnostic_lines"](output, values)
     exported = json.dumps(summaries)
     for private in (
-        "db-password-123456",
-        "sensitive-pepper-456789",
+        database_password,
+        bridge_pepper,
         "unknown-credential",
         "another-credential",
         "A" * 120,
