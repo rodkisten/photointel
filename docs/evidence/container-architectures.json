@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "scope": "Build e execução isolada das imagens reais API, web e MinIO em AMD64 e ARM64.",
+  "workflow_run": {
+    "id": 38832588645,
+    "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645",
+    "source_commit": "89a325b90b5b2ab5a643628cd41938b7a51325da",
+    "branch": "validation/container-architectures",
+    "run_attempt": 1,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-10-16T00:59:06Z",
+    "updated_at": "2026-10-16T01:03:19Z",
+    "workflow_path": ".github/workflows/container-architectures.yml"
+  },
+  "verification": {
+    "successful_jobs": 6,
+    "artifact_zip_sha256_verified": 6,
+    "source_commit_and_image_platform_verified": 6,
+    "artifact_contents_checked_against_component_runtime_assertions": 6,
+    "pushed_to_registry": false,
+    "production_deployed": false,
+    "gpu_execution": false
+  },
+  "containers": [
+    {
+      "component": "api",
+      "platform": "linux/amd64",
+      "execution": "native",
+      "job_id": 116754471155,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754471155",
+      "started_at": "2026-10-16T00:59:08Z",
+      "completed_at": "2026-10-16T01:01:43Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the API native-extension smoke test": "success"
+      },
+      "artifact": {
+        "id": 12017897562,
+        "name": "container-api-amd64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12017897562",
+        "size_bytes": 2415,
+        "expected_zip_sha256": "d2656db5e7e9587dfe114373d6718bac901c1c5737797f311939a3d367477a77",
+        "actual_zip_sha256": "d2656db5e7e9587dfe114373d6718bac901c1c5737797f311939a3d367477a77",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 381,
+            "sha256": "84545cd65771b7073bf5a2192474d203e916616f66ddda1e50317ef2b7d4856f"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 4044,
+            "sha256": "9c5f6f04ae3cd97f0a9dca404b0ce301700189b93a46ef6f85225f6d69bbfed9"
+          },
+          {
+            "path": "runtime-api.json",
+            "size_bytes": 238,
+            "sha256": "5f430d0581bb21b30b6b1e4b2756e50685bc11c5f78e2d3a75250ff9759e9771"
+          }
+        ]
+      },
+      "image_id": "sha256:935496be5b7b516687bbb62bcd61eab5877c7b69f9c7487d402e2dc151bf0389",
+      "build_digest": "sha256:2fd270e5ca0efd4e3f7417f29e036ff42e845f096546873ac67abcf63bf4d880",
+      "runtime": {
+        "machine": "x86_64",
+        "python": "3.12.15",
+        "opencv": "4.14.0",
+        "pillow_heif": "1.8.1",
+        "psycopg": "3.3.6",
+        "image_processing_and_quality_primitives": "passed",
+        "heif_plugin_registration": "passed",
+        "database_connection_attempted": false
+      }
+    },
+    {
+      "component": "api",
+      "platform": "linux/arm64",
+      "execution": "qemu-user",
+      "job_id": 116754470922,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754470922",
+      "started_at": "2026-10-16T00:59:08Z",
+      "completed_at": "2026-10-16T01:03:18Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the API native-extension smoke test": "success"
+      },
+      "artifact": {
+        "id": 12018152130,
+        "name": "container-api-arm64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12018152130",
+        "size_bytes": 2415,
+        "expected_zip_sha256": "1243a37d6265dec47aa69f0783ba06fde8065aaed0b6c6f9b6fcb7653c29bcad",
+        "actual_zip_sha256": "1243a37d6265dec47aa69f0783ba06fde8065aaed0b6c6f9b6fcb7653c29bcad",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 384,
+            "sha256": "c40672978b0e36194b871823e70d2e59ba89412331710383425cf63d33a616a8"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 4044,
+            "sha256": "2580f458fb975e7ff7eda6d4070683765f1d8a32e578e9208ce134dea2e9805b"
+          },
+          {
+            "path": "runtime-api.json",
+            "size_bytes": 239,
+            "sha256": "e77f7ba585d92b8908e66d34432e0c72b38166b2595a7b2baa6c2119a1d6d0fb"
+          }
+        ]
+      },
+      "image_id": "sha256:3429903753001a3f38657bc01ff71a5da3fc9f51eb3ede25e611d6a453227a69",
+      "build_digest": "sha256:5d85357d693598dd469e2f931289e4d65bdc3a5457b0ef3ea4ea3be8e99aec05",
+      "runtime": {
+        "machine": "aarch64",
+        "python": "3.12.15",
+        "opencv": "4.14.0",
+        "pillow_heif": "1.8.1",
+        "psycopg": "3.3.6",
+        "image_processing_and_quality_primitives": "passed",
+        "heif_plugin_registration": "passed",
+        "database_connection_attempted": false
+      }
+    },
+    {
+      "component": "minio",
+      "platform": "linux/amd64",
+      "execution": "native",
+      "job_id": 116754471208,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754471208",
+      "started_at": "2026-10-16T00:59:59Z",
+      "completed_at": "2026-10-16T01:00:36Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the cross-compiled MinIO binary": "success"
+      },
+      "artifact": {
+        "id": 12017817558,
+        "name": "container-minio-amd64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12017817558",
+        "size_bytes": 2100,
+        "expected_zip_sha256": "d5dffe7d5c7a1b8bbadf40f630c85a8dbb652306c5719b05b28533be376aca4c",
+        "actual_zip_sha256": "d5dffe7d5c7a1b8bbadf40f630c85a8dbb652306c5719b05b28533be376aca4c",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 383,
+            "sha256": "df06a361abf6c18124161d8802b8b4d69806440b6caffce5f69edd063f83382b"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 3331,
+            "sha256": "fc97b1a88a27c8d38f7f2f2dc6a31602249362a87586e7119e1c32e084fa8ea3"
+          },
+          {
+            "path": "runtime-minio.txt",
+            "size_bytes": 225,
+            "sha256": "4882fd1cf90dcdf97445dd72a82afb2ffb2b5880a5d1942c58f7324afa4def9d"
+          }
+        ]
+      },
+      "image_id": "sha256:68e941f194aa285e2d53a278a05b65f77b5d0a1f50667ddc5899214d1df23f3f",
+      "build_digest": "sha256:bdb1ad59ce17f01608b3f7e3007a628d963a4f44f24f02c3f981dd3acb97a753",
+      "runtime": {
+        "release": "RELEASE.2025-09-07T16-13-09Z",
+        "source_revision": "07c3a429bfed433e49018cb0f78a52145d4bedeb",
+        "go_version": "go1.24.13",
+        "platform": "linux/amd64",
+        "version_output": "minio version RELEASE.2025-09-07T16-13-09Z (commit-id=07c3a429bfed433e49018cb0f78a52145d4bedeb)\nRuntime: go1.24.13 linux/amd64\nLicense: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html\nCopyright: 2015-0000 MinIO, Inc.\n",
+        "persistent_storage_started": false
+      }
+    },
+    {
+      "component": "minio",
+      "platform": "linux/arm64",
+      "execution": "qemu-user",
+      "job_id": 116754471195,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754471195",
+      "started_at": "2026-10-16T01:00:37Z",
+      "completed_at": "2026-10-16T01:01:11Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the cross-compiled MinIO binary": "success"
+      },
+      "artifact": {
+        "id": 12018386072,
+        "name": "container-minio-arm64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12018386072",
+        "size_bytes": 2105,
+        "expected_zip_sha256": "ae325ca1b84fe825a5253d057688937d4909358debeaaa1fd665729212b97635",
+        "actual_zip_sha256": "ae325ca1b84fe825a5253d057688937d4909358debeaaa1fd665729212b97635",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 386,
+            "sha256": "f88e751ac671f328bf8ec8e53155c08662d330bf35c6e939f6777e0b18a14ac3"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 3331,
+            "sha256": "4b0c533d2e008156b700cf64004ca4fc2fb02c10f3040714e9d3d9552be1295e"
+          },
+          {
+            "path": "runtime-minio.txt",
+            "size_bytes": 225,
+            "sha256": "039e350b3bd41a89a954f575dd5e0d6bb185bf6ede2e557a7def79d496ca0b03"
+          }
+        ]
+      },
+      "image_id": "sha256:51989c95f3d5ac898189da777ef3e0d476ef60c572909b0bb7a233fdb747cddf",
+      "build_digest": "sha256:306da5b2d048bb922b852b4465ff7f73083bbdd71c889d6c8740afeaaeebd935",
+      "runtime": {
+        "release": "RELEASE.2025-09-07T16-13-09Z",
+        "source_revision": "07c3a429bfed433e49018cb0f78a52145d4bedeb",
+        "go_version": "go1.24.13",
+        "platform": "linux/arm64",
+        "version_output": "minio version RELEASE.2025-09-07T16-13-09Z (commit-id=07c3a429bfed433e49018cb0f78a52145d4bedeb)\nRuntime: go1.24.13 linux/arm64\nLicense: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html\nCopyright: 2015-0000 MinIO, Inc.\n",
+        "persistent_storage_started": false
+      }
+    },
+    {
+      "component": "web",
+      "platform": "linux/amd64",
+      "execution": "native",
+      "job_id": 116754471362,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754471362",
+      "started_at": "2026-10-16T00:59:08Z",
+      "completed_at": "2026-10-16T00:59:30Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the static web server and check its health endpoint": "success"
+      },
+      "artifact": {
+        "id": 12018076739,
+        "name": "container-web-amd64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12018076739",
+        "size_bytes": 3656,
+        "expected_zip_sha256": "ac7fe2556556bba176513291ea43113f7cf3e676073b7edc3453a383ac348068",
+        "actual_zip_sha256": "ac7fe2556556bba176513291ea43113f7cf3e676073b7edc3453a383ac348068",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 381,
+            "sha256": "72aeb7149661dfd1f483633dd4fd0fd59b166b03607ee75c5cf859b12f1909e6"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 4984,
+            "sha256": "83b48241afacbc7ddf39820f9227b8acdb1577a0f1ec93706cc8bcc62b04eff4"
+          },
+          {
+            "path": "web-health.txt",
+            "size_bytes": 3,
+            "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"
+          },
+          {
+            "path": "web-index.html",
+            "size_bytes": 858,
+            "sha256": "8ce9a1c0479b432dad677bf6af1aac5604247f4af6f6a2cad7107f0434a5b50a"
+          },
+          {
+            "path": "web-server.log",
+            "size_bytes": 1248,
+            "sha256": "a8a60161f02c6c0a250c2437eb5ec1b628e6238c11f024c3342e8b74153aa925"
+          }
+        ]
+      },
+      "image_id": "sha256:153279778efbe770cdcf20ed3ca4f68ff487809cd535e5d965f5148b90e8ea0d",
+      "build_digest": "sha256:44ec10921a9eeba78486be729448fb4dff1349ff18c4fe27c7c8ae6151274b8b",
+      "runtime": {
+        "health_path": "/health/web",
+        "health_response": "ok\n",
+        "built_application_root_present": true,
+        "built_application_assets_present": true,
+        "built_index_sha256": "8ce9a1c0479b432dad677bf6af1aac5604247f4af6f6a2cad7107f0434a5b50a",
+        "backend_connected": false
+      }
+    },
+    {
+      "component": "web",
+      "platform": "linux/arm64",
+      "execution": "qemu-user",
+      "job_id": 116754471289,
+      "job_url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/job/116754471289",
+      "started_at": "2026-10-16T00:59:32Z",
+      "completed_at": "2026-10-16T00:59:58Z",
+      "conclusion": "success",
+      "required_steps": {
+        "Build and load the target architecture without publishing": "success",
+        "Record image architecture and source revision": "success",
+        "Execute the static web server and check its health endpoint": "success"
+      },
+      "artifact": {
+        "id": 12017721608,
+        "name": "container-web-arm64",
+        "url": "https://github.com/rodkisten/photointel/actions/runs/38832588645/artifacts/12017721608",
+        "size_bytes": 3715,
+        "expected_zip_sha256": "53e64e7ea38f3989f4da72ba9c6c018d745aeb34c4253f7721dd46ee91e8e7ed",
+        "actual_zip_sha256": "53e64e7ea38f3989f4da72ba9c6c018d745aeb34c4253f7721dd46ee91e8e7ed",
+        "zip_sha256_verified": true,
+        "entries": [
+          {
+            "path": "build.json",
+            "size_bytes": 384,
+            "sha256": "5cd1376002af0f4b90f65db9b77483deb7166a16a127308ffaef720bd5877bb9"
+          },
+          {
+            "path": "image-inspect.json",
+            "size_bytes": 4983,
+            "sha256": "cd558ec2c3c7415c7d9c188b295e95c45db0dee436e0b069c9cab6790af9859a"
+          },
+          {
+            "path": "web-health.txt",
+            "size_bytes": 3,
+            "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"
+          },
+          {
+            "path": "web-index.html",
+            "size_bytes": 858,
+            "sha256": "8ce9a1c0479b432dad677bf6af1aac5604247f4af6f6a2cad7107f0434a5b50a"
+          },
+          {
+            "path": "web-server.log",
+            "size_bytes": 1416,
+            "sha256": "c6146b2b4c0cfb08883d4a9ed1ddfe6a63a2e768608445b7064002313f639715"
+          }
+        ]
+      },
+      "image_id": "sha256:ebe7119e04e925c4daf26d44593651987463cf611d4759be469200fd3d003615",
+      "build_digest": "sha256:6acee8052420d7c3091337a0346bf35bb619bf647575390356dcf273aacef76f",
+      "runtime": {
+        "health_path": "/health/web",
+        "health_response": "ok\n",
+        "built_application_root_present": true,
+        "built_application_assets_present": true,
+        "built_index_sha256": "8ce9a1c0479b432dad677bf6af1aac5604247f4af6f6a2cad7107f0434a5b50a",
+        "backend_connected": false
+      }
+    }
+  ],
+  "limitations": [
+    "ARM64 executado por QEMU user-mode sobre runner AMD64; nenhum host Oracle ARM físico foi testado.",
+    "Não mede desempenho, latência, capacidade ou confiabilidade do host Oracle.",
+    "Não inicia o Compose completo nem valida PostgreSQL, autenticação externa, R2, iCloud ou Modal.",
+    "HEIF neste workflow verifica import e registro do plugin; encode/decode completo possui teste separado.",
+    "O teste MinIO executa --version; armazenamento S3 é exercitado pela suíte de integração dedicada.",
+    "As imagens foram carregadas apenas no Docker local do runner e não foram publicadas em registry."
+  ]
+}

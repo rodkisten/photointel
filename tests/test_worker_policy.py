@@ -66,10 +66,16 @@ def test_real_heif_roundtrip_preserves_source_and_generates_private_variants(
     }
     # The media module registers the real pillow-heif encoder and decoder.
     # A missing codec must fail this regression rather than skip required HEIF support.
-    image.save(path, format="HEIF", quality=95, exif=exif)
+    # pillow-heif reads orientation from EXIF bytes before encoding its HEIF rotation.
+    # Passing an Image.Exif object bypasses that extraction in the pinned plugin.
+    image.save(path, format="HEIF", quality=95, exif=exif.tobytes())
     source_bytes = path.read_bytes()
     with Image.open(path) as encoded:
+        encoded.load()
         assert encoded.format == "HEIF"
+        assert encoded.size == (96, 192)
+        assert encoded.info["original_orientation"] == 6
+        assert encoded.getexif().get(274) == 1
 
     settings = Settings(
         thumbnail_small_size=32,

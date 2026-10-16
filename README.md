@@ -60,6 +60,19 @@ importação 100 mídias, até 20 MiB por download e varredura a cada 60 minutos
 As estimativas de custo restringem agendamento; não substituem limites ou alertas
 de cobrança do provedor. Revise [docs/MODAL_SETUP.md](docs/MODAL_SETUP.md).
 
+## Preview e validação
+
+Capturas reais da aplicação no viewport de iPhone estão no
+[artifact de validação](https://github.com/rodkisten/photointel/actions/runs/38830845571/artifacts/12017083341),
+em `reports/previews/`: biblioteca, viewer e painel de metadados. Mostram somente
+imagens procedurais do catálogo de teste, sem fotos pessoais. A evidência separada
+de [WebKit](docs/evidence/webkit-validation.json) confirma os fluxos no Linux;
+Safari e instalação da PWA no aparelho ainda exigem teste físico.
+
+[JoyTag e SigLIP 2 com pesos reais](docs/evidence/real-cpu-model-validation.json)
+foram executados em CPU e gravados no PostgreSQL. Isso não equivale a deploy
+Modal/CUDA nem a uma integração iCloud autenticada.
+
 ## Documentação e evidência
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): componentes, identidade e fluxos.

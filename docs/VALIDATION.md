@@ -162,6 +162,19 @@ hash SHA256 do artifact conferido. Isso não valida Safari num iPhone físico,
 instalação da PWA, Keychain ou PhotoKit. As capturas de preview no artifact foram
 feitas em Chromium; não são capturas de Safari real.
 
+## Containers AMD64 e ARM64
+
+[Arquiteturas 38832588645](https://github.com/rodkisten/photointel/actions/runs/38832588645)
+passou no commit `89a325b`: **as seis combinações API/web/MinIO × AMD64/ARM64
+foram construídas e executadas com sucesso**, sem publicar imagens ou implantar
+serviços. A API executou extensões nativas e primitivas de processamento; Nginx
+serviu health e o build real; MinIO executou o binário da revisão fixada.
+
+O [relatório permanente](evidence/container-architectures.json) registra os seis
+artifacts com SHA256 conferido, arquiteturas, digests e saídas de execução. ARM64
+usou QEMU sobre AMD64; não mede performance, disco, permissões ou operação do
+Compose num host Oracle real. Nenhuma GPU ou conta de produção foi acessada.
+
 ## Como interpretar os artifacts
 
 O workflow bootstrap mantém passos independentes com `continue-on-error` para
@@ -189,7 +202,7 @@ procedural limitada. Não exporta imagens de uma biblioteca pessoal.
 | SigLIP 2 | Imagem/texto 768D e persistência com pesos reais aprovados em CPU | CUDA/Modal, qualidade de recuperação em português e custo |
 | Modal | ASGI autenticado, cache, GPU e orçamentos | Deploy e chamada autenticada com credenciais reais |
 | Cloudflare | Validação JWT, Pages/Tunnel/R2 e configuração Access | Provisionar conta e testar login, mídia e credenciais de serviço |
-| Oracle ARM | Compose e runbooks de implantação | Build multiarch e exercício no host de destino |
+| Oracle ARM | Build/execução API, web e MinIO AMD64/ARM64 aprovados; Compose e runbooks | Exercício completo no host de destino; ARM CI usa QEMU |
 | Pyto | PhotoKit read, Keychain público, protocolo seguro | Permissão, entitlements e APIs no iPhone real |
 | Keywords Apple | Diffs, aprovações, conflitos e bloqueios | API disponível e adapter validado numa foto selecionada; bulk continua desabilitado |
 

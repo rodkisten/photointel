@@ -28,8 +28,12 @@ Go em QEMU; a imagem resultante é executada para conferir o binário.
 Os seis artifacts `container-{componente}-{arquitetura}` contêm metadados da
 imagem e a saída dos testes executados. A existência do workflow ou de um
 artifact de build não comprova sucesso: confira a conclusão de cada job e a
-presença da evidência de execução. Esta documentação não declara uma execução
-aprovada antes da revisão dos resultados.
+presença da evidência de execução.
+
+O [run 38832588645](https://github.com/rodkisten/photointel/actions/runs/38832588645)
+passou nas seis combinações. Os seis ZIPs foram baixados e seus hashes conferidos
+com os artifacts do GitHub; o [relatório permanente](../evidence/container-architectures.json)
+preserva plataformas, digests, versões e evidência de execução.
 
 ## Limites e implantação Oracle
 

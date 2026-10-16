@@ -48,7 +48,7 @@ O estado mais recente de cada suíte está em [VALIDATION.md](VALIDATION.md).
 | Pyto PhotoKit read, Keychain e Service Auth | Implementado; requer validação no iPhone/Access reais |
 | Escrita nativa de keywords em Pyto | Não implementada como operacional; adapter bloqueia até API/capability verificada |
 | WebKit Linux em perfil iPhone | Implementado e testado; 15 fluxos passaram, sem validar hardware Apple |
-| Containers ARM64 | Workflows explícitos implementados; consultar evidência da execução |
+| Containers API/web/MinIO AMD64 e ARM64 | Implementado e testado; seis execuções passaram, ARM via QEMU |
 | Reconhecimento facial, OCR, vídeo AI e compartilhamento público | Não implementado; fora do escopo v1 |
 
 ## D. Comandos

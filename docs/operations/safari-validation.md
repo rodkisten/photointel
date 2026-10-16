@@ -38,8 +38,11 @@ Playwright. Esses arquivos contêm apenas a biblioteca sintética da execução.
 A conclusão do job deve ser aprovada e o JUnit precisa incluir o projeto
 `iphone-webkit` antes de registrar WebKit como validado.
 
-Esta configuração foi adicionada para execução opt-in. A existência do workflow
-não é evidência de que os testes tenham passado. WebKit no Linux também não
+O [run 38831575164](https://github.com/rodkisten/photointel/actions/runs/38831575164)
+passou: 46 testes aprovados nos três projetos, incluindo os 15 fluxos da aplicação
+em WebKit, e duas capturas desmarcadas intencionalmente. O JUnit e o hash do
+artifact estão no [relatório permanente](../evidence/webkit-validation.json).
+WebKit no Linux não
 comprova Safari no iOS: instalação da PWA, permissões, safe areas, teclado,
 gestos e navegação no aparelho real continuam exigindo validação manual em um
 iPhone. PhotoKit e escrita de keywords não são exercitados por este workflow.

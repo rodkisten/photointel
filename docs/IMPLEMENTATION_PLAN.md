@@ -32,7 +32,8 @@ Checkpoint remoto aprovado `eb6b6b1943c1f19dade4ec84b86fe211f090470b`:
 - [x] E2E: 31 passaram, 1 desmarcado intencionalmente, sem falhas.
 - [x] Pesos reais JoyTag/SigLIP 2 em CPU, vetores/consultas PT e persistência: run 38830862284.
 - [x] WebKit Linux no perfil iPhone: 15 fluxos passaram; suíte completa com Chromium 46 passaram.
-- [ ] Build ARM64 e implantação Oracle/Cloudflare/Modal, dependentes de configuração.
+- [x] API/web/MinIO construídos e executados em AMD64 e ARM64 via QEMU; seis jobs aprovados.
+- [ ] Implantação Oracle/Cloudflare/Modal, dependente de configuração das contas.
 - [ ] Login/2FA/importação iCloud reais, dependentes da conta do operador.
 - [ ] Inferência Modal/GPU real, dependente de configuração e execução explícita.
 - [ ] PhotoKit/Keychain/Service Auth no iPhone e keywords, dependentes de hardware/conta.
