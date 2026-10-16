@@ -17,6 +17,9 @@ jobs:
     name: ${{ matrix.component }} / linux/${{ matrix.architecture }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -150,10 +153,16 @@ jobs:
           docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
             "$VALIDATION_IMAGE" --version | tee reports/container-architectures/runtime-minio.txt
           python3 - <<'PY'
+          import os
+          import re
           from pathlib import Path
 
           output = Path("reports/container-architectures/runtime-minio.txt").read_text()
-          assert "2025-09-07T16:13:09Z" in output
+          expected_release = "RELEASE.2025-09-07T16-13-09Z"
+          expected_commit = "07c3a429bfed433e49018cb0f78a52145d4bedeb"
+          assert f"minio version {expected_release} (commit-id={expected_commit})" in output
+          runtime = re.search(r"^Runtime: \S+ (linux/\S+)\s*$", output, re.MULTILINE)
+          assert runtime and runtime.group(1) == os.environ["VALIDATION_PLATFORM"]
           print("The binary built from the pinned upstream source executed on the target platform.")
           PY
 
