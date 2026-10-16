@@ -91,6 +91,12 @@ class Settings(BaseSettings):
     apple_bulk_write_enabled: bool = False
     cors_origins: list[str] = Field(default_factory=list)
 
+    @field_validator("siglip_embedding_dimension", mode="before")
+    @classmethod
+    def parse_siglip_embedding_dimension(cls, value: object) -> object:
+        # Environment variables are strings; preserve the model's fixed dimension.
+        return 768 if value == "768" else value
+
     @field_validator("frontend_origin", "api_origin")
     @classmethod
     def validate_origin(cls, value: str) -> str:

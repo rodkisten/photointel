@@ -102,6 +102,67 @@ def copied_script(tmp_path: Path, filename: str) -> Path:
     return target
 
 
+def test_codespaces_setup_preserves_other_settings(tmp_path: Path):
+    script = copied_script(tmp_path, "setup-env.py")
+    shutil.copy(ROOT / ".env.example", tmp_path / ".env.example")
+    environment = {
+        **os.environ,
+        "CODESPACES": "true",
+        "CODESPACE_NAME": "synthetic-workspace",
+        "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev",
+    }
+    subprocess.run(
+        [sys.executable, str(script)], env=environment, check=True, capture_output=True
+    )
+    target = tmp_path / ".env"
+    before = dict(
+        line.split("=", 1) for line in target.read_text().splitlines() if "=" in line
+    )
+    expected = "https://synthetic-workspace-5173.app.github.dev"
+    assert before["FRONTEND_ORIGIN"] == before["API_ORIGIN"] == expected
+    assert json.loads(before["CORS_ORIGINS"]) == [expected]
+    environment["CODESPACE_NAME"] = "synthetic-replacement"
+    # Ordinary setup continues to preserve an existing operator configuration.
+    subprocess.run(
+        [sys.executable, str(script)], env=environment, check=True, capture_output=True
+    )
+    assert dict(
+        line.split("=", 1) for line in target.read_text().splitlines() if "=" in line
+    ) == before
+    subprocess.run(
+        [sys.executable, str(script), "--codespaces-origin"],
+        env=environment,
+        check=True,
+        capture_output=True,
+    )
+    after = dict(
+        line.split("=", 1) for line in target.read_text().splitlines() if "=" in line
+    )
+    origin_keys = {"FRONTEND_ORIGIN", "API_ORIGIN", "CORS_ORIGINS"}
+    assert {key: value for key, value in after.items() if key not in origin_keys} == {
+        key: value for key, value in before.items() if key not in origin_keys
+    }
+    assert after["FRONTEND_ORIGIN"] == "https://synthetic-replacement-5173.app.github.dev"
+    assert json.loads(after["CORS_ORIGINS"]) == [after["FRONTEND_ORIGIN"]]
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_codespaces_setup_rejects_malformed_host_before_writing(tmp_path: Path):
+    script = copied_script(tmp_path, "setup-env.py")
+    shutil.copy(ROOT / ".env.example", tmp_path / ".env.example")
+    environment = {
+        **os.environ,
+        "CODESPACES": "true",
+        "CODESPACE_NAME": "synthetic-workspace",
+        "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev\nAUTH_MODE=local",
+    }
+    result = subprocess.run(
+        [sys.executable, str(script)], env=environment, capture_output=True
+    )
+    assert result.returncode != 0
+    assert not (tmp_path / ".env").exists()
+
+
 def test_setup_creates_private_credentials_and_preserves_configuration(tmp_path: Path):
     script = copied_script(tmp_path, "setup-env.py")
     shutil.copy(ROOT / ".env.example", tmp_path / ".env.example")

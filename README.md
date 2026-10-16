@@ -28,6 +28,19 @@ Abra `http://localhost:5173`; a API usa `http://localhost:8000`. Banco e MinIO
 escutam somente em loopback no modo local. O bucket é privado. `make stop`
 preserva os volumes; não use `docker compose down -v` em uma biblioteca real.
 
+No Codespaces, abra a porta **5173** pela aba Ports no Safari, com visibilidade
+**Private**. A configuração nova detecta sua origem HTTPS e usa o proxy da própria
+PWA para `/v1`. Se o `.env` já existia ou o nome do Codespace mudou, execute:
+
+```bash
+python3 infra/scripts/setup-env.py --codespaces-origin
+make dev
+```
+
+Esse comando altera apenas as três configurações de origem e preserva os demais
+valores. A origem precisa corresponder à URL aberta no iPhone para que alterações
+de tags, álbuns e jobs passem pela proteção CSRF.
+
 O modo de autenticação local serve ao desenvolvimento em loopback. Produção
 exige JWT criptograficamente validado do Cloudflare Access, allowlist explícita,
 HTTPS e R2/S3 privado. [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) e
