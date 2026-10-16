@@ -7,14 +7,20 @@
     "context": ".."
   },
 
+  "remoteUser": "vscode",
+
+  "runArgs": [
+    "--device=/dev/net/tun"
+  ],
+
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/sshd:1": {},
+    "ghcr.io/tailscale/codespace/tailscale": {}
   },
-
-  "remoteUser": "vscode",
 
   "forwardPorts": [
     5173,
@@ -38,7 +44,10 @@
   },
 
   "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}"
+    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}",
+    "UV_LINK_MODE": "copy",
+    "UV_CACHE_DIR": "/tmp/photointel-uv-cache",
+    "PYTHONUNBUFFERED": "1"
   },
 
   "postCreateCommand": "bash -lc 'make setup && uv pip install pip'",
