@@ -77,7 +77,7 @@ jobs:
           python-version: "3.13"
 
       - name: Setup uv with persistent cache
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-local-path: /tmp/photointel-uv-cache
@@ -190,3 +190,4 @@ jobs:
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: bash scripts/commit-session.sh
+

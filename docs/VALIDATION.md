@@ -74,6 +74,41 @@ executou no commit `38ab4e4`:
   instalação/E2E; a versão anteriormente validada será restaurada. Não trate
   resolução automática como substituto de um lock revisado e testado.
 
+## Validação com todas as dependências locais
+
+[Bootstrap 38812662508](https://github.com/rodkisten/photointel/actions/runs/38812662508)
+no commit `3bc23a2` passou em todos os checks obrigatórios, exceto E2E:
+
+- **182 testes Python unitários**, **34 testes de integração** e **28 testes web**
+  passaram. Ruff, Mypy, ESLint, TypeScript, OpenAPI e build passaram.
+- MinIO, bucket privado, migrations até `0004`, papel SQL limitado, dump/restore,
+  imagem API AMD64 e auditorias passaram.
+- E2E: **26 passaram, 5 falharam e 1 foi desmarcado**. As falhas localizaram um
+  painel de metadados aberto interceptando zoom e labels que incluíam opções
+  dos selects. As correções precisam de nova execução; não é uma suíte aprovada.
+- As capturas reais do catálogo sintético estão no artifact `validation-evidence`,
+  em `reports/previews/`, com manifesto de origem e garantia do modo de teste.
+
+Medições PostgreSQL no mesmo runner, sem inferência de modelo real:
+
+| Metadados | Inserção | Galeria, mediana | FTS, mediana | Resultados por página |
+| --- | --- | --- | --- | --- |
+| 10.000 | 0,918 s | 0,756 ms | 0,703 ms | 60 |
+| 100.000 | 12,070 s | 0,836 ms | 0,693 ms | 60 |
+| 176.000 | 21,070 s | 0,730 ms | 0,708 ms | 60 |
+
+Com **10.000 vetores sintéticos normalizados de 768 dimensões**, a inserção com
+HNSW levou 16,895 s; ANN retornou 20 resultados com mediana 1,547 ms, contra
+28,449 ms da referência exata SQL. O plano observou o índice HNSW e recall@20
+foi **0,90 em uma única consulta sintética**. Isso não mede a qualidade semântica,
+concorrência, cache frio ou a busca sobre 176 mil embeddings.
+
+Relatórios originais com amostras e planos: [10k](evidence/benchmark-10000.json),
+[100k](evidence/benchmark-100000.json), [176k](evidence/benchmark-176000.json) e
+[10k vetores](evidence/benchmark-vectors-10000.json). São cinco amostras por
+consulta, cache possivelmente aquecido e latência cliente incluindo configuração
+de timeout. Não são garantias de latência no Oracle nem percentis de carga.
+
 ## Como interpretar os artifacts
 
 O workflow bootstrap mantém passos independentes com `continue-on-error` para

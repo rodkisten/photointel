@@ -16,29 +16,30 @@ integrações ou da aplicação completa. A conclusão depende dos checks abaixo
 
 ## Validação em andamento — 15/10/2026
 
-Checkpoint remoto `edb2df8a22e3f216872992af656f6dd9c8be663c`:
+Checkpoint remoto `3bc23a21cd331f93ec643fa49ff9123154c6c8df`:
 
-- [x] Instalação Python com `uv.lock` e grupo `ingest` no GitHub Actions.
-- [x] Instalação npm e atualização do lock para Vitest 5.0.4 no bootstrap.
-- [x] OpenAPI exportado do FastAPI e tipos TypeScript gerados.
-- [x] Mypy executado sem erros no backend, GPU e Bridge.
-- [x] Pytest: 116 testes passaram, 16 desmarcados, sem GPU/contas externas.
-- [x] Imagem da API construída e imports nativos testados no runner AMD64.
-- [x] Auditorias de dependências do bootstrap e scanner de segredos passaram.
-- [ ] Ruff em CI após correções locais (check local agora passa).
-- [ ] Tipos, testes e build web após correções da galeria/cliente gerado.
-- [ ] Migrations, integração e E2E: bloqueados nesta rodada pelo pull do MinIO;
-      substituição por build do código oficial em implementação.
-- [ ] Medições com PostgreSQL e validação de restauração representativa.
-- [ ] Implantação real em Oracle/Cloudflare/Modal, dependente de configuração.
+- [x] Instalação Python e npm a partir de locks reais.
+- [x] OpenAPI exportado e tipos TypeScript gerados.
+- [x] Ruff, Mypy, ESLint e TypeScript passaram no CI.
+- [x] Pytest: 182 unitários e 34 de integração passaram.
+- [x] Frontend: 28 testes e build passaram.
+- [x] MinIO oficial, bucket privado, migrations até 0004 e papel limitado testados.
+- [x] Dump/restore real de 16 imagens sintéticas com fingerprints de todas as tabelas.
+- [x] Imagem API AMD64 construída e imports nativos testados.
+- [x] Auditorias Python/npm e scanner de segredos passaram.
+- [x] Metadados medidos com 10k, 100k e 176k registros; HNSW com 10k vetores.
+- [x] Capturas reais Chromium do catálogo sintético em viewport de iPhone.
+- [ ] E2E: 26 passaram, 5 falharam; correções de labels/painel móvel em nova rodada.
+- [ ] Pesos reais em CPU: workflow explícito preparado, execução pendente.
+- [ ] Build ARM64 e implantação Oracle/Cloudflare/Modal, dependentes de configuração.
 - [ ] Login/2FA/importação iCloud reais, dependentes da conta do operador.
-- [ ] Inferência com pesos reais e GPU, dependente de execução explícita/custos.
-- [ ] PhotoKit/Keychain no iPhone e keywords, dependentes do runtime e hardware.
+- [ ] Inferência Modal/GPU real, dependente de configuração e execução explícita.
+- [ ] PhotoKit/Keychain/Service Auth no iPhone e keywords, dependentes de hardware/conta.
 
-Evidência: [bootstrap 38808843904](https://github.com/rodkisten/photointel/actions/runs/38808843904).
-As condições reais estão em `reports/validation.json` do artifact, pois checks
-independentes usam `continue-on-error` para coletar todas as falhas. O workflow
-falha ao final se qualquer verificação obrigatória não passar.
+Evidência: [bootstrap 38812662508](https://github.com/rodkisten/photointel/actions/runs/38812662508).
+`reports/validation.json` registra outcomes reais: somente E2E falhou nesta rodada.
+Dados sintéticos não comprovam operação da biblioteca privada. O detalhamento e
+os relatórios permanentes estão em [VALIDATION.md](VALIDATION.md).
 
 ## Decisões e dependências
 

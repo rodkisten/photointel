@@ -120,6 +120,24 @@ export:
 cleanup:
 	python3 infra/scripts/cleanup-temp.py --directory var/processing --hours 24 --apply
 
+
+# Administration runs inside the container using the same protected session volume.
+.PHONY: icloud-auth icloud-verify icloud-libraries icloud-test icloud-status
+icloud-auth:
+	$(COMPOSE) run --rm ingestion python -m photointel.services.icloud_admin authenticate
+
+icloud-verify:
+	$(COMPOSE) run --rm -T ingestion python -m photointel.services.icloud_admin verify
+
+icloud-libraries:
+	$(COMPOSE) run --rm -T ingestion python -m photointel.services.icloud_admin libraries
+
+icloud-test:
+	$(COMPOSE) run --rm -T ingestion python -m photointel.services.icloud_admin test
+
+icloud-status:
+	$(COMPOSE) run --rm -T ingestion python -m photointel.services.icloud_admin status
+
 # Optional helper targets added for the remote development workflow.
 check: lint typecheck test
 

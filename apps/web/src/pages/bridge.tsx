@@ -53,8 +53,8 @@ export function BridgePage() {
         <div className="stack"><label className="field">Fotografia do catálogo (UUID)<input value={asset} onChange={(e) => {setAsset(e.target.value);setPreview(null);}}
           placeholder="Abra uma foto → Preparar sincronização" maxLength={36} /></label>
           {asset && <div style={{ height:140 }}><PrivateImage src={`/v1/assets/${asset}/media/thumbnail_medium`} alt="Fotografia alvo da alteração" /></div>}
-          <label className="field">Dispositivo<select value={device} onChange={(e) => {setDevice(e.target.value);setPreview(null);}}>
-            <option value="">Selecione seu iPhone</option>{devices.map((item) => <option key={text(item.id)} value={text(item.id)}>{text(item.name)}</option>)}</select></label>
+          <div className="field"><label htmlFor="bridge-device">Dispositivo</label><select id="bridge-device" value={device} onChange={(e) => {setDevice(e.target.value);setPreview(null);}}>
+            <option value="">Selecione seu iPhone</option>{devices.map((item) => <option key={text(item.id)} value={text(item.id)}>{text(item.name)}</option>)}</select></div>
           <label className="field">Adicionar keywords, separadas por vírgula<input value={add} maxLength={2000}
             onChange={(e) => {setAdd(e.target.value);setPreview(null);}} placeholder="viagem, praia" /></label>
           <label className="field">Remover keywords gerenciadas<input value={remove} maxLength={2000}

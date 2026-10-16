@@ -81,6 +81,8 @@ test('03 opens details with metadata, provenance and keyboard navigation', async
   await expect(viewer.getByText(`${fixtures[0].width} × ${fixtures[0].height}`, { exact: true }))
     .toBeVisible();
   await expect(viewer.getByRole('heading', { name: 'Inteligência e procedência' })).toBeVisible();
+  const closeInformation = viewer.getByRole('button', { name: 'Fechar informações', exact: true });
+  if (await closeInformation.isVisible()) await closeInformation.click();
   await viewer.getByRole('button', { name: 'Ampliar fotografia' }).click();
   await expect(viewer.getByRole('button', { name: 'Reduzir zoom' })).toBeVisible();
   await viewer.getByRole('button', { name: 'Ajustar à tela' }).click();
@@ -240,52 +242,85 @@ test('11 observes durable ingestion completion and persisted job state', async (
   await expect(page.getByRole('dialog').getByText('Concluído', { exact: true })).toBeVisible();
 });
 
-test('12 enrolls a read-only Bridge and previews an approved mapping without Apple writes', async ({ page, request }) => {
-  const code = await (await post(request, '/v1/apple-sync/enrollment', {})).json();
-  const name = `Pyto E2E ${Date.now()}`;
-  const enrollment = await post(request, '/v1/bridge/enroll', {
-    code: code.code, name, capabilities: {
-      level: 'read_only', photokit_read: true, keywords_read: true,
-      keywords_write: false, authorization: 'authorized', platform: 'test-ios',
-      adapter: 'test-readonly', reason: 'Inventário controlado de teste; sem hardware PhotoKit.',
-    },
+test.describe('Read-only Apple Bridge protocol', () => {
+  let deviceToRevoke: string | undefined;
+
+  test.afterEach(async ({ request }) => {
+    if (!deviceToRevoke) return;
+    const deviceId = deviceToRevoke;
+    deviceToRevoke = undefined;
+    // Hook cleanup runs while this request fixture is still alive. A test timeout
+    // must report its original failing action, rather than a closed-context error.
+    const response = await request.post(`${api}/v1/apple-sync/devices/${deviceId}/revoke`, {
+      data: {}, headers: { Origin: origin }, timeout: 5_000,
+    });
+    expect(response.ok(), `Revoke test Bridge device: ${response.status()}`).toBeTruthy();
   });
-  const { device, credential } = await enrollment.json();
-  try {
-    const manifestResponse = await request.post(`${api}/v1/bridge/manifest`, {
-      headers: { Authorization: `Bearer ${credential}` }, data: {
-        items: [{ local_identifier: `test-${fixtures[0].id}`, filename: fixtures[0].filename,
-          captured_at: fixtures[0].captured_at, width: fixtures[0].width,
-          height: fixtures[0].height, media_type: 'image', keywords: ['palavra existente'] }],
-        checkpoint: 'e2e-1', complete: true,
-      },
+
+  test('12 enrolls a read-only Bridge and previews an approved mapping without Apple writes', async ({ page, request }) => {
+    const { device, credential } = await test.step('Enroll a read-only test device', async () => {
+      const code = await (await post(request, '/v1/apple-sync/enrollment', {})).json();
+      const name = `Pyto E2E ${Date.now()}`;
+      const enrollment = await post(request, '/v1/bridge/enroll', {
+        code: code.code, name, capabilities: {
+          level: 'read_only', photokit_read: true, keywords_read: true,
+          keywords_write: false, authorization: 'authorized', platform: 'test-ios',
+          adapter: 'test-readonly', reason: 'Inventário controlado de teste; sem hardware PhotoKit.',
+        },
+      });
+      const enrolled = await enrollment.json();
+      deviceToRevoke = enrolled.device.id;
+      return enrolled;
     });
-    expect(manifestResponse.ok()).toBeTruthy();
-    const inventory = await manifestResponse.json();
-    await post(request, '/v1/apple-sync/mappings/confirm', {
-      asset_id: fixtures[0].id, snapshot_id: inventory.items[0].snapshot_id, confirm: true,
+    await test.step('Upload inventory and explicitly verify the asset mapping', async () => {
+      const manifestResponse = await request.post(`${api}/v1/bridge/manifest`, {
+        headers: { Authorization: `Bearer ${credential}` }, data: {
+          items: [{ local_identifier: `test-${fixtures[0].id}`, filename: fixtures[0].filename,
+            captured_at: fixtures[0].captured_at, width: fixtures[0].width,
+            height: fixtures[0].height, media_type: 'image', keywords: ['palavra existente'] }],
+          checkpoint: 'e2e-1', complete: true,
+        },
+      });
+      expect(manifestResponse.ok()).toBeTruthy();
+      const inventory = await manifestResponse.json();
+      await post(request, '/v1/apple-sync/mappings/confirm', {
+        asset_id: fixtures[0].id, snapshot_id: inventory.items[0].snapshot_id, confirm: true,
+      });
     });
-    await page.goto(`/bridge?asset=${fixtures[0].id}`);
-    await page.getByLabel('Dispositivo', { exact: true }).selectOption(device.id);
-    await page.getByLabel('Adicionar keywords, separadas por vírgula').fill('viagem aprovada');
-    const previewPromise = page.waitForResponse((response) =>
-      response.url().endsWith('/v1/apple-sync/preview'));
-    await page.getByRole('button', { name: 'Ver prévia segura', exact: true }).click();
-    const preview = await (await previewPromise).json();
-    expect(preview.write_available).toBe(false);
-    expect(preview.capability).toBe('read_only');
-    expect(preview.before).toContain('palavra existente');
-    expect(preview.add).toContain('viagem aprovada');
-    await expect(page.getByText('Indisponível; operação ficará pendente', { exact: true })).toBeVisible();
-    const operationPromise = page.waitForResponse((response) =>
-      response.url().endsWith('/v1/apple-sync/operations') && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Criar operação para aprovação', exact: true }).click();
-    const operation = await (await operationPromise).json();
-    expect(operation.status).toBe('awaiting_approval');
-    await post(request, `/v1/apple-sync/operations/${operation.id}/cancel`, {});
-  } finally {
-    await post(request, `/v1/apple-sync/devices/${device.id}/revoke`, {});
-  }
+    await test.step('Preview the keyword delta in the authenticated application', async () => {
+      await page.goto(`/bridge?asset=${fixtures[0].id}`);
+      await page.getByRole('combobox', { name: 'Dispositivo', exact: true })
+        .selectOption(device.id);
+      await page.getByLabel('Adicionar keywords, separadas por vírgula').fill('viagem aprovada');
+      const previewPromise = page.waitForResponse((response) =>
+        response.url().endsWith('/v1/apple-sync/preview') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Ver prévia segura', exact: true }).click();
+      const previewResponse = await previewPromise;
+      expect(previewResponse.ok()).toBeTruthy();
+      const preview = await previewResponse.json();
+      expect(preview.write_available).toBe(false);
+      expect(preview.capability).toBe('read_only');
+      expect(preview.before).toContain('palavra existente');
+      expect(preview.add).toContain('viagem aprovada');
+      await expect(page.getByText('Indisponível; operação ficará pendente', { exact: true }))
+        .toBeVisible();
+    });
+    await test.step('Persist a pending approval, then cancel without Apple writes', async () => {
+      const operationPromise = page.waitForResponse((response) =>
+        response.url().endsWith('/v1/apple-sync/operations') && response.request().method() === 'POST');
+      await page.getByRole('button', { name: 'Criar operação para aprovação', exact: true }).click();
+      const operationResponse = await operationPromise;
+      expect(operationResponse.status()).toBe(201);
+      const operation = await operationResponse.json();
+      expect(operation.status).toBe('awaiting_approval');
+      await post(request, `/v1/apple-sync/operations/${operation.id}/cancel`, {});
+      const pending = await request.get(`${api}/v1/bridge/operations`, {
+        headers: { Authorization: `Bearer ${credential}` },
+      });
+      expect(pending.ok()).toBeTruthy();
+      expect((await pending.json()).items).toEqual([]);
+    });
+  });
 });
 
 test('13 rejects unauthenticated application and Bridge requests and foreign origins', async ({ request }) => {

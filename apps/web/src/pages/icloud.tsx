@@ -44,13 +44,16 @@ export function ICloudPage() {
           Sessão expirada? Execute make icloud-auth novamente. Consulte ICLOUD_SETUP.md para o procedimento completo.</p></div>
     </section>
     <section className="panel"><div className="panel-title"><h2>Importação controlada</h2><Info size={15} className="muted" /></div>
-      <div className="stack"><label className="field">Fonte<select value={source} onChange={(e) => setSource(e.target.value)}>
+      {settings.error && <ErrorState error={settings.error} retry={() => void settings.refetch()} />}
+      <div className="stack"><label className="field">Fonte<select aria-label="Fonte"
+        disabled={!settings.data} value={source} onChange={(e) => setSource(e.target.value)}>
         <option value="icloud">Apple iCloud Photos</option>{local && <option value="fixture">Imagens sintéticas locais (desenvolvimento)</option>}</select></label>
-        <label className="field">Biblioteca<select value={library} onChange={(e) => setLibrary(e.target.value)}>
+        <label className="field">Biblioteca<select aria-label="Biblioteca" value={library} onChange={(e) => setLibrary(e.target.value)}>
           <option value="">Biblioteca configurada no servidor</option>{libraries.data?.items.map((item) =>
             <option key={text(item.id)} value={text(item.id)}>{text(item.name)}</option>)}</select></label>
-        <label className="field">Limite desta execução<input type="number" min="1" max="10000" value={limit}
-          onChange={(e) => setLimit(Number(e.target.value))} /><span className="field-help">Comece com até 100.
+        <label className="field">Limite desta execução<input aria-label="Limite desta execução"
+          aria-describedby="ingestion-limit-help" type="number" min="1" max="10000" value={limit}
+          onChange={(e) => setLimit(Number(e.target.value))} /><span id="ingestion-limit-help" className="field-help">Comece com até 100.
             Expansões respeitam os limites de bytes e de processamento configurados.</span></label>
         <label className="checkbox-field"><span>Reconciliação mais profunda<small>Não interpreta uma falha de varredura como exclusão.</small></span>
           <input type="checkbox" checked={fullScan} onChange={(e) => setFullScan(e.target.checked)} /></label>
