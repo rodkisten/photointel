@@ -75,8 +75,10 @@ de cobrança do provedor. Revise [docs/MODAL_SETUP.md](docs/MODAL_SETUP.md).
 
 ## Preview e validação
 
+<img src="docs/previews/iphone-library.png" width="320" alt="Galeria privada no perfil de iPhone com imagens sintéticas" />
+
 Capturas reais da aplicação no viewport de iPhone estão no
-[artifact de validação](https://github.com/rodkisten/photointel/actions/runs/38830845571/artifacts/12017083341),
+[artifact de validação](https://github.com/rodkisten/photointel/actions/runs/38896377983/artifacts/12044595503),
 em `reports/previews/`: biblioteca, viewer e painel de metadados. Mostram somente
 imagens procedurais do catálogo de teste, sem fotos pessoais. A evidência separada
 de [WebKit](docs/evidence/webkit-validation.json) confirma os fluxos no Linux;

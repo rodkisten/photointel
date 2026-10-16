@@ -44,3 +44,9 @@ e preserva os volumes, sem `down -v`.
 A existência do workflow não comprova execução bem-sucedida. Consulte os resultados
 da execução e os arquivos JSON de cada fase. Essa validação não substitui um
 exercício no Oracle, autenticação Cloudflare, ingestão Apple ou inferência Modal.
+
+O [run 38897424107](https://github.com/rodkisten/photointel/actions/runs/38897424107)
+passou todas as fases: seis serviços saudáveis, 16 assets, 48 derivados privados e
+96 jobs concluídos, sem duplicação após reimportação ou reinício. O ZIP foi baixado
+e seu SHA256 conferido. O [relatório permanente](../evidence/compose-validation.json)
+preserva os resultados, fingerprints e limites do teste.

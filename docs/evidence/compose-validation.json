@@ -1,0 +1,436 @@
+{
+  "schema_version": 1,
+  "scope": "Execução real do caminho documentado make setup → make dev → migrate → seed de 16 imagens sintéticas → importação repetida → stop/start, com PostgreSQL/pgvector e MinIO privados.",
+  "workflow_run": {
+    "id": 38897424107,
+    "url": "https://github.com/rodkisten/photointel/actions/runs/38897424107",
+    "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+    "branch": "validation/compose",
+    "run_attempt": 1,
+    "event": "push",
+    "status": "completed",
+    "conclusion": "success",
+    "started_at": "2026-10-16T11:59:22Z",
+    "updated_at": "2026-10-16T12:05:17Z",
+    "workflow_path": ".github/workflows/compose-validation.yml"
+  },
+  "job": {
+    "id": 116961158051,
+    "url": "https://github.com/rodkisten/photointel/actions/runs/38897424107/job/116961158051",
+    "started_at": "2026-10-16T11:59:25Z",
+    "completed_at": "2026-10-16T12:05:16Z",
+    "conclusion": "success",
+    "required_steps": {
+      "Run documented setup with committed lockfiles": "success",
+      "Set up the shared BuildKit builder": "success",
+      "Warm the real source-built MinIO cache without publishing": "success",
+      "Start the actual documented Compose services": "success",
+      "Reapply migrations and import sixteen synthetic photos": "success",
+      "Verify repeat import does not duplicate persisted work": "success",
+      "Stop and restart the documented stack with its volumes preserved": "success",
+      "Capture health and allowlisted redacted failure summaries": "success",
+      "Stop the isolated runner stack and preserve its volumes": "success",
+      "Upload redacted counts, health, and persistence fingerprints": "success"
+    }
+  },
+  "artifact": {
+    "id": 12044294211,
+    "name": "developer-compose-validation",
+    "url": "https://github.com/rodkisten/photointel/actions/runs/38897424107/artifacts/12044294211",
+    "size_bytes": 3161,
+    "expected_zip_sha256": "b810953719108098cf1f9b69238ca5af5f3dc618eb9599942da7c4c0f2631e79",
+    "zip_sha256_verified": true,
+    "actual_zip_sha256": "b810953719108098cf1f9b69238ca5af5f3dc618eb9599942da7c4c0f2631e79",
+    "entries": [
+      {
+        "path": "configuration.json",
+        "size_bytes": 377,
+        "sha256": "adce66f3709db820e15b1124eb7d8040197bc406a39b0b5722adc0b80212ea91"
+      },
+      {
+        "path": "final-health.json",
+        "size_bytes": 1132,
+        "sha256": "7ded96806a3cf6b6e4bc72cfcb947f161e1faae3cf0ab2e6bc89c1c6cc239497"
+      },
+      {
+        "path": "repeated.json",
+        "size_bytes": 1504,
+        "sha256": "adcbc0b6bb717cf589aa8074ab5af326a09f568da1a8d7cf96538d5727f9ada7"
+      },
+      {
+        "path": "restarted.json",
+        "size_bytes": 1505,
+        "sha256": "2bcded7f958ec8fb5883284c439711d07c8ac4375092db60f6e06060a3caed29"
+      },
+      {
+        "path": "seeded.json",
+        "size_bytes": 1475,
+        "sha256": "f37beda77036939dc9fca35cdb56684ca1534d5980ecc8a7d36b023bff166de1"
+      },
+      {
+        "path": "startup.json",
+        "size_bytes": 1446,
+        "sha256": "469c2e63c668c092bdf171b3e209bc6b7dfe5fb9ce15d1cb4c9d48a620db3c07"
+      }
+    ]
+  },
+  "verification": {
+    "all_six_services_healthy": true,
+    "initialization_tasks_exited_successfully": true,
+    "all_six_report_phases_passed": true,
+    "repeat_import_preserved_counts_jobs_and_fingerprint": true,
+    "restart_preserved_counts_jobs_and_fingerprint": true,
+    "private_bucket_unsigned_list_status": 403,
+    "private_media_unsigned_get_status": 403
+  },
+  "limits": {
+    "runner": "GitHub Actions ubuntu-latest; serviços reais de desenvolvimento em Docker Compose",
+    "assets": "16 imagens procedurais sintéticas; nenhuma biblioteca pessoal",
+    "storage": "MinIO privado real compilado da revisão upstream fixada",
+    "gpu_enabled": false,
+    "inference_called": false,
+    "icloud_enabled": false,
+    "icloud_authenticated": false,
+    "apple_keyword_writes_executed": false,
+    "production_deployed": false,
+    "oracle_host_exercised": false,
+    "external_cloudflare_r2_or_modal_services_exercised": false,
+    "physical_ios_safari_validated": false,
+    "credentials": "Geradas localmente no runner; não exportadas no artifact ou neste resumo."
+  },
+  "phases": {
+    "configuration": {
+      "phase": "configuration",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T11:59:52.986038+00:00",
+      "status": "passed",
+      "environment_file_mode": "0600",
+      "gpu_enabled": false,
+      "icloud_enabled": false,
+      "inference_called": false,
+      "storage_backend": "real_private_s3",
+      "credentials": "generated_locally_never_exported"
+    },
+    "startup": {
+      "phase": "startup",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T12:02:38.215915+00:00",
+      "status": "passed",
+      "containers": {
+        "api": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "bucket": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "frontend": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "ingestion": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "migrate": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "minio": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "permissions": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "postgres": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "worker": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        }
+      },
+      "asset_count": 0,
+      "resource_count": 0,
+      "tag_assertion_count": 0,
+      "job_counts": {},
+      "media_bytes_verified": 0,
+      "catalog_and_media_fingerprint": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "private_bucket_unsigned_list_status": 403,
+      "private_media_unsigned_get_status": null,
+      "gpu_enabled": false,
+      "icloud_enabled": false,
+      "source": "synthetic_fixture_only"
+    },
+    "seeded": {
+      "phase": "seeded",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T12:03:04.170335+00:00",
+      "status": "passed",
+      "containers": {
+        "api": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "bucket": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "frontend": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "ingestion": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "migrate": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "minio": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "permissions": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "postgres": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "worker": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        }
+      },
+      "asset_count": 16,
+      "resource_count": 48,
+      "tag_assertion_count": 16,
+      "job_counts": {
+        "completed": 96
+      },
+      "media_bytes_verified": 220954,
+      "catalog_and_media_fingerprint": "b21d5abc49ef4d751bf8dd4b4220cb5e7f0494767eb9801c7379600a9a102cda",
+      "private_bucket_unsigned_list_status": 403,
+      "private_media_unsigned_get_status": 403,
+      "gpu_enabled": false,
+      "icloud_enabled": false,
+      "source": "synthetic_fixture_only"
+    },
+    "repeated": {
+      "phase": "repeated",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T12:03:06.786811+00:00",
+      "status": "passed",
+      "containers": {
+        "api": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "bucket": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "frontend": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "ingestion": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "migrate": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "minio": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "permissions": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "postgres": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "worker": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        }
+      },
+      "asset_count": 16,
+      "resource_count": 48,
+      "tag_assertion_count": 16,
+      "job_counts": {
+        "completed": 96
+      },
+      "media_bytes_verified": 220954,
+      "catalog_and_media_fingerprint": "b21d5abc49ef4d751bf8dd4b4220cb5e7f0494767eb9801c7379600a9a102cda",
+      "private_bucket_unsigned_list_status": 403,
+      "private_media_unsigned_get_status": 403,
+      "gpu_enabled": false,
+      "icloud_enabled": false,
+      "source": "synthetic_fixture_only",
+      "compared_to": "seeded"
+    },
+    "restarted": {
+      "phase": "restarted",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T12:04:41.527738+00:00",
+      "status": "passed",
+      "containers": {
+        "api": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "bucket": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "frontend": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "ingestion": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "migrate": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "minio": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "permissions": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "postgres": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "worker": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        }
+      },
+      "asset_count": 16,
+      "resource_count": 48,
+      "tag_assertion_count": 16,
+      "job_counts": {
+        "completed": 96
+      },
+      "media_bytes_verified": 220954,
+      "catalog_and_media_fingerprint": "b21d5abc49ef4d751bf8dd4b4220cb5e7f0494767eb9801c7379600a9a102cda",
+      "private_bucket_unsigned_list_status": 403,
+      "private_media_unsigned_get_status": 403,
+      "gpu_enabled": false,
+      "icloud_enabled": false,
+      "source": "synthetic_fixture_only",
+      "compared_to": "seeded"
+    },
+    "final-health": {
+      "phase": "final-health",
+      "source_commit": "a7c042952301ce65c416711f9f3cf14210325344",
+      "recorded_at": "2026-10-16T12:04:58.315989+00:00",
+      "status": "passed",
+      "containers": {
+        "api": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "bucket": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "frontend": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "ingestion": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "migrate": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "minio": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "permissions": {
+          "state": "exited",
+          "health": "",
+          "exit_code": 0
+        },
+        "postgres": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        },
+        "worker": {
+          "state": "running",
+          "health": "healthy",
+          "exit_code": 0
+        }
+      },
+      "startup_diagnostics": {
+        "state": "collected",
+        "failed_services": {}
+      }
+    }
+  }
+}

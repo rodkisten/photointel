@@ -37,6 +37,7 @@ O estado mais recente de cada suíte está em [VALIDATION.md](VALIDATION.md).
 | Auth JWT Access, allowlist e rejeição de cabeçalhos forjados | Implementado e testado; borda real exige configuração |
 | Storage privado, thumbnails, EXIF, SHA/pHash e qualidade | Implementado e testado com MinIO/fixtures |
 | Jobs, leases, retries, heartbeat e persistência de progresso | Implementado e testado com PostgreSQL/worker |
+| Docker Compose e inicialização dos seis serviços | Implementado e testado; seed idempotente e reinício preservaram 16 assets e 48 derivados |
 | Galeria, viewer, tags, filtros, álbuns e duplicatas | Implementado e testado; ver resultado E2E atual |
 | Busca AST, FTS e similaridade SQL/pgvector | Implementado e testado; sem loop integral Python |
 | JoyTag e SigLIP 2 com pesos reais | Implementado e testado em CPU, uma imagem sintética |
@@ -183,6 +184,13 @@ capturas reais e outcomes individuais. Medições SQL com 176 mil metadados e
 10 mil vetores estão em `docs/evidence`; não equivalem a um teste de carga
 concorrente com a biblioteca pessoal inteira.
 
+Resultados do núcleo: **198 unitários Python, 36 integrações, 31 frontend e
+31 E2E Chromium** aprovados; uma captura desktop desmarcada intencionalmente.
+WebKit passou 15 fluxos, e os seis builds/execuções AMD64/ARM64 passaram.
+O Compose completo confirmou seis serviços saudáveis, 16 assets, 48 derivados
+privados, 96 jobs concluídos e persistência após reimportação/reinício.
+JoyTag/SigLIP 2 com pesos reais foram testados em CPU; Modal/CUDA não foi testado.
+
 ## G. Checklist inteiramente pelo iPhone
 
 1. Abra GitHub/Codespaces no Safari; confira branch e os workflows de validação.
@@ -214,7 +222,7 @@ detalha os limites de operação e de evidência.
 
 ## I. Próximas ações necessárias
 
-Concluir os gates de validação registrados, configurar as contas reais e
-executar o cenário de aceitação com até 100 imagens. Qualquer expansão de
+Os gates controlados registrados foram concluídos. Configure as contas reais e
+execute o cenário de aceitação com até 100 imagens. Qualquer expansão de
 ingestão, gasto GPU e teste Apple precisa ser explícito. Funcionalidades futuras
 não substituem a validação pendente do v1.

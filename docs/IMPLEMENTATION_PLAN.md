@@ -9,19 +9,19 @@
 - [x] Protocolo Apple e Bridge Pyto implementados; validação iOS pendente.
 - [x] Compose, CI, Codespaces, Cloudflare, Oracle, backup e restore implementados.
 - [x] Lint, types, unitários, integração, build e E2E executados e aprovados.
-- [ ] Relatório de evidências/limitações e entrega no GitHub.
+- [x] Relatório de evidências/limitações e entrega no GitHub.
 
 Marcas acima indicam código implementado. Não representam aprovação de todas as
 integrações ou da aplicação completa. A conclusão depende dos checks abaixo.
 
-## Validação em andamento — 16/10/2026
+## Validação controlada concluída — 16/10/2026
 
-Checkpoint remoto aprovado `eb6b6b1943c1f19dade4ec84b86fe211f090470b`:
+Checkpoint do núcleo aprovado `9a835194ffb4d579b962477a400d1dd78348c408`:
 
 - [x] Instalação Python e npm a partir de locks reais.
 - [x] OpenAPI exportado e tipos TypeScript gerados.
 - [x] Ruff, Mypy, ESLint e TypeScript passaram no CI.
-- [x] Pytest: 182 unitários e 34 de integração passaram.
+- [x] Pytest: 198 unitários e 36 de integração passaram.
 - [x] Frontend: 31 testes e build passaram.
 - [x] MinIO oficial, bucket privado, migrations até 0004 e papel limitado testados.
 - [x] Dump/restore real de 16 imagens sintéticas com fingerprints de todas as tabelas.
@@ -33,15 +33,17 @@ Checkpoint remoto aprovado `eb6b6b1943c1f19dade4ec84b86fe211f090470b`:
 - [x] Pesos reais JoyTag/SigLIP 2 em CPU, vetores/consultas PT e persistência: run 38830862284.
 - [x] WebKit Linux no perfil iPhone: 15 fluxos passaram; suíte completa com Chromium 46 passaram.
 - [x] API/web/MinIO construídos e executados em AMD64 e ARM64 via QEMU; seis jobs aprovados.
+- [x] Compose completo: seis serviços saudáveis, 16 assets/48 derivados, reimportação e reinício idempotentes.
 - [ ] Implantação Oracle/Cloudflare/Modal, dependente de configuração das contas.
 - [ ] Login/2FA/importação iCloud reais, dependentes da conta do operador.
 - [ ] Inferência Modal/GPU real, dependente de configuração e execução explícita.
 - [ ] PhotoKit/Keychain/Service Auth no iPhone e keywords, dependentes de hardware/conta.
 
-Evidência: [bootstrap 38830845571](https://github.com/rodkisten/photointel/actions/runs/38830845571).
+Evidência: [bootstrap 38896377983](https://github.com/rodkisten/photointel/actions/runs/38896377983).
 `reports/validation.json` registra outcomes reais: todos os checks obrigatórios passaram.
 Dados sintéticos não comprovam operação da biblioteca privada. O detalhamento e
 os relatórios permanentes estão em [VALIDATION.md](VALIDATION.md).
+O Compose completo passou no [run 38897424107](https://github.com/rodkisten/photointel/actions/runs/38897424107).
 
 ## Decisões e dependências
 

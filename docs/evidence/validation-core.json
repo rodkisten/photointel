@@ -1,6 +1,6 @@
 {
-  "executed_at": "2026-10-16T00:45:36.322108+00:00",
-  "commit": "eb6b6b1943c1f19dade4ec84b86fe211f090470b",
+  "executed_at": "2026-10-16T11:56:19.964834+00:00",
+  "commit": "9a835194ffb4d579b962477a400d1dd78348c408",
   "checks": {
     "python_install": "success",
     "node_install": "success",
@@ -26,5 +26,85 @@
     "icloud_help": "success",
     "worker_smoke": "success"
   },
-  "scope": "synthetic local services; no production deploy, Apple account or real GPU"
+  "scope": "synthetic local services; no production deploy, Apple account or real GPU",
+  "provenance": {
+    "repository": "rodkisten/photointel",
+    "workflow": "Bootstrap and validate",
+    "run_id": 38896377983,
+    "run_attempt": 1,
+    "run_url": "https://github.com/rodkisten/photointel/actions/runs/38896377983",
+    "run_conclusion": "success",
+    "artifact_id": 12044595503,
+    "artifact_name": "validation-evidence",
+    "artifact_zip_sha256": "0d34c438e9b2f0545576a2ad518e04aa3d9050b639e2ba3436779a646485a305",
+    "artifact_digest_verified": true,
+    "source_report": "reports/validation.json",
+    "source_report_sha256": "acc4b1fa075ed538394cc4df4830b90359a861ecde5fbc7c56bbd32f57b7bed5"
+  },
+  "test_results": {
+    "python_unit": {
+      "source": "reports/unit.xml",
+      "testcases": 198,
+      "passed": 198,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "source_sha256": "4790baca23a6c672229fe3f0e0d03a63a7fece4ffc13514389b197b3700808a7",
+      "junit_suite_reported_tests": 222,
+      "count_basis": "Actual testcase elements: 198; JUnit suite tests attribute reports 222."
+    },
+    "python_integration": {
+      "source": "reports/integration.xml",
+      "testcases": 36,
+      "passed": 36,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "source_sha256": "f4f465100646a3b0d6bbde0bf5fcde9216ad5d59077d1729af6769f1e9477ecb"
+    },
+    "frontend_unit": {
+      "source": "reports/frontend-unit.xml",
+      "testcases": 31,
+      "passed": 31,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "source_sha256": "6c8db11136b2dc5cbd53ee7c5ac25c72ef07246338ca8ea8c5db553a8b060d44"
+    },
+    "e2e_chromium": {
+      "source": "reports/browser.xml",
+      "testcases": 32,
+      "passed": 31,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 1,
+      "source_sha256": "e53741d20ab570418f374319b07663d73929aed564af8738a4165ecb79835dd4",
+      "projects": [
+        {
+          "name": "iphone",
+          "suite": "application.spec.ts",
+          "tests": 15,
+          "skipped": 0
+        },
+        {
+          "name": "iphone",
+          "suite": "previews.spec.ts",
+          "tests": 1,
+          "skipped": 0
+        },
+        {
+          "name": "desktop",
+          "suite": "application.spec.ts",
+          "tests": 15,
+          "skipped": 0
+        },
+        {
+          "name": "desktop",
+          "suite": "previews.spec.ts",
+          "tests": 1,
+          "skipped": 1
+        }
+      ]
+    }
+  }
 }

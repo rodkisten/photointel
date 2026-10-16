@@ -4,6 +4,55 @@ Este registro distingue implementação, execução controlada e integração ex
 As suítes locais controladas passaram; a existência do código não comprova o
 cenário de aceitação completo com iCloud, GPU e PhotoKit reais.
 
+## Resultado atual do núcleo
+
+No checkpoint `9a83519`, os dois workflows passaram:
+[Bootstrap 38896377983](https://github.com/rodkisten/photointel/actions/runs/38896377983)
+e [Validate 38896377817](https://github.com/rodkisten/photointel/actions/runs/38896377817).
+
+- **198 testes Python unitários**, **36 de integração** e **31 frontend** passaram.
+- E2E Chromium: **31 passaram, 1 captura desktop desmarcada intencionalmente**.
+- As 23 verificações obrigatórias do bootstrap passaram: lint/tipos, contratos,
+  banco/storage reais, migrations, papel limitado, restauração, build, benchmarks
+  e auditorias, além das suítes de testes.
+- O `.env` gerado foi exercitado em regressão real de configuração. A dimensão
+  fixa de 768 aceita o valor de ambiente sem aceitar dimensões incompatíveis.
+- Setup Codespaces usa a origem HTTPS real; atualização explícita de origem
+  preserva as outras configurações e mantém `.env` em modo 0600.
+
+[Relatório atual](evidence/validation-core.json): ZIP baixado e SHA256 conferido;
+contagens derivadas dos casos JUnit. Os registros abaixo preservam a evolução dos
+checkpoints anteriores e não substituem este resultado atual.
+
+Depois da correção do healthcheck Compose, ambos passaram novamente no commit
+`a7c0429`: [Bootstrap 38897421056](https://github.com/rodkisten/photointel/actions/runs/38897421056)
+e [Validate 38897421098](https://github.com/rodkisten/photointel/actions/runs/38897421098).
+
+## Serviços completos pelo Docker Compose
+
+[Compose 38897424107](https://github.com/rodkisten/photointel/actions/runs/38897424107)
+passou no checkpoint `a7c0429`, executando os comandos documentados:
+`make setup`, `make dev`, `make migrate`, `make seed ASSETS=16`, uma segunda
+importação e `make stop`/`make dev`.
+
+- PostgreSQL, MinIO, API, worker, ingestion e frontend ficaram saudáveis.
+- Migração, permissões de volumes e criação do bucket terminaram com exit 0.
+- **16 assets, 48 derivados privados, 16 tags importadas e 96 jobs concluídos**.
+- As contagens, identidades, revisões, tags e hashes de 220.954 bytes de mídia
+  permaneceram iguais na importação repetida e após o reinício.
+- Listagem anônima do bucket e GET anônimo de um derivado real retornaram 403.
+- GPU e iCloud ficaram desabilitados; não houve inferência nem fotos pessoais.
+
+O [relatório permanente](evidence/compose-validation.json) inclui as seis fases,
+hashes dos arquivos e proveniência do ZIP conferido. O exercício validou o caminho
+de instalação, não uma implantação permanente: os containers isolados do runner
+foram encerrados depois do teste. Oracle/R2/Access/Modal reais exigem configuração.
+
+Essa execução encontrou e corrigiu quatro falhas do caminho documentado: montagem
+das opções `tmpfs`, compatibilidade do certificado de build com Compose/Bake,
+parsing de `SIGLIP_EMBEDDING_DIMENSION=768` e healthcheck IPv4 do Nginx. O seed
+também passou a usar o volume compartilhado com os workers.
+
 ## Checkpoints publicados
 
 | Commit remoto | Conteúdo |
