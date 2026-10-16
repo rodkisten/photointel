@@ -1,0 +1,16 @@
+# Alternativa ao túnel gerenciado por token. Não combine as duas estratégias.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: /etc/cloudflared/credentials.json
+metrics: 0.0.0.0:2000
+ingress:
+  - hostname: api.example.com
+    service: http://gateway:8080
+    originRequest:
+      connectTimeout: 15s
+      access:
+        required: true
+        teamName: REPLACE_WITH_ACCESS_TEAM
+        # With the separate Bridge Service Auth app, append its audience here.
+        # Keep the API audience; do not configure Access Bypass.
+        audTag: [REPLACE_WITH_API_ACCESS_AUDIENCE]
+  - service: http_status:404

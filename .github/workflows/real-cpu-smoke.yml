@@ -1,0 +1,103 @@
+name: Real models on CPU (manual)
+
+on:
+  push:
+    branches: [validation/real-cpu]
+  workflow_dispatch:
+    inputs:
+      confirm_download:
+        description: 'Download pinned real model weights and process one synthetic image on CPU'
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-cpu-model-validation
+  cancel-in-progress: false
+
+jobs:
+  real-cpu:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_download == true)
+      || (github.event_name == 'push' && github.ref == 'refs/heads/validation/real-cpu')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: isolated-cpu-ci-only
+          POSTGRES_DB: photointel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+asyncpg://photointel:isolated-cpu-ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_DIRECTORY: /tmp/photointel-real-cpu-media
+      TEMP_DIRECTORY: /tmp/photointel-real-cpu-processing
+      MODEL_CACHE_DIRECTORY: /tmp/photointel-real-cpu-models
+      ICLOUD_ENABLED: 'false'
+      GPU_ENABLED: 'true'
+      INFERENCE_BACKEND: cpu
+      BATCH_SIZE: '1'
+      GPU_MAX_ASSETS_PER_RUN: '1'
+      GPU_HOURLY_COST_ESTIMATE: '0'
+      GPU_MAX_COST_PER_RUN: '0'
+      GPU_DAILY_BUDGET: '0'
+      GPU_MONTHLY_BUDGET: '0'
+      MAX_GPU_CONCURRENCY: '1'
+      CUDA_VISIBLE_DEVICES: ''
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      UV_CACHE_DIR: /tmp/photointel-real-cpu-uv
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.23'}
+      - name: Install locked base application without GPU dependencies
+        run: |
+          uv python install 3.12
+          uv sync --frozen --no-dev
+          mkdir -p reports/real-cpu
+      - name: Export frozen model dependencies without CUDA packages
+        run: |
+          uv export --frozen --group gpu --no-dev --no-hashes --no-annotate --no-header --no-emit-project --output-file reports/real-cpu/all.requirements.txt
+          uv run --no-sync python infra/scripts/real-cpu-smoke.py prepare --export reports/real-cpu/all.requirements.txt
+      - name: Install exact official CPU wheels and remaining frozen dependencies
+        run: |
+          uv pip install --no-deps --index-url https://download.pytorch.org/whl/cpu --requirement reports/real-cpu/cpu-wheels.requirements.txt
+          uv pip install --no-deps --requirement reports/real-cpu/cpu-dependencies.requirements.txt
+          uv pip check
+      - name: Cache only pinned public model snapshots
+        uses: actions/cache@v4
+        with:
+          path: /tmp/photointel-real-cpu-models
+          key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
+      - name: Apply migrations to isolated PostgreSQL
+        run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: Ingest one procedural fixture with inference disabled
+        env:
+          GPU_ENABLED: 'false'
+        run: uv run --no-sync python -m photointel.cli seed --synthetic-assets 1 > reports/real-cpu/seed.json
+      - name: Execute JoyTag and SigLIP 2 on CPU and verify committed results
+        run: uv run --no-sync python infra/scripts/real-cpu-smoke.py run
+      - name: Upload measured report and exact dependency selections
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-cpu-model-validation
+          path: reports/real-cpu/
+          if-no-files-found: warn
+          retention-days: 7

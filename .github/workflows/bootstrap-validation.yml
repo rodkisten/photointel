@@ -1,0 +1,332 @@
+name: Bootstrap and validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: s3
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_BUCKET: photointel-ci-private
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY: ci-access
+      STORAGE_SECRET_KEY: ci-only-not-a-production-secret
+      TEMP_DIRECTORY: /tmp/photointel-ci-processing
+      ICLOUD_ENABLED: 'false'
+      GPU_ENABLED: 'false'
+      INFERENCE_BACKEND: test
+      UV_CACHE_DIR: /tmp/photointel-uv-cache
+      npm_config_cache: /tmp/photointel-npm-cache
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.23'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Initialize evidence directory
+        run: mkdir -p reports packages/contracts
+      - name: Resolve Python dependencies only when no lock exists
+        id: python_install
+        continue-on-error: true
+        run: |
+          uv python install 3.12
+          if test -s uv.lock; then
+            uv sync --frozen --group ingest
+          else
+            uv sync --group ingest
+          fi
+      - name: Export standalone validation tool for offline source fixes
+        if: steps.python_install.outcome == 'success'
+        run: |
+          mkdir -p reports/tools
+          cp .venv/bin/ruff reports/tools/ruff
+          uv run --no-sync ruff --version > reports/tools/ruff-version.txt
+          sha256sum reports/tools/ruff > reports/tools/ruff.sha256
+      - name: Upload public standalone Ruff executable early
+        if: steps.python_install.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-tools
+          path: reports/tools/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Resolve missing or placeholder npm lock
+        id: node_install
+        continue-on-error: true
+        run: |
+          if ! node - <<'JS'
+          const fs = require('node:fs');
+          const file = 'apps/web/package-lock.json';
+          if (!fs.existsSync(file)) process.exit(1);
+          const manifest = JSON.parse(fs.readFileSync('apps/web/package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync(file, 'utf8')).packages?.[''];
+          if (!lock?.dependencies) process.exit(1);
+          const ordered = value => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+          for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+            if (ordered(manifest[kind]) !== ordered(lock[kind])) process.exit(1);
+          }
+          JS
+          then
+            npm --prefix apps/web install --package-lock-only --ignore-scripts
+          fi
+          npm --prefix apps/web ci
+      - name: Capture installed ingestion CLI without authenticating
+        id: icloud_help
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync icloudpd --help > reports/icloudpd-help.txt
+          uv run --no-sync python - <<'PY'
+          import importlib.metadata
+          import json
+          from pathlib import Path
+          distribution = importlib.metadata.distribution("icloudpd")
+          Path("reports/icloudpd-installed.json").write_text(json.dumps({
+              "version": distribution.version,
+              "authentication_attempted": False,
+          }, indent=2) + "\n")
+          PY
+      - name: Generate OpenAPI from the real application
+        id: openapi
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          from pathlib import Path
+          from photointel.main import app
+          schema = app.openapi()
+          if not schema.get("paths"):
+              raise SystemExit("OpenAPI has no paths")
+          Path("packages/contracts/openapi.json").write_text(
+              json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+          )
+          PY
+      - name: Generate typed frontend contract
+        id: contracts
+        if: steps.openapi.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run generate:api
+      - name: Python lint
+        id: python_lint
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync ruff check . --output-format=github
+      - name: Python type checking
+        id: python_types
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync mypy apps/api/src gpu bridges
+      - name: Unit tests without GPU or external accounts
+        id: python_tests
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+      - name: Dependency-free worker policy smoke checks
+        id: worker_smoke
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync python tests/worker_core_smoke.py > reports/worker-core-smoke.txt
+      - name: Frontend lint
+        id: web_lint
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run lint
+      - name: Frontend type checking
+        id: web_types
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run typecheck
+      - name: Frontend unit tests
+        id: web_tests
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
+      - name: Frontend production build
+        id: web_build
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: npm --prefix apps/web run build
+      - name: Set up cached source builds for local object storage
+        if: steps.python_install.outcome == 'success'
+        uses: docker/setup-buildx-action@v3
+      - name: Build real MinIO from pinned upstream source with CI cache
+        id: minio_build
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/minio.Dockerfile
+          tags: photointel-minio:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=photointel-minio
+          cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
+      - name: Start real private object storage
+        id: storage
+        if: steps.minio_build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
+          uv run --no-sync python infra/scripts/init-private-bucket.py
+      - name: Apply actual PostgreSQL migrations
+        id: migrate
+        if: steps.storage.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: Verify real dump and restore using isolated synthetic databases
+        id: restore
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: Provision limited application role after privileged migrations
+        id: app_role
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql --username=photointel --dbname=photointel --set=app_role=photointel_app --set=app_password=ci-app-only --set=database_name=photointel --set=ON_ERROR_STOP=1 < infra/oracle/provision-app-role.sql
+      - name: Integration tests against PostgreSQL and MinIO
+        id: integration
+        if: steps.app_role.outcome == 'success'
+        continue-on-error: true
+        run: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+      - name: Browser E2E on real API and synthetic media
+        id: e2e
+        if: steps.app_role.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm exec --prefix apps/web -- playwright install --with-deps chromium
+          bash infra/scripts/run-e2e.sh
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/browser.xml
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+          APP_ENV: test
+          INFERENCE_BACKEND: test
+          FRONTEND_ORIGIN: http://127.0.0.1:4173
+          API_ORIGIN: http://127.0.0.1:8000
+          GPU_ENABLED: 'true'
+          JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
+          SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
+      - name: Measure synthetic metadata queries
+        id: benchmark
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync python -m photointel.cli benchmark --assets 10000 --timeout-seconds 600 --output reports/benchmark-10000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 100000 --timeout-seconds 600 --output reports/benchmark-100000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 176000 --timeout-seconds 600 --output reports/benchmark-176000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 10000 --vectors 10000 --timeout-seconds 600 --output reports/benchmark-vectors-10000.json
+      - name: Build one backend image and check native libraries
+        id: api_build
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker build -f infra/docker/api.Dockerfile -t photointel-api:bootstrap .
+          docker run --rm --entrypoint python photointel-api:bootstrap -c 'import cv2, pillow_heif, psycopg; print("native runtime imports passed")'
+      - name: Dependency security reports
+        id: security
+        if: steps.python_install.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv export --frozen --no-dev --group ingest --no-emit-project > /tmp/photointel-runtime-requirements.txt
+          uvx pip-audit -r /tmp/photointel-runtime-requirements.txt --disable-pip --format=json --output reports/python-audit.json &
+          audit_process_id=$!
+          npm --prefix apps/web audit --json > reports/npm-audit.json &
+          npm_audit_process_id=$!
+          audit_status=0
+          wait "$audit_process_id" || audit_status=1
+          wait "$npm_audit_process_id" || audit_status=1
+          exit "$audit_status"
+      - name: Capture public model and Apple/Pyto evidence without model weights
+        id: references
+        if: always()
+        continue-on-error: true
+        run: python3 infra/scripts/fetch-public-references.py --output reports/public-references
+      - name: Record check outcomes
+        id: evidence
+        if: always()
+        env:
+          WORKER_SMOKE_OUTCOME: ${{ steps.worker_smoke.outcome }}
+          ICLOUD_HELP_OUTCOME: ${{ steps.icloud_help.outcome }}
+          CHECK_OUTCOMES: >-
+            {"python_install":"${{ steps.python_install.outcome }}","node_install":"${{ steps.node_install.outcome }}","openapi":"${{ steps.openapi.outcome }}","contracts":"${{ steps.contracts.outcome }}","python_lint":"${{ steps.python_lint.outcome }}","python_types":"${{ steps.python_types.outcome }}","python_tests":"${{ steps.python_tests.outcome }}","web_lint":"${{ steps.web_lint.outcome }}","web_types":"${{ steps.web_types.outcome }}","web_tests":"${{ steps.web_tests.outcome }}","web_build":"${{ steps.web_build.outcome }}","minio_build":"${{ steps.minio_build.outcome }}","storage":"${{ steps.storage.outcome }}","migrate":"${{ steps.migrate.outcome }}","restore":"${{ steps.restore.outcome }}","app_role":"${{ steps.app_role.outcome }}","integration":"${{ steps.integration.outcome }}","e2e":"${{ steps.e2e.outcome }}","benchmark":"${{ steps.benchmark.outcome }}","api_build":"${{ steps.api_build.outcome }}","security":"${{ steps.security.outcome }}"}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+          checks = json.loads(os.environ["CHECK_OUTCOMES"])
+          checks["icloud_help"] = os.environ["ICLOUD_HELP_OUTCOME"]
+          checks["worker_smoke"] = os.environ["WORKER_SMOKE_OUTCOME"]
+          result = {"executed_at": datetime.now(UTC).isoformat(),
+              "commit": os.environ["GITHUB_SHA"], "checks": checks,
+              "scope": "synthetic local services; no production deploy, Apple account or real GPU"}
+          Path("reports").mkdir(exist_ok=True)
+          Path("reports/validation.json").write_text(json.dumps(result, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("| Check | Actual outcome |\n|---|---|\n")
+              for name, outcome in checks.items():
+                  summary.write(f"| {name} | {outcome} |\n")
+          PY
+      - name: Upload exact generated dependency locks and contracts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-locks-contracts
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            uv.lock
+            apps/web/package-lock.json
+            packages/contracts/openapi.json
+            apps/web/src/api/schema.d.ts
+      - name: Upload actual validation and public research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            reports/
+            apps/web/test-results/
+            apps/web/playwright-report/
+      - name: Fail when a required check did not pass
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          checks = json.loads(Path("reports/validation.json").read_text())["checks"]
+          failed = {name: value for name, value in checks.items() if value != "success"}
+          if failed:
+              raise SystemExit(f"Required checks did not pass: {failed}")
+          PY
