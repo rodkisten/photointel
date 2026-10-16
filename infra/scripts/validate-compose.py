@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 import time
@@ -12,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ REPORTS = ROOT / "reports" / "compose-validation"
 BASE = "http://localhost:5173"
 VARIANTS = {"thumbnail_small", "thumbnail_medium", "preview_large"}
 SERVICES = {"postgres", "minio", "api", "worker", "ingestion", "frontend"}
+DIAGNOSTIC_SERVICES = {"migrate", "bucket", "api", "worker", "ingestion"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -72,13 +74,17 @@ def container_health() -> dict[str, dict[str, Any]]:
     }
 
 
-def configuration() -> dict[str, Any]:
-    target = ROOT / ".env"
-    values = dict(
+def environment_values() -> dict[str, str]:
+    return dict(
         line.split("=", 1)
-        for line in target.read_text().splitlines()
+        for line in (ROOT / ".env").read_text().splitlines()
         if line and not line.startswith("#") and "=" in line
     )
+
+
+def configuration() -> dict[str, Any]:
+    target = ROOT / ".env"
+    values = environment_values()
     require(stat.S_IMODE(target.stat().st_mode) == 0o600, "env_permissions_not_private")
     for key, expected in {
         "APP_ENV": "development",
@@ -106,6 +112,100 @@ def configuration() -> dict[str, Any]:
         "storage_backend": "real_private_s3",
         "credentials": "generated_locally_never_exported",
     }
+
+
+def diagnostic_lines(output: str, values: dict[str, str]) -> list[str]:
+    """Discard arbitrary log lines and redact before selecting traceback summaries."""
+    sensitive = {
+        variant
+        for key, value in values.items()
+        if value
+        and re.search(
+            r"PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL|ACCOUNT|EMAIL|DATABASE_URL", key, re.I
+        )
+        for variant in (value, quote(value, safe=""), json.dumps(value)[1:-1])
+    }
+    result = []
+    fields = {key.casefold() for key in values}
+    for raw in output[-65536:].splitlines()[-100:]:
+        line = re.sub(r"\x1b\[[0-9;]*m", "", raw).strip()
+        for secret in sorted(sensitive, key=len, reverse=True):
+            line = line.replace(secret, "[REDACTED]")
+        line = re.sub(
+            r"\b[a-z][a-z0-9+.-]*://[^\s\"'<>]+", "[REDACTED_URL]", line, flags=re.I
+        )
+        line = re.sub(
+            r"(?i)((?:password|secret|token|credential|access[_-]?key)\s*[:=]\s*)"
+            r"(?:\"[^\"]*\"|'[^']*'|[^,\s;}]+)",
+            r"\1[REDACTED]",
+            line,
+        )
+        line = re.sub(r"[A-Za-z0-9+/=_-]{64,}", "[REDACTED_LONG_VALUE]", line)
+        frame = re.fullmatch(r'File "([^"]{1,240})", line (\d+), in ([\w<>]+)', line)
+        exception = re.match(
+            r"^(?:[A-Za-z_]\w*\.)*[A-Za-z_]\w*"
+            r"(?:Error|Exception|Warning|Exit|Interrupt)(?::|$)",
+            line,
+        )
+        if frame:
+            path, number, function = frame.groups()
+            # Only source locations inside the application or Python installation.
+            if path.startswith(("/app/", "/usr/local/lib/python", "/usr/local/bin/")):
+                result.append(f'File "{path}", line {number}, in {function}')
+        elif exception:
+            result.append(line.split("[SQL:", 1)[0].split("[parameters:", 1)[0][:512])
+        elif line.startswith("Value error,"):
+            result.append(line.split("[type=", 1)[0][:512])
+        elif line.casefold() in fields:
+            result.append(line)
+        elif re.match(r"^(?:INFO|WARN|ERROR)\s+\[alembic\.[a-z_.]+\]", line):
+            result.append(line[:512])
+    return result[-100:]
+
+
+def failure_diagnostics(health: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    # This collector must never become a production log export facility.
+    if (
+        os.environ.get("GITHUB_ACTIONS") != "true"
+        or os.environ.get("GITHUB_WORKFLOW") != "Validate developer Compose"
+    ):
+        return {"state": "not_collected", "reason": "isolated_compose_ci_only"}
+    configuration()
+    values = {**os.environ, **environment_values()}
+    diagnostics: dict[str, Any] = {}
+    for service in sorted(DIAGNOSTIC_SERVICES):
+        state = health.get(service, {})
+        failed = state.get("health") == "unhealthy" or (
+            state.get("state") in {"exited", "dead"}
+            and state.get("exit_code") not in {None, 0, "0"}
+        )
+        if not failed:
+            continue
+        try:
+            process = subprocess.run(
+                [
+                    "bash",
+                    "infra/scripts/compose.sh",
+                    "logs",
+                    "--no-color",
+                    "--no-log-prefix",
+                    "--tail",
+                    "100",
+                    service,
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=True,
+            )
+            diagnostics[service] = {
+                "traceback_summary": diagnostic_lines(process.stdout, values),
+                "raw_logs_exported": False,
+            }
+        except (OSError, subprocess.SubprocessError) as error:
+            diagnostics[service] = {"collection_error_type": type(error).__name__}
+    return {"state": "collected", "failed_services": diagnostics}
 
 
 def wait_ready(expected: int) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -273,6 +373,7 @@ def main() -> None:
             report.update(configuration())
         elif args.phase == "final-health":
             report["containers"] = container_health()
+            report["startup_diagnostics"] = failure_diagnostics(report["containers"])
         else:
             report.update(snapshot(args.expected_assets))
             if args.compare:

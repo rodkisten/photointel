@@ -162,6 +162,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
       - run: uv export --frozen --no-dev --no-emit-project > /tmp/runtime-requirements.txt

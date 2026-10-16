@@ -1,14 +1,17 @@
 """Local infrastructure safety checks require no Docker/network/services."""
 
 import ast
+import json
 import os
 import re
+import runpy
 import shutil
 import stat
 import subprocess
 import sys
 import time
 from pathlib import Path, PurePosixPath
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,6 +39,56 @@ def test_compose_tmpfs_options_form_one_absolute_mount():
             assert len(size) == 1 and size <= {"size=64m", "size=256m"}
             sizes.extend(size)
         assert sorted(sizes) == ["size=256m", "size=64m"]
+
+
+def test_compose_diagnostics_exclude_raw_payloads_and_redact_actual_secrets():
+    helper = runpy.run_path(str(ROOT / "infra/scripts/validate-compose.py"))
+    values = {
+        "POSTGRES_PASSWORD": "db-password-123456",
+        "BRIDGE_TOKEN_PEPPER": "sensitive-pepper-456789",
+        "DATABASE_URL": "postgresql+asyncpg://operator:db-password-123456@localhost/db",
+        "APP_ENV": "development",
+    }
+    output = "\n".join(
+        [
+            'File "/app/infra/migrations/env.py", line 24, in run_migrations_online',
+            'print("source-line-must-be-excluded")',
+            'request={"photo":"private-image-must-be-excluded"}',
+            "app_env",
+            "RuntimeError: db-password-123456 sensitive-pepper-456789 "
+            "postgresql+asyncpg://other:unknown-credential@postgres/db "
+            "token=another-credential " + "A" * 120,
+            "Value error, invalid configuration [type=value_error, "
+            "input_value={'payload': 'must-be-excluded'}]",
+        ]
+    )
+    summaries = helper["diagnostic_lines"](output, values)
+    exported = json.dumps(summaries)
+    for private in (
+        "db-password-123456",
+        "sensitive-pepper-456789",
+        "unknown-credential",
+        "another-credential",
+        "A" * 120,
+        "source-line-must-be-excluded",
+        "private-image-must-be-excluded",
+        "input_value",
+    ):
+        assert private not in exported
+    assert "RuntimeError" in exported and "env.py" in exported
+    assert "app_env" in summaries
+
+
+def test_compose_failure_diagnostics_refuse_nonisolated_execution():
+    helper = runpy.run_path(str(ROOT / "infra/scripts/validate-compose.py"))
+    with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}):
+        result = helper["failure_diagnostics"](
+            {"migrate": {"state": "exited", "exit_code": 1}}
+        )
+    assert result == {
+        "state": "not_collected",
+        "reason": "isolated_compose_ci_only",
+    }
 
 
 def copied_script(tmp_path: Path, filename: str) -> Path:

@@ -32,9 +32,13 @@ e tags de origem `import`. Nenhum inference run pode existir nesse exercício.
 
 Contagens e fingerprints de identidade, revisões, tags e bytes dos derivados
 devem permanecer iguais após a importação repetida e após o reinício. A evidência
-fica no artifact `developer-compose-validation`; ela contém somente saúde,
-contagens e hashes. `.env`, credenciais, fotos, metadados individuais e logs dos
-serviços não são publicados. O cleanup encerra apenas o projeto isolado do runner
+fica no artifact `developer-compose-validation`; ela contém saúde, contagens e
+hashes. Em falhas de startup, somente nesse workflow isolado, o coletor também
+seleciona frames de traceback e resumos de exceções das últimas 100 linhas dos
+serviços com falha. Valores sensíveis reais do `.env` e do ambiente, URLs e valores
+longos são redigidos antes da seleção. Linhas arbitrárias e logs brutos, `.env`,
+credenciais, fotos e metadados individuais não são publicados. O cleanup encerra
+apenas o projeto isolado do runner
 e preserva os volumes, sem `down -v`.
 
 A existência do workflow não comprova execução bem-sucedida. Consulte os resultados
