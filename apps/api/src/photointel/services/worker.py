@@ -6,24 +6,21 @@ import os
 import signal
 import socket
 import time
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, text, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
-    create_async_engine,
 )
-from sqlalchemy.pool import NullPool
 
 from photointel.config import get_settings
 from photointel.database import SessionLocal
 from photointel.errors import AppError, ErrorCode
-from photointel.models import Asset, IngestionRun, Job, JobEvent, utcnow
+from photointel.models import Asset, DiscoveryManifest, Job, JobEvent, utcnow
 from photointel.services.jobs import (
     ACTIVE,
     claim_jobs,
@@ -33,13 +30,17 @@ from photointel.services.jobs import (
     retry_delay,
     worker_seen,
 )
+from photointel.services.leases import (
+    JobFence,
+    LeaseLost,
+    acquire_lease,
+    assert_job_fences,
+    release_lease,
+    renew_lease,
+)
 from photointel.services.runtime_settings import effective_settings
 
 logger = structlog.get_logger()
-
-
-class LeaseLost(Exception):
-    """The operation must roll back after cancellation, pause, or lease loss."""
 
 
 def superseded_reason(
@@ -58,18 +59,24 @@ def superseded_reason(
 
 async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     settings = await effective_settings(session)
+    fences = (
+        [(job.id, job.worker_id, job.fence_token)]
+        if job.worker_id and job.status in ACTIVE
+        else None
+    )
     if job.job_type == "icloud_discovery":
-        from photointel.services.ingestion import ingest_fixture_directory, ingest_icloud
+        from photointel.services.ingestion import ingest_fixture_directory
 
         if job.payload.get("source") == "fixture":
             from photointel.services.fixtures import generate_fixtures
 
             directory = settings.temp_directory / "fixtures"
+            await session.commit()
             await asyncio.to_thread(generate_fixtures, directory)
             return await ingest_fixture_directory(
                 session,
                 directory,
-                min(int(job.payload.get("limit", 100)), settings.ingestion_import_limit),
+                int(job.payload.get("limit", settings.ingestion_import_limit)),
                 batch_id=job.batch_id,
             )
         if job.payload.get("library_id"):
@@ -79,20 +86,28 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
             if not library or library.source_type != "icloud":
                 raise AppError(ErrorCode.INVALID_REQUEST, "Biblioteca iCloud inválida")
             settings = settings.model_copy(update={"icloud_library": library.name})
-        return await ingest_icloud(
-            session,
+        from photointel.services.discovery import discover_icloud
+
+        authorization = job.payload.get("authorization", {})
+        limit = int(
+            authorization.get(
+                "requested_batch_limit",
+                job.payload.get("limit", settings.ingestion_import_limit),
+            )
+        )
+        await session.commit()
+        return await discover_icloud(
             settings,
-            limit=int(job.payload.get("limit", settings.ingestion_import_limit)),
-            full_scan=bool(job.payload.get("full_scan", False)),
+            execution_limit=limit,
             job_id=job.id,
             batch_id=job.batch_id,
+            full_scan=bool(job.payload.get("full_scan", False)),
+            mode=str(job.payload.get("mode", "incremental")),
+            owner=job.worker_id,
+            fence_token=job.fence_token,
         )
     if not job.asset_id:
         raise AppError(ErrorCode.INVALID_REQUEST, "Job exige asset_id")
-    # Serialize derived writes for an asset, without locking the heartbeat's job row.
-    # Atomic, transaction-scoped advisory locks are released on process death.
-    lock_key = int.from_bytes(job.asset_id.bytes[:8], "big", signed=True)
-    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
     asset = await session.get(Asset, job.asset_id)
     if not asset:
         raise AppError(ErrorCode.NOT_FOUND, "Foto não encontrada", 404)
@@ -101,15 +116,34 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     if reason:
         return {"skipped": True, "reason": reason}
     if job.job_type == "media_download":
-        from photointel.services.media import source_path
+        if not asset.source_metadata.get("fixture"):
+            from photointel.services.discovery import download_discovered_asset
 
-        if asset.media_type != "video":
-            path = source_path(asset, settings)
-            if path.stat().st_size > settings.max_download_bytes:
+            await session.commit()
+            await download_discovered_asset(
+                asset.id,
+                settings,
+                job_id=job.id,
+                owner=job.worker_id,
+                fence_token=job.fence_token,
+            )
+            if fences:
+                await assert_job_fences(session, fences)
+            asset = await session.get(Asset, job.asset_id, populate_existing=True)
+            assert asset is not None
+            revision = asset.content_revision
+        else:
+            from photointel.services.media import source_path
+
+            await session.commit()
+            path = await asyncio.to_thread(source_path, asset, settings)
+            size = await asyncio.to_thread(lambda: path.stat().st_size)
+            if size > settings.max_download_bytes:
                 raise AppError(
-                    ErrorCode.MEDIA_DOWNLOAD_FAILED,
-                    "Representação excede o limite",
+                    ErrorCode.MEDIA_DOWNLOAD_FAILED, "Representação excede o limite"
                 )
+            if fences:
+                await assert_job_fences(session, fences)
         await enqueue_job(
             session,
             "metadata_extract",
@@ -122,7 +156,7 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     if job.job_type == "metadata_extract":
         from photointel.services.media import process_asset
 
-        result = await process_asset(session, asset, settings)
+        result = await process_asset(session, asset, settings, job_fences=fences)
         for kind in ("thumbnail_generate", "hash_generate", "quality_analysis"):
             await enqueue_job(
                 session,
@@ -158,6 +192,7 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
             settings,
             job.job_type,
             force=bool(job.payload.get("force")),
+            job_fences=fences,
         )
         if job.job_type == "hash_generate" and asset.media_type == "image":
             await enqueue_job(
@@ -185,6 +220,7 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
             [asset.id],
             settings,
             force=bool(job.payload.get("force")),
+            job_fences=fences,
         )
     if job.job_type == "apple_sync":
         # Device work is retained in sync_operations. This worker cannot use PhotoKit.
@@ -204,31 +240,32 @@ async def _dispatch(session: AsyncSession, job: Job) -> dict[str, Any]:
     raise AppError(ErrorCode.INVALID_REQUEST, "Tipo de job desconhecido")
 
 
-@lru_cache(maxsize=1)
 def lease_sessions() -> async_sessionmaker[AsyncSession]:
-    # Long-running media/GPU work can occupy every connection in the normal pool.
-    # Short-lived lease connections must remain available independently. NullPool
-    # also avoids retained connections when the CLI runs the worker for fixture seeding.
-    lease_engine = create_async_engine(
-        get_settings().database_url,
-        poolclass=NullPool,
-        pool_pre_ping=True,
-    )
-    return async_sessionmaker(lease_engine, expire_on_commit=False)
+    # External stages release their SQL connection, so the same bounded,
+    # TLS/pooler-aware factory is sufficient for short heartbeat transactions.
+    return SessionLocal
 
 
 async def _heartbeat_many_loop(
     job_ids: list[UUID],
     worker_id: str,
     stopped: asyncio.Event,
+    fence_tokens: dict[UUID, int] | None = None,
+    asset_leases: list[tuple[str, int]] | None = None,
 ) -> None:
     while not stopped.is_set():
         try:
             async with lease_sessions()() as session:
-                renewed = await heartbeat_many(session, job_ids, worker_id)
+                renewed = await heartbeat_many(session, job_ids, worker_id, fence_tokens)
                 if renewed != len(job_ids):
                     stopped.set()
                     return
+                for key, token in asset_leases or []:
+                    if not await renew_lease(
+                        session, key, worker_id, token, get_settings().job_lease_seconds
+                    ):
+                        stopped.set()
+                        return
                 await worker_seen(session, worker_id, job_ids[0] if job_ids else None)
                 await session.commit()
         except Exception:
@@ -243,144 +280,280 @@ async def _heartbeat_loop(job_id: UUID, worker_id: str, stopped: asyncio.Event) 
     await _heartbeat_many_loop([job_id], worker_id, stopped)
 
 
-async def execute_job(job_id: UUID, worker_id: str) -> None:
-    """Execute a committed claim, persisting output only while owning its lease."""
-    stopped = asyncio.Event()
-    heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id, worker_id, stopped))
-    started = time.monotonic()
-    try:
-        async with SessionLocal() as session:
-            job = await session.get(Job, job_id)
-            if (
-                not job
-                or job.worker_id != worker_id
-                or job.status not in ACTIVE
-                or not job.lease_until
-                or job.lease_until <= utcnow()
-            ):
-                return
-            batch_id = job.batch_id
-            result = await _dispatch(session, job)
-            # Flush results, then fence against concurrent cancellation/claim.
-            await session.flush()
-            fenced = (
-                await session.execute(
-                    update(Job)
-                    .where(
-                        Job.id == job_id,
-                        Job.worker_id == worker_id,
-                        Job.status.in_(ACTIVE),
-                        Job.lease_until > utcnow(),
-                    )
-                    .values(
-                        status="completed",
-                        finished_at=utcnow(),
-                        lease_until=None,
-                        progress={
-                            **result,
-                            "runtime_ms": round(
-                                (time.monotonic() - started) * 1000,
-                                2,
-                            ),
-                        },
-                        error_code=None,
-                        error_details=None,
-                    )
-                    .returning(
-                        Job.id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if not fenced:
-                raise LeaseLost()
-            session.add(
-                JobEvent(
-                    job_id=job_id,
-                    status="completed",
-                    payload={
-                        "runtime_ms": round((time.monotonic() - started) * 1000, 2),
-                    },
-                )
-            )
-            await refresh_batch(session, batch_id)
-            await session.commit()
-    except (LeaseLost, asyncio.CancelledError):
-        # Rollback makes replay safe. Deterministic object keys may be overwritten.
-        logger.info("worker_lease_released", job_id=str(job_id))
-    except Exception as exc:
-        code = exc.code if isinstance(exc, AppError) else ErrorCode.INTERNAL_ERROR
-        message = (
-            exc.message
-            if isinstance(exc, AppError)
-            else "Falha no processamento; verifique diagnóstico"
+async def _acquire_asset_leases(
+    session: AsyncSession,
+    jobs: list[Job],
+    worker_id: str,
+) -> list[tuple[str, int]]:
+    leases = []
+    for asset_id in sorted({job.asset_id for job in jobs if job.asset_id}, key=str):
+        key = f"asset:{asset_id}"
+        token = await acquire_lease(
+            session, key, worker_id, get_settings().job_lease_seconds
         )
-        async with SessionLocal() as session:
+        if token is None:
+            raise AssetBusy()
+        leases.append((key, token))
+    return leases
+
+
+class AssetBusy(Exception):
+    """Another committed job owns this asset; defer without consuming an attempt."""
+
+
+async def _fail_jobs(
+    fences: list[JobFence],
+    exc: BaseException,
+    *,
+    busy: bool = False,
+) -> None:
+    code = (
+        exc.code
+        if isinstance(exc, AppError)
+        else "ASSET_BUSY"
+        if busy
+        else ErrorCode.INTERNAL_ERROR
+    )
+    async with SessionLocal() as session:
+        changed: list[Job] = []
+        for job_id, owner, token in fences:
             job = await session.scalar(
                 select(Job)
                 .where(
                     Job.id == job_id,
-                    Job.worker_id == worker_id,
+                    Job.worker_id == owner,
+                    Job.fence_token == token,
                     Job.status.in_(ACTIVE),
                     Job.lease_until > utcnow(),
                 )
                 .with_for_update()
             )
-            if job:
-                job.error_code = str(code)
-                job.error_details = {"message": message}
-                job.status = (
-                    "failed" if job.attempts >= job.maximum_attempts else "retrying"
+            if job is None:
+                continue
+            changed.append(job)
+            if busy:
+                job.attempts = max(0, job.attempts - 1)
+            job.status = "failed" if job.attempts >= job.maximum_attempts else "retrying"
+            job.error_code = str(code)
+            job.error_details = {
+                "message": (
+                    exc.message
+                    if isinstance(exc, AppError)
+                    else "Ativo ocupado; nova tentativa agendada"
+                    if busy
+                    else "Falha no processamento; verifique diagnóstico"
                 )
-                job.scheduled_at = utcnow() + retry_delay(job.attempts)
-                job.finished_at = utcnow() if job.status == "failed" else None
-                job.lease_until = None
-                session.add(
-                    JobEvent(
-                        job_id=job_id,
-                        status=job.status,
-                        payload={"error_code": str(code)},
-                    )
-                )
-                if job.asset_id:
-                    asset = await session.get(Asset, job.asset_id)
-                    if asset:
-                        asset.last_error = str(code)
-                        if job.job_type in ("joytag_inference", "embedding_inference"):
-                            settings = await effective_settings(session)
-                            if settings.gpu_enabled:
-                                from photointel.services.inference import (
-                                    record_inference_failure,
-                                )
+            }
+            job.scheduled_at = utcnow() + retry_delay(job.attempts, jitter=True)
+            job.finished_at = utcnow() if job.status == "failed" else None
+            job.lease_until = None
 
-                                await record_inference_failure(
-                                    session,
-                                    asset.id,
-                                    settings,
-                                    str(code),
-                                )
-                if job.job_type == "icloud_discovery":
-                    session.add(
-                        IngestionRun(
-                            job_id=job.id,
-                            status="failed",
-                            finished_at=utcnow(),
-                            failed=1,
-                            error=str(code),
+            if job.asset_id and not busy:
+                asset = await session.get(Asset, job.asset_id, with_for_update=True)
+                expected = job.payload.get("content_revision")
+                if asset and (expected is None or expected == asset.content_revision):
+                    asset.last_error = str(code)
+                    if job.job_type in ("media_download", "metadata_extract"):
+                        from photointel.services.discovery import failure_category
+
+                        manifest = await session.scalar(
+                            select(DiscoveryManifest)
+                            .where(
+                                DiscoveryManifest.asset_id == asset.id,
+                                DiscoveryManifest.content_revision
+                                == asset.content_revision,
+                            )
+                            .with_for_update()
                         )
+                        if manifest and manifest.status != "completed":
+                            category = failure_category(str(code))
+                            permanent = category in {
+                                "corrupt_media",
+                                "invalid_representation",
+                                "permanent_failure",
+                            }
+                            exhausted = (
+                                job.status == "failed"
+                                or manifest.attempts >= manifest.maximum_attempts
+                            )
+                            state = (
+                                "quarantined" if permanent or exhausted else "retrying"
+                            )
+                            manifest.status = asset.ingestion_status = state
+                            manifest.failure_category = category
+                            manifest.last_error = str(code)[:64]
+                            if state == "quarantined":
+                                job.status = "failed"
+                                job.finished_at = utcnow()
+                        elif job.job_type == "media_download":
+                            asset.ingestion_status = (
+                                "quarantined" if job.status == "failed" else "retrying"
+                            )
+                    if job.job_type in ("joytag_inference", "embedding_inference"):
+                        from photointel.services.inference import record_inference_failure
+
+                        await record_inference_failure(
+                            session,
+                            asset.id,
+                            await effective_settings(session),
+                            str(code),
+                        )
+            session.add(
+                JobEvent(
+                    job_id=job.id, status=job.status, payload={"error_code": str(code)}
+                )
+            )
+        for batch_id in sorted(
+            {job.batch_id for job in changed if job.batch_id}, key=str
+        ):
+            await refresh_batch(session, batch_id)
+        await session.commit()
+
+
+async def _finish_jobs(
+    session: AsyncSession,
+    jobs: list[Job],
+    result: dict[str, Any],
+    started: float,
+    skipped: dict[UUID, str | None] | None = None,
+) -> None:
+    fences = [(job.id, str(job.worker_id), job.fence_token) for job in jobs]
+    await assert_job_fences(session, fences)
+    leader = jobs[0].id
+    for job in jobs:
+        reason = (skipped or {}).get(job.id)
+        job.status, job.finished_at, job.lease_until = "completed", utcnow(), None
+        job.error_code = job.error_details = None
+        job.progress = (
+            {"skipped": True, "reason": reason}
+            if reason
+            else {**result, "runtime_ms": round((time.monotonic() - started) * 1000, 2)}
+            if job.id == leader
+            else {"batch_metrics_job_id": str(leader)}
+        )
+        session.add(
+            JobEvent(
+                job_id=job.id,
+                status="completed",
+                payload={
+                    "runtime_ms": round((time.monotonic() - started) * 1000, 2),
+                    "skipped": bool(reason),
+                },
+            )
+        )
+    await session.flush()
+    for batch_id in sorted({job.batch_id for job in jobs if job.batch_id}, key=str):
+        await refresh_batch(session, batch_id)
+    await session.commit()
+
+
+async def execute_job(job_id: UUID, worker_id: str) -> None:
+    """Prepare/commit → external I/O → revision/fence checked short commit."""
+    await _execute_claimed([job_id], worker_id, batch=False)
+
+
+async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) -> None:
+    stopped = asyncio.Event()
+    heartbeat_task: asyncio.Task[None] | None = None
+    fences: list[JobFence] = []
+    leases: list[tuple[str, int]] = []
+    started = time.monotonic()
+    try:
+        async with SessionLocal() as session:
+            jobs = list(
+                (
+                    await session.scalars(
+                        select(Job)
+                        .where(
+                            Job.id.in_(job_ids),
+                            Job.worker_id == worker_id,
+                            Job.status.in_(ACTIVE),
+                            Job.lease_until > utcnow(),
+                        )
+                        .order_by(Job.id)
                     )
-                await refresh_batch(session, job.batch_id)
-                await session.commit()
+                ).all()
+            )
+            if len(jobs) != len(job_ids):
+                return
+            fences = [(job.id, worker_id, job.fence_token) for job in jobs]
+            leases = await _acquire_asset_leases(session, jobs, worker_id)
+            await session.commit()
+            heartbeat_task = asyncio.create_task(
+                _heartbeat_many_loop(
+                    job_ids,
+                    worker_id,
+                    stopped,
+                    {job.id: job.fence_token for job in jobs},
+                    leases,
+                )
+            )
+            skipped: dict[UUID, str | None] = {}
+            if batch:
+                from photointel.services.inference import infer_assets
+
+                assets = {
+                    asset.id: asset
+                    for asset in (
+                        await session.scalars(
+                            select(Asset).where(
+                                Asset.id.in_(
+                                    [job.asset_id for job in jobs if job.asset_id]
+                                )
+                            )
+                        )
+                    ).all()
+                }
+                if any(job.asset_id not in assets for job in jobs):
+                    raise AppError(ErrorCode.NOT_FOUND, "Ativo não encontrado", 404)
+                skipped = {
+                    job.id: superseded_reason(
+                        job.payload,
+                        assets[job.asset_id].content_revision,
+                        assets[job.asset_id].representation_revision,
+                    )
+                    for job in jobs
+                    if job.asset_id
+                }
+                eligible = [job for job in jobs if not skipped.get(job.id)]
+                ids = sorted({job.asset_id for job in eligible if job.asset_id}, key=str)
+                result = (
+                    await infer_assets(
+                        session,
+                        ids,
+                        await effective_settings(session),
+                        job_fences=fences,
+                        force_asset_ids={
+                            job.asset_id
+                            for job in eligible
+                            if job.asset_id and job.payload.get("force")
+                        },
+                    )
+                    if ids
+                    else {"completed": 0, "skipped": len(jobs)}
+                )
+            else:
+                result = await _dispatch(session, jobs[0])
+            await _finish_jobs(session, jobs, result, started, skipped)
+    except AssetBusy as exc:
+        await _fail_jobs(fences, exc, busy=True)
+    except (LeaseLost, asyncio.CancelledError):
+        logger.info("worker_lease_released", jobs=len(job_ids))
+        # SIGTERM/cancellation leaves the durable claim recoverable on expiry.
+    except Exception as exc:
+        await _fail_jobs(fences, exc)
         logger.warning(
-            "worker_job_failed",
-            job_id=str(job_id),
-            error_code=str(code),
-            exception_type=type(exc).__name__,
+            "worker_job_failed", jobs=len(job_ids), exception_type=type(exc).__name__
         )
     finally:
         stopped.set()
-        heartbeat_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await heartbeat_task
+        if heartbeat_task:
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
+        for key, token in leases:
+            with contextlib.suppress(Exception):
+                async with SessionLocal() as session, session.begin():
+                    await release_lease(session, key, worker_id, token)
 
 
 async def run_worker() -> None:
@@ -452,180 +625,8 @@ async def run_worker() -> None:
 
 
 async def execute_inference_batch(job_ids: list[UUID], worker_id: str) -> None:
-    """Run many durable GPU jobs in one actual model batch, fenced as one transaction."""
-    from photointel.services.inference import infer_assets
-
-    stopped = asyncio.Event()
-    heartbeat_task = asyncio.create_task(
-        _heartbeat_many_loop(job_ids, worker_id, stopped),
-    )
-    started = time.monotonic()
-    try:
-        async with SessionLocal() as session:
-            jobs = list(
-                (
-                    await session.scalars(
-                        select(Job)
-                        .where(
-                            Job.id.in_(job_ids),
-                            Job.worker_id == worker_id,
-                            Job.status.in_(ACTIVE),
-                            Job.lease_until > utcnow(),
-                        )
-                        .order_by(Job.asset_id)
-                    )
-                ).all()
-            )
-            if len(jobs) != len(job_ids):
-                raise LeaseLost()
-            if any(job.asset_id is None for job in jobs):
-                raise AppError(ErrorCode.INVALID_REQUEST, "Inferência exige asset_id")
-            asset_ids = sorted({job.asset_id for job in jobs if job.asset_id}, key=str)
-            for asset_id in asset_ids:
-                await session.execute(
-                    text("SELECT pg_advisory_xact_lock(:key)"),
-                    {
-                        "key": int.from_bytes(asset_id.bytes[:8], "big", signed=True),
-                    },
-                )
-            assets = {
-                asset.id: asset
-                for asset in (
-                    await session.scalars(
-                        select(Asset).where(Asset.id.in_(asset_ids)),
-                    )
-                ).all()
-            }
-            if len(assets) != len(asset_ids):
-                raise AppError(ErrorCode.NOT_FOUND, "Ativo não encontrado", 404)
-            skipped = {
-                job.id: superseded_reason(
-                    job.payload,
-                    assets[job.asset_id].content_revision,
-                    assets[job.asset_id].representation_revision,
-                )
-                for job in jobs
-                if job.asset_id
-            }
-            eligible = [job for job in jobs if job.asset_id and not skipped.get(job.id)]
-            eligible_ids = sorted(
-                {job.asset_id for job in eligible if job.asset_id},
-                key=str,
-            )
-            result = (
-                await infer_assets(
-                    session,
-                    eligible_ids,
-                    await effective_settings(session),
-                    force_asset_ids={
-                        job.asset_id
-                        for job in eligible
-                        if job.asset_id and job.payload.get("force")
-                    },
-                )
-                if eligible_ids
-                else {"completed": 0, "skipped": len(jobs)}
-            )
-            await session.flush()
-            fenced = (
-                await session.execute(
-                    update(Job)
-                    .where(
-                        Job.id.in_(job_ids),
-                        Job.worker_id == worker_id,
-                        Job.status.in_(ACTIVE),
-                        Job.lease_until > utcnow(),
-                    )
-                    .values(status="completed", lease_until=None, finished_at=utcnow())
-                    .returning(Job.id)
-                )
-            ).all()
-            if len(fenced) != len(jobs):
-                raise LeaseLost()
-            leader_id = eligible[0].id if eligible else None
-            for job in jobs:
-                if skipped.get(job.id):
-                    job.progress = {"skipped": True, "reason": skipped[job.id]}
-                elif job.id == leader_id:
-                    job.progress = {
-                        **result,
-                        "batch_assets": len(eligible_ids),
-                        "runtime_ms": round((time.monotonic() - started) * 1000, 2),
-                    }
-                else:
-                    job.progress = {
-                        "batch_metrics_job_id": str(leader_id),
-                        "batch_assets": len(eligible_ids),
-                    }
-                session.add(
-                    JobEvent(
-                        job_id=job.id,
-                        status="completed",
-                        payload={
-                            "batch_assets": len(eligible_ids),
-                            "skipped": bool(skipped.get(job.id)),
-                        },
-                    )
-                )
-            for batch_id in sorted({job.batch_id for job in jobs}, key=str):
-                await refresh_batch(session, batch_id)
-            await session.commit()
-    except (LeaseLost, asyncio.CancelledError):
-        logger.info("worker_batch_lease_released", jobs=len(job_ids))
-    except Exception as exc:
-        code = exc.code if isinstance(exc, AppError) else str(ErrorCode.INFERENCE_FAILED)
-        async with SessionLocal() as session:
-            jobs = list(
-                (
-                    await session.scalars(
-                        select(Job)
-                        .where(
-                            Job.id.in_(job_ids),
-                            Job.worker_id == worker_id,
-                            Job.status.in_(ACTIVE),
-                            Job.lease_until > utcnow(),
-                        )
-                        .with_for_update()
-                    )
-                ).all()
-            )
-            for job in jobs:
-                job.status = (
-                    "failed" if job.attempts >= job.maximum_attempts else "retrying"
-                )
-                job.error_code = code
-                job.error_details = {
-                    "message": (
-                        "Inferência indisponível; verifique configuração ou orçamento"
-                    ),
-                }
-                job.scheduled_at = utcnow() + retry_delay(job.attempts)
-                job.finished_at = utcnow() if job.status == "failed" else None
-                job.lease_until = None
-                session.add(
-                    JobEvent(
-                        job_id=job.id, status=job.status, payload={"error_code": code}
-                    )
-                )
-            settings = await effective_settings(session)
-            if settings.gpu_enabled:
-                from photointel.services.inference import record_inference_failure
-
-                for asset_id in {job.asset_id for job in jobs if job.asset_id}:
-                    await record_inference_failure(session, asset_id, settings, str(code))
-            for batch_id in sorted({job.batch_id for job in jobs}, key=str):
-                await refresh_batch(session, batch_id)
-            await session.commit()
-        logger.warning(
-            "worker_gpu_batch_failed",
-            jobs=len(job_ids),
-            error_code=code,
-            exception_type=type(exc).__name__,
-        )
-    finally:
-        stopped.set()
-        heartbeat_task.cancel()
-        await asyncio.gather(heartbeat_task, return_exceptions=True)
+    """One real GPU batch; no connection or row lock remains held during inference."""
+    await _execute_claimed(job_ids, worker_id, batch=True)
 
 
 if __name__ == "__main__":

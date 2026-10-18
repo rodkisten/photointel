@@ -22,5 +22,7 @@ jobs:
           python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
           python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
+      - name: Validate fixed-origin Cloudflare relay
+        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
       - uses: actions/upload-artifact@v4
         with: {name: gcp-offline-definitions, path: reports/gcp-*}

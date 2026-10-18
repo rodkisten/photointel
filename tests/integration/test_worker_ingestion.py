@@ -241,6 +241,9 @@ async def test_preview_rebuild_preserves_source_identity_after_cache_retirement(
         force=True,
     )
     assert rebuilt["source"] == "retained_preview"
+    # Re-encoding a retained preview may produce different bytes. The immutable
+    # object key changes while the source identity and resource revision remain.
+    await session.refresh(small)
     assert storage.exists(small.object_key)
     assert asset.sha256 == source_hash and asset.representation_revision == revision
     with pytest.raises(AppError, match="Cache retirado"):

@@ -71,7 +71,7 @@ identidades de runtime.
 | Identidade | Acesso |
 |---|---|
 | `photointel-api` | Secrets necessários; `run.invoker` somente nos quatro Jobs permitidos |
-| `photointel-jobs` | Secrets de R2, sessão e inferência; sem DDL/migration credencial |
+| `photointel-jobs` | Secrets R2/sessão/inferência e invocação dos quatro Jobs; sem credencial DDL |
 | `photointel-migrate` | Somente as duas referências de banco; sem R2 ou sessão Apple |
 | `photointel-scheduler` | `run.invoker` somente discover, worker e maintenance |
 | `photointel-builder` | Escrita no repositório de imagens, leitura do staging e logs |
@@ -236,3 +236,9 @@ interrompa rollout e siga o runbook de recuperação antes de repetir.
 A implantação real permanece pendente de autorização de cobrança, contas,
 credenciais, quotas e gates físicos. Uma definição renderizada ou um teste
 mockado não comprova Cloud Run, Neon, R2, Apple ou Modal operacionais.
+
+Os identificadores públicos de service token do Bridge podem ser informados em
+`extra_environment.ACCESS_BRIDGE_SERVICE_TOKENS` como string JSON de uma lista,
+e a audience própria em `ACCESS_BRIDGE_AUDIENCE`. Isso é uma allowlist de client
+IDs, não de client secrets. Os segredos Access do dispositivo ficam no Keychain
+do Pyto. Não envie service-token secrets ao frontend ou à configuração pública.

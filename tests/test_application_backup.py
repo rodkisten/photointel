@@ -2,6 +2,7 @@
 
 import base64
 import io
+import json
 import os
 from pathlib import Path
 
@@ -134,9 +135,46 @@ def test_key_requires_32_bytes_and_private_permissions(tmp_path: Path):
 
 def test_pg_tools_receive_credentials_through_environment_not_argv():
     environment = postgres_environment(
-        "postgresql+asyncpg://user:secret@localhost:5433/db?ssl=require"
+        "postgresql+asyncpg://user:secret@localhost:5433/db?ssl=require&channel_binding=require"
     )
     assert environment["PGPASSWORD"] == "secret"
     assert environment["PGSSLMODE"] == "require"
     assert environment["PGPORT"] == "5433"
+    assert environment["PGCHANNELBINDING"] == "require"
     assert "ICLOUD_ACCOUNT" not in environment
+
+
+def test_verify_cli_emits_matching_content_receipt_without_private_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    from photointel.services.backup import main
+
+    directory = tmp_path / "backup"
+    key, _ = create_fixture(directory)
+    key_path = tmp_path / "key"
+    key_path.write_bytes(base64.b64encode(key))
+    key_path.chmod(0o600)
+    receipt_path = directory / "verification.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "backup",
+            "verify",
+            "--directory",
+            str(directory),
+            "--key-file",
+            str(key_path),
+            "--verification-receipt",
+            str(receipt_path),
+        ],
+    )
+    main()
+    result = json.loads(capsys.readouterr().out)
+    receipt = json.loads(receipt_path.read_text())
+    header = json.loads((directory / "backup.json").read_text())
+    assert result["status"] == receipt["status"] == "verified"
+    assert receipt["verification_kind"] == "authenticated-content-integrity"
+    assert receipt["backup_id"] == header["backup_id"]
+    assert receipt["manifest_sha256"] == header["manifest_sha256"]
+    assert receipt_path.stat().st_mode & 0o077 == 0
+    assert "preview.webp" not in receipt_path.read_text()

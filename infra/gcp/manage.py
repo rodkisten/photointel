@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import json
 import re
 import shlex
@@ -118,6 +119,9 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
     ) and (production or "REPLACE_GIT_SHA" not in image):
         raise ConfigurationError("Image must use a SHA-256 digest or full Git commit tag")
     release_sha = config.get("release_git_sha") or image.rsplit(":", 1)[-1]
+    image_tag = image.rsplit(":", 1)[-1]
+    if re.fullmatch(r"[a-f0-9]{40}", image_tag) and release_sha != image_tag:
+        raise ConfigurationError("Release SHA must match the image commit tag")
     if production and not re.fullmatch(r"[a-f0-9]{40}", release_sha):
         raise ConfigurationError(
             "Digest images require release_git_sha with source commit"
@@ -187,11 +191,30 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
     ):
         raise ConfigurationError("Invalid extra environment; credentials require secrets")
     if any(
-        re.search(r"PASSWORD|CREDENTIAL|SECRET|TOKEN|PRIVATE_KEY", key) for key in extra
+        re.search(r"PASSWORD|CREDENTIAL|SECRET|TOKEN|PRIVATE_KEY", key)
+        and key != "ACCESS_BRIDGE_SERVICE_TOKENS"
+        for key in extra
     ):
         raise ConfigurationError(
             "Secret-looking environment values must use Secret Manager"
         )
+    if "ACCESS_BRIDGE_SERVICE_TOKENS" in extra:
+        try:
+            identifiers = json.loads(extra["ACCESS_BRIDGE_SERVICE_TOKENS"])
+        except json.JSONDecodeError:
+            raise ConfigurationError(
+                "Bridge service identities must be a JSON list"
+            ) from None
+        if (
+            not isinstance(identifiers, list)
+            or not 1 <= len(identifiers) <= 100
+            or any(
+                not isinstance(value, str)
+                or not re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", value)
+                for value in identifiers
+            )
+        ):
+            raise ConfigurationError("Invalid public Bridge service client identifiers")
     for name in ("enable_gpu", "enable_icloud"):
         if type(config.get(name, False)) is not bool:
             raise ConfigurationError(f"{name} must be an explicit boolean")
@@ -264,7 +287,7 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
         "ICLOUD_SESSION_BACKEND": "encrypted_object",
         "GCP_PROJECT_ID": config["project_id"],
         "GCP_REGION": config["region"],
-        "GCP_JOB_DISPATCH_ENABLED": "true" if mode == "api" else "false",
+        "GCP_JOB_DISPATCH_ENABLED": "false" if mode == "migrate" else "true",
     }
     values.update(config.get("extra_environment", {}))
     entries: list[dict[str, Any]] = [
@@ -618,7 +641,7 @@ def deploy_jobs(runner: Runner, directory: Path) -> None:
         # No runtime identity may invoke migration or change job overrides.
         if mode == "migrate":
             continue
-        accounts = [identity(config, "api")]
+        accounts = [identity(config, "api"), identity(config, "jobs")]
         if mode in SCHEDULED:
             accounts.append(identity(config, "scheduler"))
         for account in accounts:
@@ -767,6 +790,15 @@ def verify_backup_receipt(directory: Path, receipt_path: Path) -> None:
         raise ConfigurationError("Backup header is missing or too large")
     if not receipt_path.is_file() or receipt_path.stat().st_size > 65536:
         raise ConfigurationError("Backup verification receipt is missing or too large")
+    manifest_path = directory / "manifest.enc"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ConfigurationError("Encrypted backup manifest is missing")
+    if manifest_path.stat().st_size > 256 * 1024 * 1024 + 28:
+        raise ConfigurationError(
+            "Encrypted backup manifest exceeds the backup format limit"
+        )
+    with manifest_path.open("rb") as handle:
+        manifest_digest = hashlib.file_digest(handle, "sha256").hexdigest()
     header = json.loads(header_path.read_text())
     receipt = json.loads(receipt_path.read_text())
     if (
@@ -774,6 +806,7 @@ def verify_backup_receipt(directory: Path, receipt_path: Path) -> None:
         or not (directory / "manifest.enc").is_file()
         or not re.fullmatch(r"[a-f0-9]{32}", header.get("backup_id", ""))
         or not re.fullmatch(r"[a-f0-9]{64}", header.get("manifest_sha256", ""))
+        or manifest_digest != header.get("manifest_sha256")
         or receipt.get("backup_id") != header["backup_id"]
         or receipt.get("manifest_sha256") != header["manifest_sha256"]
         or receipt.get("verification_kind") != "authenticated-content-integrity"

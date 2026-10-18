@@ -212,6 +212,10 @@ def postgres_environment(url: str) -> dict[str, str]:
     environment["PGSSLMODE"] = str(
         parsed.query.get("sslmode", parsed.query.get("ssl", "prefer"))
     )
+    if "channel_binding" in parsed.query:
+        environment["PGCHANNELBINDING"] = str(parsed.query["channel_binding"])
+    if "sslrootcert" in parsed.query:
+        environment["PGSSLROOTCERT"] = str(parsed.query["sslrootcert"])
     return environment
 
 
@@ -470,7 +474,10 @@ def restore_backup(
         if not entry["name"].startswith("objects/"):
             continue
         object_key = validate_key(entry["metadata"]["object_key"])
-        # Media inputs are capped by the existing storage adapter; backup is chunked.
+        # Do not let a malformed object entry bypass the adapter's memory bound.
+        maximum = getattr(storage, "max_read_bytes", 20 * 1024 * 1024)
+        if not isinstance(entry["bytes"], int) or not 0 <= entry["bytes"] <= maximum:
+            raise BackupError("Objeto excede o limite configurado para restauração")
         content = b"".join(reader.chunks(entry))
         if storage.exists(object_key):
             if hashlib.sha256(storage.get(object_key)).hexdigest() != entry["sha256"]:

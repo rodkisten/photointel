@@ -115,6 +115,8 @@ jobs:
       - run: uv run alembic -c infra/migrations/alembic.ini upgrade head
       - name: Verify dump and restore using isolated synthetic databases
         run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: Verify encrypted PostgreSQL and private image-content restore
+        run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
       - run: uv run pytest -m integration --junitxml=reports/integration.xml
       - uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}

@@ -1,6 +1,7 @@
 """Durable PostgreSQL jobs: transactional claim, leases, fences, and replay events."""
 
 from datetime import timedelta
+from random import uniform
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -70,8 +71,9 @@ async def enqueue_job(
     return job
 
 
-def retry_delay(attempts: int) -> timedelta:
-    return timedelta(seconds=min(3600, 5 * 2 ** min(max(0, attempts - 1), 10)))
+def retry_delay(attempts: int, *, jitter: bool = False) -> timedelta:
+    seconds = min(3600, 5 * 2 ** min(max(0, attempts - 1), 10))
+    return timedelta(seconds=seconds * uniform(0.75, 1.0) if jitter else seconds)
 
 
 async def recover_stale_jobs(session: AsyncSession, limit: int = 100) -> int:
@@ -115,6 +117,7 @@ async def claim_jobs(
     *,
     job_types: tuple[str, ...] | None = None,
     exclude_types: tuple[str, ...] = (),
+    payload_mode: str | None = None,
 ) -> list[Job]:
     await recover_stale_jobs(session)
     paused_batch = exists(
@@ -129,6 +132,12 @@ async def claim_jobs(
         Job.attempts < Job.maximum_attempts,
         ~paused_batch,
     ]
+    if payload_mode is not None:
+        from sqlalchemy import func
+
+        filters.append(
+            func.coalesce(Job.payload["mode"].as_string(), "incremental") == payload_mode
+        )
     if job_types:
         filters.append(Job.job_type.in_(job_types))
     if exclude_types:
@@ -148,6 +157,7 @@ async def claim_jobs(
         job.status = "running"
         job.worker_id = worker_id
         job.attempts += 1
+        job.fence_token += 1
         job.started_at = job.started_at or utcnow()
         job.heartbeat_at = utcnow()
         job.lease_until = utcnow() + timedelta(seconds=get_settings().job_lease_seconds)
@@ -163,7 +173,32 @@ async def heartbeat_many(
     session: AsyncSession,
     job_ids: list[UUID],
     worker_id: str,
+    fence_tokens: dict[UUID, int] | None = None,
 ) -> int:
+    if fence_tokens is not None:
+        renewed = 0
+        for job_id in job_ids:
+            token = fence_tokens.get(job_id)
+            if token is None:
+                continue
+            row = await session.scalar(
+                update(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.worker_id == worker_id,
+                    Job.fence_token == token,
+                    Job.status.in_(ACTIVE),
+                    Job.lease_until > utcnow(),
+                )
+                .values(
+                    heartbeat_at=utcnow(),
+                    lease_until=utcnow()
+                    + timedelta(seconds=get_settings().job_lease_seconds),
+                )
+                .returning(Job.id)
+            )
+            renewed += int(row is not None)
+        return renewed
     if not job_ids:
         return 0
     result = await session.execute(

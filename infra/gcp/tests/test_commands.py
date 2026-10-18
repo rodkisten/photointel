@@ -2,6 +2,7 @@
 
 import contextlib
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -108,7 +110,7 @@ class CloudRunCommandsTests(unittest.TestCase):
             for line in output.getvalue().splitlines()
             if "add-iam-policy-binding" in line
         ]
-        self.assertEqual(len(bindings), 7)
+        self.assertEqual(len(bindings), 11)
         self.assertTrue(all("roles/run.invoker" in line for line in bindings))
         self.assertTrue(all("photointel-migrate" not in line for line in bindings))
         self.assertTrue(
@@ -189,6 +191,53 @@ class CloudRunCommandsTests(unittest.TestCase):
             "infra/gcp/config.local.json",
         ):
             self.assertIn(pattern, ignore)
+
+    def test_public_bridge_identifiers_can_be_configured_without_client_secrets(
+        self,
+    ) -> None:
+        self.config["extra_environment"] = {
+            "ACCESS_BRIDGE_SERVICE_TOKENS": '["public-client-id.access"]',
+            "ACCESS_BRIDGE_AUDIENCE": "bridge-audience",
+        }
+        manage.validate(self.config)
+        self.config["extra_environment"]["ACCESS_BRIDGE_SERVICE_TOKENS"] = '"not-a-list"'
+        with self.assertRaises(manage.ConfigurationError):
+            manage.validate(self.config)
+
+    def test_migration_backup_receipt_binds_the_encrypted_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            encrypted = b"synthetic-test-ciphertext-not-personal-data"
+            (path / "manifest.enc").write_bytes(encrypted)
+            header = {
+                "format": "photointel-application-backup-v2",
+                "backup_id": "a" * 32,
+                "manifest_sha256": hashlib.sha256(encrypted).hexdigest(),
+            }
+            (path / "backup.json").write_text(json.dumps(header))
+            receipt = {
+                "verification_kind": "authenticated-content-integrity",
+                "backup_id": header["backup_id"],
+                "manifest_sha256": header["manifest_sha256"],
+                "status": "verified",
+                "verified_at": datetime.now(UTC).isoformat(),
+                "files_verified": 3,
+            }
+            receipt_path = path / "receipt.json"
+            receipt_path.write_text(json.dumps(receipt))
+            manage.verify_backup_receipt(path, receipt_path)
+            (path / "manifest.enc").write_bytes(b"tampered-ciphertext")
+            with self.assertRaises(manage.ConfigurationError):
+                manage.verify_backup_receipt(path, receipt_path)
+
+    def test_source_provenance_is_exposed_without_secret_payloads(self) -> None:
+        env = {
+            item["name"]: item.get("value")
+            for item in manage.environment(self.config, "api")
+        }
+        self.assertEqual(env["RELEASE_GIT_SHA"], "a" * 40)
+        self.assertEqual(env["EXECUTION_PLATFORM"], "cloud_run")
+        self.assertEqual(env["VERIFICATION_GATES_ENFORCED"], "true")
 
     def test_api_does_not_trust_forwarded_headers(self) -> None:
         entrypoint = (ROOT / "infra/gcp/entrypoint.py").read_text()

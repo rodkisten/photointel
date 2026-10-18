@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import contextlib
 import hashlib
 import math
 from collections.abc import AsyncIterator
@@ -9,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from pydantic import ValidationError
@@ -93,62 +94,94 @@ def validate_spending(settings: Settings, count: int) -> float:
 
 @asynccontextmanager
 async def inference_permit(settings: Settings, count: int) -> AsyncIterator[None]:
+    """Reserve budget and a renewable slot without retaining a SQL transaction."""
+    from photointel.services.leases import (
+        LeaseLost,
+        acquire_lease,
+        assert_lease,
+        release_lease,
+        renew_lease,
+    )
+
     cost = validate_spending(settings, count)
     if settings.inference_backend == "test":
         if settings.app_env != "test":
             raise AppError(
-                ErrorCode.FORBIDDEN,
-                "Adaptador sintético restrito a testes",
-                403,
+                ErrorCode.FORBIDDEN, "Adaptador sintético restrito a testes", 403
             )
         yield
         return
-    async with SessionLocal() as permit, permit.begin():
-        acquired = False
+    owner = f"inference:{uuid4()}"
+    key: str | None = None
+    token: int | None = None
+    duration = max(120, settings.job_lease_seconds)
+    async with SessionLocal() as session, session.begin():
         for slot in range(settings.max_gpu_concurrency):
-            acquired = bool(
-                await permit.scalar(
-                    text("SELECT pg_try_advisory_xact_lock(:slot)"),
-                    {"slot": 891000 + slot},
-                )
-            )
-            if acquired:
+            candidate = f"gpu-slot:{slot}"
+            acquired = await acquire_lease(session, candidate, owner, duration)
+            if acquired is not None:
+                key, token = candidate, acquired
                 break
-        if not acquired:
+        if key is None:
             raise AppError(
-                ErrorCode.GPU_UNAVAILABLE,
-                "Todos os slots de inferência ocupados",
-                503,
+                ErrorCode.GPU_UNAVAILABLE, "Todos os slots de inferência ocupados", 503
             )
-        # Separate transaction commits reservations before any paid external call.
-        # Reservations are never refunded automatically after an uncertain network error.
-        async with SessionLocal() as ledger, ledger.begin():
-            now = datetime.now(UTC)
-            keys = [
-                (f"gpu_budget_day_{now:%Y-%m-%d}", settings.gpu_daily_budget),
-                (f"gpu_budget_month_{now:%Y-%m}", settings.gpu_monthly_budget),
-            ]
-            for key, limit in sorted(keys):
-                await ledger.execute(
-                    insert(Setting).values(key=key, value=0).on_conflict_do_nothing(),
+        now = datetime.now(UTC)
+        keys = [
+            (f"gpu_budget_day_{now:%Y-%m-%d}", settings.gpu_daily_budget),
+            (f"gpu_budget_month_{now:%Y-%m}", settings.gpu_monthly_budget),
+        ]
+        for budget_key, limit in sorted(keys):
+            await session.execute(
+                insert(Setting).values(key=budget_key, value=0).on_conflict_do_nothing()
+            )
+            row = await session.scalar(
+                select(Setting).where(Setting.key == budget_key).with_for_update()
+            )
+            assert row is not None
+            reserved = float(row.value)
+            if reserved + cost > limit:
+                raise AppError(
+                    ErrorCode.GPU_UNAVAILABLE,
+                    "Orçamento estimado de inferência esgotado",
+                    409,
                 )
-                row = await ledger.scalar(
-                    select(Setting)
-                    .where(
-                        Setting.key == key,
-                    )
-                    .with_for_update()
-                )
-                assert row is not None
-                reserved = float(row.value)
-                if reserved + cost > limit:
-                    raise AppError(
-                        ErrorCode.GPU_UNAVAILABLE,
-                        "Orçamento estimado de inferência esgotado",
-                        409,
-                    )
-                row.value = reserved + cost
+            row.value = reserved + cost
+    assert key is not None and token is not None
+    stopped = asyncio.Event()
+    lost = asyncio.Event()
+
+    async def renew() -> None:
+        while not stopped.is_set():
+            try:
+                await asyncio.wait_for(stopped.wait(), max(1, duration / 3))
+                return
+            except TimeoutError:
+                pass
+            try:
+                async with SessionLocal() as session, session.begin():
+                    if not await renew_lease(session, key, owner, token, duration):
+                        lost.set()
+                        return
+            except Exception:
+                # An uncertain renewal cannot authorize a paid replacement slot.
+                lost.set()
+                return
+
+    heartbeat = asyncio.create_task(renew())
+    try:
         yield
+        if lost.is_set():
+            raise LeaseLost("Inference slot expired")
+        async with SessionLocal() as session, session.begin():
+            await assert_lease(session, key, owner, token)
+    finally:
+        stopped.set()
+        heartbeat.cancel()
+        await asyncio.gather(heartbeat, return_exceptions=True)
+        with contextlib.suppress(Exception):
+            async with SessionLocal() as session, session.begin():
+                await release_lease(session, key, owner, token)
 
 
 @lru_cache(maxsize=2)
@@ -578,6 +611,7 @@ async def infer_assets(
     *,
     force: bool = False,
     force_asset_ids: set[UUID] | None = None,
+    job_fences: list[tuple[UUID, str, int]] | None = None,
 ) -> dict[str, Any]:
     validate_spending(settings, len(asset_ids))
     if len(set(asset_ids)) != len(asset_ids):
@@ -634,6 +668,13 @@ async def infer_assets(
             )
         )
     ).all()
+    # Registry, idempotency checks and descriptors are committed before R2/Modal.
+    # A database connection is returned to the pool for the entire external stage.
+    expected_revisions = {
+        asset.id: (asset.content_revision, asset.representation_revision)
+        for asset in pending
+    }
+    await session.commit()
     storage = get_storage()
     inputs = []
     bytes_transferred = 0
@@ -691,6 +732,33 @@ async def infer_assets(
             "Resposta GPU contém ativos divergentes",
             502,
         )
+    from photointel.services.leases import assert_job_fences
+
+    if job_fences:
+        await assert_job_fences(session, job_fences)
+    # Re-read after I/O: an old result must never attach to a newer representation.
+    current_assets = list(
+        (
+            await session.scalars(
+                select(Asset)
+                .where(Asset.id.in_(list(expected_revisions)))
+                .order_by(Asset.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    if len(current_assets) != len(expected_revisions) or any(
+        expected_revisions[asset.id]
+        != (asset.content_revision, asset.representation_revision)
+        for asset in current_assets
+    ):
+        raise AppError(
+            ErrorCode.INFERENCE_FAILED,
+            "Representação mudou durante inferência; resultado descartado",
+            409,
+        )
+    pending = current_assets
     taxonomy_settings = {
         row.key: row.value
         for row in (
