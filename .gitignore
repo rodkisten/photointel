@@ -21,3 +21,7 @@ test-results/
 *.egg-info/
 .coverage
 htmlcov/
+*.tsbuildinfo
+# Local Cloudflare relay deployment configuration.
+infra/cloudflare/cloud-run-proxy/wrangler.toml
+infra/cloudflare/cloud-run-proxy/.wrangler/

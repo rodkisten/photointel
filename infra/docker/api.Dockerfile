@@ -27,4 +27,4 @@ ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
 USER 10001:10001
 EXPOSE 8000
 STOPSIGNAL SIGTERM
-CMD ["uvicorn", "photointel.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["sh", "infra/docker/start-api.sh"]
