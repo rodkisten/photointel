@@ -238,9 +238,15 @@ async def semantic_vector(
                 ErrorCode.NOT_FOUND, "Foto ainda não tem embedding compatível", 404
             )
         return [float(item) for item in vector], model
-    from photointel.services.inference import embed_text
+    from photointel.services.query_cache import cached_text_embedding
 
-    result = await embed_text(str(request.query), settings=settings)
+    # This path performs only reads. Return the connection before a cache wait or
+    # a potentially cold remote text encoder; preserve the loaded model values.
+    if session.new or session.dirty or session.deleted:
+        raise RuntimeError("Semantic search requires a read-only transaction")
+    session.expunge(model)
+    await session.rollback()
+    result = await cached_text_embedding(str(request.query), settings, model.id)
     if result.model_revision != model.revision:
         raise AppError(
             ErrorCode.INFERENCE_FAILED,
@@ -259,8 +265,21 @@ async def execute_search(session: AsyncSession, request: SearchRequest) -> Searc
     query = select(Asset)
     model_revision: str | None = None
     is_semantic = bool(request.query or request.source_asset_id)
+    semantic_warning: str | None = None
     if is_semantic:
-        vector, model = await semantic_vector(session, request)
+        try:
+            vector, model = await semantic_vector(session, request)
+        except AppError as exc:
+            if request.source_asset_id or exc.status_code not in {502, 503}:
+                raise
+            # Exact filters and ordinary catalog ordering remain useful during
+            # an inference outage. Never attach invented semantic distances.
+            semantic_warning = (
+                "Busca semântica indisponível. Os filtros exatos foram preservados; "
+                "tente novamente para ordenar por significado."
+            )
+            is_semantic = False
+    if is_semantic:
         distance = Embedding.vector.cosine_distance(vector)
         model_revision = model.revision
         query = query.add_columns(distance.label("distance")).join(
@@ -358,6 +377,11 @@ async def execute_search(session: AsyncSession, request: SearchRequest) -> Searc
         next_cursor=next_cursor,
         explanation={
             "semantic_query": request.query,
+            "semantic_status": "unavailable"
+            if semantic_warning
+            else ("available" if is_semantic else "not_requested"),
+            "semantic_warning": semantic_warning,
+            "semantic_retryable": semantic_warning is not None,
             "structured_filter": request.filter.model_dump(mode="json")
             if request.filter
             else None,

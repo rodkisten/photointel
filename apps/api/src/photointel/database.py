@@ -1,4 +1,4 @@
-"""Async database access; PostgreSQL owns durable state."""
+"""Short-lived PostgreSQL access, with explicit transaction-pooler support."""
 
 from collections.abc import AsyncIterator
 
@@ -6,18 +6,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 from photointel.config import get_settings
+from photointel.db_connection import (
+    database_connection_options,
+    database_engine_options,
+)
 
 
 class Base(DeclarativeBase):
     pass
 
 
+_settings = get_settings()
+_database_url, _connect_args = database_connection_options(_settings)
 engine = create_async_engine(
-    get_settings().database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=10,
-    pool_recycle=1800,
+    _database_url,
+    connect_args=_connect_args,
+    **database_engine_options(_settings),
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
