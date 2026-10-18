@@ -4,7 +4,7 @@ import asyncio
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy import delete, func, not_, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,6 +70,12 @@ from photointel.services.catalog import (
     get_asset,
     merge_tag_assertions,
     refresh_search_document,
+)
+from photointel.services.media_http import (
+    PrivateStreamingResponse,
+    matches_etag,
+    media_etag,
+    parse_range,
 )
 from photointel.services.search import execute_search, rejection_exists, sensitive_visible
 from photointel.storage import get_storage
@@ -267,6 +273,7 @@ async def asset_media(
     asset_id: UUID,
     variant: Literal["thumbnail_small", "thumbnail_medium", "preview_large"],
     session: Session,
+    request: Request,
 ) -> Response:
     asset = await get_asset(session, asset_id)
     resource = await session.scalar(
@@ -283,18 +290,48 @@ async def asset_media(
         raise AppError(
             ErrorCode.NOT_FOUND, "Prévia ainda indisponível; verifique os jobs", 404
         )
-    if (resource.byte_size or 0) > get_settings().media_max_bytes:
+    size = resource.byte_size or 0
+    if size > get_settings().media_max_bytes:
         raise AppError(ErrorCode.INVALID_REQUEST, "Prévia excede limite de mídia", 413)
-    data = await asyncio.to_thread(get_storage().get, resource.object_key)
-    if len(data) > get_settings().media_max_bytes:
-        raise AppError(ErrorCode.INVALID_REQUEST, "Prévia excede limite de mídia", 413)
-    return Response(
-        data,
-        media_type=resource.mime_type or "image/webp",
-        headers={
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-        },
+    key = resource.object_key
+    mime = resource.mime_type or "image/webp"
+    etag = media_etag(str(resource.id), resource.revision, resource.sha256)
+    # End the read transaction before opening R2 or streaming to a slow client.
+    await session.commit()
+    headers = {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "ETag": etag,
+        "Accept-Ranges": "bytes",
+        "Vary": "Cookie, Cf-Access-Jwt-Assertion",
+    }
+    if matches_etag(request.headers.get("if-none-match"), etag):
+        return Response(status_code=304, headers=headers)
+    requested_range = request.headers.get("range")
+    if request.headers.get("if-range") not in {None, etag}:
+        requested_range = None
+    try:
+        byte_range = parse_range(requested_range, size)
+    except AppError as exc:
+        if exc.status_code != 416:
+            raise
+        return Response(
+            status_code=416, headers={**headers, "Content-Range": f"bytes */{size}"}
+        )
+    stream = await asyncio.to_thread(get_storage().open_stream, key, byte_range)
+    if size and stream.length != (
+        byte_range[1] - byte_range[0] + 1 if byte_range else size
+    ):
+        stream.close()
+        raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Revisão de mídia inválida", 503)
+    headers["Content-Length"] = str(stream.length)
+    if byte_range:
+        headers["Content-Range"] = f"bytes {byte_range[0]}-{byte_range[1]}/{size}"
+    return PrivateStreamingResponse(
+        stream,
+        status_code=206 if byte_range else 200,
+        media_type=mime,
+        headers=headers,
     )
 
 

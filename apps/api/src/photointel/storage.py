@@ -3,10 +3,12 @@
 import os
 import re
 import tempfile
+from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 import boto3
@@ -16,10 +18,53 @@ from botocore.exceptions import BotoCoreError, ClientError
 from photointel.config import get_settings
 from photointel.errors import AppError, ErrorCode
 
+STREAM_CHUNK_BYTES = 64 * 1024
+
+
+class ReadableBody(Protocol):
+    def read(self, size: int = -1) -> bytes: ...
+    def close(self) -> None: ...
+
+
+@dataclass
+class ObjectStream:
+    """A bounded object body. Iteration closes the provider connection on errors."""
+
+    body: ReadableBody
+    length: int
+
+    def chunks(self) -> Iterator[bytes]:
+        remaining = self.length
+        try:
+            while remaining:
+                data = self.body.read(min(STREAM_CHUNK_BYTES, remaining))
+                if not data:
+                    raise AppError(
+                        ErrorCode.STORAGE_UNAVAILABLE, "Imagem incompleta", 503
+                    )
+                if len(data) > min(STREAM_CHUNK_BYTES, remaining):
+                    raise AppError(
+                        ErrorCode.STORAGE_UNAVAILABLE, "Resposta de imagem inválida", 503
+                    )
+                remaining -= len(data)
+                yield data
+        except (BotoCoreError, OSError):
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Transferência de mídia interrompida", 503
+            ) from None
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        self.body.close()
+
 
 class Storage(Protocol):
     def put(self, key: str, data: bytes, mime: str) -> None: ...
     def get(self, key: str) -> bytes: ...
+    def open_stream(
+        self, key: str, byte_range: tuple[int, int] | None = None
+    ) -> ObjectStream: ...
     def delete(self, key: str) -> None: ...
     def presign_get(self, key: str, expires: int = 60) -> str: ...
     def exists(self, key: str) -> bool: ...
@@ -91,6 +136,28 @@ class LocalStorage:
             return data
         except FileNotFoundError as exc:
             raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc
+
+    def open_stream(
+        self, key: str, byte_range: tuple[int, int] | None = None
+    ) -> ObjectStream:
+        try:
+            body = self._path(key).open("rb")
+        except FileNotFoundError as exc:
+            raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc
+        try:
+            size = os.fstat(body.fileno()).st_size
+            if size > self.max_read_bytes:
+                raise AppError(
+                    ErrorCode.STORAGE_UNAVAILABLE, "Imagem excede limite local", 503
+                )
+            start, end = byte_range if byte_range is not None else (0, size - 1)
+            if start < 0 or end >= size or end < start:
+                raise AppError(ErrorCode.INVALID_REQUEST, "Intervalo inválido", 416)
+            body.seek(start)
+            return ObjectStream(body, end - start + 1)
+        except Exception:
+            body.close()
+            raise
 
     def delete(self, key: str) -> None:
         self._path(key).unlink(missing_ok=True)
@@ -169,6 +236,48 @@ class S3Storage:
                     503,
                 )
             return data
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
+                raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
+        except BotoCoreError as exc:
+            raise AppError(
+                ErrorCode.STORAGE_UNAVAILABLE, "Armazenamento indisponível", 503
+            ) from exc
+
+    def open_stream(
+        self, key: str, byte_range: tuple[int, int] | None = None
+    ) -> ObjectStream:
+        arguments: dict[str, Any] = {"Bucket": self.bucket, "Key": validate_key(key)}
+        if byte_range is not None:
+            start, end = byte_range
+            if start < 0 or end < start or end >= self.max_read_bytes:
+                raise AppError(ErrorCode.INVALID_REQUEST, "Intervalo inválido", 416)
+            arguments["Range"] = f"bytes={start}-{end}"
+        try:
+            response = self.client.get_object(**arguments)
+            body = response["Body"]
+            length = response.get("ContentLength")
+            if (
+                not isinstance(length, int)
+                or not 0 < length <= self.max_read_bytes
+                or (byte_range is not None and length != end - start + 1)
+            ):
+                body.close()
+                raise AppError(
+                    ErrorCode.STORAGE_UNAVAILABLE, "Tamanho de imagem inválido", 503
+                )
+            # R2/S3 must honor a requested range, never pass a whole body as 206.
+            if byte_range is not None and not response.get("ContentRange", "").startswith(
+                f"bytes {start}-{end}/"
+            ):
+                body.close()
+                raise AppError(
+                    ErrorCode.STORAGE_UNAVAILABLE, "Intervalo de imagem inválido", 503
+                )
+            return ObjectStream(body, length)
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
                 raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc

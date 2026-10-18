@@ -74,7 +74,9 @@ async def fetch_keys(
         return keys
 
 
-async def validate_access_token(token: str, settings: Settings) -> Identity:
+async def validate_jwt(
+    token: str, settings: Settings, audience: str, required: list[str]
+) -> dict[str, Any]:
     if len(token) > 16384:
         raise AppError(ErrorCode.UNAUTHORIZED, "Token de autenticação inválido", 401)
     issuer = issuer_for(settings)
@@ -102,18 +104,64 @@ async def validate_access_token(token: str, settings: Settings) -> Identity:
             signing_key,
             algorithms=["RS256"],
             issuer=issuer,
-            audience=settings.access_audience,
-            options={"require": ["exp", "iat", "iss", "aud", "sub", "email"]},
+            audience=audience,
+            options={"require": required},
             leeway=10,
         )
-        email = str(claims["email"]).casefold()
-        if email not in {value.casefold() for value in settings.access_allowed_emails}:
-            raise AppError(ErrorCode.FORBIDDEN, "Identidade não autorizada", 403)
-        return Identity(subject=str(claims["sub"]), email=email)
+        return claims
     except (jwt.PyJWTError, KeyError, ValueError, TypeError) as exc:
         raise AppError(
             ErrorCode.UNAUTHORIZED, "Autenticação inválida ou expirada", 401
         ) from exc
+
+
+async def validate_access_token(token: str, settings: Settings) -> Identity:
+    claims = await validate_jwt(
+        token,
+        settings,
+        settings.access_audience,
+        ["exp", "iat", "iss", "aud", "sub", "email"],
+    )
+    email = claims.get("email")
+    subject = claims.get("sub")
+    if not isinstance(email, str) or not isinstance(subject, str) or not subject:
+        raise AppError(ErrorCode.UNAUTHORIZED, "Identidade Access inválida", 401)
+    if email.casefold() not in {
+        value.casefold() for value in settings.access_allowed_emails
+    }:
+        raise AppError(ErrorCode.FORBIDDEN, "Identidade não autorizada", 403)
+    return Identity(subject=subject, email=email.casefold())
+
+
+async def require_bridge_access(request: Request) -> None:
+    """Validate the edge service identity even through the direct Cloud Run URL.
+
+    A Cloudflare Service Auth JWT intentionally has no email and an empty sub.
+    Its exact common_name (Client ID) and separate application audience are scoped
+    to Bridge endpoints. The device Bearer or enrollment code is still required.
+    """
+    settings = get_settings()
+    check_origin(request, settings)
+    if settings.auth_mode == "local" and settings.app_env in {"development", "test"}:
+        return
+    # Production never assumes a Tunnel or Cloudflare network hop performed auth.
+    if not settings.access_bridge_audience or not settings.access_bridge_service_tokens:
+        raise AppError(ErrorCode.UNAUTHORIZED, "Access do Bridge não configurado", 503)
+    token = request.headers.get("cf-access-jwt-assertion")
+    if not token:
+        raise AppError(ErrorCode.UNAUTHORIZED, "Autenticação Access necessária", 401)
+    claims = await validate_jwt(
+        token,
+        settings,
+        settings.access_bridge_audience,
+        ["exp", "iat", "iss", "aud", "sub", "common_name"],
+    )
+    # mTLS identities also have common_name; they are not service-token identities.
+    common_name = claims.get("common_name")
+    if claims.get("sub") != "" or not isinstance(common_name, str):
+        raise AppError(ErrorCode.UNAUTHORIZED, "Token de serviço Access inválido", 401)
+    if common_name not in settings.access_bridge_service_tokens:
+        raise AppError(ErrorCode.FORBIDDEN, "Serviço Bridge não autorizado", 403)
 
 
 def check_origin(request: Request, settings: Settings) -> None:

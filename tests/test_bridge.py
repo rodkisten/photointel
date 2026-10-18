@@ -99,3 +99,14 @@ def test_transport_retries_only_idempotent_paths(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(BridgeError):
         client.request("POST", "/v1/bridge/enroll", {})
     assert len(attempts) == 1
+
+
+def test_keyword_symbol_presence_cannot_enable_unverified_native_writes() -> None:
+    from bridges.pyto.bridge import keyword_api_probe
+
+    probe = keyword_api_probe()
+    assert probe["documented_ios_version"] == "27.0"
+    assert probe["native_write_verified"] is False
+    caps = PhotoKitReader().capabilities()
+    assert caps["keywords_write"] is False
+    assert caps["keywords_read"] is False

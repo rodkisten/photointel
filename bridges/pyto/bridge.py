@@ -405,6 +405,52 @@ class UnavailableKeywordWriter:
         )
 
 
+def keyword_api_probe() -> dict[str, Any]:
+    """Observe public runtime symbols without loading media or changing PhotoKit.
+
+    Presence is not a successful keyword read, write, or permission check. Apple's
+    documentation currently marks these APIs introduced in iOS 27.0. They may be
+    absent from the OS/framework bundled with a user's Pyto installation.
+    """
+    result: dict[str, Any] = {
+        "documented_ios_version": "27.0",
+        "extended_metadata_class": False,
+        "extended_metadata_accessor": False,
+        "add_keyword_selector": False,
+        "remove_keyword_selector": False,
+        "native_write_verified": False,
+    }
+    if sys.platform != "ios" and platform.system() != "Darwin":
+        result["runtime"] = "unavailable"
+        return result
+    try:
+        ctypes.CDLL("/System/Library/Frameworks/Photos.framework/Photos")
+        objc = ctypes.CDLL("/usr/lib/libobjc.A.dylib")
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.class_getInstanceMethod.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        objc.class_getInstanceMethod.restype = ctypes.c_void_p
+        result["extended_metadata_class"] = bool(
+            objc.objc_getClass(b"PHAssetExtendedMetadata")
+        )
+        for key, class_name, selector in [
+            ("extended_metadata_accessor", b"PHAsset", b"extendedMetadata"),
+            ("add_keyword_selector", b"PHAssetChangeRequest", b"addKeyword:"),
+            ("remove_keyword_selector", b"PHAssetChangeRequest", b"removeKeyword:"),
+        ]:
+            cls = objc.objc_getClass(class_name)
+            result[key] = bool(
+                cls and objc.class_getInstanceMethod(cls, objc.sel_registerName(selector))
+            )
+        result["runtime"] = "symbols_observed"
+    except (OSError, AttributeError, TypeError, ctypes.ArgumentError) as exc:
+        result["runtime"] = "unavailable"
+        result["error_type"] = type(exc).__name__
+    return result
+
+
 class PhotoKitReader:
     def __init__(self) -> None:
         self.error: str | None = None
@@ -485,7 +531,8 @@ class PhotoKitReader:
             "platform": platform.platform()[:128],
             "adapter": "pyto-readonly-v1",
             "reason": (
-                "Keywords PhotoKit Beta não validadas em Pyto. "
+                "Keywords documentadas para iOS 27.0; "
+                "leitura/escrita não validadas em Pyto. "
                 "Inventário usa somente APIs públicas estáveis."
             ),
         }
@@ -895,6 +942,7 @@ def main(argv: list[str] | None = None) -> int:
                 "enrolled": bool(bridge.config.get("device_id")),
                 "credential_storage": keychain_status,
                 "credential_storage_backend": "Security.framework",
+                "keyword_api_probe": keyword_api_probe(),
             }
         elif arguments.command == "capabilities":
             result = bridge.reader.capabilities()

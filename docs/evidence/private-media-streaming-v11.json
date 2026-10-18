@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "dataset": "procedural synthetic JPEG, 1920x1080, quality=85",
+  "source_bytes": 1569686,
+  "adapter": "LocalStorage; no live R2, Google Cloud or cellular measurement",
+  "stream_chunk_bytes": 65536,
+  "buffered": {
+    "requests": 10,
+    "bytes_read": 15696860,
+    "peak_python_allocated_bytes": 20978036,
+    "wall_seconds": 0.026497698999946806,
+    "last_sha256": "981000f6370a2d3b8f7a9327088736f6b6ed5be0c644af1cde236c5d469f062b"
+  },
+  "streamed": {
+    "requests": 10,
+    "bytes_read": 15696860,
+    "peak_python_allocated_bytes": 138396,
+    "wall_seconds": 0.014783860999955323,
+    "last_sha256": "981000f6370a2d3b8f7a9327088736f6b6ed5be0c644af1cde236c5d469f062b"
+  },
+  "cache_policy": "private, no-store; repeat-scroll bandwidth is not reduced",
+  "limitations": [
+    "Sequential local filesystem, no network concurrency or provider latency",
+    "tracemalloc reports Python allocations, not total process RSS",
+    "Object request counts are adapter calls, not measured R2 invoices",
+    "Conditional response avoidance is covered by HTTP regression tests"
+  ]
+}

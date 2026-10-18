@@ -238,3 +238,79 @@ e exige nova matrícula. Inventários e auditorias permanecem persistidos.
 exige revisão manual; `SYNC_VERIFICATION_FAILED` exige nova leitura e revisão.
 O Bridge não solicita senha Apple. O login icloudpd continua exclusivo do terminal
 seguro do servidor conforme `ICLOUD_SETUP.md`.
+
+## Auditoria v1.1: disponibilidade real de keywords
+
+Em 18/10/2026 foram consultados os documentos oficiais e seus metadados DocC.
+`PHAssetExtendedMetadata`, `PHAsset.extendedMetadata`, a propriedade `keywords`,
+`caption` e `PHAssetChangeRequest.addKeyword(_:)`/`removeKeyword(_:)` indicam
+**introducedAt 27.0** em iOS/iPadOS/macOS nas páginas consultadas. Isso descreve
+um SDK/OS específico; não comprova que o runtime do Pyto instalado no aparelho
+contenha essas APIs. Não foi executado teste nativo de leitura/escrita.
+
+Referências consultadas:
+
+- https://developer.apple.com/documentation/photos/phassetextendedmetadata
+- https://developer.apple.com/documentation/photos/phasset/extendedmetadata
+- https://developer.apple.com/documentation/photos/phassetextendedmetadata/keywords
+- https://developer.apple.com/documentation/photos/phassetextendedmetadata/caption
+- https://developer.apple.com/documentation/photos/phassetchangerequest/addkeyword(_:)
+- https://developer.apple.com/documentation/photos/phassetchangerequest/removekeyword(_:)
+- https://developer.apple.com/documentation/photos/phcloudidentifier
+
+`doctor` inclui `keyword_api_probe`: usa as APIs C públicas do runtime Objective-C
+para observar a classe `PHAssetExtendedMetadata` e os selectors documentados
+`extendedMetadata`, `addKeyword:` e `removeKeyword:`. Não instancia mudança,
+não escreve keywords e não usa KVC privado. Ausência de classe/selector é
+reportada. Presença de todos continua com `native_write_verified=false`:
+a permissão, leitura, adaptação Rubicon e confirmação precisam de teste real.
+`capabilities` continua declarando `keywords_read=false`, `keywords_write=false`.
+O inventário de dados públicos das fotos funciona independentemente disso.
+
+### Extensão nativa necessária quando Pyto não oferece o runtime
+
+Uma implementação Swift opcional precisará de um SDK que realmente inclua
+as APIs acima e de verificação de disponibilidade em execução. O adaptador deve:
+
+1. Solicitar autorização `.readWrite` com `PHPhotoLibrary`, tratar acesso limitado
+   e buscar apenas o `PHAsset` de identidade mapeada/confirmada pelo usuário.
+2. Ler `PHAsset.extendedMetadata.keywords` usando API pública disponível, montar
+   a revisão do snapshot e comparar a revisão aprovada no backend.
+3. Criar `PHAssetChangeRequest` somente dentro do bloco `performChanges`, aplicar
+   `addKeyword`/`removeKeyword` exclusivamente ao delta aprovado; remover somente
+   keywords comprovadamente gerenciadas e explicitamente autorizadas.
+4. Refazer a leitura do mesmo asset, verificar identidade + revisão + conjunto
+   final e enviar o recibo idempotente com lease/fencing do protocolo existente.
+5. Manter `awaiting_cloud_confirmation` após read-back local. Confirmar iCloud
+   separadamente antes de marcar `completed`; nunca presumir propagação por
+   uma chamada aceita ou por presença de `PHCloudIdentifier`.
+
+Isso exige compilação/assinatura nativa e hardware compatível; não é requisito
+para catálogo, ingestão, inferência ou pesquisa cloud. Nenhum stub de escrita
+é apresentado como funcional. No Pyto atual, operações ficam pendentes ou
+unsupported com `PHOTOKIT_WRITE_UNAVAILABLE`.
+
+### Protocolo de teste: exatamente uma fotografia
+
+Registre SHA da release, versão do OS/SDK, versão Pyto/adaptador e um ID interno
+sem exportar a imagem. Escolha manualmente uma foto de teste autorizada, confira
+nome/data/dimensões na tela e confirme correspondência única; semelhantes não
+servem como prova de identidade. Leia keywords existentes e salve a revisão.
+Solicite prévia com **uma** keyword inofensiva nova, `single_asset_test=true`,
+aprove explicitamente e mantenha escrita em lote desativada. Execute somente o
+delta, refaça leitura e compare a identidade e todas as keywords preexistentes.
+Conferir no app Fotos e, depois, em outra visualização sincronizada do iCloud
+é uma etapa adicional, não uma consequência automática do read-back.
+Se a leitura, identidade, disponibilidade ou revisão falhar, interrompa sem
+escrever nem confirmar sucesso. Remoção da keyword de teste exige uma nova
+prévia/ aprovação e prova de gerenciamento. O checklist físico completo está
+em [docs/operations/iphone-acceptance.md](docs/operations/iphone-acceptance.md).
+
+### Access na origem Cloud Run
+
+Além do Bearer do aparelho, a produção valida o JWT Service Auth da aplicação
+Bridge com `ACCESS_BRIDGE_AUDIENCE` e allowlist de Client IDs em
+`ACCESS_BRIDGE_SERVICE_TOKENS`. Isso protege também a URL direta `run.app`.
+O Pyto deve usar o hostname Cloudflare configurado em `access`; não enviar
+Client Secret para a origem Google. A sessão Safari não substitui esse par.
+Ausência/expiração/revogação exige recuperação explícita, nunca bypass.

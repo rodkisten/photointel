@@ -11,7 +11,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import and_, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from photointel.auth import Identity, require_identity
+from photointel.auth import Identity, require_bridge_access, require_identity
 from photointel.config import get_settings
 from photointel.database import get_session
 from photointel.errors import AppError, ErrorCode
@@ -153,6 +153,7 @@ def operation_out(operation: SyncOperation) -> dict[str, Any]:
 
 async def require_device(
     session: DB,
+    _: Annotated[None, Depends(require_bridge_access)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> BridgeDevice:
     if not authorization or not authorization.startswith("Bearer bridge_"):
@@ -201,7 +202,9 @@ async def issue_enrollment(session: DB, identity: User) -> dict[str, Any]:
     return {"code": code, "expires_at": expires, "single_use": True}
 
 
-@router.post("/bridge/enroll", status_code=201)
+@router.post(
+    "/bridge/enroll", status_code=201, dependencies=[Depends(require_bridge_access)]
+)
 async def enroll(body: Enrollment, session: DB) -> dict[str, Any]:
     enrollment = await session.scalar(
         select(Setting)

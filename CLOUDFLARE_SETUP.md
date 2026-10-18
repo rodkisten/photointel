@@ -131,3 +131,74 @@ JWT com audience errada, thumbnail privado e logout. Adicione a PWA à tela de
 início somente após confirmar esses controles. Cache offline deve conter apenas
 o shell estático: fotos, respostas privadas e URLs assinadas não são dados para
 cache público.
+
+## Produção v1.1: Cloud Run com origem alcançável
+
+O destino principal é Cloud Run + Neon; o Tunnel acima continua opção VPS.
+A URL `run.app` é alcançável pela rede pública. Não a descrevemos como origem
+privada e não dependemos de DNS oculto. O serviço usa autorização da aplicação:
+cada rota privada humana verifica assinatura RS256, issuer, audience, expiração
+e allowlist de email. A borda e a API aplicam proteção em conjunto.
+Um header email ou `X-Forwarded-*` não concede identidade. O container não deve
+confiar em proxy headers de qualquer cliente (`--forwarded-allow-ips '*'`).
+O destino Cloud Run usa `--no-proxy-headers`, sem inferir HTTPS de entrada externa.
+Os health checks públicos retornam apenas estado mínimo, sem metadata pessoal.
+
+Use o relay implementado em `infra/cloudflare/cloud-run-proxy/worker.mjs`, com
+upstream fixo HTTPS `run.app`, nunca URL escolhida pelo cliente. Ele transmite
+somente headers necessários, incluindo JWT Access assinado e Bearer Bridge;
+recusa redirects da origem e impede cache CDN. O backend faz a validação
+criptográfica mesmo que alguém contorne o Worker e chame `run.app` diretamente.
+Não combine esta implantação com Cloud Run IAM obrigatório sem implementar
+outra identidade de origem compatível: um JWT Access não é um ID token Google.
+
+```bash
+cp infra/cloudflare/cloud-run-proxy/wrangler.example.toml \
+   infra/cloudflare/cloud-run-proxy/wrangler.toml
+# No arquivo local: informar a URL run.app real, hostname API e origem Pages.
+node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+cd infra/cloudflare/cloud-run-proxy
+npx wrangler deploy --config wrangler.toml
+```
+
+Esse deploy cria/atualiza recurso na conta Cloudflare e requer login e
+aprovação do operador. O exemplo contém somente campos a preencher. Proteja
+`api.SEUDOMINIO` com Access **antes** de usar dados reais. Não basta criar CNAME
+para `run.app`: Host/TLS e o domínio precisam do relay ou de domain mapping
+Google validado. `workers_dev=false` e `preview_urls=false` evitam hostnames
+alternativos do relay. O projeto Pages também precisa de proteção dos previews
+no Access; restrinja/desative `pages.dev` quando não puder protegê-lo.
+
+No backend, acrescente a aplicação de serviço separada:
+
+```dotenv
+ACCESS_BRIDGE_AUDIENCE=AUDIENCE_DA_APLICACAO_BRIDGE
+ACCESS_BRIDGE_SERVICE_TOKENS=["CLIENT_ID_DO_SERVICE_TOKEN.access"]
+```
+
+`ACCESS_BRIDGE_SERVICE_TOKENS` contém **Client IDs públicos**, nunca Client
+Secrets. O JWT Service Auth traz `common_name` com esse ID e `sub` vazio; ele
+não traz a identidade humana necessária para a API do catálogo. O backend
+valida issuer/assinatura/audience/expiração e a allowlist exata também na
+matrícula Bridge. Ausência de configuração bloqueia o Bridge em produção com
+503; credencial inválida/faltando falha com 401/403. Enrollment ainda exige
+código de uso único; rotas posteriores exigem Bearer próprio do dispositivo.
+Apenas enviar `CF-Access-Client-Id` e `CF-Access-Client-Secret` diretamente para
+`run.app` não funciona: esses headers são apresentados à borda Cloudflare, que
+emite o JWT assinado encaminhado. O backend não confia nesses headers crus.
+
+A API não consulta o painel Access a cada requisição. Revogar um Service Token
+impede novos JWT na borda; um JWT já emitido pode durar até `exp`. Para bloqueio
+imediato, remova seu Client ID da allowlist e revogue também o dispositivo
+Bridge. Rotacione segredos separadamente. Não prometa revogação instantânea de
+JWT offline já emitido sem esse procedimento.
+
+Referências oficiais consultadas em 18/10/2026:
+
+- https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/
+- https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/
+
+Execute [aceitação física](docs/operations/iphone-acceptance.md) com Safari e
+PWA reais, cookies expirados, login, rede móvel e mídia sem autorização. Os
+testes locais verificam o código de autenticação e relay; não comprovam a
+política criada na conta Cloudflare nem o comportamento de cookies no iPhone.
