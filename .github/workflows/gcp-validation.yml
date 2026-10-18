@@ -1,0 +1,26 @@
+name: Google Cloud deployment definitions
+on:
+  pull_request:
+    paths: ['infra/gcp/**', 'apps/api/src/photointel/services/cloud_dispatch.py', '.github/workflows/gcp*.yml']
+  push:
+    branches: [main]
+    paths: ['infra/gcp/**', 'apps/api/src/photointel/services/cloud_dispatch.py', '.github/workflows/gcp*.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Validate finite resources and command authorization without cloud credentials
+        run: |
+          python -m unittest discover -s infra/gcp/tests -v
+          python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
+          python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
+          python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
+      - uses: actions/upload-artifact@v4
+        with: {name: gcp-offline-definitions, path: reports/gcp-*}

@@ -1,0 +1,70 @@
+name: Google Cloud controlled deployment
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Operation (migration remains a separate backed-up operator command)'
+        type: choice
+        options: [build, jobs-deploy, deploy, scheduler, cleanup]
+        required: true
+      authorize_charges:
+        description: 'I authorize Google Cloud resources and applicable charges'
+        type: boolean
+        default: false
+        required: true
+      confirm_project:
+        description: 'Exact Google Cloud project ID configured in production environment'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: photointel-gcp-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Check reviewed project configuration before obtaining credentials
+        env:
+          GCP_CONFIG_JSON: ${{ vars.GCP_CONFIG_JSON }}
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re
+          config = json.loads(os.environ['GCP_CONFIG_JSON'])
+          if config['project_id'] != os.environ['CONFIRM_PROJECT']:
+              raise SystemExit('Project confirmation mismatch')
+          sha = os.environ['RELEASE_SHA']
+          if not re.fullmatch('[a-f0-9]{40}', sha):
+              raise SystemExit('Invalid release SHA')
+          # This workflow always builds/deploys this exact checked-out commit.
+          config['image'] = (f"{config['region']}-docker.pkg.dev/{config['project_id']}/"
+                             f"{config['repository']}/api:{sha}")
+          path = pathlib.Path('infra/gcp/config.local.json')
+          path.write_text(json.dumps(config))
+          path.chmod(0o600)
+          PY
+          python infra/gcp/manage.py render
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Execute only the explicitly selected operation
+        env:
+          OPERATION: ${{ inputs.action }}
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          python infra/gcp/manage.py "$OPERATION" --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+      - name: Remove local deployment metadata
+        if: always()
+        run: rm -f infra/gcp/config.local.json
