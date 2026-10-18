@@ -312,6 +312,7 @@ class Job(Identifier, Base):
     priority: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="queued")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    fence_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     maximum_attempts: Mapped[int] = mapped_column(Integer, default=3)
     scheduled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
@@ -542,3 +543,117 @@ class SavedSearch(Identifier, Timestamps, Base):
     __tablename__ = "saved_searches"
     name: Mapped[str] = mapped_column(String(255))
     query: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE)
+
+
+class DurableLease(Base):
+    __tablename__ = "durable_leases"
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    owner: Mapped[str | None] = mapped_column(String(128))
+    fence_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ObjectIntent(Identifier, Timestamps, Base):
+    __tablename__ = "object_intents"
+    job_id: Mapped[UUID | None] = mapped_column(ForeignKey("jobs.id"))
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), index=True)
+    content_revision: Mapped[str] = mapped_column(String(128))
+    representation_revision: Mapped[str] = mapped_column(String(128))
+    object_key: Mapped[str] = mapped_column(String(1024), unique=True)
+    sha256: Mapped[str] = mapped_column(String(64))
+    mime_type: Mapped[str] = mapped_column(String(128))
+    byte_size: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    owner: Mapped[str] = mapped_column(String(128))
+    fence_token: Mapped[int] = mapped_column(Integer)
+    __table_args__ = (Index("ix_object_intents_recovery", "status", "updated_at"),)
+
+
+class SessionState(Base):
+    __tablename__ = "icloud_session_states"
+    scope_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    object_key: Mapped[str | None] = mapped_column(String(1024))
+    ciphertext_sha256: Mapped[str | None] = mapped_column(String(64))
+    key_id: Mapped[str | None] = mapped_column(String(64))
+    lease_owner: Mapped[UUID | None] = mapped_column()
+    lease_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, server_default=func.now()
+    )
+    last_error: Mapped[str | None] = mapped_column(String(64))
+
+
+class QueryEmbeddingCache(Base):
+    __tablename__ = "query_embedding_cache"
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    model_id: Mapped[UUID] = mapped_column(ForeignKey("model_registry.id"))
+    model_revision: Mapped[str] = mapped_column(String(128))
+    preprocessing_revision: Mapped[str] = mapped_column(String(128))
+    vector: Mapped[list[float] | None] = mapped_column(Vector(768))
+    status: Mapped[str] = mapped_column(String(16), default="generating")
+    owner_token: Mapped[UUID | None] = mapped_column()
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    hit_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('generating','ready')", name="ck_query_cache_status"),
+    )
+
+
+class DiscoveryScan(Identifier, Timestamps, Base):
+    __tablename__ = "discovery_scans"
+    library_id: Mapped[UUID] = mapped_column(ForeignKey("libraries.id"), index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="incremental")
+    status: Mapped[str] = mapped_column(String(32), default="discovering")
+    source_cursor: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
+    seen_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(64))
+
+
+class DiscoveryManifest(Identifier, Timestamps, Base):
+    __tablename__ = "discovery_manifests"
+    scan_id: Mapped[UUID] = mapped_column(ForeignKey("discovery_scans.id"), index=True)
+    library_id: Mapped[UUID] = mapped_column(ForeignKey("libraries.id"))
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), index=True)
+    source_key: Mapped[str] = mapped_column(String(512))
+    content_revision: Mapped[str] = mapped_column(String(128))
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="discovered")
+    failure_category: Mapped[str | None] = mapped_column(String(64))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    maximum_attempts: Mapped[int] = mapped_column(Integer, default=5)
+    last_error: Mapped[str | None] = mapped_column(String(64))
+    __table_args__ = (
+        UniqueConstraint("library_id", "source_key", "content_revision"),
+        Index("ix_discovery_manifest_status", "status", "updated_at", "id"),
+    )
+
+
+class VerificationGate(Base):
+    __tablename__ = "verification_gates"
+    id: Mapped[str] = mapped_column(String(1), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), default="not_verified")
+    release_sha: Mapped[str | None] = mapped_column(String(64))
+    evidence: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list)
+    notes: Mapped[str | None] = mapped_column(String(2000))
+    verified_by: Mapped[str | None] = mapped_column(String(255))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class DispatchOutbox(Identifier, Timestamps, Base):
+    __tablename__ = "dispatch_outbox"
+    job_name: Mapped[str] = mapped_column(String(64))
+    idempotency_key: Mapped[str] = mapped_column(String(512), unique=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    owner: Mapped[str | None] = mapped_column(String(128))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(64))

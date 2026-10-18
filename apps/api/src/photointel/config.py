@@ -22,10 +22,21 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://photointel:local-only@localhost:5432/photointel"
     )
+    execution_platform: Literal["vps", "cloud_run"] = "vps"
+    database_pool_mode: Literal["direct", "transaction"] = "direct"
+    database_pool_size: int = Field(default=2, ge=1, le=20)
+    database_max_overflow: int = Field(default=0, ge=0, le=10)
+    database_pool_timeout_seconds: int = Field(default=15, ge=1, le=120)
+    database_require_tls: bool = False
+    database_tls_ca_file: Path | None = None
+    database_profile: Literal["limited", "full"] = "limited"
+    catalog_asset_limit: int = Field(default=1000, ge=1, le=10_000_000)
     migration_database_url: str | None = None
     log_level: str = "INFO"
     access_team_domain: str = ""
     access_audience: str = ""
+    access_bridge_audience: str = ""
+    access_bridge_service_tokens: list[str] = Field(default_factory=list)
     access_allowed_emails: list[str] = Field(default_factory=list)
     access_jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
     local_identity_email: str = "local@photointel.invalid"
@@ -40,10 +51,23 @@ class Settings(BaseSettings):
     signed_url_seconds: int = Field(default=60, ge=10, le=300)
     temp_directory: Path = Path("var/processing")
     icloud_account: str = ""
-    icloud_library: str = "PrimarySync"
+    icloud_library: str = ""
     icloud_session_directory: Path = Path("var/icloud-session")
     icloud_download_directory: Path = Path("var/icloud-downloads")
     icloud_enabled: bool = False
+    icloud_session_backend: Literal["local", "encrypted_object"] = "local"
+    icloud_session_key: SecretStr | None = None
+    icloud_session_key_id: str = "v1"
+    icloud_session_max_bytes: int = Field(default=8 * 1024 * 1024, ge=1024, le=67108864)
+    icloud_session_lease_seconds: int = Field(default=180, ge=30, le=3600)
+    icloud_session_max_age_hours: int = Field(default=720, ge=1, le=8760)
+    initial_import_limit: int = Field(default=100, ge=1, le=10000)
+    maximum_authorized_import_limit: int = Field(default=1000, ge=1, le=1_000_000)
+    hard_import_limit: int = Field(default=10000, ge=1, le=1_000_000)
+    verification_gates_enforced: bool = False
+    ingestion_maximum_attempts: int = Field(default=5, ge=1, le=20)
+    backfill_concurrency: int = Field(default=2, ge=1, le=16)
+    incremental_overlap_assets: int = Field(default=100, ge=1, le=10000)
     ingestion_interval_minutes: int = Field(default=60, ge=5, le=10080)
     ingestion_import_limit: int = Field(default=100, ge=1, le=1_000_000)
     download_representation: Literal["medium", "thumb", "original"] = "medium"
@@ -89,6 +113,14 @@ class Settings(BaseSettings):
     bridge_token_pepper: SecretStr | None = None
     apple_keyword_sync_mode: Literal["manual", "disabled"] = "manual"
     apple_bulk_write_enabled: bool = False
+    apple_native_write_enabled: bool = False
+    auto_delete_enabled: bool = False
+    query_cache_enabled: bool = True
+    query_cache_ttl_seconds: int = Field(default=86400, ge=30, le=2592000)
+    query_cache_max_entries: int = Field(default=10000, ge=1, le=100000)
+    query_cache_lease_seconds: int = Field(default=90, ge=10, le=1800)
+    query_cache_wait_seconds: int = Field(default=30, ge=1, le=300)
+    query_preprocessing_revision: str = "siglip2-transformers-4.57.6-v1"
     cors_origins: list[str] = Field(default_factory=list)
 
     @field_validator("siglip_embedding_dimension", mode="before")
@@ -125,6 +157,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def secure_configuration(self) -> "Settings":
+        if self.auto_delete_enabled:
+            raise ValueError("Automatic deletion is not implemented or permitted")
+        if self.initial_import_limit > self.maximum_authorized_import_limit:
+            raise ValueError("Initial import limit exceeds the authorized maximum")
+        if self.maximum_authorized_import_limit > self.hard_import_limit:
+            raise ValueError("Authorized import limit exceeds the hard import limit")
+        if self.execution_platform == "cloud_run" and self.app_env == "production":
+            if not self.database_require_tls or not self.verification_gates_enforced:
+                raise ValueError("Cloud Run production requires database TLS and gates")
+            if self.icloud_enabled and self.icloud_session_backend != "encrypted_object":
+                raise ValueError(
+                    "Cloud Run iCloud requires encrypted persistent sessions"
+                )
         if self.inference_backend == "test" and self.app_env != "test":
             raise ValueError("INFERENCE_BACKEND=test is only permitted with APP_ENV=test")
         if self.auth_mode == "cloudflare" and not re.fullmatch(
