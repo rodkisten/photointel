@@ -2,6 +2,7 @@
 """Create a private development configuration without overwriting user values."""
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -84,6 +85,7 @@ else:
         "STORAGE_SECRET_KEY": storage_password,
         "BRIDGE_ENROLLMENT_SECRET": secrets.token_hex(32),
         "BRIDGE_TOKEN_PEPPER": secrets.token_hex(32),
+        "ICLOUD_SESSION_KEY": base64.b64encode(secrets.token_bytes(32)).decode(),
     }
     replacements.update(origins)
     fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)

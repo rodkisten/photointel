@@ -1,0 +1,13 @@
+[project]
+name = "photointel-icloudpd-source"
+version = "1.32.3"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["requests>=2.32.5,<3", "srp>=1.0.22,<2", "keyring>=25.6,<26", "pytz>=2025.2", "tzlocal>=5.3,<6"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyicloud_ipd", "foundation", "icloudpd"]
