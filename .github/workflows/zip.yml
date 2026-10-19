@@ -1,0 +1,1620 @@
+name: 📦 Apply ZIP patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      zip_path:
+        description: "Path to a .zip file inside ./zip"
+        required: true
+        #default: "zip/patch.zip"
+        type: string
+
+      root_mode:
+        description: "How to handle a single top-level directory"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - strip
+          - keep
+
+      pr_title:
+        description: "Optional pull request title"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: apply-zip-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply-zip:
+    name: 📦 Apply ZIP file by file
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout selected branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: 🔎 Validate selected branch and ZIP path
+        id: zip
+        shell: bash
+        env:
+          ZIP_INPUT: ${{ inputs.zip_path }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          function isInside(parent, child) {
+            const relative = path.relative(parent, child);
+
+            return (
+              relative === "" ||
+              (
+                !relative.startsWith("..") &&
+                !path.isAbsolute(relative)
+              )
+            );
+          }
+
+          function appendOutput(name, value) {
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              `${name}=${value}\n`,
+            );
+          }
+
+          if (process.env.GITHUB_REF_TYPE !== "branch") {
+            fail("This workflow must run from a branch.");
+          }
+
+          const repo = path.resolve(process.env.GITHUB_WORKSPACE);
+          const zipDir = path.resolve(repo, "zip");
+          const rawInput = process.env.ZIP_INPUT.trim();
+
+          if (!rawInput) {
+            fail("The zip_path input cannot be empty.");
+          }
+
+          const normalizedInput = rawInput
+            .replaceAll("\\", "/")
+            .replace(/^\.\//, "");
+
+          let candidate;
+
+          if (path.isAbsolute(rawInput)) {
+            candidate = path.resolve(rawInput);
+          } else if (
+            normalizedInput === "zip" ||
+            normalizedInput.startsWith("zip/")
+          ) {
+            candidate = path.resolve(repo, normalizedInput);
+          } else {
+            candidate = path.resolve(zipDir, normalizedInput);
+          }
+
+          if (!isInside(zipDir, candidate)) {
+            fail("The ZIP must be located inside ./zip.");
+          }
+
+          if (!fs.existsSync(candidate)) {
+            fail(`ZIP file not found: ${candidate}`);
+          }
+
+          if (!fs.statSync(candidate).isFile()) {
+            fail(`ZIP path is not a file: ${candidate}`);
+          }
+
+          if (path.extname(candidate).toLowerCase() !== ".zip") {
+            fail("The selected file must have a .zip extension.");
+          }
+
+          const relativeToRepo = path.relative(repo, candidate);
+          const relativeToZip = path.relative(zipDir, candidate);
+
+          appendOutput("zip_path", candidate);
+          appendOutput(
+            "zip_relative",
+            relativeToRepo.split(path.sep).join("/"),
+          );
+
+          console.log(
+            `✅ ZIP: ${relativeToRepo}`,
+          );
+
+          console.log(
+            `📁 ZIP directory: ${path.dirname(relativeToZip) || "."}`,
+          );
+          NODE
+
+      - name: 🛡️ Validate and safely extract ZIP
+        id: extract
+        shell: bash
+        env:
+          ZIP_PATH: ${{ steps.zip.outputs.zip_path }}
+        run: |
+          node <<'NODE'
+          const childProcess = require("node:child_process");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          function appendOutput(name, value) {
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              `${name}=${value}\n`,
+            );
+          }
+
+          function run(command, args, options = {}) {
+            const result = childProcess.spawnSync(
+              command,
+              args,
+              {
+                encoding: "utf8",
+                ...options,
+              },
+            );
+
+            if (result.error) {
+              fail(
+                `Failed to execute ${command}: ` +
+                  result.error.message,
+              );
+            }
+
+            if (result.status !== 0) {
+              const message = (
+                result.stderr ||
+                result.stdout ||
+                `${command} exited with code ${result.status}.`
+              ).trim();
+
+              fail(message);
+            }
+
+            return result;
+          }
+
+          function isGitHubPath(parts) {
+            return parts.some(
+              (part) => part.toLowerCase() === ".github",
+            );
+          }
+
+          function removeGitHubDirectories(directory) {
+            for (
+              const entry of fs.readdirSync(
+                directory,
+                {
+                  withFileTypes: true,
+                },
+              )
+            ) {
+              const entryPath = path.join(
+                directory,
+                entry.name,
+              );
+
+              if (
+                entry.name.toLowerCase() === ".github"
+              ) {
+                fs.rmSync(
+                  entryPath,
+                  {
+                    recursive: true,
+                    force: true,
+                  },
+                );
+
+                continue;
+              }
+
+              if (
+                entry.isDirectory() &&
+                !entry.isSymbolicLink()
+              ) {
+                removeGitHubDirectories(entryPath);
+              }
+            }
+          }
+
+          function inspectTree(directory) {
+            let fileCount = 0;
+
+            for (
+              const entry of fs.readdirSync(
+                directory,
+                {
+                  withFileTypes: true,
+                },
+              )
+            ) {
+              const entryPath = path.join(
+                directory,
+                entry.name,
+              );
+
+              const stat = fs.lstatSync(entryPath);
+
+              if (stat.isSymbolicLink()) {
+                fail(
+                  "Symbolic links are not allowed in the ZIP: " +
+                    entryPath,
+                );
+              }
+
+              if (stat.isDirectory()) {
+                fileCount += inspectTree(entryPath);
+                continue;
+              }
+
+              if (!stat.isFile()) {
+                fail(
+                  "Unsupported special file in ZIP: " +
+                    entryPath,
+                );
+              }
+
+              fileCount += 1;
+            }
+
+            return fileCount;
+          }
+
+          const archive = path.resolve(
+            process.env.ZIP_PATH,
+          );
+
+          const extractDir = path.join(
+            process.env.RUNNER_TEMP,
+            [
+              "zip-patch",
+              process.env.GITHUB_RUN_ID,
+              process.env.GITHUB_RUN_ATTEMPT,
+            ].join("-"),
+          );
+
+          fs.rmSync(
+            extractDir,
+            {
+              recursive: true,
+              force: true,
+            },
+          );
+
+          fs.mkdirSync(
+            extractDir,
+            {
+              recursive: true,
+            },
+          );
+
+          const listResult = run(
+            "unzip",
+            [
+              "-Z1",
+              archive,
+            ],
+          );
+
+          const entries = listResult.stdout
+            .split("\n")
+            .filter(Boolean);
+
+          if (entries.length === 0) {
+            fail("The ZIP archive is empty.");
+          }
+
+          const seen = new Set();
+
+          let ignoredGitHubCount = 0;
+          let applicableEntries = 0;
+
+          for (const rawName of entries) {
+            const normalized = rawName.replaceAll(
+              "\\",
+              "/",
+            );
+
+            if (normalized.startsWith("/")) {
+              fail(
+                "Absolute paths are not allowed: " +
+                  rawName,
+              );
+            }
+
+            if (/^[A-Za-z]:\//.test(normalized)) {
+              fail(
+                "Windows absolute paths are not allowed: " +
+                  rawName,
+              );
+            }
+
+            for (const character of normalized) {
+              if (character.charCodeAt(0) < 32) {
+                fail(
+                  "Control characters are not allowed " +
+                    "in ZIP paths.",
+                );
+              }
+            }
+
+            const parts = normalized
+              .split("/")
+              .filter(
+                (part) =>
+                  part !== "" &&
+                  part !== ".",
+              );
+
+            if (parts.length === 0) {
+              continue;
+            }
+
+            if (parts.includes("..")) {
+              fail(
+                "Parent path traversal is not allowed: " +
+                  rawName,
+              );
+            }
+
+            if (
+              parts.some(
+                (part) =>
+                  part.toLowerCase() === ".git",
+              )
+            ) {
+              fail(
+                "The ZIP cannot contain .git paths: " +
+                  rawName,
+              );
+            }
+
+            if (isGitHubPath(parts)) {
+              ignoredGitHubCount += 1;
+
+              console.log(
+                `⏭️ Ignoring .github path: ${normalized}`,
+              );
+
+              continue;
+            }
+
+            const relative = parts.join("/");
+
+            if (seen.has(relative)) {
+              fail(
+                "Duplicate ZIP entry detected: " +
+                  relative,
+              );
+            }
+
+            seen.add(relative);
+            applicableEntries += 1;
+          }
+
+          if (applicableEntries === 0) {
+            fail(
+              "The ZIP contains no applicable files " +
+                "after ignoring .github.",
+            );
+          }
+
+          run(
+            "unzip",
+            [
+              "-qq",
+              "-o",
+              archive,
+              "-d",
+              extractDir,
+            ],
+            {
+              stdio: "inherit",
+            },
+          );
+
+          removeGitHubDirectories(extractDir);
+
+          const extractedFiles = inspectTree(
+            extractDir,
+          );
+
+          if (extractedFiles === 0) {
+            fail(
+              "The ZIP contains no files to apply " +
+                "after ignoring .github.",
+            );
+          }
+
+          appendOutput(
+            "extract_dir",
+            extractDir,
+          );
+
+          appendOutput(
+            "archive_file_count",
+            String(extractedFiles),
+          );
+
+          appendOutput(
+            "ignored_github_count",
+            String(ignoredGitHubCount),
+          );
+
+          console.log(
+            `✅ Safely extracted ${extractedFiles} file(s).`,
+          );
+
+          console.log(
+            "⏭️ Ignored .github entries: " +
+              ignoredGitHubCount,
+          );
+          NODE
+
+      - name: 🧭 Resolve repository structure
+        id: structure
+        shell: bash
+        env:
+          EXTRACT_DIR: ${{ steps.extract.outputs.extract_dir }}
+          ROOT_MODE: ${{ inputs.root_mode }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          function appendOutput(name, value) {
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              `${name}=${value}\n`,
+            );
+          }
+
+          function comparePaths(left, right) {
+            if (left < right) {
+              return -1;
+            }
+
+            if (left > right) {
+              return 1;
+            }
+
+            return 0;
+          }
+
+          function walkFiles(root) {
+            const files = [];
+
+            function walk(directory) {
+              const entries = fs.readdirSync(
+                directory,
+                {
+                  withFileTypes: true,
+                },
+              );
+
+              for (const entry of entries) {
+                if (
+                  entry.name.toLowerCase() ===
+                  ".github"
+                ) {
+                  continue;
+                }
+
+                const entryPath = path.join(
+                  directory,
+                  entry.name,
+                );
+
+                if (entry.isDirectory()) {
+                  walk(entryPath);
+                  continue;
+                }
+
+                if (entry.isFile()) {
+                  files.push(entryPath);
+                }
+              }
+            }
+
+            walk(root);
+
+            return files.sort(
+              (left, right) =>
+                comparePaths(
+                  path
+                    .relative(root, left)
+                    .split(path.sep)
+                    .join("/"),
+                  path
+                    .relative(root, right)
+                    .split(path.sep)
+                    .join("/"),
+                ),
+            );
+          }
+
+          const repo = path.resolve(
+            process.env.GITHUB_WORKSPACE,
+          );
+
+          const root = path.resolve(
+            process.env.EXTRACT_DIR,
+          );
+
+          const rootMode = process.env.ROOT_MODE;
+
+          const repoName = process.env.REPOSITORY
+            .split("/")
+            .at(-1);
+
+          const children = fs
+            .readdirSync(
+              root,
+              {
+                withFileTypes: true,
+              },
+            )
+            .filter(
+              (entry) =>
+                entry.name.toLowerCase() !==
+                ".github",
+            )
+            .sort(
+              (left, right) =>
+                comparePaths(
+                  left.name.toLowerCase(),
+                  right.name.toLowerCase(),
+                ),
+            );
+
+          const topFiles = children.filter(
+            (entry) => entry.isFile(),
+          );
+
+          const topDirs = children.filter(
+            (entry) => entry.isDirectory(),
+          );
+
+          let patchRoot = root;
+          let stripped = false;
+
+          const hasSingleRootDir =
+            topDirs.length === 1 &&
+            topFiles.length === 0;
+
+          if (rootMode === "strip") {
+            if (!hasSingleRootDir) {
+              fail(
+                "root_mode=strip requires exactly one " +
+                  "top-level directory and no top-level files.",
+              );
+            }
+
+            patchRoot = path.join(
+              root,
+              topDirs[0].name,
+            );
+
+            stripped = true;
+          } else if (
+            rootMode === "auto" &&
+            hasSingleRootDir
+          ) {
+            const candidate = path.join(
+              root,
+              topDirs[0].name,
+            );
+
+            const candidateTarget = path.join(
+              repo,
+              topDirs[0].name,
+            );
+
+            const candidateName =
+              topDirs[0].name.toLowerCase();
+
+            const repositoryName =
+              repoName.toLowerCase();
+
+            const looksLikeRepoWrapper =
+              candidateName === repositoryName ||
+              candidateName.startsWith(
+                `${repositoryName}-`,
+              ) ||
+              candidateName.startsWith(
+                `${repositoryName}_`,
+              );
+
+            const innerChildren = fs
+              .readdirSync(
+                candidate,
+                {
+                  withFileTypes: true,
+                },
+              )
+              .filter(
+                (entry) =>
+                  entry.name.toLowerCase() !==
+                  ".github",
+              );
+
+            const mapsToRepositoryRoot =
+              innerChildren.some(
+                (entry) =>
+                  fs.existsSync(
+                    path.join(
+                      repo,
+                      entry.name,
+                    ),
+                  ),
+              );
+
+            if (
+              !fs.existsSync(candidateTarget) &&
+              (
+                looksLikeRepoWrapper ||
+                mapsToRepositoryRoot
+              )
+            ) {
+              patchRoot = candidate;
+              stripped = true;
+            }
+          }
+
+          const files = walkFiles(patchRoot);
+
+          if (files.length === 0) {
+            fail(
+              "No files were found after resolving " +
+                "the archive structure.",
+            );
+          }
+
+          appendOutput(
+            "patch_root",
+            patchRoot,
+          );
+
+          appendOutput(
+            "file_count",
+            String(files.length),
+          );
+
+          appendOutput(
+            "stripped",
+            stripped ? "true" : "false",
+          );
+
+          console.log(
+            `📦 Patch root: ${patchRoot}`,
+          );
+
+          console.log(
+            `📄 Files: ${files.length}`,
+          );
+
+          console.log(
+            `✂️ Root directory stripped: ${stripped}`,
+          );
+          NODE
+
+      - name: 🌳 Inspect normalized file structure
+        shell: bash
+        env:
+          PATCH_ROOT: ${{ steps.structure.outputs.patch_root }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function comparePaths(left, right) {
+            if (left < right) {
+              return -1;
+            }
+
+            if (left > right) {
+              return 1;
+            }
+
+            return 0;
+          }
+
+          function walkFiles(root) {
+            const files = [];
+
+            function walk(directory) {
+              for (
+                const entry of fs.readdirSync(
+                  directory,
+                  {
+                    withFileTypes: true,
+                  },
+                )
+              ) {
+                if (
+                  entry.name.toLowerCase() ===
+                  ".github"
+                ) {
+                  continue;
+                }
+
+                const entryPath = path.join(
+                  directory,
+                  entry.name,
+                );
+
+                if (entry.isDirectory()) {
+                  walk(entryPath);
+                  continue;
+                }
+
+                if (entry.isFile()) {
+                  files.push(
+                    path
+                      .relative(root, entryPath)
+                      .split(path.sep)
+                      .join("/"),
+                  );
+                }
+              }
+            }
+
+            walk(root);
+
+            return files.sort(comparePaths);
+          }
+
+          const root = path.resolve(
+            process.env.PATCH_ROOT,
+          );
+
+          const files = walkFiles(root);
+
+          console.log(
+            "📦 Normalized archive structure:",
+          );
+
+          console.log("");
+
+          for (const file of files.slice(0, 300)) {
+            console.log(file);
+          }
+
+          if (files.length > 300) {
+            console.log("");
+
+            console.log(
+              `… ${files.length - 300} additional ` +
+                "file(s) omitted.",
+            );
+          }
+          NODE
+
+      - name: 📝 Find CHANGELOG for pull request description
+        id: changelog
+        shell: bash
+        env:
+          PATCH_ROOT: ${{ steps.structure.outputs.patch_root }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function appendOutput(name, value) {
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              `${name}=${value}\n`,
+            );
+          }
+
+          function walkFiles(root) {
+            const files = [];
+
+            function walk(directory) {
+              for (
+                const entry of fs.readdirSync(
+                  directory,
+                  {
+                    withFileTypes: true,
+                  },
+                )
+              ) {
+                if (
+                  entry.name.toLowerCase() ===
+                  ".github"
+                ) {
+                  continue;
+                }
+
+                const entryPath = path.join(
+                  directory,
+                  entry.name,
+                );
+
+                if (entry.isDirectory()) {
+                  walk(entryPath);
+                  continue;
+                }
+
+                if (entry.isFile()) {
+                  files.push(entryPath);
+                }
+              }
+            }
+
+            walk(root);
+
+            return files;
+          }
+
+          const root = path.resolve(
+            process.env.PATCH_ROOT,
+          );
+
+          const bodyFile = path.join(
+            process.env.RUNNER_TEMP,
+            "zip-patch-pr-body.md",
+          );
+
+          const matches = walkFiles(root)
+            .filter(
+              (file) =>
+                path
+                  .basename(file)
+                  .toLowerCase()
+                  .includes("changelog"),
+            )
+            .sort(
+              (left, right) => {
+                const leftRelative = path
+                  .relative(root, left)
+                  .split(path.sep);
+
+                const rightRelative = path
+                  .relative(root, right)
+                  .split(path.sep);
+
+                if (
+                  leftRelative.length !==
+                  rightRelative.length
+                ) {
+                  return (
+                    leftRelative.length -
+                    rightRelative.length
+                  );
+                }
+
+                return leftRelative
+                  .join("/")
+                  .localeCompare(
+                    rightRelative.join("/"),
+                  );
+              },
+            );
+
+          if (matches.length > 0) {
+            const changelog = matches[0];
+
+            const text = fs.readFileSync(
+              changelog,
+              "utf8",
+            );
+
+            fs.writeFileSync(
+              bodyFile,
+              text,
+              "utf8",
+            );
+
+            const relative = path
+              .relative(root, changelog)
+              .split(path.sep)
+              .join("/");
+
+            appendOutput(
+              "found",
+              "true",
+            );
+
+            appendOutput(
+              "body_file",
+              bodyFile,
+            );
+
+            appendOutput(
+              "changelog",
+              relative,
+            );
+
+            console.log(
+              "📝 PR description will use " +
+                `${relative}.`,
+            );
+          } else {
+            appendOutput(
+              "found",
+              "false",
+            );
+
+            appendOutput(
+              "body_file",
+              bodyFile,
+            );
+
+            console.log(
+              "ℹ️ No CHANGELOG file was found.",
+            );
+          }
+          NODE
+
+      - name: 🌿 Create patch branch
+        id: branch
+        shell: bash
+        run: |
+          node <<'NODE'
+          const childProcess = require("node:child_process");
+          const fs = require("node:fs");
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          function run(command, args) {
+            const result = childProcess.spawnSync(
+              command,
+              args,
+              {
+                stdio: "inherit",
+              },
+            );
+
+            if (
+              result.error ||
+              result.status !== 0
+            ) {
+              fail(
+                `Failed to execute ${command}.`,
+              );
+            }
+          }
+
+          const branchName = [
+            "automation/apply-zip",
+            process.env.GITHUB_RUN_ID,
+            process.env.GITHUB_RUN_ATTEMPT,
+          ].join("-");
+
+          run(
+            "git",
+            [
+              "config",
+              "user.name",
+              "github-actions[bot]",
+            ],
+          );
+
+          run(
+            "git",
+            [
+              "config",
+              "user.email",
+              [
+                "41898282+github-actions[bot]",
+                "@users.noreply.github.com",
+              ].join(""),
+            ],
+          );
+
+          run(
+            "git",
+            [
+              "switch",
+              "--create",
+              branchName,
+            ],
+          );
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `branch=${branchName}\n`,
+          );
+
+          console.log(
+            `🌿 Created branch: ${branchName}`,
+          );
+          NODE
+
+      - name: 🧩 Apply and commit files one by one
+        id: apply
+        shell: bash
+        env:
+          PATCH_ROOT: ${{ steps.structure.outputs.patch_root }}
+        run: |
+          node <<'NODE'
+          const childProcess = require("node:child_process");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          function comparePaths(left, right) {
+            if (left < right) {
+              return -1;
+            }
+
+            if (left > right) {
+              return 1;
+            }
+
+            return 0;
+          }
+
+          function run(command, args) {
+            const result = childProcess.spawnSync(
+              command,
+              args,
+              {
+                stdio: "inherit",
+              },
+            );
+
+            if (result.error) {
+              fail(
+                `Failed to execute ${command}: ` +
+                  result.error.message,
+              );
+            }
+
+            if (result.status !== 0) {
+              fail(
+                `${command} exited with code ` +
+                  `${result.status}.`,
+              );
+            }
+
+            return result;
+          }
+
+          function getDiffStatus(relative) {
+            const result = childProcess.spawnSync(
+              "git",
+              [
+                "diff",
+                "--cached",
+                "--quiet",
+                "--",
+                relative,
+              ],
+              {
+                stdio: "ignore",
+              },
+            );
+
+            if (result.error) {
+              fail(
+                "Failed to inspect staged changes: " +
+                  result.error.message,
+              );
+            }
+
+            if (
+              result.status !== 0 &&
+              result.status !== 1
+            ) {
+              fail(
+                "git diff failed with code " +
+                  `${result.status}.`,
+              );
+            }
+
+            return result.status;
+          }
+
+          function walkFiles(root) {
+            const files = [];
+
+            function walk(directory) {
+              for (
+                const entry of fs.readdirSync(
+                  directory,
+                  {
+                    withFileTypes: true,
+                  },
+                )
+              ) {
+                if (
+                  entry.name.toLowerCase() ===
+                  ".github"
+                ) {
+                  continue;
+                }
+
+                const entryPath = path.join(
+                  directory,
+                  entry.name,
+                );
+
+                if (entry.isDirectory()) {
+                  walk(entryPath);
+                  continue;
+                }
+
+                if (entry.isFile()) {
+                  files.push(entryPath);
+                }
+              }
+            }
+
+            walk(root);
+
+            return files.sort(
+              (left, right) =>
+                comparePaths(
+                  path
+                    .relative(root, left)
+                    .split(path.sep)
+                    .join("/"),
+                  path
+                    .relative(root, right)
+                    .split(path.sep)
+                    .join("/"),
+                ),
+            );
+          }
+
+          const repo = path.resolve(
+            process.env.GITHUB_WORKSPACE,
+          );
+
+          const patchRoot = path.resolve(
+            process.env.PATCH_ROOT,
+          );
+
+          const files = walkFiles(
+            patchRoot,
+          );
+
+          let changedCount = 0;
+          let skippedCount = 0;
+          let processedCount = 0;
+
+          for (const source of files) {
+            processedCount += 1;
+
+            const relative = path
+              .relative(patchRoot, source)
+              .split(path.sep)
+              .join("/");
+
+            const parts = relative.split("/");
+
+            if (
+              parts.some(
+                (part) =>
+                  part.toLowerCase() ===
+                  ".github",
+              )
+            ) {
+              skippedCount += 1;
+
+              console.log(
+                `⏭️ Ignoring .github path: ${relative}`,
+              );
+
+              continue;
+            }
+
+            const target = path.resolve(
+              repo,
+              ...parts,
+            );
+
+            console.log("");
+
+            console.log(
+              "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" +
+                "━━━━━━━━━━━━",
+            );
+
+            console.log(
+              `📄 [${processedCount}/${files.length}] ` +
+                relative,
+            );
+
+            let current = repo;
+
+            for (
+              let index = 0;
+              index < parts.length - 1;
+              index += 1
+            ) {
+              current = path.join(
+                current,
+                parts[index],
+              );
+
+              if (!fs.existsSync(current)) {
+                continue;
+              }
+
+              if (
+                fs
+                  .lstatSync(current)
+                  .isSymbolicLink()
+              ) {
+                fail(
+                  "Refusing to write through repository " +
+                    `symlink: ${current}`,
+                );
+              }
+            }
+
+            fs.mkdirSync(
+              path.dirname(target),
+              {
+                recursive: true,
+              },
+            );
+
+            if (fs.existsSync(target)) {
+              const stat = fs.lstatSync(
+                target,
+              );
+
+              if (stat.isSymbolicLink()) {
+                fs.unlinkSync(target);
+              } else if (stat.isDirectory()) {
+                fail(
+                  "Cannot replace an existing directory " +
+                    `with a file: ${relative}`,
+                );
+              }
+            }
+
+            fs.copyFileSync(
+              source,
+              target,
+            );
+
+            const sourceMode =
+              fs.statSync(source).mode & 0o777;
+
+            fs.chmodSync(
+              target,
+              sourceMode,
+            );
+
+            run(
+              "git",
+              [
+                "add",
+                "-f",
+                "--",
+                relative,
+              ],
+            );
+
+            const diffStatus = getDiffStatus(
+              relative,
+            );
+
+            if (diffStatus === 0) {
+              skippedCount += 1;
+
+              console.log(
+                `⏭️ No changes: ${relative}`,
+              );
+
+              continue;
+            }
+
+            changedCount += 1;
+
+            run(
+              "git",
+              [
+                "commit",
+                "-m",
+                `chore(zip): apply ${relative}`,
+              ],
+            );
+
+            console.log(
+              `✅ Committed: ${relative}`,
+            );
+          }
+
+          console.log("");
+
+          console.log(
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" +
+              "━━━━━━━━━━━━",
+          );
+
+          console.log(
+            `📦 Processed: ${processedCount}`,
+          );
+
+          console.log(
+            `✅ Changed: ${changedCount}`,
+          );
+
+          console.log(
+            `⏭️ Unchanged: ${skippedCount}`,
+          );
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `changed_count=${changedCount}\n`,
+          );
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `skipped_count=${skippedCount}\n`,
+          );
+          NODE
+
+      - name: ✨ Nothing to apply
+        if: steps.apply.outputs.changed_count == '0'
+        run: |
+          echo \
+            "The ZIP contents are already synchronized with the repository."
+
+      - name: 🚀 Push patch branch
+        if: steps.apply.outputs.changed_count != '0'
+        shell: bash
+        env:
+          BRANCH_NAME: ${{ steps.branch.outputs.branch }}
+        run: |
+          node <<'NODE'
+          const childProcess = require("node:child_process");
+
+          const result = childProcess.spawnSync(
+            "git",
+            [
+              "push",
+              "--set-upstream",
+              "origin",
+              process.env.BRANCH_NAME,
+            ],
+            {
+              stdio: "inherit",
+            },
+          );
+
+          if (
+            result.error ||
+            result.status !== 0
+          ) {
+            console.error(
+              "::error::Failed to push patch branch.",
+            );
+
+            process.exit(1);
+          }
+          NODE
+
+      - name: 📋 Prepare pull request
+        if: steps.apply.outputs.changed_count != '0'
+        id: pr
+        shell: bash
+        env:
+          CHANGELOG_FOUND: ${{ steps.changelog.outputs.found }}
+          CHANGELOG_BODY: ${{ steps.changelog.outputs.body_file }}
+          ZIP_RELATIVE: ${{ steps.zip.outputs.zip_relative }}
+          CHANGED_COUNT: ${{ steps.apply.outputs.changed_count }}
+          SKIPPED_COUNT: ${{ steps.apply.outputs.skipped_count }}
+          ROOT_STRIPPED: ${{ steps.structure.outputs.stripped }}
+          IGNORED_GITHUB: >-
+            ${{ steps.extract.outputs.ignored_github_count }}
+          PR_TITLE_INPUT: ${{ inputs.pr_title }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          function appendOutput(name, value) {
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              `${name}=${value}\n`,
+            );
+          }
+
+          const bodyFile =
+            process.env.CHANGELOG_BODY;
+
+          if (
+            process.env.CHANGELOG_FOUND !==
+            "true"
+          ) {
+            const body = [
+              "## 📦 ZIP patch",
+              "",
+              "Applied files from " +
+                `\`${process.env.ZIP_RELATIVE}\`.`,
+              "",
+              "- **Base branch:** " +
+                `\`${process.env.GITHUB_REF_NAME}\``,
+              "- **Changed files:** " +
+                process.env.CHANGED_COUNT,
+              "- **Unchanged files:** " +
+                process.env.SKIPPED_COUNT,
+              "- **Ignored .github entries:** " +
+                process.env.IGNORED_GITHUB,
+              "- **Root directory stripped:** " +
+                process.env.ROOT_STRIPPED,
+              "- **Commit strategy:** " +
+                "one commit per changed file",
+              "- **Ordering:** ascending " +
+                "lexicographical path order",
+              "",
+            ].join("\n");
+
+            fs.writeFileSync(
+              bodyFile,
+              body,
+              "utf8",
+            );
+          }
+
+          const inputTitle =
+            process.env.PR_TITLE_INPUT.trim();
+
+          const zipName = path.basename(
+            process.env.ZIP_RELATIVE,
+          );
+
+          const prTitle =
+            inputTitle ||
+            `chore: apply ${zipName}`;
+
+          appendOutput(
+            "title",
+            prTitle,
+          );
+
+          appendOutput(
+            "body_file",
+            bodyFile,
+          );
+          NODE
+
+      - name: 🔀 Open pull request
+        if: steps.apply.outputs.changed_count != '0'
+        id: open-pr
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH_NAME: ${{ steps.branch.outputs.branch }}
+          PR_TITLE: ${{ steps.pr.outputs.title }}
+          PR_BODY_FILE: ${{ steps.pr.outputs.body_file }}
+        run: |
+          node <<'NODE'
+          const childProcess = require("node:child_process");
+          const fs = require("node:fs");
+
+          const result = childProcess.spawnSync(
+            "gh",
+            [
+              "pr",
+              "create",
+              "--base",
+              process.env.GITHUB_REF_NAME,
+              "--head",
+              process.env.BRANCH_NAME,
+              "--title",
+              process.env.PR_TITLE,
+              "--body-file",
+              process.env.PR_BODY_FILE,
+            ],
+            {
+              encoding: "utf8",
+              env: process.env,
+            },
+          );
+
+          if (
+            result.error ||
+            result.status !== 0
+          ) {
+            console.error(
+              result.stderr ||
+                "::error::Failed to create pull request.",
+            );
+
+            process.exit(1);
+          }
+
+          const prUrl = result.stdout.trim();
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `url=${prUrl}\n`,
+          );
+
+          console.log("");
+
+          console.log(
+            "✅ Pull request created:",
+          );
+
+          console.log(
+            prUrl,
+          );
+          NODE
+
+      - name: 📊 Summary
+        if: steps.apply.outputs.changed_count != '0'
+        shell: bash
+        env:
+          ZIP_PATH: ${{ steps.zip.outputs.zip_relative }}
+          BRANCH_NAME: ${{ steps.branch.outputs.branch }}
+          CHANGED_COUNT: ${{ steps.apply.outputs.changed_count }}
+          SKIPPED_COUNT: ${{ steps.apply.outputs.skipped_count }}
+          IGNORED_GITHUB: >-
+            ${{ steps.extract.outputs.ignored_github_count }}
+          PR_URL: ${{ steps.open-pr.outputs.url }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const summary = [
+            "## 📦 ZIP patch applied",
+            "",
+            `- **ZIP:** \`${process.env.ZIP_PATH}\``,
+            "- **Branch:** " +
+              `\`${process.env.BRANCH_NAME}\``,
+            "- **Committed files:** " +
+              process.env.CHANGED_COUNT,
+            "- **Unchanged files:** " +
+              process.env.SKIPPED_COUNT,
+            "- **Ignored .github entries:** " +
+              process.env.IGNORED_GITHUB,
+            "- **Pull request:** " +
+              process.env.PR_URL,
+            "",
+          ].join("\n");
+
+          fs.appendFileSync(
+            process.env.GITHUB_STEP_SUMMARY,
+            summary,
+          );
+          NODE
