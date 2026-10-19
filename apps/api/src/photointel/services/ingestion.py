@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,15 +21,14 @@ from photointel.config import Settings
 from photointel.errors import AppError, ErrorCode
 from photointel.models import (
     Asset,
-    AssetResource,
+    DiscoveryScan,
     IngestionRun,
+    JobEvent,
     Library,
-    MetadataSnapshot,
     Setting,
     utcnow,
 )
-from photointel.services.identity import revision_hash
-from photointel.services.jobs import enqueue_job
+from photointel.services.jobs import enqueue_job, refresh_batch
 from photointel.services.runtime_settings import effective_settings
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".tif", ".tiff"}
@@ -133,6 +132,20 @@ def classify_icloud_failure(text: str) -> tuple[str, str]:
             ErrorCode.ICLOUD_RATE_LIMITED,
             "Apple limitou solicitações; aguarde e tente novamente",
         )
+    if any(
+        term in lower
+        for term in (
+            "timeout",
+            "connectionerror",
+            "connectionreset",
+            "protocolerror",
+            "remotedisconnected",
+        )
+    ):
+        return (
+            ErrorCode.MEDIA_DOWNLOAD_FAILED,
+            "Conexão com iCloud interrompida; uma nova tentativa será agendada",
+        )
     return (
         ErrorCode.ICLOUD_ACCESS_DENIED,
         "Acesso iCloud indisponível; verifique sessão e biblioteca",
@@ -183,6 +196,8 @@ async def _upsert_asset(
     captured_at: Any = None,
     added_at: Any = None,
     batch_id: UUID | None = None,
+    enqueue: bool = True,
+    catalog_limit: int | None = None,
 ) -> tuple[Asset, bool]:
     identifier = uuid4()
     created = (
@@ -207,6 +222,8 @@ async def _upsert_asset(
             .returning(Asset.id)
         )
     ).scalar_one_or_none()
+    if created is not None:
+        await _admit_catalog_asset(session, catalog_limit)
     asset = await session.scalar(
         select(Asset)
         .where(
@@ -243,8 +260,10 @@ async def _upsert_asset(
             }
     asset.visibility_status = "active"
     asset.missing_scan_count = 0
-    if (changed or asset.ingestion_status != "completed") and not metadata.get(
-        "representation_unavailable"
+    if (
+        enqueue
+        and (changed or asset.ingestion_status != "completed")
+        and not metadata.get("representation_unavailable")
     ):
         await enqueue_job(
             session,
@@ -255,6 +274,86 @@ async def _upsert_asset(
             batch_id,
         )
     return asset, created is not None
+
+
+CATALOG_ADMISSION_KEY = "system:catalog-admission"
+
+
+async def _catalog_ledger(session: AsyncSession) -> Setting:
+    await session.execute(
+        insert(Setting)
+        .values(key=CATALOG_ADMISSION_KEY, value={"version": 1})
+        .on_conflict_do_nothing(index_elements=[Setting.key])
+    )
+    ledger = await session.get(
+        Setting,
+        CATALOG_ADMISSION_KEY,
+        with_for_update=True,
+        populate_existing=True,
+    )
+    assert ledger is not None
+    return ledger
+
+
+async def reconcile_catalog_admission(session: AsyncSession) -> None:
+    """Count once per bounded execution, serialized with all application writers."""
+    ledger = await _catalog_ledger(session)
+    count = await session.scalar(select(func.count()).select_from(Asset)) or 0
+    ledger.value = {"version": 1, "count": count}
+
+
+async def _admit_catalog_asset(
+    session: AsyncSession, catalog_limit: int | None
+) -> None:
+    """A failed admission rolls back the new asset and its counter together.
+
+    The INSERT has already succeeded in this transaction. Its uncommitted row is
+    included in an initialization count, but competing uncommitted inserts are
+    admitted later under the same ledger lock.
+    """
+    ledger = await _catalog_ledger(session)
+    stored = ledger.value.get("count")
+    if type(stored) is not int or stored < 0:
+        count = (await session.scalar(select(func.count()).select_from(Asset))) or 0
+    else:
+        count = stored + 1
+    if catalog_limit is not None and count > catalog_limit:
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "Limite do catálogo atingido; revise capacidade e DATABASE_PROFILE",
+            409,
+        )
+    ledger.value = {"version": 1, "count": count}
+
+
+async def record_batch_skip(
+    session: AsyncSession,
+    asset_id: UUID,
+    revision: str,
+    batch_id: UUID | None,
+) -> None:
+    """Persist an unchanged asset's actual no-op outcome in the requesting batch."""
+    if batch_id is None:
+        return
+    job = await enqueue_job(
+        session,
+        "media_download",
+        asset_id,
+        {"content_revision": revision},
+        f"unchanged:{batch_id}:{asset_id}:{revision}",
+        batch_id,
+    )
+    if job.status == "completed":
+        return
+    job.status, job.finished_at = "completed", utcnow()
+    job.progress = {"skipped": True, "reason": "unchanged_asset", "runtime_ms": 0}
+    session.add(
+        JobEvent(
+            job_id=job.id,
+            status="completed",
+            payload={"skipped": True, "reason": "unchanged_asset"},
+        )
+    )
 
 
 def fixture_content_hash(path: Path) -> str:
@@ -284,6 +383,9 @@ async def ingest_fixture_directory(
     library.last_attempted_scan = utcnow()
     run = IngestionRun(library_id=library.id, full_scan=False)
     session.add(run)
+    await session.flush()
+    await reconcile_catalog_admission(session)
+    await session.commit()
     imported = skipped = discovered = transferred = 0
     # Only filenames are read in bounded iteration; fixture roots are operator-controlled.
     for file in sorted(root.iterdir()):
@@ -320,13 +422,20 @@ async def ingest_fixture_directory(
             size=size,
             media_type="video" if file.suffix.lower() in VIDEO_EXTENSIONS else "image",
             batch_id=batch_id,
+            catalog_limit=settings.catalog_asset_limit,
         )
-        if process_inline:
+        already_completed = asset.ingestion_status == "completed"
+        if already_completed:
+            await record_batch_skip(session, asset.id, digest, batch_id)
+        await refresh_batch(session, batch_id)
+        await session.commit()
+        if process_inline and not already_completed:
             from photointel.services.duplicates import analyze_duplicates
             from photointel.services.media import process_asset
 
             await process_asset(session, asset, settings)
             await analyze_duplicates(session, asset)
+            await session.commit()
         imported += int(created)
         skipped += int(not created)
         transferred += size
@@ -355,21 +464,85 @@ def _safe_session_directory(settings: Settings) -> None:
 
 
 async def schedule_due_ingestion(session: AsyncSession) -> None:
+    """Persist bounded scheduled work; Cloud Scheduler invokes the finite runner.
+
+    Incremental discovery revisits the head. An explicitly completed initial
+    backfill enables periodic deep reconciliation, whose own checkpoint resumes
+    independently of the head and never authorizes unlimited processing.
+    """
+    from photointel.services.import_policy import authorize_import
+
     settings = await effective_settings(session)
     paused = await session.get(Setting, "ingestion_paused")
     if not settings.icloud_enabled or (paused and paused.value):
         return
-    # A timestamp bucket makes independent scheduler replicas idempotent.
+    limit = min(settings.initial_import_limit, settings.ingestion_import_limit)
+    if settings.verification_gates_enforced:
+        from photointel.services.verification import require_import_gates
+
+        try:
+            await require_import_gates(session, limit)
+        except AppError as exc:
+            if exc.status_code == 409:
+                return
+            raise
+    authorization = authorize_import(settings, limit, False)
     bucket = int(utcnow().timestamp()) // (60 * settings.ingestion_interval_minutes)
     await enqueue_job(
         session,
         "icloud_discovery",
         payload={
             "source": "icloud",
-            "limit": settings.ingestion_import_limit,
+            "limit": limit,
+            "mode": "incremental",
+            "authorization": authorization,
         },
         idempotency_key=f"scheduled:icloud:{bucket}",
     )
+    identifier = sha256(
+        f"{settings.icloud_account}:{settings.icloud_library}".encode()
+    ).hexdigest()
+    library = await session.scalar(
+        select(Library).where(
+            Library.source_type == "icloud", Library.source_identifier == identifier
+        )
+    )
+    if library is None:
+        return
+    active = await session.scalar(
+        select(DiscoveryScan.id)
+        .where(
+            DiscoveryScan.library_id == library.id,
+            DiscoveryScan.mode == "reconciliation",
+            DiscoveryScan.status.in_(("discovering", "interrupted")),
+        )
+        .limit(1)
+    )
+    last_deep = await session.scalar(
+        select(DiscoveryScan.updated_at)
+        .where(
+            DiscoveryScan.library_id == library.id,
+            DiscoveryScan.mode.in_(("backfill", "reconciliation")),
+            DiscoveryScan.status == "completed",
+        )
+        .order_by(DiscoveryScan.updated_at.desc())
+        .limit(1)
+    )
+    interval = timedelta(hours=getattr(settings, "reconciliation_interval_hours", 168))
+    if active or (last_deep and utcnow() - last_deep >= interval):
+        await enqueue_job(
+            session,
+            "icloud_discovery",
+            payload={
+                "source": "icloud",
+                "limit": limit,
+                "mode": "incremental",
+                "full_scan": True,
+                "authorization": authorization,
+            },
+            idempotency_key=f"scheduled:reconciliation:{library.id}:{bucket}",
+            priority=-10,
+        )
 
 
 @dataclass(frozen=True)
@@ -401,6 +574,7 @@ class ICloudAdapter:
         self.settings = settings
         self.client: Any = None
         self.library: Any = None
+        self.last_cache_incident: dict[str, Any] | None = None
 
     def connect(self) -> list[str]:
         import importlib.metadata
@@ -542,20 +716,36 @@ class ICloudAdapter:
                 "Representação excede limite por arquivo",
             )
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if target.is_file() and target.stat().st_size == version.size:
+        # Neither byte length nor Apple's opaque checksum establishes local integrity.
+        # The completion marker binds a verified local digest to this representation.
+        from photointel.services.download_cache import (
+            cache_binding,
+            complete_download,
+            completed_cache_valid,
+            partial_offset,
+            record_cache_incident,
+            write_partial_marker,
+        )
+
+        binding = cache_binding(version, target)
+        if completed_cache_valid(target, binding):
             return 0
+        if target.exists():
+            self.last_cache_incident = record_cache_incident(target, binding)
         partial = target.with_suffix(".part")
-        offset = partial.stat().st_size if partial.exists() else 0
+        offset = partial_offset(partial, binding)
         if offset >= version.size:
             partial.unlink()
             offset = 0
         transferred = 0
         response = photo.download(self.client.session, version.url, start=offset)
         try:
-            if response.status_code in (401, 403, 429):
+            if response.status_code in (401, 403, 404, 410, 429):
                 code = {
                     401: ErrorCode.ICLOUD_AUTH_EXPIRED,
                     403: ErrorCode.ICLOUD_ACCESS_DENIED,
+                    404: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
+                    410: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
                     429: ErrorCode.ICLOUD_RATE_LIMITED,
                 }[response.status_code]
                 if response.status_code == 401:
@@ -573,6 +763,11 @@ class ICloudAdapter:
             if offset and response.status_code != 206:
                 offset = 0
             if response.status_code == 206:
+                if not offset:
+                    raise AppError(
+                        ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                        "Resposta parcial não corresponde a uma retomada validada",
+                    )
                 match = re.fullmatch(
                     r"bytes (\d+)-(\d+)/(\d+)",
                     response.headers.get("Content-Range", ""),
@@ -594,6 +789,7 @@ class ICloudAdapter:
                     ErrorCode.MEDIA_DOWNLOAD_FAILED,
                     "Resposta excede o limite de download",
                 )
+            write_partial_marker(partial, binding)
             with partial.open("ab" if offset else "wb") as output:
                 os.chmod(partial, 0o600)
                 for chunk in response.iter_content(chunk_size=64 * 1024):
@@ -616,10 +812,12 @@ class ICloudAdapter:
                     ErrorCode.MEDIA_DOWNLOAD_FAILED,
                     "Download incompleto; parcial preservado para retomar",
                 )
-            partial.replace(target)
+            complete_download(partial, target, binding)
             return transferred
         finally:
             response.close()
+            if partial.is_file() and not partial.is_symlink():
+                write_partial_marker(partial, binding)
 
 
 def _next_photo(iterator: Any) -> Any:
@@ -635,267 +833,22 @@ async def ingest_icloud(
     job_id: UUID | None = None,
     batch_id: UUID | None = None,
 ) -> dict[str, Any]:
-    if not settings.icloud_enabled or not settings.icloud_account:
-        raise AppError(
-            ErrorCode.ICLOUD_ACCESS_DENIED,
-            "Configure e habilite integração iCloud",
-            503,
-        )
-    limit = min(max(1, limit), settings.ingestion_import_limit)
-    identifier = sha256(
-        f"{settings.icloud_account}:{settings.icloud_library}".encode(),
-    ).hexdigest()
-    await session.execute(
-        text("SELECT pg_advisory_xact_lock(:key)"),
-        {
-            "key": int.from_bytes(bytes.fromhex(identifier)[:8], "big", signed=True),
-        },
-    )
-    adapter = ICloudAdapter(settings)
-    try:
-        await asyncio.to_thread(adapter.connect)
-    except AppError:
-        raise
-    except Exception as exc:
-        code, reason = classify_icloud_failure(type(exc).__name__)
-        await asyncio.to_thread(record_authentication, settings, "unavailable", reason)
-        raise AppError(code, reason, 503) from exc
-    library = await _library(session, "icloud", identifier, settings.icloud_library)
-    library.last_attempted_scan = utcnow()
-    run = IngestionRun(library_id=library.id, job_id=job_id, full_scan=False)
-    session.add(run)
-    # Rotating scans avoid assuming capture date equals addition date. Persisted
-    # offset bounds each execution; complete cycles reconcile missing candidates.
-    config = dict(library.configuration)
-    offset = 0 if full_scan else int(config.get("scan_offset", 0))
-    scan_token = str(config.get("scan_token") or uuid4())
-    if full_scan:
-        scan_token = str(uuid4())
-    import itertools
+    """Compatibility entry point: discovery commits independently of one caller.
 
-    # Revisit a bounded head on every incremental run while rotating through older
-    # capture dates. Backdated additions are eventually found by the deep cursor.
-    head_limit = min(50, limit // 2) if offset and not full_scan else 0
-    iterator = itertools.chain(
-        ((photo, False) for photo in itertools.islice(adapter.assets(), head_limit)),
-        ((photo, True) for photo in adapter.assets(offset)),
-    )
-    deep_count = 0
-    count = imported = skipped = failed = transferred = 0
-    exhausted = False
-    while count < limit:
-        entry = await asyncio.to_thread(_next_photo, iterator)
-        if entry is None:
-            exhausted = True
-            break
-        photo, from_deep_scan = entry
-        count += 1
-        deep_count += int(from_deep_scan)
-        remote = await asyncio.to_thread(adapter.describe, photo)
-        version = remote.version
-        source = {
-            "downloader_id": remote.source_key,
-            "icloud_library": settings.icloud_library,
-            "source_account": sha256(settings.icloud_account.encode()).hexdigest(),
-            "scan_token": scan_token,
-            "source_identity_kind": "icloudpd_not_phcloud",
-            "representation": settings.download_representation,
-            "live_photo": bool(remote.live_resources),
-        }
-        metadata_revision = revision_hash(
-            {
-                "id": remote.source_key,
-                "original_bytes": remote.original_size,
-                "representation_checksum": remote.representation_checksum,
-                "representation_bytes": remote.representation_size,
-            }
-        )
-        source_snapshot = {
-            "filename": remote.filename,
-            "original_bytes": remote.original_size,
-            "captured_at": remote.captured_at.isoformat() if remote.captured_at else None,
-            "added_at": remote.added_at.isoformat() if remote.added_at else None,
-            "dimensions": remote.dimensions,
-            "content_revision": metadata_revision,
-        }
-        source["metadata_revision"] = revision_hash(source_snapshot)
-        identity_hash = sha256(remote.source_key.encode()).hexdigest()
-        relative = f"{identity_hash}/{metadata_revision}.image"
-        source["cache_relative_path"] = relative
-        existing = await session.scalar(
-            select(Asset).where(
-                Asset.library_id == library.id,
-                Asset.source_asset_key == remote.source_key,
-            )
-        )
-        snapshot_changed = (
-            existing is None
-            or existing.source_metadata.get(
-                "metadata_revision",
-            )
-            != source["metadata_revision"]
-        )
-        if (
-            existing
-            and existing.content_revision == metadata_revision
-            and existing.ingestion_status == "completed"
-        ):
-            if snapshot_changed:
-                session.add(
-                    MetadataSnapshot(
-                        asset_id=existing.id,
-                        source="icloud",
-                        revision_hash=source["metadata_revision"],
-                        payload=source_snapshot,
-                    )
-                )
-            existing.filename = remote.filename
-            if remote.original_size is not None:
-                existing.filesize = remote.original_size
-            if remote.captured_at is not None:
-                existing.captured_at = remote.captured_at
-            if remote.added_at is not None:
-                existing.added_at = remote.added_at
-            if remote.dimensions:
-                existing.width, existing.height = remote.dimensions
-            existing.source_metadata = {**existing.source_metadata, **source}
-            existing.visibility_status = "active"
-            existing.missing_scan_count = 0
-            skipped += 1
-            continue
-        if remote.media_type == "image" and version:
-            if version.size > settings.max_download_bytes:
-                source["representation_unavailable"] = "exceeds_download_limit"
-            elif transferred + version.size > settings.max_run_download_bytes:
-                count -= 1  # Resume from this asset in the next bounded run.
-                deep_count -= int(from_deep_scan)
-                break
-            else:
-                try:
-                    target = (settings.icloud_download_directory / relative).resolve()
-                    transferred += await asyncio.to_thread(
-                        adapter.download,
-                        photo,
-                        version,
-                        target,
-                    )
-                except Exception as exc:
-                    code = (
-                        exc.code
-                        if isinstance(exc, AppError)
-                        else ErrorCode.MEDIA_DOWNLOAD_FAILED
-                    )
-                    source["representation_unavailable"] = str(code)
-                    failed += 1
-                    # Let the durable discovery job retry. Already downloaded files
-                    # are reused, while rolled-back catalog changes remain atomic.
-                    raise AppError(
-                        code,
-                        "Falha ao baixar mídia; execução será retomada",
-                        503,
-                    ) from exc
-        elif remote.media_type == "image":
-            source["representation_unavailable"] = (
-                "requested_representation_missing_no_fallback"
-            )
-        asset, created = await _upsert_asset(
-            session,
-            library,
-            source_key=remote.source_key,
-            filename=remote.filename,
-            revision=metadata_revision,
-            metadata=source,
-            size=remote.original_size,
-            media_type=remote.media_type,
-            captured_at=remote.captured_at,
-            added_at=remote.added_at,
-            batch_id=batch_id,
-        )
-        if snapshot_changed:
-            session.add(
-                MetadataSnapshot(
-                    asset_id=asset.id,
-                    source="icloud",
-                    revision_hash=source["metadata_revision"],
-                    payload=source_snapshot,
-                )
-            )
-        # Linked Live Photo video resources stay under this asset; no video
-        # download is needed for v1 image inference.
-        for size_name, byte_size in remote.live_resources:
-            resource_type = f"source_live_video_{size_name}"
-            linked = await session.scalar(
-                select(AssetResource).where(
-                    AssetResource.asset_id == asset.id,
-                    AssetResource.resource_type == resource_type,
-                    AssetResource.revision == metadata_revision,
-                )
-            )
-            if linked is None:
-                session.add(
-                    AssetResource(
-                        asset_id=asset.id,
-                        resource_type=resource_type,
-                        source_identifier=f"{remote.source_key}:{size_name}",
-                        revision=metadata_revision,
-                        byte_size=byte_size,
-                        mime_type="video/quicktime",
-                        status="catalog_only",
-                    )
-                )
-        if remote.dimensions:
-            asset.width, asset.height = remote.dimensions
-        if source.get("representation_unavailable"):
-            asset.ingestion_status = "unavailable"
-            asset.last_error = str(source["representation_unavailable"])
-        imported += int(created)
-    if exhausted:
-        # Only a successfully exhausted full rotation can mark an item as a
-        # candidate. No scan can delete a metadata row, media, or an Apple asset.
-        from sqlalchemy import update
+    A discovery job queues per-asset downloads; it never downloads the entire batch.
+    Authorization must already be persisted on a dispatched job. Direct operator
+    calls remain bounded by the initial limit unless they dispatch an authorized job.
+    """
+    from photointel.services.discovery import discover_icloud
 
-        await session.execute(
-            update(Asset)
-            .where(
-                Asset.library_id == library.id,
-                Asset.source_metadata["scan_token"].as_string() != scan_token,
-                Asset.visibility_status.not_in(("archived", "unavailable")),
-            )
-            .values(
-                missing_scan_count=Asset.missing_scan_count + 1,
-                visibility_status="missing_candidate",
-            )
-        )
-        await session.execute(
-            update(Asset)
-            .where(
-                Asset.library_id == library.id,
-                Asset.visibility_status == "missing_candidate",
-                Asset.missing_scan_count >= settings.reconcile_missing_scans,
-            )
-            .values(visibility_status="confirmed_missing")
-        )
-        config.update(scan_offset=0, scan_token=str(uuid4()))
-        run.full_scan = True
-    else:
-        config.update(scan_offset=offset + deep_count, scan_token=scan_token)
-    library.configuration = config
-    library.last_successful_scan = utcnow()
-    run.discovered, run.imported = count, imported
-    run.failed, run.skipped = failed, skipped
-    run.bytes_transferred = transferred
-    run.status, run.finished_at = "completed", utcnow()
-    await session.flush()
-    return {
-        "run_id": str(run.id),
-        "discovered": count,
-        "imported": imported,
-        "failed": failed,
-        "skipped": skipped,
-        "bytes_transferred": transferred,
-        "full_rotation_completed": exhausted,
-        "next_offset": config["scan_offset"],
-    }
+    await session.commit()
+    return await discover_icloud(
+        settings,
+        execution_limit=limit,
+        full_scan=full_scan,
+        job_id=job_id,
+        batch_id=batch_id,
+    )
 
 
 async def run_scheduler() -> None:

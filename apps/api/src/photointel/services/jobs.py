@@ -293,6 +293,10 @@ async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
             func.count().filter(Job.status.not_in(TERMINAL)).label("pending"),
             func.count().filter(Job.status == "failed").label("failed"),
             func.count().filter(Job.status == "cancelled").label("cancelled"),
+            func.count().label("job_count"),
+            func.count()
+            .filter(Job.progress["skipped"].as_boolean().is_(True))
+            .label("skipped_jobs"),
         )
         .where(Job.batch_id == batch_id, Job.asset_id.is_not(None))
         .group_by(
@@ -309,11 +313,19 @@ async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
                     (per_asset.c.pending == 0)
                     & (per_asset.c.failed == 0)
                     & (per_asset.c.cancelled == 0)
+                    & (per_asset.c.skipped_jobs < per_asset.c.job_count)
                 )
                 .label("completed"),
                 func.count().filter(per_asset.c.failed > 0).label("failed"),
                 func.count()
-                .filter((per_asset.c.cancelled > 0) & (per_asset.c.failed == 0))
+                .filter(
+                    (
+                        (per_asset.c.cancelled > 0)
+                        | (per_asset.c.skipped_jobs == per_asset.c.job_count)
+                    )
+                    & (per_asset.c.failed == 0)
+                    & (per_asset.c.pending == 0)
+                )
                 .label("skipped"),
             ).select_from(per_asset)
         )
