@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     ingestion_maximum_attempts: int = Field(default=5, ge=1, le=20)
     backfill_concurrency: int = Field(default=2, ge=1, le=16)
     incremental_overlap_assets: int = Field(default=100, ge=1, le=10000)
+    reconciliation_interval_hours: int = Field(default=168, ge=24, le=8760)
     ingestion_interval_minutes: int = Field(default=60, ge=5, le=10080)
     ingestion_import_limit: int = Field(default=100, ge=1, le=1_000_000)
     download_representation: Literal["medium", "thumb", "original"] = "medium"

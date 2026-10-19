@@ -7,7 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
 import { searchAssets } from '../api/generated-client';
 import type { Album, Asset, Page, SearchRequest } from '../api/types';
-import { date, number } from '../lib/format';
+import { date, number, obj, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { Empty, ErrorState, PrivateImage, Skeleton } from './common';
 import { Button } from './ui/button';
@@ -35,6 +35,7 @@ export function Gallery({ search, compact = false, albumId }: {
   const query = useInfiniteQuery({ queryKey: ['gallery', search], initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => searchAssets({ ...search, cursor: pageParam }), getNextPageParam: (page) => page.next_cursor ?? undefined });
   const assets = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const explanation = obj(query.data?.pages[0]?.explanation);
   const columns = width < 600 ? [3, 4, 2][density] : width < 1000 ? [5, 7, 4][density] : [7, 10, 5][density];
   const rowCount = Math.ceil(assets.length / columns);
   const rowHeight = width / columns + 36;
@@ -42,9 +43,10 @@ export function Gallery({ search, compact = false, albumId }: {
     getScrollElement: () => scroll.current, estimateSize: () => rowHeight, overscan: 5 });
   const visible = virtualizer.getVirtualItems();
   const lastIndex = visible.at(-1)?.index ?? 0;
-  useEffect(() => { if (lastIndex >= rowCount - 3 && query.hasNextPage && !query.isFetchingNextPage)
-    void query.fetchNextPage();
-  }, [lastIndex, rowCount, query.hasNextPage, query.isFetchingNextPage, query.fetchNextPage]);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  useEffect(() => { if (lastIndex >= rowCount - 3 && hasNextPage && !isFetchingNextPage)
+    void fetchNextPage();
+  }, [lastIndex, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage]);
   useEffect(() => {
     if (!scroll.current) return;
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
@@ -93,6 +95,12 @@ export function Gallery({ search, compact = false, albumId }: {
           }}>Remover do álbum</Button>}
         <Button variant="ghost" size="sm" onClick={clear} aria-label="Limpar seleção"><X size={14} /></Button>
       </div></div>}
+    {explanation.semantic_status === 'unavailable' && <div className="notice warning" role="status">
+      <span><strong>Busca semântica temporariamente indisponível.</strong>{' '}
+        {text(explanation.semantic_warning ?? 'Os filtros exatos continuam aplicados. Não há pontuação de similaridade nesta resposta.')}</span>
+      {explanation.semantic_retryable === true && <Button variant="outline" size="sm"
+        disabled={query.isFetching} onClick={() => void query.refetch()}>Tentar busca semântica novamente</Button>}
+    </div>}
     {query.isPending ? <Skeleton count={8} /> : query.error ?
       <ErrorState error={query.error} retry={() => void query.refetch()} /> : !assets.length ?
         <Empty title="Seu próximo olhar começa aqui" description="Nenhuma fotografia corresponde a esta

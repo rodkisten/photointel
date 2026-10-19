@@ -76,10 +76,10 @@ export function SearchPage() {
     <form onSubmit={(event) => { event.preventDefault(); apply(); }}><div className="search-input-wrap">
       <Sparkles size={19} /><input aria-label="Busca semântica em português" value={query} maxLength={1000}
         placeholder="Paisagem com montanhas ao pôr do sol…" onChange={(event) => setQuery(event.target.value)} />
-      <Button disabled={!!query.trim() && !semanticReady}><Search size={14} />Buscar</Button></div></form>
+      <Button><Search size={14} />Buscar</Button></div></form>
     <p className="search-note"><Info size={12} /><span>{semanticReady ?
       'Sua frase é interpretada por embeddings SigLIP 2. Datas, tags e medidas são filtros exatos aplicados separadamente.' :
-      `Busca semântica indisponível: ${semantic?.reason ?? 'consultando configuração'}. Você pode usar os filtros exatos abaixo.`}</span></p>
+      `Busca semântica indisponível: ${semantic?.reason ?? 'consultando configuração'}. A busca mantém os filtros exatos e informa quando não há relevância semântica.`}</span></p>
     <div className="toolbar"><Button variant={advanced ? 'default' : 'outline'} size="sm"
       onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={13} />Filtros avançados</Button>
       <select className="input" aria-label="Ordenar resultados" style={{ width: 175 }} value={sort}
@@ -110,7 +110,7 @@ export function SearchPage() {
     </div><div className="panel-section"><h3 style={{ marginBottom: 13 }}>Regras e grupos booleanos</h3>
       <FilterBuilder node={tree} onChange={setTree} /></div>
       <div className="form-actions"><Button variant="outline" onClick={reset}>Limpar filtros</Button>
-        <Button onClick={apply} disabled={!!query.trim() && !semanticReady}>Aplicar filtros exatos</Button></div></div>}
+        <Button onClick={apply}>Aplicar filtros exatos</Button></div></div>}
     {!!saved.data?.items.length && <div className="saved-list">{saved.data.items.map((item) =>
       <div className="saved-item" key={item.id}><button onClick={() => loadSaved(item.query)}>
         <Bookmark size={10} style={{ display: 'inline', marginRight: 6 }} />{item.name}</button>

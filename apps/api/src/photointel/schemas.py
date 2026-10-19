@@ -358,10 +358,13 @@ class ReindexInput(Contract):
 
 class IngestionInput(Contract):
     source: Literal["icloud", "fixture"] = "icloud"
+    mode: Literal["incremental", "backfill"] = "incremental"
     limit: int = Field(default=100, ge=1, le=10000)
     library_id: UUID | None = None
     full_scan: bool = False
     confirm_expansion: bool = False
+    target_assets: int | None = Field(default=None, ge=1, le=5_000_000)
+    confirm_full_backfill: bool = False
 
 
 class CategoryRule(Contract):

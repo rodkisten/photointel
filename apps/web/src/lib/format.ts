@@ -32,5 +32,9 @@ export const statusNames: Record<string, string> = {
   conflict: 'Conflito', read_only: 'Somente leitura', write_verified: 'Escrita verificada',
   unverified: 'Não verificado', verified: 'Verificado', ambiguous: 'Ambíguo',
   unmapped: 'Sem vínculo', valid: 'Válida', unknown: 'Não verificada',
+  discovered: 'Descoberto', downloading: 'Baixando', downloaded: 'Download concluído',
+  quarantined: 'Em quarentena', blocked: 'Bloqueado', not_verified: 'Não verificado',
+  passed: 'Passou', identified: 'Identificada', unidentified: 'Não identificada',
+  configured: 'Configurado, não verificado', healthy: 'Disponível', degraded: 'Requer atenção',
 };
 export const statusLabel = (value: unknown) => statusNames[String(value)] ?? text(value);

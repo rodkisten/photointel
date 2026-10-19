@@ -5,6 +5,7 @@ import { useApi } from '../api/client';
 import type { Capabilities, Info, Page, Asset } from '../api/types';
 import { ErrorState, PageHeader, PrivateImage, Skeleton, Status } from '../components/common';
 import { Button } from '../components/ui/button';
+import { SetupStatusPanel } from '../components/setup-status';
 import { bytes, date, number, obj, text } from '../lib/format';
 
 export function Overview() {
@@ -22,6 +23,7 @@ export function Overview() {
     actions={<Button asChild variant="outline"><Link to="/icloud"><Cloud size={14} />
       Sincronizar iCloud</Link></Button>} />
     {stats.error && <ErrorState error={stats.error} retry={() => void stats.refetch()} />}
+    <SetupStatusPanel compact />
     <div className="overview-intro"><div><p className="eyebrow">PHOTO INTELLIGENCE CLOUD</p>
       <h2>Suas memórias. Mais fáceis de encontrar.</h2>
       <p>Busque por uma ideia em português, explore palavras-chave e redescubra fotografias.

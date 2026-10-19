@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="Photo Intelligence Cloud",
-        version="1.0.0",
+        version="1.1.0",
         description="Catálogo privado, metadata, jobs e inteligência visual.",
         lifespan=lifespan,
         docs_url=None if settings.is_production else "/docs",
@@ -55,7 +55,11 @@ def create_app() -> FastAPI:
             "Cf-Access-Jwt-Assertion",
             "Authorization",
             "Last-Event-ID",
+            "If-None-Match",
+            "If-Range",
+            "Range",
         ],
+        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
     )
 
     @app.exception_handler(AppError)
@@ -198,6 +202,9 @@ def create_app() -> FastAPI:
     from photointel.routers.bridge import router as bridge
 
     app.include_router(bridge, prefix="/v1")
+    from photointel.routers.readiness import router as readiness
+
+    app.include_router(readiness, prefix="/v1")
     return app
 
 

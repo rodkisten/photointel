@@ -17,6 +17,7 @@ import { JobsPage } from './pages/jobs';
 import { ICloudPage } from './pages/icloud';
 import { BridgePage } from './pages/bridge';
 import { SettingsPage } from './pages/settings';
+import { SetupPage } from './pages/setup';
 
 const navigation = [
   { to: '/', label: 'Visão geral', icon: Home },
@@ -29,6 +30,7 @@ const navigation = [
   { to: '/icloud', label: 'Sincronização iCloud', icon: Cloud },
   { to: '/bridge', label: 'Apple Bridge', icon: Fingerprint },
   { to: '/settings', label: 'Configurações', icon: Settings },
+  { to: '/setup', label: 'Preparação e validação', icon: ShieldCheck },
 ];
 function Shell() {
   const [menu, setMenu] = useState(false);
@@ -40,7 +42,7 @@ function Shell() {
   return <div className="app-shell"><a href="#main" className="skip-link">Ir para conteúdo</a>
     <aside className="sidebar"><NavLink className="brand" to="/">
       <span className="brand-icon"><Aperture size={23} /></span>
-      <span>Photo Intelligence<small>PRIVATE CLOUD · v1.0</small></span></NavLink>
+      <span>Photo Intelligence<small>PRIVATE CLOUD · v1.1</small></span></NavLink>
       <nav aria-label="Navegação principal">{navigation.map(({ to, label, icon: Icon }, index) =>
         <NavLink key={to} to={to} end={to === '/'} className={index === 6 ? 'nav-divider' : ''}>
           <Icon size={17} /><span>{label}</span></NavLink>)}</nav>
@@ -76,6 +78,7 @@ export default function App() {
     <Route path="jobs" element={<JobsPage />} /><Route path="icloud" element={<ICloudPage />} />
     <Route path="bridge" element={<BridgePage />} />
     <Route path="settings" element={<SettingsPage />} />
+    <Route path="setup" element={<SetupPage />} />
     <Route path="*" element={<div className="empty-state"><h1>Página não encontrada</h1>
       <Button asChild><NavLink to="/library">Voltar à biblioteca</NavLink></Button></div>} />
   </Route></Routes>;

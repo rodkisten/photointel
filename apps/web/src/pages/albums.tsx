@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Edit3, Plus, Search } from 'lucide-react';
-import { useAction, useApi } from '../api/client';
+import { request, useAction, useApi } from '../api/client';
 import type { Album, Page, SearchRequest } from '../api/types';
 import { Empty, ErrorState, PageHeader, PrivateImage, Skeleton } from '../components/common';
 import { Gallery } from '../components/gallery';
@@ -21,7 +22,9 @@ export function AlbumsPage() {
   const [editing, setEditing] = useState<Album | null>(null);
   const query = useApi<Page<Album>>(`/v1/albums?q=${encodeURIComponent(q)}&limit=100`);
   const create = useAction<Album>('/v1/albums'); const patch = useAction<Album>(undefined, 'PATCH');
-  const active = query.data?.items.find((album) => album.id === activeId);
+  const detailPath = `/v1/albums/${encodeURIComponent(activeId ?? '')}`;
+  const detail = useQuery({queryKey: [detailPath], queryFn: () => request<Album>(detailPath), enabled: !!activeId});
+  const active = detail.data;
   const form = useForm<AlbumForm>({ resolver: zodResolver(albumSchema), defaultValues: { name: '', description: '' } });
   const search = useMemo<SearchRequest>(() => ({ limit: 90,
     sort: active?.sort_order === 'added_desc' ? 'added_desc' : 'captured_desc',
@@ -39,7 +42,7 @@ export function AlbumsPage() {
     description={active?.description ?? 'Organize histórias com álbuns que pertencem ao seu catálogo privado.'}
     actions={active ? <Button variant="outline" onClick={() => start(active)}><Edit3 size={13} />Editar álbum</Button> :
       <Button onClick={() => start()}><Plus size={14} />Criar álbum</Button>} />
-    {activeId ? <><div className="toolbar"><Button variant="ghost" size="sm" onClick={() => setParams({})}>
+    {activeId ? <>{detail.error && <ErrorState error={detail.error} retry={() => void detail.refetch()} />}<div className="toolbar"><Button variant="ghost" size="sm" onClick={() => setParams({})}>
       <ArrowLeft size={13} />Todos os álbuns</Button><span className="muted">Selecione fotos para removê-las deste álbum.</span>
       {active && <select className="input" style={{ width: 170 }} aria-label="Ordenar álbum" value={active.sort_order}
         onChange={(event) => patch.mutate({ url: `/v1/albums/${active.id}`, body: { sort_order: event.target.value } })}>

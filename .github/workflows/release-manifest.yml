@@ -1,0 +1,38 @@
+name: Generate release provenance (no deployment)
+on:
+  workflow_dispatch:
+    inputs:
+      container_digest:
+        description: Optional immutable container digest (sha256:...), not an image tag
+        required: false
+        type: string
+      modal_deployment_id:
+        description: Optional already-deployed Modal ID; no deployment is performed
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Generate commit-bound provenance without claiming tests ran
+        env:
+          CONTAINER_DIGEST: ${{ inputs.container_digest }}
+          MODAL_DEPLOYMENT_ID: ${{ inputs.modal_deployment_id }}
+        run: |
+          arguments=(--ci-run-id "$GITHUB_RUN_ID")
+          if [ -n "$CONTAINER_DIGEST" ]; then
+            arguments+=(--container-digest "$CONTAINER_DIGEST")
+          fi
+          if [ -n "$MODAL_DEPLOYMENT_ID" ]; then
+            arguments+=(--modal-deployment-id "$MODAL_DEPLOYMENT_ID")
+          fi
+          python3 infra/scripts/release-manifest.py "${arguments[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-provenance-${{ github.sha }}
+          path: reports/release-manifest.json
+          retention-days: 90

@@ -2421,3 +2421,33 @@ main {
     scroll-behavior: auto!important
   }
 }
+
+/* Operational setup uses the same surfaces and rhythm as the catalog. */
+.setup-panel { margin-bottom: 22px; }
+.setup-panel > .muted { line-height: 1.65; margin-bottom: 8px; }
+.setup-action { color: var(--color-foreground); font-size: 11px; margin-top: 6px; }
+.setup-next { display: flex; gap: 12px; align-items: center; margin-top: 18px; }
+.setup-next > div { flex: 1; min-width: 0; }
+.setup-next p { margin-top: 5px; font-size: 12px; line-height: 1.6; }
+.gate-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.gate-item { border: 1px solid var(--border); border-radius: 8px; padding: 18px; min-width: 0; }
+.gate-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.gate-title h3 { font-size: 13px; margin-top: 5px; }
+.gate-item > .muted { font-size: 12px; line-height: 1.7; }
+.gate-item > .inline { margin-top: 18px; flex-wrap: wrap; }
+.gate-requirements, .gate-references { padding-left: 17px; color: var(--muted); font-size: 11px; line-height: 1.8; margin-top: 10px; }
+.gate-item details { font-size: 11px; margin-top: 12px; }
+.gate-item summary { cursor: pointer; color: var(--color-foreground); }
+.gate-references code, .release-revision, .release-reference { overflow-wrap: anywhere; word-break: break-word; }
+.release-revision { font-size: 10px; max-width: 68%; text-align: right; }
+.failure-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.failure-row { align-items: flex-start; }
+.failure-row > div:first-child { min-width: 0; }
+.failure-row strong { overflow-wrap: anywhere; }
+@media(max-width: 720px) {
+  .gate-list { grid-template-columns: minmax(0,1fr); }
+  .setup-next { align-items: flex-start; flex-wrap: wrap; }
+  .setup-next .button { margin-left: 28px; }
+  .failure-row { flex-wrap: wrap; gap: 10px; }
+  .failure-actions { justify-content: flex-start; }
+}

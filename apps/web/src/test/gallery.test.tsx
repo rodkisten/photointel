@@ -99,6 +99,19 @@ describe('private virtualized gallery', () => {
     ).length).toBeGreaterThan(1));
   });
 
+  it('preserves exact results and offers a real retry when semantic inference is unavailable', async () => {
+    fetcher.mockImplementation(async () => Response.json({
+      items: [], next_cursor: null, explanation: {semantic_status: 'unavailable',
+        semantic_warning: 'Filtros exatos preservados; sem pontuação semântica.', semantic_retryable: true},
+    }));
+    show();
+    expect(await screen.findByText('Busca semântica temporariamente indisponível.')).toBeVisible();
+    expect(screen.getByText(/Filtros exatos preservados/)).toBeVisible();
+    const before = fetcher.mock.calls.length;
+    await userEvent.setup().click(screen.getByRole('button', {name: 'Tentar busca semântica novamente'}));
+    await waitFor(() => expect(fetcher.mock.calls.length).toBeGreaterThan(before));
+  });
+
   it('offers an actionable empty state instead of a fabricated gallery', async () => {
     fetcher.mockImplementation(async () => Response.json({
       items: [], next_cursor: null, explanation: {},

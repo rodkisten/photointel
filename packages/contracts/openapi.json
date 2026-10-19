@@ -3,7 +3,7 @@
   "info": {
     "title": "Photo Intelligence Cloud",
     "description": "Catálogo privado, metadata, jobs e inteligência visual.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "paths": {
     "/health/live": {
@@ -3712,6 +3712,343 @@
           }
         }
       }
+    },
+    "/v1/release": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Release",
+        "operationId": "release_v1_release_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/verification/gates": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Gates",
+        "operationId": "gates_v1_verification_gates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationGates"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Attest Gate",
+        "operationId": "attest_gate_v1_verification_gates_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationGates"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup/status": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Setup Status",
+        "operationId": "setup_status_v1_setup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ingestion/preview": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Import Preview",
+        "operationId": "import_preview_v1_ingestion_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Import Preview V1 Ingestion Preview Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ingestion/failures": {
+      "get": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Ingestion Failures",
+        "operationId": "ingestion_failures_v1_ingestion_failures_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "failed",
+                    "retrying",
+                    "quarantined"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionFailures"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ingestion/assets/{asset_id}/retry": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Retry Asset",
+        "operationId": "retry_asset_v1_ingestion_assets__asset_id__retry_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Retry Asset V1 Ingestion Assets  Asset Id  Retry Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ingestion/assets/{asset_id}/quarantine": {
+      "post": {
+        "tags": [
+          "ingestion"
+        ],
+        "summary": "Quarantine Asset",
+        "operationId": "quarantine_asset_v1_ingestion_assets__asset_id__quarantine_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Quarantine Asset V1 Ingestion Assets  Asset Id  Quarantine Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4871,6 +5208,69 @@
         ],
         "title": "FilterNode"
       },
+      "GateInput": {
+        "properties": {
+          "gate_id": {
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ],
+            "title": "Gate Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "not_verified"
+            ],
+            "title": "Status"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Evidence"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "release_sha": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$",
+            "title": "Release Sha"
+          },
+          "operator_attestation": {
+            "type": "boolean",
+            "const": true,
+            "title": "Operator Attestation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gate_id",
+          "status",
+          "release_sha",
+          "operator_attestation"
+        ],
+        "title": "GateInput"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4884,6 +5284,111 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IngestionFailure": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "failure_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Category"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Details"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "maximum_attempts": {
+            "type": "integer",
+            "title": "Maximum Attempts"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "filename",
+          "status",
+          "failure_category",
+          "error_code",
+          "error_details",
+          "attempts",
+          "maximum_attempts",
+          "updated_at"
+        ],
+        "title": "IngestionFailure"
+      },
+      "IngestionFailures": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionFailure"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "IngestionFailures"
+      },
       "IngestionInput": {
         "properties": {
           "source": {
@@ -4894,6 +5399,15 @@
             ],
             "title": "Source",
             "default": "icloud"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "incremental",
+              "backfill"
+            ],
+            "title": "Mode",
+            "default": "incremental"
           },
           "limit": {
             "type": "integer",
@@ -4922,6 +5436,24 @@
           "confirm_expansion": {
             "type": "boolean",
             "title": "Confirm Expansion",
+            "default": false
+          },
+          "target_assets": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Assets"
+          },
+          "confirm_full_backfill": {
+            "type": "boolean",
+            "title": "Confirm Full Backfill",
             "default": false
           }
         },
@@ -5265,6 +5797,26 @@
         ],
         "title": "MappingConfirmation"
       },
+      "ModelRelease": {
+        "properties": {
+          "revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "ModelRelease"
+      },
       "Page_AlbumOut_": {
         "properties": {
           "items": {
@@ -5377,6 +5929,19 @@
         ],
         "title": "Page[TagOut]"
       },
+      "RecoveryInput": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "default": "Revisão manual do operador"
+          }
+        },
+        "type": "object",
+        "title": "RecoveryInput"
+      },
       "ReindexInput": {
         "properties": {
           "asset_ids": {
@@ -5418,6 +5983,187 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ReindexInput"
+      },
+      "ReleaseInfo": {
+        "properties": {
+          "manifest_version": {
+            "type": "integer",
+            "title": "Manifest Version"
+          },
+          "git_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Sha"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "build_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Timestamp"
+          },
+          "container_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Digest"
+          },
+          "frontend_release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frontend Release Id"
+          },
+          "api_version": {
+            "type": "string",
+            "title": "Api Version"
+          },
+          "database_migration_head": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database Migration Head"
+          },
+          "models": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ModelRelease"
+            },
+            "type": "object",
+            "title": "Models"
+          },
+          "modal_deployment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modal Deployment Id"
+          },
+          "infrastructure_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Infrastructure Hash"
+          },
+          "ci_run_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ci Run Ids"
+          },
+          "test_results": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseTest"
+            },
+            "type": "array",
+            "title": "Test Results"
+          },
+          "provenance_status": {
+            "type": "string",
+            "title": "Provenance Status"
+          },
+          "validation_status": {
+            "type": "string",
+            "title": "Validation Status"
+          },
+          "notice": {
+            "type": "string",
+            "title": "Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "manifest_version",
+          "git_sha",
+          "branch",
+          "build_timestamp",
+          "container_digest",
+          "frontend_release_id",
+          "api_version",
+          "database_migration_head",
+          "models",
+          "modal_deployment_id",
+          "infrastructure_hash",
+          "ci_run_ids",
+          "test_results",
+          "provenance_status",
+          "validation_status",
+          "notice"
+        ],
+        "title": "ReleaseInfo"
+      },
+      "ReleaseTest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "git_sha": {
+            "type": "string",
+            "title": "Git Sha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "status",
+          "reference",
+          "git_sha"
+        ],
+        "title": "ReleaseTest"
       },
       "ResourceOut": {
         "properties": {
@@ -5939,6 +6685,104 @@
         "type": "object",
         "title": "SettingsPatch"
       },
+      "SetupCheck": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "state",
+          "reason",
+          "action",
+          "href"
+        ],
+        "title": "SetupCheck"
+      },
+      "SetupNextAction": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "href": {
+            "type": "string",
+            "title": "Href"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "href",
+          "description"
+        ],
+        "title": "SetupNextAction"
+      },
+      "SetupStatus": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/SetupCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SetupNextAction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spending": {
+            "$ref": "#/components/schemas/SpendingState"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checks",
+          "next_action",
+          "spending",
+          "checked_at"
+        ],
+        "title": "SetupStatus"
+      },
       "SimilarRequest": {
         "properties": {
           "asset_id": {
@@ -5970,6 +6814,24 @@
           "asset_id"
         ],
         "title": "SimilarRequest"
+      },
+      "SpendingState": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "gpu_enabled": {
+            "type": "boolean",
+            "title": "Gpu Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "gpu_enabled"
+        ],
+        "title": "SpendingState"
       },
       "SyncProposal": {
         "properties": {
@@ -6474,6 +7336,84 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerificationGateOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified At"
+          },
+          "requirements": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requirements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "reason",
+          "evidence",
+          "verified_at",
+          "requirements"
+        ],
+        "title": "VerificationGateOut"
+      },
+      "VerificationGates": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VerificationGateOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "full_backfill_unlocked": {
+            "type": "boolean",
+            "title": "Full Backfill Unlocked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "full_backfill_unlocked"
+        ],
+        "title": "VerificationGates"
       }
     }
   }

@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.auth import Identity, require_identity
@@ -25,17 +25,21 @@ from photointel.models import (
     AssetTag,
     AuditEvent,
     BridgeDevice,
+    DispatchOutbox,
     Embedding,
     InferenceRun,
     IngestionRun,
     Job,
     JobBatch,
     JobEvent,
+    Library,
     ModelRegistry,
+    SessionState,
     Setting,
     SyncOperation,
     Tag,
     WorkerState,
+    utcnow,
 )
 from photointel.schemas import (
     IngestionInput,
@@ -46,6 +50,7 @@ from photointel.schemas import (
 )
 from photointel.serializers import decode_uuid_cursor, encode_cursor, row_dict
 from photointel.services.catalog import audit
+from photointel.services.import_policy import authorize_import
 from photointel.services.runtime_settings import effective_settings
 
 router = APIRouter(dependencies=[Depends(require_identity)])
@@ -373,7 +378,49 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
     )
     from photointel.services.ingestion import authentication_state
 
-    auth = await asyncio.to_thread(authentication_state, settings)
+    if settings.icloud_session_backend == "encrypted_object":
+        from photointel.services.session_store import session_scope
+
+        stored = (
+            await session.get(SessionState, session_scope(settings))
+            if settings.icloud_account and settings.icloud_library
+            else None
+        )
+        live_success = await session.scalar(
+            select(IngestionRun)
+            .join(Library, IngestionRun.library_id == Library.id)
+            .where(Library.source_type == "icloud", IngestionRun.status == "completed")
+            .order_by(IngestionRun.finished_at.desc())
+            .limit(1)
+        )
+        present = bool(stored and stored.object_key and not stored.revoked_at)
+        valid = bool(
+            present
+            and settings.icloud_enabled
+            and stored
+            and not stored.last_error
+            and live_success
+            and live_success.finished_at
+            and utcnow() - live_success.finished_at < timedelta(minutes=65)
+        )
+        auth = {
+            "state": "not_configured"
+            if not settings.icloud_enabled
+            else "valid"
+            if valid
+            else "expired"
+            if stored and stored.last_error
+            else "available_unverified"
+            if present
+            else "verification_required",
+            "valid": valid,
+            "checked_at": live_success.finished_at if live_success else None,
+            "reason": "Descoberta recente comprovou acesso; Apple pode expirar a sessão"
+            if valid
+            else "Execute o workflow de sessão criptografada pelo terminal",
+        }
+    else:
+        auth = await asyncio.to_thread(authentication_state, settings)
     return {
         "enabled": settings.icloud_enabled,
         "paused": bool(paused and paused.value),
@@ -381,6 +428,13 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
         "selected_library": settings.icloud_library,
         "interval_minutes": settings.ingestion_interval_minutes,
         "import_limit": settings.ingestion_import_limit,
+        "default_import_limit": min(
+            settings.initial_import_limit, settings.ingestion_import_limit
+        ),
+        "maximum_authorized_import_limit": settings.maximum_authorized_import_limit,
+        "hard_import_limit": settings.hard_import_limit,
+        "catalog_asset_limit": settings.catalog_asset_limit,
+        "database_profile": settings.database_profile,
         "last_run": row_dict(last) if last else None,
         "last_successful_sync": last_success.finished_at if last_success else None,
         "next_scheduled_sync": (
@@ -445,10 +499,43 @@ async def start_ingestion(
         raise AppError(
             ErrorCode.ICLOUD_ACCESS_DENIED, "Configure e habilite o iCloud no host", 409
         )
-    if body.limit > settings.ingestion_import_limit and not body.confirm_expansion:
-        raise AppError(
-            ErrorCode.INVALID_REQUEST, "Confirme expansão do limite inicial", 409
-        )
+    authorization = authorize_import(settings, body.limit, body.confirm_expansion)
+    backfill_authorization = None
+    if body.target_assets is not None:
+        if (
+            body.mode != "backfill"
+            or body.source != "icloud"
+            or not body.confirm_full_backfill
+            or settings.database_profile != "full"
+            or body.target_assets < body.limit
+            or body.target_assets > settings.catalog_asset_limit
+        ):
+            raise AppError(
+                ErrorCode.INVALID_REQUEST,
+                "Backfill exige confirmação, perfil full e capacidade autorizada",
+                409,
+            )
+        from photointel.services.release import get_release_manifest
+        from photointel.services.verification import gate_status
+
+        if not (await gate_status(session))["full_backfill_unlocked"]:
+            raise AppError(
+                ErrorCode.INVALID_REQUEST, "Conclua o gate F antes do backfill", 409
+            )
+        backfill_authorization = {
+            "target_assets": body.target_assets,
+            "release_sha": get_release_manifest()["git_sha"],
+            "authorized_by": identity.subject,
+            "approved_at": datetime.now(UTC).isoformat(),
+            "authorization": authorization,
+        }
+    if body.source == "icloud" and settings.verification_gates_enforced:
+        from photointel.services.verification import require_import_gates
+
+        await require_import_gates(session, body.limit)
+    # Transaction-scoped only: compatible with Neon transaction pooling. The lock
+    # ends before dispatch/network I/O and prevents overlapping API submissions.
+    await session.execute(text("SELECT pg_advisory_xact_lock(917314, 1)"))
     existing = await session.scalar(
         select(Job.id)
         .where(
@@ -468,10 +555,21 @@ async def start_ingestion(
         session,
         job_type="icloud_discovery",
         asset_id=None,
-        payload=body.model_dump(mode="json"),
+        payload={
+            **body.model_dump(mode="json"),
+            "authorization": authorization,
+            "backfill_authorization": backfill_authorization,
+        },
         batch_id=batch.id,
         idempotency_key=f"ingestion:{uuid4()}",
     )
+    if settings.execution_platform == "cloud_run":
+        session.add(
+            DispatchOutbox(
+                job_name="backfill" if body.mode == "backfill" else "discover",
+                idempotency_key=f"ingestion-dispatch:{job.id}",
+            )
+        )
     audit(session, identity, "ingestion.start", limit=body.limit, source=body.source)
     await session.commit()
     return {"job_id": job.id, "batch_id": batch.id, "status": job.status}

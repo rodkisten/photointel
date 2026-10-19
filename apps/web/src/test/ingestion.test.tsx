@@ -38,7 +38,7 @@ describe('controlled ingestion administration', () => {
     await user.click(screen.getByRole('button', { name: 'Importar fixtures locais' }));
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/v1/ingestion/start',
       expect.objectContaining({ method: 'POST', body: JSON.stringify({
-        source: 'fixture', limit: 4, full_scan: false, confirm_expansion: false,
+        source: 'fixture', limit: 4, mode: 'backfill', full_scan: false, confirm_expansion: false,
       }) }),
     ));
   });
