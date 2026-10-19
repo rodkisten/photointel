@@ -1,0 +1,21 @@
+{
+  "executed_at": "2026-10-19T15:02:17.971597+00:00",
+  "status": "passed",
+  "scope": "disposable databases and synthetic images only",
+  "migration_heads": [
+    "0006_query_embedding_cache"
+  ],
+  "files_verified": 8,
+  "bytes_verified": 96410,
+  "objects_restored_and_read_back": 3,
+  "database_fingerprints_match": true,
+  "synthetic_vectors": {
+    "count": 1,
+    "dimensions": 768
+  },
+  "images_decode_after_restore": 3,
+  "missing_preview_repaired": true,
+  "retry_idempotent": true,
+  "corruption_detected": true,
+  "database_contains_tags_albums_model_revisions_and_jobs": true
+}

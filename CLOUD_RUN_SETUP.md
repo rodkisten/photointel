@@ -137,16 +137,20 @@ make gcp-build GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJE
 make gcp-jobs-deploy GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID'
 # Somente na PRIMEIRA instalação em banco comprovadamente vazio:
 make gcp-migrate GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID --initial-empty-database'
-# Para banco existente, use diretório e recibo do backup validado:
-make gcp-migrate GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID --backup-directory backups/RELEASE --backup-receipt backups/RELEASE/verification.json'
+# Para banco existente, restaure o backup em destino isolado e use o recibo:
+make gcp-migrate GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID --backup-directory backups/RELEASE --backup-receipt backups/RELEASE/restore-verification.json'
 make gcp-deploy GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID'
 make gcp-scheduler GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID'
 ```
 
 Escolha apenas uma variante de `gcp-migrate`. O recibo deve corresponder ao ID e
-SHA-256 do manifesto criptografado e ter verificação feita há menos de 24 horas.
-É uma proteção operacional baseada em evidência fornecida pelo operador; não é
-uma assinatura criptográfica do processo nem substitui o restore real.
+SHA-256 do manifesto criptografado e ter restauração feita há menos de 24 horas.
+Somente `verification_kind=database-and-object-restore` com fingerprints do banco,
+head de migração e leitura dos objetos restaurados é aceito. `verify` sozinho não
+libera a migração; siga o restore isolado em [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md).
+É uma proteção operacional baseada em evidência fornecida pelo operador, sem
+assinatura independente do processo. O destino da primeira instalação deve ser
+verificado como vazio antes de usar a exceção explícita.
 
 O bootstrap do Scheduler publica três agendamentos e os deixa **pausados**.
 Não há backfill periódico. Jobs do Scheduler usam OAuth para a API Google

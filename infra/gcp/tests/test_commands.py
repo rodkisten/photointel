@@ -216,16 +216,25 @@ class CloudRunCommandsTests(unittest.TestCase):
             }
             (path / "backup.json").write_text(json.dumps(header))
             receipt = {
-                "verification_kind": "authenticated-content-integrity",
+                "verification_kind": "database-and-object-restore",
                 "backup_id": header["backup_id"],
                 "manifest_sha256": header["manifest_sha256"],
-                "status": "verified",
+                "status": "passed",
                 "verified_at": datetime.now(UTC).isoformat(),
                 "files_verified": 3,
+                "database_fingerprints_match": True,
+                "migration_heads": ["0006_query_embedding_cache"],
+                "objects_restored_and_read_back": 1,
             }
             receipt_path = path / "receipt.json"
             receipt_path.write_text(json.dumps(receipt))
             manage.verify_backup_receipt(path, receipt_path)
+            receipt["verification_kind"] = "authenticated-content-integrity"
+            receipt_path.write_text(json.dumps(receipt))
+            with self.assertRaises(manage.ConfigurationError):
+                manage.verify_backup_receipt(path, receipt_path)
+            receipt["verification_kind"] = "database-and-object-restore"
+            receipt_path.write_text(json.dumps(receipt))
             (path / "manifest.enc").write_bytes(b"tampered-ciphertext")
             with self.assertRaises(manage.ConfigurationError):
                 manage.verify_backup_receipt(path, receipt_path)

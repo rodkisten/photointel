@@ -64,10 +64,16 @@ class GoogleJobDispatcher:
         import google.auth
         from google.auth.transport.requests import Request
 
+        class BoundedRequest(Request):
+            def __call__(self, *args: Any, **kwargs: Any) -> Any:
+                kwargs["timeout"] = 10
+                return super().__call__(*args, **kwargs)
+
+        transport = BoundedRequest()
         if self._credentials is None:
-            self._credentials, _ = google.auth.default(scopes=SCOPES)
+            self._credentials, _ = google.auth.default(scopes=SCOPES, request=transport)
         if not self._credentials.valid:
-            self._credentials.refresh(Request())
+            self._credentials.refresh(transport)
         token = self._credentials.token
         if not isinstance(token, str) or not token:
             raise RuntimeError("Google service identity returned no access token")
@@ -110,10 +116,10 @@ class GoogleJobDispatcher:
             return name
         except AppError:
             raise
-        except Exception as exc:
+        except Exception:
             # Provider/credential exception messages can contain credential details.
             raise AppError(
                 ErrorCode.INTERNAL_ERROR,
                 "Despacho Cloud Run não confirmado; operação será reconciliada",
                 503,
-            ) from exc
+            ) from None

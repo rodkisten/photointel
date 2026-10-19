@@ -1,6 +1,6 @@
 """Fixed Cloud Run Jobs API invocation; ADC and network are mocked explicitly."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -78,3 +78,48 @@ async def test_dispatch_rejects_wrong_operation_project() -> None:
         )
         with pytest.raises(AppError):
             await dispatcher.dispatch("worker")
+
+
+def test_adc_resolution_and_refresh_have_a_bounded_transport(monkeypatch) -> None:
+    import google.auth
+    from google.auth.transport.requests import Request
+
+    calls = []
+
+    def bounded_request(_self, *args, **kwargs):
+        calls.append(kwargs["timeout"])
+        return Mock()
+
+    credentials = Mock(valid=False, token="test-only-refreshed-token")
+    credentials.refresh.side_effect = lambda request: request(
+        "https://metadata.google.internal/test-only", timeout=500
+    )
+
+    def application_default(*, scopes, request):
+        assert scopes == ["https://www.googleapis.com/auth/cloud-platform"]
+        request("https://metadata.google.internal/test-only", timeout=500)
+        return credentials, "photointel-test"
+
+    monkeypatch.setattr(Request, "__call__", bounded_request)
+    monkeypatch.setattr(google.auth, "default", application_default)
+    dispatcher = GoogleJobDispatcher(
+        DispatchConfiguration("photointel-test", "us-central1", enabled=True)
+    )
+    assert dispatcher._refresh_credentials() == "test-only-refreshed-token"
+    assert calls == [10, 10]
+
+
+@pytest.mark.asyncio
+async def test_credential_failure_suppresses_sensitive_exception_context() -> None:
+    dispatcher = GoogleJobDispatcher(
+        DispatchConfiguration("photointel-test", "us-central1", enabled=True)
+    )
+    dispatcher._access_token = AsyncMock(
+        side_effect=RuntimeError("credential-provider-private-details")
+    )
+    with pytest.raises(AppError) as failure:
+        await dispatcher.dispatch("worker")
+    assert failure.value.status_code == 503
+    assert "private-details" not in str(failure.value)
+    assert failure.value.__cause__ is None
+    assert failure.value.__suppress_context__ is True

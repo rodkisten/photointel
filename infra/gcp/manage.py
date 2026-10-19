@@ -786,7 +786,11 @@ def verify_backup_receipt(directory: Path, receipt_path: Path) -> None:
     if directory.is_symlink() or receipt_path.is_symlink():
         raise ConfigurationError("Backup references must not be symlinks")
     header_path = directory / "backup.json"
-    if not header_path.is_file() or header_path.stat().st_size > 65536:
+    if (
+        header_path.is_symlink()
+        or not header_path.is_file()
+        or header_path.stat().st_size > 65536
+    ):
         raise ConfigurationError("Backup header is missing or too large")
     if not receipt_path.is_file() or receipt_path.stat().st_size > 65536:
         raise ConfigurationError("Backup verification receipt is missing or too large")
@@ -809,11 +813,19 @@ def verify_backup_receipt(directory: Path, receipt_path: Path) -> None:
         or manifest_digest != header.get("manifest_sha256")
         or receipt.get("backup_id") != header["backup_id"]
         or receipt.get("manifest_sha256") != header["manifest_sha256"]
-        or receipt.get("verification_kind") != "authenticated-content-integrity"
-        or receipt.get("status") not in {"verified", "passed"}
-        or int(receipt.get("files_verified", 0)) < 1
+        or receipt.get("verification_kind") != "database-and-object-restore"
+        or receipt.get("status") != "passed"
+        or type(receipt.get("files_verified")) is not int
+        or receipt["files_verified"] < 1
+        or receipt.get("database_fingerprints_match") is not True
+        or not isinstance(receipt.get("migration_heads"), list)
+        or not receipt.get("migration_heads")
+        or type(receipt.get("objects_restored_and_read_back")) is not int
+        or receipt["objects_restored_and_read_back"] < 0
     ):
-        raise ConfigurationError("Backup identity and integrity receipt do not match")
+        raise ConfigurationError(
+            "Backup requires a matching successful database-and-object restore receipt"
+        )
     try:
         verified = datetime.fromisoformat(receipt["verified_at"])
         age = datetime.now(UTC) - verified

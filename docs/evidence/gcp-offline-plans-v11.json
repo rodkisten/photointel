@@ -1,0 +1,74 @@
+{
+  "scope": "offline command plans only; no GCP authentication, deployment or provider validation",
+  "source_sha": "73236e47012830533226c0c07f81a2712e1685d9",
+  "worktree_has_changes": true,
+  "provider_cli_invocations": 0,
+  "targets": [
+    {
+      "target": "gcp-doctor",
+      "exit_code": 0,
+      "provider_plan_lines": 5,
+      "error": null
+    },
+    {
+      "target": "gcp-bootstrap",
+      "exit_code": 0,
+      "provider_plan_lines": 42,
+      "error": null
+    },
+    {
+      "target": "gcp-build",
+      "exit_code": 0,
+      "provider_plan_lines": 2,
+      "error": null
+    },
+    {
+      "target": "gcp-deploy",
+      "exit_code": 0,
+      "provider_plan_lines": 2,
+      "error": null
+    },
+    {
+      "target": "gcp-migrate",
+      "exit_code": 0,
+      "provider_plan_lines": 1,
+      "error": null
+    },
+    {
+      "target": "gcp-jobs-deploy",
+      "exit_code": 0,
+      "provider_plan_lines": 16,
+      "error": null
+    },
+    {
+      "target": "gcp-scheduler",
+      "exit_code": 0,
+      "provider_plan_lines": 6,
+      "error": null
+    },
+    {
+      "target": "gcp-smoke",
+      "exit_code": 0,
+      "provider_plan_lines": 0,
+      "error": null
+    },
+    {
+      "target": "gcp-rollback",
+      "exit_code": 0,
+      "provider_plan_lines": 1,
+      "error": null
+    },
+    {
+      "target": "gcp-cleanup",
+      "exit_code": 0,
+      "provider_plan_lines": 3,
+      "error": null
+    },
+    {
+      "target": "gcp-render",
+      "exit_code": 0,
+      "provider_plan_lines": 0,
+      "error": null
+    }
+  ]
+}

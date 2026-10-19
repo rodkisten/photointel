@@ -47,6 +47,7 @@ jobs:
           if not re.fullmatch('[a-f0-9]{40}', sha):
               raise SystemExit('Invalid release SHA')
           # This workflow always builds/deploys this exact checked-out commit.
+          config['release_git_sha'] = sha
           config['image'] = (f"{config['region']}-docker.pkg.dev/{config['project_id']}/"
                              f"{config['repository']}/api:{sha}")
           path = pathlib.Path('infra/gcp/config.local.json')
