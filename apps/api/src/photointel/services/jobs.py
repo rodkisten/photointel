@@ -5,12 +5,12 @@ from random import uniform
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import exists, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.config import get_settings
-from photointel.models import Job, JobBatch, JobEvent, WorkerState, utcnow
+from photointel.models import IngestionRun, Job, JobBatch, JobEvent, WorkerState, utcnow
 
 JOB_TYPES = frozenset(
     {
@@ -107,7 +107,45 @@ async def recover_stale_jobs(session: AsyncSession, limit: int = 100) -> int:
         )
     for batch_id in sorted({job.batch_id for job in rows if job.batch_id}, key=str):
         await refresh_batch(session, batch_id)
+    await recover_interrupted_ingestion_runs(session, limit=limit)
     return len(rows)
+
+
+async def recover_interrupted_ingestion_runs(
+    session: AsyncSession, limit: int = 100
+) -> int:
+    """Close bounded abandoned attempts without changing a newer shared scan.
+
+    A new claim resets Job.started_at, so an earlier run of that same job can be
+    distinguished from its current attempt. Rows with no owning job are excluded:
+    a standalone interactive import has no job lease to evaluate.
+    """
+    now = utcnow()
+    runs = list(
+        (
+            await session.scalars(
+                select(IngestionRun)
+                .join(Job, Job.id == IngestionRun.job_id)
+                .where(
+                    IngestionRun.status == "running",
+                    or_(
+                        Job.status.not_in(ACTIVE),
+                        Job.lease_until.is_(None),
+                        Job.lease_until <= now,
+                        IngestionRun.started_at < Job.started_at,
+                    ),
+                )
+                .order_by(IngestionRun.started_at, IngestionRun.id)
+                .limit(min(1000, max(1, limit)))
+                .with_for_update(of=IngestionRun, skip_locked=True)
+                .execution_options(populate_existing=True)
+            )
+        ).all()
+    )
+    for run in runs:
+        run.status, run.finished_at = "failed", now
+        run.error = "WORKER_INTERRUPTED"
+    return len(runs)
 
 
 async def claim_jobs(
@@ -158,7 +196,7 @@ async def claim_jobs(
         job.worker_id = worker_id
         job.attempts += 1
         job.fence_token += 1
-        job.started_at = job.started_at or utcnow()
+        job.started_at = utcnow()
         job.heartbeat_at = utcnow()
         job.lease_until = utcnow() + timedelta(seconds=get_settings().job_lease_seconds)
         job.error_code = None

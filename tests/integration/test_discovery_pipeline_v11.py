@@ -806,3 +806,88 @@ async def test_repeated_fixture_import_persists_four_skips_in_its_own_batch(
             )
             == 4
         )
+
+
+async def test_job_recovery_closes_old_ingestion_attempt_without_touching_current_scan(
+    pipeline,
+):
+    from datetime import timedelta
+
+    from photointel.models import IngestionRun, utcnow
+    from photointel.services.ingestion import _library
+    from photointel.services.jobs import recover_stale_jobs
+
+    factory, _, _, _, _ = pipeline
+    async with factory() as session:
+        now = utcnow()
+        library = await _library(session, "fixture", "recovered-run", "Generated")
+        job = Job(
+            job_type="icloud_discovery",
+            status="running",
+            worker_id="new-owner",
+            fence_token=2,
+            started_at=now,
+            lease_until=now + timedelta(minutes=5),
+            idempotency_key=f"recovered-ingestion-{uuid4()}",
+        )
+        session.add(job)
+        await session.flush()
+        scan = DiscoveryScan(library_id=library.id, status="discovering")
+        old = IngestionRun(job_id=job.id, started_at=now - timedelta(minutes=5))
+        current = IngestionRun(job_id=job.id, started_at=now + timedelta(seconds=1))
+        already_completed = IngestionRun(
+            job_id=job.id, status="completed", started_at=now - timedelta(minutes=10)
+        )
+        session.add_all([scan, old, current, already_completed])
+        await session.commit()
+        assert await recover_stale_jobs(session) == 0
+        await session.commit()
+        await session.refresh(old)
+        await session.refresh(current)
+        await session.refresh(scan)
+        await session.refresh(already_completed)
+        assert old.status == "failed" and old.error == "WORKER_INTERRUPTED"
+        assert old.finished_at is not None
+        assert current.status == "running" and current.finished_at is None
+        assert scan.status == "discovering"
+        assert already_completed.status == "completed"
+
+
+@pytest.mark.parametrize(
+    ("status", "lease"),
+    [("failed", "none"), ("completed", "none"), ("running", "expired")],
+)
+async def test_interrupted_ingestion_recovery_is_bounded_and_idempotent(
+    pipeline, status, lease
+):
+    from datetime import timedelta
+
+    from photointel.models import IngestionRun, utcnow
+    from photointel.services.jobs import recover_interrupted_ingestion_runs
+
+    factory, _, _, _, _ = pipeline
+    async with factory() as session:
+        now = utcnow()
+        job = Job(
+            job_type="icloud_discovery",
+            status=status,
+            lease_until=now - timedelta(seconds=1) if lease == "expired" else None,
+            idempotency_key=f"bounded-ingestion-{uuid4()}",
+        )
+        session.add(job)
+        await session.flush()
+        session.add_all([IngestionRun(job_id=job.id) for _ in range(2)])
+        await session.commit()
+        assert await recover_interrupted_ingestion_runs(session, limit=1) == 1
+        await session.commit()
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(IngestionRun)
+                .where(IngestionRun.status == "running")
+            )
+            == 1
+        )
+        assert await recover_interrupted_ingestion_runs(session, limit=1) == 1
+        await session.commit()
+        assert await recover_interrupted_ingestion_runs(session, limit=1) == 0

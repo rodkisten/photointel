@@ -1,7 +1,7 @@
 # Ingestão recuperável v1.1
 
 A integração continua usando o SDK oficial do projeto `icloudpd` na revisão
-registrada em `packages/icloudpd-source/UPSTREAM.md`. A distribuição binária PyPI
+registrada em `packages/icloudpd-source/UPSTREAM.json`. A distribuição binária PyPI
 não disponibiliza todos os módulos Python utilizados pelo adapter; o código MIT
 necessário está preservado no pacote local. Isso não transforma a interface Apple
 não oficial em uma API estável ou homologada.
@@ -92,6 +92,13 @@ novo proprietário.
 A persistência de falhas também verifica ownership. Se um worker perder sua lease
 durante uma chamada externa, ele não pode marcar como interrompida a varredura que
 já pertence a uma execução mais recente.
+
+A manutenção também encerra tentativas antigas de ingestão com
+`WORKER_INTERRUPTED`, em lotes limitados, quando o job proprietário terminou,
+perdeu sua lease ou iniciou uma tentativa mais recente. Essa recuperação altera
+somente `ingestion_runs`; não modifica o manifesto/cursor compartilhado nem a
+tentativa atual. Cada claim atualiza `jobs.started_at`, e os eventos preservam o
+histórico de aquisição.
 
 Antes de um upload, `object_intents` registra a chave imutável e o SHA-256. Depois
 do upload, uma transação curta publica `asset_resources` com
