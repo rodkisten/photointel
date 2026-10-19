@@ -188,6 +188,7 @@ async def asset_detail(asset_id: UUID, session: Session) -> AssetDetailOut:
                 "id": run.id,
                 "model_name": model.model_name,
                 "model_revision": model.revision,
+                "preprocessing_revision": model.preprocessing_revision,
                 "input_revision": run.input_revision,
                 "status": run.status,
                 "runtime_ms": run.runtime_ms,

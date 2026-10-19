@@ -1,12 +1,12 @@
 {
-  "executed_at": "2026-10-19T15:02:17.971597+00:00",
+  "executed_at": "2026-10-19T18:51:07.893758+00:00",
   "status": "passed",
   "scope": "disposable databases and synthetic images only",
   "migration_heads": [
-    "0006_query_embedding_cache"
+    "0007_model_preprocessing"
   ],
   "files_verified": 8,
-  "bytes_verified": 96410,
+  "bytes_verified": 96579,
   "objects_restored_and_read_back": 3,
   "database_fingerprints_match": true,
   "synthetic_vectors": {
