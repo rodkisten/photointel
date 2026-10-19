@@ -1,6 +1,8 @@
 # Banco de dados
 
-PostgreSQL 16 com extensões `vector` e `pg_trgm`; SQLAlchemy 2 usa `asyncpg`.
+PostgreSQL com extensões `vector` e `pg_trgm`; SQLAlchemy 2 usa `asyncpg`.
+O desenvolvimento e os testes usam PostgreSQL 16. Neon é o destino gerenciado
+preferencial; a conexão remota depende da configuração e validação do operador.
 Alembic aplica migrações em `infra/migrations`. Datas são UTC, IDs de entidades
 são UUID e JSONB guarda metadados versionáveis sem substituir chaves e índices.
 
@@ -8,7 +10,11 @@ Em produção `APP_DATABASE_URL` aponta a um papel LOGIN sem SUPERUSER, CREATEDB
 CREATEROLE ou BYPASSRLS, autorizado a CRUD/uso de sequências do catálogo.
 `MIGRATION_DATABASE_URL` usa credencial separada para extensões/DDL e só é
 injetada no container `migrate`. `.env.runtime` não contém segredos administrativos.
-Veja o provisionamento explícito em `infra/oracle/provision-app-role.sh` e
+No Cloud Run, `DATABASE_URL` usa o endpoint pooled, TLS com verificação e
+`DATABASE_POOL_MODE=transaction`; a migração usa o endpoint direto separado.
+O pool padrão possui duas conexões e zero overflow; o modo transaction usa
+`NullPool`, sem estado de sessão entre transações. Veja [NEON_SETUP.md](NEON_SETUP.md).
+O provisionamento VPS continua em `infra/oracle/provision-app-role.sh` e
 [docs/deployment/oracle-arm.md](docs/deployment/oracle-arm.md).
 
 ## Entidades
@@ -22,6 +28,11 @@ Veja o provisionamento explícito em `infra/oracle/provision-app-role.sh` e
 | Apple | `bridge_devices`, `device_mappings`, `metadata_snapshots`, `sync_operations` | Dispositivo, identidade verificada, revisão e aprovação |
 | Organização | `albums`, `album_assets`, `duplicate_groups`, `duplicate_members`, `saved_searches` | Álbuns, duplicatas e consultas |
 | Configuração/auditoria | `settings`, `audit_events` | Parâmetros públicos e histórico de ações |
+| Descoberta v1.1 | `discovery_scans`, `discovery_manifests` | Checkpoints, revisões e falhas independentes |
+| Recuperação v1.1 | `durable_leases`, `object_intents`, `dispatch_outbox` | Fencing, uploads recuperáveis e despacho finito |
+| Sessões v1.1 | `icloud_session_states` | Ponteiro para snapshot criptografado, geração e CAS |
+| Busca v1.1 | `query_embedding_cache` | Cache limitado por modelo, revisão e preprocessing; sem texto da consulta |
+| Validação v1.1 | `verification_gates` | Evidência manual vinculada ao SHA exato do release |
 
 ```mermaid
 erDiagram
@@ -51,6 +62,30 @@ erDiagram
 `(asset_id, model_id, input_revision)`. Jobs e operações de sync têm chave de
 idempotência única. Dimensão do vetor é 768 para o SigLIP2 especificado;
 trocar checkpoint/dimensão exige migração e índice correspondente.
+
+`model_registry.preprocessing_revision` separa vetores produzidos por runtimes
+distintos. A migração `0007_model_preprocessing` preserva registros existentes
+no namespace `legacy-v1`. O runtime Transformers 5.10.2 registra outro `model_id`;
+buscas e cache exigem o mesmo namespace. Vetores antigos continuam armazenados;
+reindexação exige ação explícita e os controles de orçamento permanecem ativos.
+
+A aplicação e os workers anteriores à v1.1 devem ser pausados na passagem para
+0007: a chave única de modelo passa a incluir preprocessing. Não faça uma
+implantação misturando esses writers. O downgrade recusa namespaces que
+colidiriam na chave antiga; ele não mescla nem apaga inteligência para forçar
+rollback. Preserve backup/restauração antes da migração.
+
+Jobs possuem `fence_token` monotônico. Somente o dono da lease não expirada pode
+persistir resultados; um retry não aceita commits de um worker anterior.
+Uploads usam chaves imutáveis e um `object_intent` persistido antes do I/O.
+Manifests possuem unicidade `(library_id, source_key, content_revision)`.
+O contador de admissão do catálogo em `settings` é reconciliado uma vez por
+execução e atualizado na mesma transação de cada novo asset, sem COUNT por foto.
+
+As migrações 0005 e 0006 adicionam esses componentes sem resetar dados. O Job
+de migração usa conexão direta e lock de serialização; o startup da API não
+executa Alembic. [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) descreve backup
+criptografado com conteúdo dos objetos e verificação de restauração.
 
 `visibility_status` é `active`, `unavailable`, `missing_candidate`,
 `confirmed_missing` ou `archived`. Confirmar ausência exige varreduras completas

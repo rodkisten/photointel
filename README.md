@@ -1,12 +1,17 @@
-# Photo Intelligence Cloud v1.0
+# Photo Intelligence Cloud v1.1
 
 Catálogo privado de fotos e vídeos, preparado para bibliotecas grandes, com tags
 revisáveis, busca textual e vetorial, álbuns, fila persistente, diagnóstico de
 duplicatas e integração opcional com iCloud. Os originais permanecem no serviço
 de origem: o projeto trabalha com representações limitadas e derivados privados.
 
+O destino principal de produção é Cloudflare Pages + Google Cloud Run
+Service/Jobs + Neon PostgreSQL + R2 privado + Modal. Compose continua o ambiente
+local e Oracle/VPS permanece como fallback. A migração preserva o catálogo,
+contratos e design existentes, sem reconstruir a aplicação.
+
 O núcleo funciona em Linux ARM64/AMD64 sem Mac, Xcode ou aplicativo iOS próprio.
-O iPhone pode acessar a PWA e operar o servidor por SSH. A ponte Pyto é opcional;
+O iPhone pode acessar a PWA e operar o sistema por Codespaces, Cloud Shell ou SSH. A ponte Pyto é opcional;
 as capacidades reais do dispositivo e qualquer escrita de keywords precisam de
 validação e aprovação. Leia [LIMITATIONS.md](LIMITATIONS.md) antes de conectar
 uma biblioteca pessoal.
@@ -43,8 +48,11 @@ de tags, álbuns e jobs passem pela proteção CSRF.
 
 O modo de autenticação local serve ao desenvolvimento em loopback. Produção
 exige JWT criptograficamente validado do Cloudflare Access, allowlist explícita,
-HTTPS e R2/S3 privado. [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) e
-[docs/deployment/oracle-arm.md](docs/deployment/oracle-arm.md) descrevem a instalação.
+HTTPS e R2/S3 privado. O origin `run.app` é publicamente alcançável, mas cada endpoint privado valida o
+JWT e falha fechado; a proteção do Pages sozinha não autentica a API. Veja
+[CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md), [NEON_SETUP.md](NEON_SETUP.md) e
+[CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md). O caminho
+[Oracle/VPS](docs/deployment/oracle-arm.md) continua disponível como alternativa.
 
 ## Comandos
 
@@ -62,16 +70,38 @@ HTTPS e R2/S3 privado. [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md) e
 | `make doctor` | Diagnóstico em JSON; integração não configurada é explicitada |
 | `make ingest-test` | Exercício do pipeline com fixture sintética |
 | `make gpu-test` | Testes marcados GPU; modelos/revisões/hardware reais necessários |
-| `make backup` | `pg_dump`, exportação CSV/JSON e hashes; requer Compose ativo |
+| `make backup` | Backup legado PostgreSQL/exportações; não inclui bytes R2 |
+| `make backup-application BACKUP_DIRECTORY=backups/NOVO BACKUP_KEY_FILE=/caminho/privado` | Dump e bytes dos derivados em chunks AES-GCM; requer clientes PostgreSQL |
+| `make verify-backup BACKUP_DIRECTORY=backups/NOVO BACKUP_KEY_FILE=/caminho/privado` | Verifica manifesto, criptografia e checksums completos |
+| `make restore-application-test POSTGRES_CONTAINER=seu-postgres` | Testa banco e conteúdo de imagens em destinos descartáveis |
 | `make restore-test` | Backup/restore de dois bancos sintéticos isolados |
 | `make export` | CSV/JSON em `exports/`, sem vetores volumosos |
 | `make benchmark ASSETS=10000` | Benchmark em banco sintético, relatório JSON |
 | `make cleanup` | Remove somente arquivos temporários expirados em `var/processing` |
+| `make capacity-benchmark CAPACITY_ASSETS=1000` | Dataset sintético com tags/vetores; banco descartável obrigatório |
+| `make gcp-doctor`, `make gcp-render` | Diagnóstico/plano offline da implantação |
+| `make gcp-bootstrap`, `make gcp-build`, `make gcp-jobs-deploy` | Planos de infraestrutura e imagens fixadas ao Git SHA |
+| `make gcp-migrate`, `make gcp-deploy`, `make gcp-scheduler` | Planos de migração, Service/Jobs e Scheduler pausado |
+| `make gcp-smoke`, `make gcp-rollback` | Validação de segurança/saúde e plano de rollback |
 
 GPU e iCloud começam desativados. Os limites iniciais são lote 8, concorrência 1,
 importação 100 mídias, até 20 MiB por download e varredura a cada 60 minutos.
-As estimativas de custo restringem agendamento; não substituem limites ou alertas
-de cobrança do provedor. Revise [docs/MODAL_SETUP.md](docs/MODAL_SETUP.md).
+Expansões autorizadas têm limites de execução explícitos e hard cap; gates
+persistidos mantêm o backfill completo bloqueado. Descoberta gera manifesto e
+jobs individuais, permitindo continuar quando uma foto falha. Cloud Run executa
+cargas finitas; a API não hospeda cron ou worker permanente. Sessões Apple são
+snapshots AES-GCM com lease/CAS no PostgreSQL, nunca estado durável em `/tmp`.
+
+Neon tem dois perfis: catálogo limitado com cap explícito e biblioteca completa
+que exige capacidade medida. Não se presume que Free comporte 176 mil vetores,
+tags e índices. As estimativas de custo restringem agendamento; não substituem
+limites ou alertas de cobrança do provedor. Revise
+[COST_MODEL.md](COST_MODEL.md) e [MODAL_SETUP.md](MODAL_SETUP.md).
+
+Todos os comandos GCP planejam offline por padrão. Criar recursos ou executar
+cargas requer `--apply --authorize-charges --confirm-project PROJETO`, após
+revisão explícita pelo operador. Não foi criada infraestrutura paga automaticamente.
+A implantação pelo iPhone está detalhada em [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md).
 
 ## Preview e validação
 
@@ -93,7 +123,12 @@ Modal/CUDA nem a uma integração iCloud autenticada.
 - [ARCHITECTURE.md](ARCHITECTURE.md): componentes, identidade e fluxos.
 - [DATABASE.md](DATABASE.md): entidades, índices, evolução e backup.
 - [API.md](API.md): autenticação, paginação e contrato HTTP.
-- [ICLOUD_SETUP.md](ICLOUD_SETUP.md): login interativo e sessões protegidas.
+- [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md): implantação e rollback pelo iPhone.
+- [NEON_SETUP.md](NEON_SETUP.md): TLS, pooling, migrações e perfis de capacidade.
+- [ICLOUD_SETUP.md](ICLOUD_SETUP.md): login interativo e ingestão.
+- [ICLOUD_SESSION_SETUP.md](ICLOUD_SESSION_SETUP.md): cookies criptografados e bootstrap serverless.
+- [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md): backup completo de banco/objetos e restore.
+- [docs/audit/FINDINGS_STATUS.md](docs/audit/FINDINGS_STATUS.md): achados e evidências v1.1.
 - [PYTO_BRIDGE.md](PYTO_BRIDGE.md): capacidades e aprovação no dispositivo.
 - [OPERATIONS.md](OPERATIONS.md): operação diária, recuperação e custos.
 - [docs/operations/benchmarks.md](docs/operations/benchmarks.md): medições reproduzíveis.

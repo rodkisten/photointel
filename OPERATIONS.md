@@ -1,10 +1,43 @@
-# Operação e recuperação
+# Operação e recuperação v1.1
 
 Comece com 100 mídias e GPU desativada. Aumente ingestão depois de observar bytes,
 latência, erros, disco, fila e custo. Lote 8/concorrência 1 são limites prudentes;
 não representam throughput medido para 176 mil mídias.
 
-## Rotina diária pelo iPhone
+## Cloud Run: rotina principal pelo iPhone
+
+Use Safari para dashboards e Codespaces/Cloud Shell para o terminal. Não é
+necessário Mac/Xcode. A API pode escalar a zero; jobs finitos usam fila e checkpoints
+PostgreSQL. Não execute um worker infinito dentro do Cloud Run Service.
+
+```bash
+make gcp-doctor             # plano offline
+make gcp-smoke              # plano de health e segurança
+make gcp-doctor GCP_ARGS='--apply'  # consultas autenticadas; sem criação
+make gcp-smoke GCP_ARGS='--apply'
+gcloud run jobs executions list --job photointel-worker --region REGION --project PROJECT
+gcloud run jobs executions list --job photointel-discover --region REGION --project PROJECT
+```
+
+Configure `infra/gcp/config.local.json` antes desses comandos. Execução de Jobs,
+deploy e retomada de Scheduler podem gerar cobrança: revise os planos e use
+somente os parâmetros de autorização explícitos de
+[CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md). `gcp-smoke` testa rejeição de acesso
+anônimo ao origin além de saúde; não comprova login real no Safari.
+
+Na PWA, acompanhe onboarding, diagnósticos, gates, fila e último erro persistido.
+Use pause antes de alterações de custos, modelos ou grandes lotes. Não libere o
+backfill completo antes de validar os gates reais de Apple, Modal, 100/1.000 mídias,
+segurança no iPhone, restauração e capacidade do banco.
+
+O perfil Neon inicial limita o catálogo; não basta aumentar `INITIAL_IMPORT_LIMIT`
+para autorizar expansão. API e execução validam os limites, o operador confirma
+expansão e as gates/capacidade continuam aplicáveis. Configure conexões de runtime
+pooled/TLS e migração direta conforme [NEON_SETUP.md](NEON_SETUP.md).
+Sessões expiradas são recuperadas em terminal, com o fluxo criptografado de
+[ICLOUD_SESSION_SETUP.md](ICLOUD_SESSION_SETUP.md), nunca digitando senha na PWA.
+
+## Rotina Oracle/VPS e Compose (fallback)
 
 Use SSH com chave e verificação de host. O aplicativo e credenciais rodam no
 servidor; não é necessário compilar no iPhone nem abrir Mac/Xcode.
@@ -28,53 +61,45 @@ vida do processo. Readiness iCloud/GPU/Apple é distinta e exige diagnóstico e
 exercício real. Docker `restart: unless-stopped` reinicia processos que encerram;
 estado unhealthy sozinho não causa reinício automático.
 
-## Backup
+## Backup e teste de recuperação
+
+O mecanismo recomendado copia dump PostgreSQL e **conteúdo dos objetos privados**
+para chunks AES-GCM independentes do bucket primário:
 
 ```bash
-PHOTOINTEL_COMPOSE_MODE=prod make backup
+make backup-application BACKUP_DIRECTORY=backups/NOVA_RELEASE BACKUP_KEY_FILE=/caminho/privado/backup-key
+make verify-backup BACKUP_DIRECTORY=backups/NOVA_RELEASE BACKUP_KEY_FILE=/caminho/privado/backup-key
+# Somente contra PostgreSQL de teste, com APP_ENV=test:
+make restore-application-test POSTGRES_CONTAINER=seu-container-postgres
 ```
 
-O script gera `backups/AAAA.../postgres.dump`, metadados CSV/JSON e manifest SHA-256
-em diretório 0700. A exportação temporária usa o volume de processamento, em vez
-do `/tmp` limitado do container, e é removida após a cópia. Reserve espaço no
-volume para a exportação completa além do dump. Dump completo preserva vetores; exportação de portabilidade
-não inclui embeddings. A exportação e o dump são feitos sequencialmente, por isso
-não representam uma transação única: para um ponto perfeitamente coordenado,
-pause ingestão/worker e alterações pela API durante o backup.
+Clientes `pg_dump`/`pg_restore` compatíveis com o servidor precisam estar no
+terminal; o teste pode usar os clientes do container indicado. A cópia real deve
+ter uma segunda localização durável privada e chave preservada separadamente.
+A CLI `verify --verification-receipt` produz prova de integridade autenticada;
+`restore --verification-receipt` também confirma banco e leitura dos objetos.
+O recibo de integridade sozinho não comprova restauração. A implantação exige
+backup verificado para migração de uma base existente.
 
-Com `BACKUP_AGE_RECIPIENT` configurado e `age` instalado, o script gera também
-`backup.tar.age`; cópias locais privadas permanecem para recuperação. Copie o
-arquivo criptografado para destino separado e gerencie a retenção fora do script.
-Não guarde a chave de descriptografia junto ao backup. Derivados R2/MinIO precisam
-de política/cópia própria; os originais iCloud não são backup deste projeto.
+[DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) contém criação da chave, TLS/conexão
+direta Neon, comandos exatos, guard de banco vazio, retomada e política de custo.
+O teste sintético usa bancos descartáveis, imagens procedurais e vetores
+explicitamente sintéticos. Não acessa Apple nem Modal; restore real de Neon/R2
+continua dependente das contas e do destino autorizado.
 
-## Testar o procedimento
-
-```bash
-PHOTOINTEL_COMPOSE_MODE=prod make restore-test
-```
-
-O teste cria **dois bancos scratch**, migra um, insere 16 mídias sintéticas,
-calcula hashes e contagens por tabela, executa `pg_dump`/`pg_restore` no outro e
-compara a totalidade da fixture. Ao terminar remove apenas esses bancos e arquivos
-temporários, deixando `reports/restore-test.json` quando passou.
-O CI executa a mesma sequência de migração, seed, dump, restore e comparação
-sobre o PostgreSQL real do runner, usando `infra/scripts/restore-ci.py`; o
-resultado só é confirmado quando o artefato `reports/restore-test.json` existe
-com `status=passed` naquela execução. Nenhum teste de restore acessa iCloud,
-R2 ou GPU.
-
-Ele não comprova restauração do seu backup real nem disponibilidade de objetos
-R2. Execute-o no mesmo PostgreSQL/imagem de produção após upgrades.
-
-Para ensaiar um dump real, use host isolado, mesmo major PostgreSQL/extensões,
-novo banco e `pg_restore --no-owner --no-acl --exit-on-error`. Verifique o manifest,
-contagens, tags revisadas, jobs, snapshots/mapeamentos e amostra de recursos R2.
-Não substitua a base ativa durante um ensaio. Faça novo login iCloud no destino
-em vez de expor sessão antiga. Só troque a aplicação para o banco restaurado após
-revisão dos resultados e backup da instalação anterior.
+Os comandos legados `make backup` e `make restore-test` mantêm compatibilidade:
+salvam/testam banco/exportações com Compose e **não incluem bytes R2**. Não os
+interprete como backup completo dos derivados. Nenhuma dessas cópias substitui
+backup dos originais que permanecem em iCloud.
 
 ## Atualização e rollback
+
+Registre o manifesto de release, commit, imagens/digests, frontend release ID,
+versão Alembic, revisões dos modelos e runs de CI implantados. Não misture evidência
+de uma revisão anterior com validação da release atual. Em Cloud Run, publique a
+imagem imutável ligada ao SHA, use migration Job separado e mantenha a revisão
+anterior para `make gcp-rollback` (plano por padrão). Não faça downgrade destrutivo
+para simplificar rollback. O procedimento abaixo é o fallback VPS.
 
 Registre commit, imagens/digests e versão Alembic implantados. Construa imagens
 ARM64 no CI ou host compatível, pause novos jobs, faça backup e aplique migração.
@@ -96,12 +121,12 @@ compatibilidade/dimensão do embedding.
 | Sintoma | Verificação inicial |
 |---|---|
 | API não pronta | Migração, conexão PG, auth/armazenamento production |
-| Jobs parados | Worker em execução, heartbeat, lease, attempts e erro persistido |
-| iCloud requer autenticação | Login interativo no diretório da sessão correto |
+| Jobs parados | Scheduler pausado/última execução finita, outbox, lease, attempts e erro persistido |
+| iCloud requer autenticação | Snapshot ausente/expirado, lease de sessão e login/publicação interativos |
 | Representação indisponível | Tamanho/formato permitido; não habilite original automaticamente |
 | GPU desabilitada | Revisões/token/backend configurados e orçamento revisado |
 | Apple `mapping_required` | Mapeamento verificado no dispositivo e revisão atual |
-| Disco crescendo | PostgreSQL/WAL, backups retidos, temporários; jamais apague originais |
+| Banco/storage crescendo | Perfil/cap Neon, HNSW/tags/raw predictions, retenção de jobs/backups e temporários |
 | Access em loop | Hostnames/políticas, API session, CORS e cookies no Safari |
 
 Os limites de GPU estimam trabalho e custo. Habilite alertas/limites do provedor
