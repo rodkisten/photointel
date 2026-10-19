@@ -22,6 +22,7 @@ test-results/
 .coverage
 htmlcov/
 *.tsbuildinfo
+gha-creds-*.json
 # Local Cloudflare relay deployment configuration.
 infra/cloudflare/cloud-run-proxy/wrangler.toml
 infra/cloudflare/cloud-run-proxy/.wrangler/

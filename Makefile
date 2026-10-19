@@ -7,6 +7,13 @@ NPM := npm --cache /tmp/photointel-npm-cache --prefix apps/web
 COMPOSE := bash infra/scripts/compose.sh
 ASSETS ?= 100
 REPORT ?= reports/benchmark-$(ASSETS).json
+GCP_CONFIG ?= infra/gcp/config.local.json
+GCP_ARGS ?=
+BACKUP_DIRECTORY ?= backups/application
+BACKUP_KEY_FILE ?=
+POSTGRES_CONTAINER ?= photointel-v11-postgres
+CAPACITY_ASSETS ?= 1000
+CAPACITY_REPORT ?= reports/capacity-$(CAPACITY_ASSETS).json
 
 # GitHub Actions interactive SSH session
 SESSION_MINUTES ?= 60
@@ -105,10 +112,38 @@ gpu-test:
 	$(UV) run pytest -m gpu
 
 backup:
+	@echo 'Este comando legado salva somente PostgreSQL. Use backup-application para banco e objetos.'
 	bash infra/scripts/backup.sh
 
 restore-test:
 	bash infra/scripts/restore-test.sh
+
+.PHONY: backup-application verify-backup restore-application-test capacity-benchmark benchmark-capacity release-manifest
+backup-application:
+	@test -n "$(BACKUP_KEY_FILE)" || { echo 'Defina BACKUP_KEY_FILE (chave privada de 32 bytes)' >&2; exit 2; }
+	$(UV) run python -m photointel.services.backup create --directory "$(BACKUP_DIRECTORY)" --key-file "$(BACKUP_KEY_FILE)"
+
+verify-backup:
+	@test -n "$(BACKUP_KEY_FILE)" || { echo 'Defina BACKUP_KEY_FILE' >&2; exit 2; }
+	$(UV) run python -m photointel.services.backup verify --directory "$(BACKUP_DIRECTORY)" --key-file "$(BACKUP_KEY_FILE)"
+
+restore-application-test:
+	$(UV) run python infra/scripts/backup-restore-ci.py --postgres-container "$(POSTGRES_CONTAINER)"
+
+capacity-benchmark:
+	$(UV) run python infra/scripts/capacity-benchmark.py --assets "$(CAPACITY_ASSETS)" --confirm-disposable SYNTHETIC_ONLY --output "$(CAPACITY_REPORT)"
+
+benchmark-capacity: ASSETS=1000
+benchmark-capacity:
+	$(UV) run python infra/scripts/capacity-benchmark.py --assets "$(ASSETS)" --confirm-disposable SYNTHETIC_ONLY --output "$(REPORT)"
+
+release-manifest:
+	python3 infra/scripts/release-manifest.py --output reports/release-manifest.json
+
+# Read-only plans are the default. Mutation needs all explicit authorization flags.
+.PHONY: gcp-doctor gcp-bootstrap gcp-build gcp-deploy gcp-migrate gcp-jobs-deploy gcp-scheduler gcp-smoke gcp-rollback gcp-cleanup gcp-render
+gcp-doctor gcp-bootstrap gcp-build gcp-deploy gcp-migrate gcp-jobs-deploy gcp-scheduler gcp-smoke gcp-rollback gcp-cleanup gcp-render:
+	python3 infra/gcp/manage.py $(@:gcp-%=%) --config "$(GCP_CONFIG)" $(GCP_ARGS)
 
 benchmark: ASSETS=10000
 benchmark:
