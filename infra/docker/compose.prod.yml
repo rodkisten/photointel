@@ -5,6 +5,9 @@ x-runtime: &runtime
   environment: &runtime-env
     APP_ENV: production
     AUTH_MODE: cloudflare
+    # Container DNS stays on the private network; external egress retains its proxy.
+    NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,::1},postgres,minio,api,frontend"
+    no_proxy: "${no_proxy:-localhost,127.0.0.1,::1},postgres,minio,api,frontend"
     DATABASE_URL: ${APP_DATABASE_URL:?configure the limited application role}
     MIGRATION_DATABASE_URL: ""
     TEMP_DIRECTORY: /data/processing

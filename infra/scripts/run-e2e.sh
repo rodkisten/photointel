@@ -11,9 +11,21 @@ if [[ "${JOYTAG_MODEL_REVISION:-}" != 1111111111111111111111111111111111111111 |
   printf 'E2E exige revisões fictícias explícitas dos modelos de teste.\n' >&2
   exit 2
 fi
+api_port="${E2E_API_PORT:-8000}"
+strict_port="${E2E_STRICT_API_PORT:-8001}"
+web_port="${PLAYWRIGHT_WEB_PORT:-4173}"
+for local_port in "$api_port" "$strict_port" "$web_port"; do
+  if [[ ! "$local_port" =~ ^[1-9][0-9]{3,4}$ ]] || (( local_port < 1024 || local_port > 65535 )); then
+    printf 'Porta E2E inválida; use números entre 1024 e 65535.\n' >&2
+    exit 2
+  fi
+done
+export E2E_API_PORT="$api_port" E2E_STRICT_API_PORT="$strict_port"
+export PLAYWRIGHT_WEB_PORT="$web_port"
 export AUTH_MODE=local ICLOUD_ENABLED=false
-export FRONTEND_ORIGIN=http://127.0.0.1:4173 API_ORIGIN=http://127.0.0.1:8000
-export AUTH_REJECTION_API_URL=http://127.0.0.1:8001
+export FRONTEND_ORIGIN="http://127.0.0.1:$web_port" API_ORIGIN="http://127.0.0.1:$api_port"
+export AUTH_REJECTION_API_URL="http://127.0.0.1:$strict_port"
+export API_PROXY_TARGET="$API_ORIGIN" PLAYWRIGHT_BASE_URL="$FRONTEND_ORIGIN"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/photointel-uv-cache}"
 export PLAYWRIGHT_JUNIT_OUTPUT_FILE="${PLAYWRIGHT_JUNIT_OUTPUT_FILE:-../../reports/browser.xml}"
 mkdir -p reports
@@ -32,14 +44,14 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-uv run --no-sync uvicorn photointel.main:app --host 127.0.0.1 --port 8000 > reports/api.log 2>&1 &
+uv run --no-sync uvicorn photointel.main:app --host 127.0.0.1 --port "$api_port" > reports/api.log 2>&1 &
 process_ids+=("$!")
 uv run --no-sync python -m photointel.services.worker > reports/worker.log 2>&1 &
 worker_process_id=$!
 process_ids+=("$worker_process_id")
 AUTH_MODE=cloudflare ACCESS_TEAM_DOMAIN=ci.cloudflareaccess.com ACCESS_AUDIENCE=ci \
   ACCESS_ALLOWED_EMAILS='["ci@example.invalid"]' \
-  uv run --no-sync uvicorn photointel.main:app --host 127.0.0.1 --port 8001 > reports/auth-rejection-api.log 2>&1 &
+  uv run --no-sync uvicorn photointel.main:app --host 127.0.0.1 --port "$strict_port" > reports/auth-rejection-api.log 2>&1 &
 process_ids+=("$!")
 export PHOTOINTEL_E2E_WORKER_PID="$worker_process_id"
 uv run --no-sync python - <<'PY'
@@ -51,7 +63,7 @@ from pathlib import Path
 deadline = time.monotonic() + 60
 while time.monotonic() < deadline:
     try:
-        for port in (8000, 8001):
+        for port in (int(os.environ["E2E_API_PORT"]), int(os.environ["E2E_STRICT_API_PORT"])):
             with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/health/ready", timeout=2
             ) as response:

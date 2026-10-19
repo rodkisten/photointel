@@ -24,6 +24,13 @@ make doctor
 ```
 
 Integração e E2E devem usar banco e bucket descartáveis. O script
+`infra/scripts/test-e2e-local.py`, chamado por `make test-e2e`, cria recursos
+locais com UUID e os remove após a execução, preservando o catálogo do Compose.
+Instale o Chromium com `npx --prefix apps/web playwright install chromium`;
+use `make test-e2e E2E_ARGS=--webkit` depois de instalar também o WebKit e suas
+bibliotecas. O runner recusa endpoints externos e configuração de produção.
+
+O script interno
 `infra/scripts/run-e2e.sh` exige explicitamente `APP_ENV=test`,
 `INFERENCE_BACKEND=test`, `GPU_ENABLED=true` e revisões fictícias; o adaptador
 determinístico é proibido fora desse ambiente. O Compose normal mantém GPU e

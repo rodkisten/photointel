@@ -14,6 +14,7 @@ BACKUP_KEY_FILE ?=
 POSTGRES_CONTAINER ?= photointel-v11-postgres
 CAPACITY_ASSETS ?= 1000
 CAPACITY_REPORT ?= reports/capacity-$(CAPACITY_ASSETS).json
+E2E_ARGS ?=
 
 # GitHub Actions interactive SSH session
 SESSION_MINUTES ?= 60
@@ -96,7 +97,7 @@ test-integration:
 	$(UV) run pytest -m integration
 
 test-e2e:
-	$(NPM) run test:e2e
+	$(UV) run python infra/scripts/test-e2e-local.py $(E2E_ARGS)
 
 build:
 	$(NPM) run build
