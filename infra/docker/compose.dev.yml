@@ -63,7 +63,7 @@ services:
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: [minio-data:/data]
     healthcheck:
-      test: [CMD, wget, -q, --spider, http://localhost:9000/minio/health/ready]
+      test: [CMD, wget, -Y, "off", -q, --spider, http://localhost:9000/minio/health/ready]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -131,7 +131,7 @@ services:
     ports: ["127.0.0.1:5173:8080"]
     depends_on: {api: {condition: service_healthy}}
     healthcheck:
-      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/health/web]
+      test: [CMD, wget, -Y, "off", -q, --spider, http://127.0.0.1:8080/health/web]
       interval: 15s
       timeout: 5s
       retries: 5

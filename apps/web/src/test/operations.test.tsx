@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,9 +22,10 @@ function mount(content = <JobsPage />, path = '/jobs') {
   const client = new QueryClient({ defaultOptions: {
     queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
   } });
-  return render(<QueryClientProvider client={client}>
+  const rendered = render(<QueryClientProvider client={client}>
     <MemoryRouter initialEntries={[path]}>{content}</MemoryRouter>
   </QueryClientProvider>);
+  return { ...rendered, client };
 }
 
 describe('persisted operations and navigation', () => {
@@ -45,7 +46,39 @@ describe('persisted operations and navigation', () => {
       return Response.json({ items: [], next_cursor: null });
     });
   });
-  afterEach(() => { fetcher.mockReset(); vi.unstubAllGlobals(); });
+  afterEach(() => { fetcher.mockReset(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+
+  it('coalesces a replayed job event burst and cancels queued refresh on navigation', async () => {
+    const sources: EventTarget[] = [];
+    const close = vi.fn();
+    vi.stubGlobal('EventSource', class extends EventTarget {
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      close = close;
+      constructor() { super(); sources.push(this); }
+    });
+    const { client, unmount } = mount();
+    expect(await screen.findByText('Geração de prévias')).toBeVisible();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    vi.useFakeTimers();
+    act(() => {
+      for (let index = 0; index < 500; index++) {
+        sources[0].dispatchEvent(new MessageEvent('job', { lastEventId: String(index) }));
+      }
+    });
+    expect(invalidate).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ predicate: expect.any(Function) }), { cancelRefetch: false },
+    );
+    act(() => { sources[0].dispatchEvent(new MessageEvent('job', { lastEventId: '501' })); });
+    unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledOnce();
+  });
 
   it('loads saved job state, shows actual errors and retries through the API', async () => {
     const user = userEvent.setup();

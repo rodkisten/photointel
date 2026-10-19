@@ -35,20 +35,35 @@ export function JobsPage() {
     if (!('EventSource' in window)) return;
     let eventId = ''; let source: EventSource | undefined;
     let stopped = false; let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    function scheduleRefresh() {
+      // Reconnection can replay hundreds of persisted events. Coalesce the burst
+      // and let an in-flight request finish instead of restarting it per event.
+      if (refreshTimer || stopped) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = undefined;
+        void client.invalidateQueries({ predicate: (query) =>
+          String(query.queryKey[0]).startsWith('/v1/jobs') ||
+          String(query.queryKey[0]).startsWith('/v1/job-batches') ||
+          query.queryKey[0] === '/v1/system/statistics' }, { cancelRefetch: false });
+      }, 500);
+    }
     function connect() {
       source = new EventSource(apiUrl(`/v1/jobs/events${eventId ? `?after=${eventId}` : ''}`), { withCredentials: true });
       source.onopen = () => setLive(true);
       source.onerror = () => setLive(false);
       source.addEventListener('job', (event) => {
         eventId = (event as MessageEvent).lastEventId;
-        void client.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/v1/jobs') ||
-          String(query.queryKey[0]).startsWith('/v1/job-batches') || query.queryKey[0] === '/v1/system/statistics' });
+        scheduleRefresh();
       });
       source.addEventListener('reconnect', () => {
         source?.close(); if (!stopped) reconnectTimer = setTimeout(connect, 500);
       });
     }
-    connect(); return () => { stopped = true; source?.close(); clearTimeout(reconnectTimer); };
+    connect(); return () => {
+      stopped = true; source?.close(); clearTimeout(reconnectTimer);
+      clearTimeout(refreshTimer);
+    };
   }, [client]);
   const counts = obj(stats.data?.job_counts);
   return <><PageHeader eyebrow="Operação contínua" title="Centro de processamento"

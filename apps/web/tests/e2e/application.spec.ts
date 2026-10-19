@@ -234,12 +234,18 @@ test('11 observes durable ingestion completion and persisted job state', async (
     if (job.status === 'failed') throw new Error(`Fixture ingestion failed: ${job.error_code}`);
     return job.status;
   }, { timeout: 60_000, intervals: [250, 500, 1000] }).toBe('completed');
+  let listRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/v1/jobs') listRequests++;
+  });
   await page.goto('/jobs');
   await page.getByLabel('Filtrar jobs por estado').selectOption('completed');
   await expect(page.locator('.job-row').first()).toBeVisible();
   await page.locator('.job-row').first().getByRole('button', { name: 'Inspecionar job' }).click();
   await expect(page.getByRole('dialog', { name: 'Inspeção do job' })).toBeVisible();
   await expect(page.getByRole('dialog').getByText('Concluído', { exact: true })).toBeVisible();
+  // Replayed persisted SSE history must not restart one request per job event.
+  expect(listRequests).toBeLessThan(20);
 });
 
 test.describe('Read-only Apple Bridge protocol', () => {
