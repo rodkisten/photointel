@@ -263,6 +263,8 @@ jobs:
           audit_status=0
           wait "$audit_process_id" || audit_status=1
           wait "$npm_audit_process_id" || audit_status=1
+          uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/photointel-gpu-requirements.txt
+          uvx pip-audit -r /tmp/photointel-gpu-requirements.txt --disable-pip --format=json --output reports/gpu-python-audit.json || audit_status=1
           exit "$audit_status"
       - name: Capture public model and Apple/Pyto evidence without model weights
         id: references

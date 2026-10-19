@@ -171,5 +171,9 @@ jobs:
         with: {version: '0.12.23'}
       - run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
       - run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
+      - name: Audit pinned inference dependencies without loading models
+        run: |
+          uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
+          uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
       - uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
