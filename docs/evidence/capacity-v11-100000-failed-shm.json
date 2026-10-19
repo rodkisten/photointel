@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "status": "failed",
+  "synthetic_only": true,
+  "real_model_inference": false,
+  "real_cloud_resources": false,
+  "git_sha": "64f29390d503b99363cde9b9617ef79266053ccc",
+  "source_file_sha256": "2df53c6ac985d4ee4930efe805b4699a3fbf1a67cdb34747f1c56f3dfdcfc26b",
+  "working_tree_dirty": true,
+  "started_at": "2026-10-18T15:11:49.245532+00:00",
+  "asset_count": 100000,
+  "tags_per_asset": 30,
+  "embedding_dimension": 768,
+  "disposable_database": "photointel_capacity_94ca3203283940369795",
+  "database_dropped": true,
+  "postgresql": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+  "pgvector": "0.8.7",
+  "migration_head": "0006_query_embedding_cache",
+  "population": {
+    "asset_insert_seconds": 43.38290119299927,
+    "tag_insert_seconds": 165.97282948999964,
+    "vector_insert_seconds": 66.10527625599934,
+    "hnsw_build_seconds": 462.0409800139987,
+    "assets_per_second": 2305.055615232507,
+    "tag_associations_per_second": 18075.247672877438,
+    "vectors_per_second": 1512.73855376899,
+    "raw_predictions_sampling": {
+      "assets_with_full_raw_predictions": 1000,
+      "vocabulary_size": 5813,
+      "sample_fraction": 0.01,
+      "measured_table_growth_bytes": 95748096,
+      "measured_bytes_per_sample": 95748.096,
+      "additional_full_retention_projection_bytes": 9479061504.0,
+      "projection_is_measurement": false,
+      "warning": "Core catalog is a LOWER BOUND; full raw retention is projected separately"
+    }
+  },
+  "storage": {
+    "database_bytes": 2721243663,
+    "average_database_bytes_per_asset": 27212.43663,
+    "average_embedding_total_bytes": 8539.50464,
+    "average_tags_per_asset": 30.0,
+    "tables": [
+      {
+        "table": "asset_tags",
+        "estimated_rows": 3000032,
+        "heap_bytes": 523108352,
+        "indexes_bytes": 912728064,
+        "total_bytes": 1436000256,
+        "exact_rows": 3000000
+      },
+      {
+        "table": "embeddings",
+        "estimated_rows": 100000,
+        "heap_bytes": 11714560,
+        "indexes_bytes": 427950080,
+        "total_bytes": 853950464,
+        "exact_rows": 100000
+      },
+      {
+        "table": "asset_resources",
+        "estimated_rows": 300000,
+        "heap_bytes": 84934656,
+        "indexes_bytes": 60891136,
+        "total_bytes": 145883136,
+        "exact_rows": 300000
+      },
+      {
+        "table": "assets",
+        "estimated_rows": 100000,
+        "heap_bytes": 40894464,
+        "indexes_bytes": 64757760,
+        "total_bytes": 105701376,
+        "exact_rows": 100000
+      },
+      {
+        "table": "inference_runs",
+        "estimated_rows": 1000,
+        "heap_bytes": 262144,
+        "indexes_bytes": 204800,
+        "total_bytes": 95789056,
+        "exact_rows": 1000
+      },
+      {
+        "table": "jobs",
+        "estimated_rows": 100000,
+        "heap_bytes": 24199168,
+        "indexes_bytes": 20840448,
+        "total_bytes": 45080576,
+        "exact_rows": 100000
+      },
+      {
+        "table": "asset_metadata",
+        "estimated_rows": 100000,
+        "heap_bytes": 14827520,
+        "indexes_bytes": 4472832,
+        "total_bytes": 19341312,
+        "exact_rows": 100000
+      },
+      {
+        "table": "query_embedding_cache",
+        "estimated_rows": 2000,
+        "heap_bytes": 262144,
+        "indexes_bytes": 172032,
+        "total_bytes": 4644864,
+        "exact_rows": 1000
+      },
+      {
+        "table": "metadata_snapshots",
+        "estimated_rows": 20000,
+        "heap_bytes": 1441792,
+        "indexes_bytes": 1613824,
+        "total_bytes": 3088384,
+        "exact_rows": 10000
+      },
+      {
+        "table": "album_assets",
+        "estimated_rows": 10000,
+        "heap_bytes": 458752,
+        "indexes_bytes": 565248,
+        "total_bytes": 1048576,
+        "exact_rows": 5000
+      },
+      {
+        "table": "tags",
+        "estimated_rows": 1000,
+        "heap_bytes": 294912,
+        "indexes_bytes": 671744,
+        "total_bytes": 999424,
+        "exact_rows": 1000
+      },
+      {
+        "table": "duplicate_members",
+        "estimated_rows": 400,
+        "heap_bytes": 16384,
+        "indexes_bytes": 49152,
+        "total_bytes": 90112,
+        "exact_rows": 200
+      },
+      {
+        "table": "duplicate_groups",
+        "estimated_rows": 200,
+        "heap_bytes": 16384,
+        "indexes_bytes": 32768,
+        "total_bytes": 81920,
+        "exact_rows": 100
+      },
+      {
+        "table": "device_mappings",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 57344,
+        "total_bytes": 65536,
+        "exact_rows": 0
+      },
+      {
+        "table": "model_registry",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 40960,
+        "total_bytes": 57344,
+        "exact_rows": 1
+      },
+      {
+        "table": "discovery_manifests",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 40960,
+        "total_bytes": 49152,
+        "exact_rows": 0
+      },
+      {
+        "table": "sync_operations",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 40960,
+        "total_bytes": 49152,
+        "exact_rows": 0
+      },
+      {
+        "table": "libraries",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 32768,
+        "total_bytes": 49152,
+        "exact_rows": 1
+      },
+      {
+        "table": "object_intents",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 32768,
+        "total_bytes": 40960,
+        "exact_rows": 0
+      },
+      {
+        "table": "audit_events",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 32768,
+        "total_bytes": 40960,
+        "exact_rows": 0
+      },
+      {
+        "table": "dispatch_outbox",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 24576,
+        "total_bytes": 32768,
+        "exact_rows": 0
+      },
+      {
+        "table": "albums",
+        "estimated_rows": 2,
+        "heap_bytes": 8192,
+        "indexes_bytes": 16384,
+        "total_bytes": 32768,
+        "exact_rows": 1
+      },
+      {
+        "table": "job_events",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "alembic_version",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 1
+      },
+      {
+        "table": "bridge_devices",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "tag_aliases",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 24576,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "ingestion_runs",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "discovery_scans",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "verification_gates",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "durable_leases",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "job_batches",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "worker_states",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "icloud_session_states",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "saved_searches",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "settings",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      }
+    ]
+  },
+  "error_type": "DiskFull",
+  "elapsed_seconds": 804.8623526980009,
+  "process_max_rss_kib": 142284,
+  "process_cpu_seconds": 59.466744623,
+  "server_cpu_memory_measured": false,
+  "cloud_run_execution_measured": false
+}

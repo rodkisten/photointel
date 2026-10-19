@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-19T18:51:14.730099+00:00",
+  "scope": "local synthetic development measurements; not a production release gate",
+  "real_model_inference": false,
+  "cloud_run_measured": false,
+  "neon_measured": false,
+  "full_176k_benchmark_completed": false,
+  "reports": [
+    {
+      "artifact": "docs/evidence/capacity-v11-1000.json",
+      "artifact_sha256": "68f5861d88a716953e227054e07b998c08e0f704008831afbcae5b87bd1e63bd",
+      "status": "completed",
+      "asset_count": 1000,
+      "source_git_sha": "73236e47012830533226c0c07f81a2712e1685d9",
+      "source_file_sha256": "341e3481aa3402186a478933f44648130c70012c7aeb2bf23e49dda1cadabd8d",
+      "working_tree_dirty": true,
+      "migration_head": "0006_query_embedding_cache",
+      "completed_stages": [
+        "migrations",
+        "population_and_storage",
+        "sql_queries",
+        "local_api",
+        "experimental_halfvec"
+      ],
+      "database_dropped": true,
+      "database_created": null,
+      "measured_database_bytes": 43844111,
+      "projected_additional_raw_retention_bytes": 101376000.0,
+      "projected_database_with_full_raw_retention_bytes": 145220111.0,
+      "full_retention_is_measured": false
+    },
+    {
+      "artifact": "docs/evidence/capacity-v11-10000.json",
+      "artifact_sha256": "786b9488f27a6a7a398055f2ee41eb4143b9ce08c1100bd34b3d77cdfd9b79fd",
+      "status": "completed",
+      "asset_count": 10000,
+      "source_git_sha": "73236e47012830533226c0c07f81a2712e1685d9",
+      "source_file_sha256": "341e3481aa3402186a478933f44648130c70012c7aeb2bf23e49dda1cadabd8d",
+      "working_tree_dirty": true,
+      "migration_head": "0006_query_embedding_cache",
+      "completed_stages": [
+        "migrations",
+        "population_and_storage",
+        "sql_queries",
+        "local_api"
+      ],
+      "database_dropped": true,
+      "database_created": null,
+      "measured_database_bytes": 287210519,
+      "projected_additional_raw_retention_bytes": 952934400.0,
+      "projected_database_with_full_raw_retention_bytes": 1240144919.0,
+      "full_retention_is_measured": false
+    },
+    {
+      "artifact": "docs/evidence/capacity-v11-100000-failed-api.json",
+      "artifact_sha256": "f18b54a74002807c49b0d9c60ee09435e1d9893d1b5b87e641dd762903daed45",
+      "status": "failed",
+      "asset_count": 100000,
+      "source_git_sha": "73236e47012830533226c0c07f81a2712e1685d9",
+      "source_file_sha256": "6bd058eec3c6d299f4cb75df7ce0a58784512b6e246dace84866e160ed14b338",
+      "working_tree_dirty": true,
+      "migration_head": "0006_query_embedding_cache",
+      "completed_stages": [
+        "migrations",
+        "population_and_storage",
+        "sql_queries"
+      ],
+      "database_dropped": true,
+      "database_created": null,
+      "measured_database_bytes": 2695887895,
+      "projected_additional_raw_retention_bytes": 9479872512.0,
+      "projected_database_with_full_raw_retention_bytes": 12175760407.0,
+      "full_retention_is_measured": false
+    },
+    {
+      "artifact": "docs/evidence/capacity-v11-100000-failed-shm.json",
+      "artifact_sha256": "060c7db32db33c865f4d751c710a6ac0d5d7c6cf0588b300005a2ab0c88d536d",
+      "status": "failed",
+      "asset_count": 100000,
+      "source_git_sha": "64f29390d503b99363cde9b9617ef79266053ccc",
+      "source_file_sha256": "2df53c6ac985d4ee4930efe805b4699a3fbf1a67cdb34747f1c56f3dfdcfc26b",
+      "working_tree_dirty": true,
+      "migration_head": "0006_query_embedding_cache",
+      "completed_stages": [],
+      "database_dropped": true,
+      "database_created": null,
+      "measured_database_bytes": 2721243663,
+      "projected_additional_raw_retention_bytes": 9479061504.0,
+      "projected_database_with_full_raw_retention_bytes": 12200305167.0,
+      "full_retention_is_measured": false
+    },
+    {
+      "artifact": "docs/evidence/capacity-v11-100000.json",
+      "artifact_sha256": "c57ead5881fa365a3987a75dc97934adf5ff1cfc8abf9423b766376770fb42c8",
+      "status": "interrupted",
+      "asset_count": 100000,
+      "source_git_sha": "f95aa493a12c4a7a405c070b1ae9fab4f7ae7fdc",
+      "source_file_sha256": "37379e9ccbba3a460f8ed971a4cf2e90712b7d578b7e70e473cdc52b847eed71",
+      "working_tree_dirty": true,
+      "migration_head": "0007_model_preprocessing",
+      "completed_stages": [
+        "migrations"
+      ],
+      "database_dropped": true,
+      "database_created": null
+    },
+    {
+      "artifact": "docs/evidence/capacity-v11-176000.json",
+      "artifact_sha256": "f997bcbfa71660fff393335c2bc43290b339420e76487502d8e56032c6093936",
+      "status": "not_run",
+      "asset_count": 176000,
+      "source_git_sha": "5477c30d1f5a128a685bdeb551310901ccb5d9d7",
+      "source_file_sha256": "d7b17a93d143c3fd168d3aaa8a3c0d0660d087b3593d6e9117bf170e980a35d8",
+      "working_tree_dirty": true,
+      "migration_head": null,
+      "completed_stages": [],
+      "database_dropped": false,
+      "database_created": false
+    }
+  ],
+  "projection_176k": {
+    "basis_artifact": "docs/evidence/capacity-v11-100000-failed-api.json",
+    "basis_count": 100000,
+    "projected_count": 176000,
+    "measured": false,
+    "projected_database_with_full_raw_retention_bytes": 21429338316.32,
+    "example_with_50_percent_headroom_bytes": 32144007474.48
+  },
+  "remaining": [
+    "Re-run HTTP load against namespace 0007 with successful baseline endpoints",
+    "Complete 176000 full-density synthetic catalog on a dedicated host with headroom",
+    "Measure actual Neon pooled endpoint, quota and cold starts",
+    "Validate halfvec recall on representative real embeddings before any production precision change"
+  ]
+}

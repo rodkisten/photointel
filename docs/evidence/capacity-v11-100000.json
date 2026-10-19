@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "status": "interrupted",
+  "synthetic_only": true,
+  "real_model_inference": false,
+  "real_cloud_resources": false,
+  "git_sha": "f95aa493a12c4a7a405c070b1ae9fab4f7ae7fdc",
+  "source_file_sha256": "37379e9ccbba3a460f8ed971a4cf2e90712b7d578b7e70e473cdc52b847eed71",
+  "working_tree_dirty": true,
+  "started_at": "2026-10-19T18:45:16.243080+00:00",
+  "asset_count": 100000,
+  "tags_per_asset": 30,
+  "embedding_dimension": 768,
+  "preprocessing_revision": "siglip2-transformers-5.10.2-v2",
+  "disposable_database": "photointel_capacity_c87eac2c13364666aaeb",
+  "database_dropped": true,
+  "completed_stages": [
+    "migrations"
+  ],
+  "parallel_workers_per_query": 0,
+  "maintenance_work_mem_mib": 512,
+  "parallel_maintenance_workers": 0,
+  "parallelism_note": "Default zero models a resource-limited database and prevents many concurrent parallel hashes exhausting Docker's default 64MiB /dev/shm. This setting applies only to the newly created disposable database.",
+  "postgresql": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+  "pgvector": "0.8.7",
+  "migration_head": "0007_model_preprocessing",
+  "error_type": "KeyboardInterrupt",
+  "server_monitor": {
+    "container": "photointel-v11-postgres",
+    "scope": "shared local PostgreSQL container, includes other databases",
+    "sample_interval_seconds": 2,
+    "peak_database_connections_observed": 3,
+    "connection_observer_included": true,
+    "container_samples": [
+      {
+        "elapsed_monotonic": 13648.508400341,
+        "cpu_percent": 5.54,
+        "memory_usage": "213MiB / 9.735GiB",
+        "memory_percent": 2.14
+      },
+      {
+        "elapsed_monotonic": 13652.100137282,
+        "cpu_percent": 78.21,
+        "memory_usage": "226.1MiB / 9.735GiB",
+        "memory_percent": 2.27
+      },
+      {
+        "elapsed_monotonic": 13655.740143567,
+        "cpu_percent": 56.58,
+        "memory_usage": "229.5MiB / 9.735GiB",
+        "memory_percent": 2.3
+      },
+      {
+        "elapsed_monotonic": 13659.30255408,
+        "cpu_percent": 87.48,
+        "memory_usage": "223.7MiB / 9.735GiB",
+        "memory_percent": 2.24
+      },
+      {
+        "elapsed_monotonic": 13662.940285919,
+        "cpu_percent": 60.46,
+        "memory_usage": "226.3MiB / 9.735GiB",
+        "memory_percent": 2.27
+      },
+      {
+        "elapsed_monotonic": 13666.502718219,
+        "cpu_percent": 59.73,
+        "memory_usage": "228.8MiB / 9.735GiB",
+        "memory_percent": 2.3
+      },
+      {
+        "elapsed_monotonic": 13670.093063411,
+        "cpu_percent": 85.62,
+        "memory_usage": "231MiB / 9.735GiB",
+        "memory_percent": 2.32
+      },
+      {
+        "elapsed_monotonic": 13673.789662958,
+        "cpu_percent": 65.67,
+        "memory_usage": "245.7MiB / 9.735GiB",
+        "memory_percent": 2.46
+      },
+      {
+        "elapsed_monotonic": 13677.442868793,
+        "cpu_percent": 101.93,
+        "memory_usage": "276.1MiB / 9.735GiB",
+        "memory_percent": 2.77
+      },
+      {
+        "elapsed_monotonic": 13681.0885468,
+        "cpu_percent": 59.33,
+        "memory_usage": "295.6MiB / 9.735GiB",
+        "memory_percent": 2.97
+      },
+      {
+        "elapsed_monotonic": 13684.74792502,
+        "cpu_percent": 71.39,
+        "memory_usage": "319.1MiB / 9.735GiB",
+        "memory_percent": 3.2
+      },
+      {
+        "elapsed_monotonic": 13688.409549375,
+        "cpu_percent": 70.42,
+        "memory_usage": "317.8MiB / 9.735GiB",
+        "memory_percent": 3.19
+      },
+      {
+        "elapsed_monotonic": 13692.042681823,
+        "cpu_percent": 88.59,
+        "memory_usage": "326.1MiB / 9.735GiB",
+        "memory_percent": 3.27
+      },
+      {
+        "elapsed_monotonic": 13695.650142177,
+        "cpu_percent": 83.1,
+        "memory_usage": "266.8MiB / 9.735GiB",
+        "memory_percent": 2.68
+      },
+      {
+        "elapsed_monotonic": 13699.763404317,
+        "cpu_percent": 82.97,
+        "memory_usage": "272.5MiB / 9.735GiB",
+        "memory_percent": 2.73
+      },
+      {
+        "elapsed_monotonic": 13703.453798017,
+        "cpu_percent": 67.8,
+        "memory_usage": "247.9MiB / 9.735GiB",
+        "memory_percent": 2.49
+      },
+      {
+        "elapsed_monotonic": 13707.080215946,
+        "cpu_percent": 74.94,
+        "memory_usage": "263.1MiB / 9.735GiB",
+        "memory_percent": 2.64
+      },
+      {
+        "elapsed_monotonic": 13710.749003326,
+        "cpu_percent": 57.74,
+        "memory_usage": "268.4MiB / 9.735GiB",
+        "memory_percent": 2.69
+      },
+      {
+        "elapsed_monotonic": 13714.300346821,
+        "cpu_percent": 77.52,
+        "memory_usage": "292.5MiB / 9.735GiB",
+        "memory_percent": 2.93
+      },
+      {
+        "elapsed_monotonic": 13717.90430866,
+        "cpu_percent": 96.55,
+        "memory_usage": "305.6MiB / 9.735GiB",
+        "memory_percent": 3.07
+      },
+      {
+        "elapsed_monotonic": 13721.548142743,
+        "cpu_percent": 53.46,
+        "memory_usage": "239MiB / 9.735GiB",
+        "memory_percent": 2.4
+      },
+      {
+        "elapsed_monotonic": 13725.115749886,
+        "cpu_percent": 95.94,
+        "memory_usage": "287.8MiB / 9.735GiB",
+        "memory_percent": 2.89
+      },
+      {
+        "elapsed_monotonic": 13728.703004465,
+        "cpu_percent": 95.11,
+        "memory_usage": "357.3MiB / 9.735GiB",
+        "memory_percent": 3.58
+      },
+      {
+        "elapsed_monotonic": 13732.293223647,
+        "cpu_percent": 85.34,
+        "memory_usage": "358MiB / 9.735GiB",
+        "memory_percent": 3.59
+      },
+      {
+        "elapsed_monotonic": 13735.981421493,
+        "cpu_percent": 81.81,
+        "memory_usage": "370.4MiB / 9.735GiB",
+        "memory_percent": 3.72
+      },
+      {
+        "elapsed_monotonic": 13739.571923769,
+        "cpu_percent": 112.4,
+        "memory_usage": "402.7MiB / 9.735GiB",
+        "memory_percent": 4.04
+      },
+      {
+        "elapsed_monotonic": 13743.180865288,
+        "cpu_percent": 72.04,
+        "memory_usage": "406.2MiB / 9.735GiB",
+        "memory_percent": 4.08
+      },
+      {
+        "elapsed_monotonic": 13746.838720514,
+        "cpu_percent": 73.11,
+        "memory_usage": "546.8MiB / 9.735GiB",
+        "memory_percent": 5.49
+      },
+      {
+        "elapsed_monotonic": 13750.466828864,
+        "cpu_percent": 66.76,
+        "memory_usage": "474.8MiB / 9.735GiB",
+        "memory_percent": 4.76
+      },
+      {
+        "elapsed_monotonic": 13754.007652624,
+        "cpu_percent": 62.63,
+        "memory_usage": "507.7MiB / 9.735GiB",
+        "memory_percent": 5.09
+      },
+      {
+        "elapsed_monotonic": 13757.682135387,
+        "cpu_percent": 57.38,
+        "memory_usage": "528.1MiB / 9.735GiB",
+        "memory_percent": 5.3
+      },
+      {
+        "elapsed_monotonic": 13761.295166133,
+        "cpu_percent": 82.82,
+        "memory_usage": "560.8MiB / 9.735GiB",
+        "memory_percent": 5.63
+      },
+      {
+        "elapsed_monotonic": 13764.87851254,
+        "cpu_percent": 74.17,
+        "memory_usage": "574.1MiB / 9.735GiB",
+        "memory_percent": 5.76
+      },
+      {
+        "elapsed_monotonic": 13768.415868006,
+        "cpu_percent": 85.94,
+        "memory_usage": "603.9MiB / 9.735GiB",
+        "memory_percent": 6.06
+      },
+      {
+        "elapsed_monotonic": 13772.021764368,
+        "cpu_percent": 103.78,
+        "memory_usage": "664MiB / 9.735GiB",
+        "memory_percent": 6.66
+      },
+      {
+        "elapsed_monotonic": 13775.569644108,
+        "cpu_percent": 96.75,
+        "memory_usage": "695.8MiB / 9.735GiB",
+        "memory_percent": 6.98
+      },
+      {
+        "elapsed_monotonic": 13779.360395681,
+        "cpu_percent": 68.99,
+        "memory_usage": "714.3MiB / 9.735GiB",
+        "memory_percent": 7.17
+      },
+      {
+        "elapsed_monotonic": 13782.902414518,
+        "cpu_percent": 94.01,
+        "memory_usage": "732.4MiB / 9.735GiB",
+        "memory_percent": 7.35
+      },
+      {
+        "elapsed_monotonic": 13786.552852465,
+        "cpu_percent": 44.19,
+        "memory_usage": "735.3MiB / 9.735GiB",
+        "memory_percent": 7.38
+      },
+      {
+        "elapsed_monotonic": 13790.152478634,
+        "cpu_percent": 51.57,
+        "memory_usage": "757.2MiB / 9.735GiB",
+        "memory_percent": 7.6
+      }
+    ],
+    "server_cpu_memory_measured": true,
+    "cloud_run_execution_measured": false
+  },
+  "elapsed_seconds": 143.88210806999996,
+  "process_max_rss_kib": 62444,
+  "process_cpu_seconds": 21.536458646,
+  "server_cpu_memory_measured": true,
+  "cloud_run_execution_measured": false
+}

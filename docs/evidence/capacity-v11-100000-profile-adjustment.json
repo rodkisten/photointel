@@ -1,0 +1,11 @@
+{
+  "captured_at": "2026-10-19T15:07:22.028271+00:00",
+  "disposable_database": "photointel_capacity_ed19d4f8619241708b47",
+  "scope": "only this script-owned synthetic database",
+  "reason": "previous 100k parallel load exhausted Docker default 64MiB /dev/shm; unrelated to Neon quota or filesystem capacity",
+  "adjustment": "ALTER DATABASE <owned-disposable-uuid> SET max_parallel_workers_per_gather=0",
+  "new_connections_inherit_parallel_workers": 0,
+  "existing_plan_connection_not_reconfigured": true,
+  "inference_or_production_data": false,
+  "future_benchmark_default": "--parallel-workers-per-query 0 recorded in final harness"
+}

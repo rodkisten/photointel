@@ -1,0 +1,4 @@
+2026-10-18 15:25:10.443 UTC [3716] ERROR:  could not resize shared memory segment "/PostgreSQL.1403015928" to 2097152 bytes: No space left on device
+2026-10-18 15:25:10.444 UTC [3723] ERROR:  could not resize shared memory segment "/PostgreSQL.1437245054" to 2097152 bytes: No space left on device
+2026-10-18 15:25:10.444 UTC [3720] ERROR:  could not resize shared memory segment "/PostgreSQL.862063052" to 2097152 bytes: No space left on device
+2026-10-18 15:25:10.503 UTC [3708] ERROR:  could not resize shared memory segment "/PostgreSQL.415453380" to 4194304 bytes: No space left on device

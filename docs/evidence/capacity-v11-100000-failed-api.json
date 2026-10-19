@@ -1,0 +1,3274 @@
+{
+  "schema_version": 1,
+  "status": "failed",
+  "synthetic_only": true,
+  "real_model_inference": false,
+  "real_cloud_resources": false,
+  "git_sha": "73236e47012830533226c0c07f81a2712e1685d9",
+  "source_file_sha256": "6bd058eec3c6d299f4cb75df7ce0a58784512b6e246dace84866e160ed14b338",
+  "working_tree_dirty": true,
+  "started_at": "2026-10-19T15:04:48.688949+00:00",
+  "asset_count": 100000,
+  "tags_per_asset": 30,
+  "embedding_dimension": 768,
+  "disposable_database": "photointel_capacity_ed19d4f8619241708b47",
+  "database_dropped": true,
+  "completed_stages": [
+    "migrations",
+    "population_and_storage",
+    "sql_queries"
+  ],
+  "postgresql": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+  "pgvector": "0.8.7",
+  "migration_head": "0006_query_embedding_cache",
+  "population": {
+    "asset_insert_seconds": 22.905931517,
+    "tag_insert_seconds": 144.81233191300004,
+    "vector_insert_seconds": 124.57100211500006,
+    "hnsw_build_seconds": 446.82409080599996,
+    "assets_per_second": 4365.681436084947,
+    "tag_associations_per_second": 20716.467723220783,
+    "vectors_per_second": 802.7550417205694,
+    "raw_predictions_sampling": {
+      "assets_with_full_raw_predictions": 1000,
+      "vocabulary_size": 5813,
+      "sample_fraction": 0.01,
+      "measured_table_growth_bytes": 95756288,
+      "measured_bytes_per_sample": 95756.288,
+      "additional_full_retention_projection_bytes": 9479872512.0,
+      "projection_is_measurement": false,
+      "warning": "Core catalog is a LOWER BOUND; full raw retention is projected separately"
+    }
+  },
+  "storage": {
+    "database_bytes": 2695887895,
+    "average_database_bytes_per_asset": 26958.87895,
+    "average_embedding_total_bytes": 8538.68544,
+    "average_tags_per_asset": 30.0,
+    "tables": [
+      {
+        "table": "asset_tags",
+        "estimated_rows": 3000811,
+        "heap_bytes": 523239424,
+        "indexes_bytes": 886595584,
+        "total_bytes": 1409998848,
+        "exact_rows": 3000000
+      },
+      {
+        "table": "embeddings",
+        "estimated_rows": 100000,
+        "heap_bytes": 11714560,
+        "indexes_bytes": 427868160,
+        "total_bytes": 853868544,
+        "exact_rows": 100000
+      },
+      {
+        "table": "asset_resources",
+        "estimated_rows": 300000,
+        "heap_bytes": 84803584,
+        "indexes_bytes": 61243392,
+        "total_bytes": 146104320,
+        "exact_rows": 300000
+      },
+      {
+        "table": "assets",
+        "estimated_rows": 100000,
+        "heap_bytes": 40894464,
+        "indexes_bytes": 65331200,
+        "total_bytes": 106274816,
+        "exact_rows": 100000
+      },
+      {
+        "table": "inference_runs",
+        "estimated_rows": 1000,
+        "heap_bytes": 262144,
+        "indexes_bytes": 212992,
+        "total_bytes": 95797248,
+        "exact_rows": 1000
+      },
+      {
+        "table": "jobs",
+        "estimated_rows": 100000,
+        "heap_bytes": 24305664,
+        "indexes_bytes": 20824064,
+        "total_bytes": 45170688,
+        "exact_rows": 100000
+      },
+      {
+        "table": "asset_metadata",
+        "estimated_rows": 100000,
+        "heap_bytes": 14868480,
+        "indexes_bytes": 4268032,
+        "total_bytes": 19177472,
+        "exact_rows": 100000
+      },
+      {
+        "table": "query_embedding_cache",
+        "estimated_rows": 2000,
+        "heap_bytes": 262144,
+        "indexes_bytes": 172032,
+        "total_bytes": 4644864,
+        "exact_rows": 1000
+      },
+      {
+        "table": "metadata_snapshots",
+        "estimated_rows": 20000,
+        "heap_bytes": 1441792,
+        "indexes_bytes": 1507328,
+        "total_bytes": 2981888,
+        "exact_rows": 10000
+      },
+      {
+        "table": "album_assets",
+        "estimated_rows": 10000,
+        "heap_bytes": 458752,
+        "indexes_bytes": 516096,
+        "total_bytes": 999424,
+        "exact_rows": 5000
+      },
+      {
+        "table": "tags",
+        "estimated_rows": 1000,
+        "heap_bytes": 294912,
+        "indexes_bytes": 671744,
+        "total_bytes": 999424,
+        "exact_rows": 1000
+      },
+      {
+        "table": "duplicate_members",
+        "estimated_rows": 400,
+        "heap_bytes": 16384,
+        "indexes_bytes": 49152,
+        "total_bytes": 90112,
+        "exact_rows": 200
+      },
+      {
+        "table": "duplicate_groups",
+        "estimated_rows": 200,
+        "heap_bytes": 16384,
+        "indexes_bytes": 32768,
+        "total_bytes": 81920,
+        "exact_rows": 100
+      },
+      {
+        "table": "device_mappings",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 57344,
+        "total_bytes": 65536,
+        "exact_rows": 0
+      },
+      {
+        "table": "model_registry",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 40960,
+        "total_bytes": 57344,
+        "exact_rows": 1
+      },
+      {
+        "table": "sync_operations",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 40960,
+        "total_bytes": 49152,
+        "exact_rows": 0
+      },
+      {
+        "table": "discovery_manifests",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 40960,
+        "total_bytes": 49152,
+        "exact_rows": 0
+      },
+      {
+        "table": "libraries",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 32768,
+        "total_bytes": 49152,
+        "exact_rows": 1
+      },
+      {
+        "table": "audit_events",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 32768,
+        "total_bytes": 40960,
+        "exact_rows": 0
+      },
+      {
+        "table": "object_intents",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 32768,
+        "total_bytes": 40960,
+        "exact_rows": 0
+      },
+      {
+        "table": "dispatch_outbox",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 24576,
+        "total_bytes": 32768,
+        "exact_rows": 0
+      },
+      {
+        "table": "albums",
+        "estimated_rows": 2,
+        "heap_bytes": 8192,
+        "indexes_bytes": 16384,
+        "total_bytes": 32768,
+        "exact_rows": 1
+      },
+      {
+        "table": "tag_aliases",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 24576,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "discovery_scans",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "job_events",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "bridge_devices",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "alembic_version",
+        "estimated_rows": 1,
+        "heap_bytes": 8192,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 1
+      },
+      {
+        "table": "ingestion_runs",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 16384,
+        "total_bytes": 24576,
+        "exact_rows": 0
+      },
+      {
+        "table": "settings",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "verification_gates",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "icloud_session_states",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "saved_searches",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "durable_leases",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "job_batches",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      },
+      {
+        "table": "worker_states",
+        "estimated_rows": 0,
+        "heap_bytes": 0,
+        "indexes_bytes": 8192,
+        "total_bytes": 16384,
+        "exact_rows": 0
+      }
+    ]
+  },
+  "queries": {
+    "gallery": {
+      "first_observed_ms": 11.312934999978097,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 10.25158300012663,
+        "p95_ms": 12.348279400021056,
+        "p99_ms": null,
+        "minimum_ms": 7.220869000093444,
+        "maximum_ms": 12.520768000058524
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 7.6,
+            "Total Cost": 24.11,
+            "Plan Rows": 60,
+            "Plan Width": 50,
+            "Actual Startup Time": 0.057,
+            "Actual Total Time": 0.078,
+            "Actual Rows": 60,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 90,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Incremental Sort",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 7.6,
+                "Total Cost": 27527.6,
+                "Plan Rows": 100000,
+                "Plan Width": 50,
+                "Actual Startup Time": 0.056,
+                "Actual Total Time": 0.074,
+                "Actual Rows": 60,
+                "Actual Loops": 1,
+                "Sort Key": [
+                  "captured_at DESC",
+                  "id"
+                ],
+                "Presorted Key": [
+                  "captured_at"
+                ],
+                "Full-sort Groups": {
+                  "Group Count": 2,
+                  "Sort Methods Used": [
+                    "top-N heapsort",
+                    "quicksort"
+                  ],
+                  "Sort Space Memory": {
+                    "Average Sort Space Used": 32,
+                    "Peak Sort Space Used": 32
+                  }
+                },
+                "Shared Hit Blocks": 90,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Backward",
+                    "Index Name": "ix_assets_capture_cursor",
+                    "Relation Name": "assets",
+                    "Alias": "assets",
+                    "Startup Cost": 0.42,
+                    "Total Cost": 23816.62,
+                    "Plan Rows": 100000,
+                    "Plan Width": 50,
+                    "Actual Startup Time": 0.006,
+                    "Actual Total Time": 0.049,
+                    "Actual Rows": 85,
+                    "Actual Loops": 1,
+                    "Filter": "((visibility_status)::text = 'active'::text)",
+                    "Rows Removed by Filter": 0,
+                    "Shared Hit Blocks": 90,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 28,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.222,
+          "Triggers": [],
+          "Execution Time": 0.088
+        }
+      ],
+      "includes_connection_acquisition": true
+    },
+    "metadata_filters": {
+      "first_observed_ms": 13.145199000064167,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 8.919605000073716,
+        "p95_ms": 10.954763599829676,
+        "p99_ms": null,
+        "minimum_ms": 7.165461999875333,
+        "maximum_ms": 11.06978299981165
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 7.53,
+            "Total Cost": 25.69,
+            "Plan Rows": 60,
+            "Plan Width": 24,
+            "Actual Startup Time": 0.076,
+            "Actual Total Time": 0.097,
+            "Actual Rows": 60,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 88,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Incremental Sort",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 7.53,
+                "Total Cost": 27129.53,
+                "Plan Rows": 89617,
+                "Plan Width": 24,
+                "Actual Startup Time": 0.075,
+                "Actual Total Time": 0.093,
+                "Actual Rows": 60,
+                "Actual Loops": 1,
+                "Sort Key": [
+                  "captured_at DESC",
+                  "id"
+                ],
+                "Presorted Key": [
+                  "captured_at"
+                ],
+                "Full-sort Groups": {
+                  "Group Count": 2,
+                  "Sort Methods Used": [
+                    "top-N heapsort",
+                    "quicksort"
+                  ],
+                  "Sort Space Memory": {
+                    "Average Sort Space Used": 28,
+                    "Peak Sort Space Used": 28
+                  }
+                },
+                "Shared Hit Blocks": 88,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Backward",
+                    "Index Name": "ix_assets_capture_cursor",
+                    "Relation Name": "assets",
+                    "Alias": "assets",
+                    "Startup Cost": 0.42,
+                    "Total Cost": 23867.15,
+                    "Plan Rows": 89617,
+                    "Plan Width": 24,
+                    "Actual Startup Time": 0.013,
+                    "Actual Total Time": 0.069,
+                    "Actual Rows": 85,
+                    "Actual Loops": 1,
+                    "Index Cond": "(captured_at < (now() - '365 days'::interval))",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "((width >= 3000) AND (filesize < 2000000))",
+                    "Rows Removed by Filter": 0,
+                    "Shared Hit Blocks": 88,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 12,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.316,
+          "Triggers": [],
+          "Execution Time": 0.113
+        }
+      ],
+      "includes_connection_acquisition": true
+    },
+    "tag_filter": {
+      "first_observed_ms": 29.25417100004779,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 21.42533000005642,
+        "p95_ms": 25.242006799999217,
+        "p99_ms": null,
+        "minimum_ms": 20.3763170000002,
+        "maximum_ms": 25.469143000009353
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 1009.18,
+            "Total Cost": 4377.8,
+            "Plan Rows": 60,
+            "Plan Width": 24,
+            "Actual Startup Time": 77.765,
+            "Actual Total Time": 81.139,
+            "Actual Rows": 60,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 15071,
+            "Shared Read Blocks": 5544,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 5442,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Gather Merge",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 1009.18,
+                "Total Cost": 169496.51,
+                "Plan Rows": 3001,
+                "Plan Width": 24,
+                "Actual Startup Time": 77.764,
+                "Actual Total Time": 81.133,
+                "Actual Rows": 60,
+                "Actual Loops": 1,
+                "Workers Planned": 2,
+                "Workers Launched": 2,
+                "Shared Hit Blocks": 15071,
+                "Shared Read Blocks": 5544,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 5442,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Nested Loop",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Join Type": "Semi",
+                    "Startup Cost": 9.15,
+                    "Total Cost": 168150.09,
+                    "Plan Rows": 1250,
+                    "Plan Width": 24,
+                    "Actual Startup Time": 2.798,
+                    "Actual Total Time": 50.668,
+                    "Actual Rows": 42,
+                    "Actual Loops": 3,
+                    "Inner Unique": false,
+                    "Shared Hit Blocks": 15071,
+                    "Shared Read Blocks": 5544,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 5442,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Workers": [],
+                    "Plans": [
+                      {
+                        "Node Type": "Index Only Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": true,
+                        "Async Capable": false,
+                        "Scan Direction": "Backward",
+                        "Index Name": "ix_assets_capture_cursor",
+                        "Relation Name": "assets",
+                        "Alias": "a",
+                        "Startup Cost": 0.42,
+                        "Total Cost": 3081.08,
+                        "Plan Rows": 41667,
+                        "Plan Width": 24,
+                        "Actual Startup Time": 0.089,
+                        "Actual Total Time": 1.66,
+                        "Actual Rows": 1480,
+                        "Actual Loops": 3,
+                        "Heap Fetches": 0,
+                        "Shared Hit Blocks": 32,
+                        "Shared Read Blocks": 24,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 24,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Workers": []
+                      },
+                      {
+                        "Node Type": "Hash Join",
+                        "Parent Relationship": "Inner",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Join Type": "Inner",
+                        "Startup Cost": 8.73,
+                        "Total Cost": 12.69,
+                        "Plan Rows": 1,
+                        "Plan Width": 16,
+                        "Actual Startup Time": 0.033,
+                        "Actual Total Time": 0.033,
+                        "Actual Rows": 0,
+                        "Actual Loops": 4439,
+                        "Inner Unique": true,
+                        "Hash Cond": "(t.tag_id = v.id)",
+                        "Shared Hit Blocks": 15039,
+                        "Shared Read Blocks": 5520,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 5418,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Workers": [],
+                        "Plans": [
+                          {
+                            "Node Type": "Index Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Scan Direction": "Forward",
+                            "Index Name": "ix_asset_tags_asset_id",
+                            "Relation Name": "asset_tags",
+                            "Alias": "t",
+                            "Startup Cost": 0.43,
+                            "Total Cost": 4.24,
+                            "Plan Rows": 55,
+                            "Plan Width": 32,
+                            "Actual Startup Time": 0.021,
+                            "Actual Total Time": 0.03,
+                            "Actual Rows": 30,
+                            "Actual Loops": 4439,
+                            "Index Cond": "(asset_id = a.id)",
+                            "Rows Removed by Index Recheck": 0,
+                            "Filter": "(confidence >= '0.4'::double precision)",
+                            "Rows Removed by Filter": 0,
+                            "Shared Hit Blocks": 14934,
+                            "Shared Read Blocks": 5520,
+                            "Shared Dirtied Blocks": 0,
+                            "Shared Written Blocks": 5418,
+                            "Local Hit Blocks": 0,
+                            "Local Read Blocks": 0,
+                            "Local Dirtied Blocks": 0,
+                            "Local Written Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Workers": []
+                          },
+                          {
+                            "Node Type": "Hash",
+                            "Parent Relationship": "Inner",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Startup Cost": 8.29,
+                            "Total Cost": 8.29,
+                            "Plan Rows": 1,
+                            "Plan Width": 16,
+                            "Actual Startup Time": 0.024,
+                            "Actual Total Time": 0.025,
+                            "Actual Rows": 1,
+                            "Actual Loops": 3,
+                            "Hash Buckets": 1024,
+                            "Original Hash Buckets": 1024,
+                            "Hash Batches": 1,
+                            "Original Hash Batches": 1,
+                            "Peak Memory Usage": 9,
+                            "Shared Hit Blocks": 11,
+                            "Shared Read Blocks": 0,
+                            "Shared Dirtied Blocks": 0,
+                            "Shared Written Blocks": 0,
+                            "Local Hit Blocks": 0,
+                            "Local Read Blocks": 0,
+                            "Local Dirtied Blocks": 0,
+                            "Local Written Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Workers": [],
+                            "Plans": [
+                              {
+                                "Node Type": "Index Scan",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": false,
+                                "Async Capable": false,
+                                "Scan Direction": "Forward",
+                                "Index Name": "tags_canonical_key_key",
+                                "Relation Name": "tags",
+                                "Alias": "v",
+                                "Startup Cost": 0.28,
+                                "Total Cost": 8.29,
+                                "Plan Rows": 1,
+                                "Plan Width": 16,
+                                "Actual Startup Time": 0.021,
+                                "Actual Total Time": 0.021,
+                                "Actual Rows": 1,
+                                "Actual Loops": 3,
+                                "Index Cond": "((canonical_key)::text = 'synthetic_tag_17'::text)",
+                                "Rows Removed by Index Recheck": 0,
+                                "Shared Hit Blocks": 11,
+                                "Shared Read Blocks": 0,
+                                "Shared Dirtied Blocks": 0,
+                                "Shared Written Blocks": 0,
+                                "Local Hit Blocks": 0,
+                                "Local Read Blocks": 0,
+                                "Local Dirtied Blocks": 0,
+                                "Local Written Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Workers": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 54,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.494,
+          "Triggers": [],
+          "Execution Time": 81.169
+        }
+      ],
+      "includes_connection_acquisition": true
+    },
+    "facets": {
+      "first_observed_ms": 859.5011480001631,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 824.3516490001639,
+        "p95_ms": 864.802428999883,
+        "p99_ms": null,
+        "minimum_ms": 799.3452729999717,
+        "maximum_ms": 869.3580259998726
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 93285.07,
+            "Total Cost": 93285.15,
+            "Plan Rows": 30,
+            "Plan Width": 24,
+            "Actual Startup Time": 727.306,
+            "Actual Total Time": 730.8,
+            "Actual Rows": 30,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 8352,
+            "Shared Read Blocks": 60532,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Sort",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 93285.07,
+                "Total Cost": 93287.57,
+                "Plan Rows": 1000,
+                "Plan Width": 24,
+                "Actual Startup Time": 727.305,
+                "Actual Total Time": 730.797,
+                "Actual Rows": 30,
+                "Actual Loops": 1,
+                "Sort Key": [
+                  "(count(*)) DESC"
+                ],
+                "Sort Method": "top-N heapsort",
+                "Sort Space Used": 27,
+                "Sort Space Type": "Memory",
+                "Shared Hit Blocks": 8352,
+                "Shared Read Blocks": 60532,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Aggregate",
+                    "Strategy": "Sorted",
+                    "Partial Mode": "Finalize",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Startup Cost": 93002.19,
+                    "Total Cost": 93255.54,
+                    "Plan Rows": 1000,
+                    "Plan Width": 24,
+                    "Actual Startup Time": 726.638,
+                    "Actual Total Time": 730.723,
+                    "Actual Rows": 1000,
+                    "Actual Loops": 1,
+                    "Group Key": [
+                      "t.tag_id"
+                    ],
+                    "Shared Hit Blocks": 8352,
+                    "Shared Read Blocks": 60532,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Gather Merge",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Startup Cost": 93002.19,
+                        "Total Cost": 93235.54,
+                        "Plan Rows": 2000,
+                        "Plan Width": 24,
+                        "Actual Startup Time": 726.632,
+                        "Actual Total Time": 730.418,
+                        "Actual Rows": 3000,
+                        "Actual Loops": 1,
+                        "Workers Planned": 2,
+                        "Workers Launched": 2,
+                        "Shared Hit Blocks": 8352,
+                        "Shared Read Blocks": 60532,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Sort",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Startup Cost": 92002.16,
+                            "Total Cost": 92004.66,
+                            "Plan Rows": 1000,
+                            "Plan Width": 24,
+                            "Actual Startup Time": 722.378,
+                            "Actual Total Time": 722.429,
+                            "Actual Rows": 1000,
+                            "Actual Loops": 3,
+                            "Sort Key": [
+                              "t.tag_id"
+                            ],
+                            "Sort Method": "quicksort",
+                            "Sort Space Used": 71,
+                            "Sort Space Type": "Memory",
+                            "Shared Hit Blocks": 8352,
+                            "Shared Read Blocks": 60532,
+                            "Shared Dirtied Blocks": 0,
+                            "Shared Written Blocks": 0,
+                            "Local Hit Blocks": 0,
+                            "Local Read Blocks": 0,
+                            "Local Dirtied Blocks": 0,
+                            "Local Written Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0,
+                            "Workers": [
+                              {
+                                "Worker Number": 0,
+                                "Sort Method": "quicksort",
+                                "Sort Space Used": 71,
+                                "Sort Space Type": "Memory"
+                              },
+                              {
+                                "Worker Number": 1,
+                                "Sort Method": "quicksort",
+                                "Sort Space Used": 71,
+                                "Sort Space Type": "Memory"
+                              }
+                            ],
+                            "Plans": [
+                              {
+                                "Node Type": "Aggregate",
+                                "Strategy": "Hashed",
+                                "Partial Mode": "Partial",
+                                "Parent Relationship": "Outer",
+                                "Parallel Aware": false,
+                                "Async Capable": false,
+                                "Startup Cost": 91942.33,
+                                "Total Cost": 91952.33,
+                                "Plan Rows": 1000,
+                                "Plan Width": 24,
+                                "Actual Startup Time": 722.082,
+                                "Actual Total Time": 722.193,
+                                "Actual Rows": 1000,
+                                "Actual Loops": 3,
+                                "Group Key": [
+                                  "t.tag_id"
+                                ],
+                                "Planned Partitions": 0,
+                                "HashAgg Batches": 1,
+                                "Peak Memory Usage": 129,
+                                "Disk Usage": 0,
+                                "Shared Hit Blocks": 8338,
+                                "Shared Read Blocks": 60532,
+                                "Shared Dirtied Blocks": 0,
+                                "Shared Written Blocks": 0,
+                                "Local Hit Blocks": 0,
+                                "Local Read Blocks": 0,
+                                "Local Dirtied Blocks": 0,
+                                "Local Written Blocks": 0,
+                                "Temp Read Blocks": 0,
+                                "Temp Written Blocks": 0,
+                                "Workers": [
+                                  {
+                                    "Worker Number": 0,
+                                    "HashAgg Batches": 1,
+                                    "Peak Memory Usage": 129,
+                                    "Disk Usage": 0
+                                  },
+                                  {
+                                    "Worker Number": 1,
+                                    "HashAgg Batches": 1,
+                                    "Peak Memory Usage": 129,
+                                    "Disk Usage": 0
+                                  }
+                                ],
+                                "Plans": [
+                                  {
+                                    "Node Type": "Hash Join",
+                                    "Parent Relationship": "Outer",
+                                    "Parallel Aware": true,
+                                    "Async Capable": false,
+                                    "Join Type": "Inner",
+                                    "Startup Cost": 6033.61,
+                                    "Total Cost": 85691.27,
+                                    "Plan Rows": 1250213,
+                                    "Plan Width": 16,
+                                    "Actual Startup Time": 16.565,
+                                    "Actual Total Time": 450.858,
+                                    "Actual Rows": 1000000,
+                                    "Actual Loops": 3,
+                                    "Inner Unique": true,
+                                    "Hash Cond": "(t.asset_id = a.id)",
+                                    "Shared Hit Blocks": 8338,
+                                    "Shared Read Blocks": 60532,
+                                    "Shared Dirtied Blocks": 0,
+                                    "Shared Written Blocks": 0,
+                                    "Local Hit Blocks": 0,
+                                    "Local Read Blocks": 0,
+                                    "Local Dirtied Blocks": 0,
+                                    "Local Written Blocks": 0,
+                                    "Temp Read Blocks": 0,
+                                    "Temp Written Blocks": 0,
+                                    "Workers": [],
+                                    "Plans": [
+                                      {
+                                        "Node Type": "Seq Scan",
+                                        "Parent Relationship": "Outer",
+                                        "Parallel Aware": true,
+                                        "Async Capable": false,
+                                        "Relation Name": "asset_tags",
+                                        "Alias": "t",
+                                        "Startup Cost": 0.0,
+                                        "Total Cost": 76375.38,
+                                        "Plan Rows": 1250338,
+                                        "Plan Width": 32,
+                                        "Actual Startup Time": 0.006,
+                                        "Actual Total Time": 141.302,
+                                        "Actual Rows": 1000000,
+                                        "Actual Loops": 3,
+                                        "Shared Hit Blocks": 3340,
+                                        "Shared Read Blocks": 60532,
+                                        "Shared Dirtied Blocks": 0,
+                                        "Shared Written Blocks": 0,
+                                        "Local Hit Blocks": 0,
+                                        "Local Read Blocks": 0,
+                                        "Local Dirtied Blocks": 0,
+                                        "Local Written Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Workers": []
+                                      },
+                                      {
+                                        "Node Type": "Hash",
+                                        "Parent Relationship": "Inner",
+                                        "Parallel Aware": true,
+                                        "Async Capable": false,
+                                        "Startup Cost": 5512.83,
+                                        "Total Cost": 5512.83,
+                                        "Plan Rows": 41662,
+                                        "Plan Width": 16,
+                                        "Actual Startup Time": 16.322,
+                                        "Actual Total Time": 16.322,
+                                        "Actual Rows": 33333,
+                                        "Actual Loops": 3,
+                                        "Hash Buckets": 131072,
+                                        "Original Hash Buckets": 131072,
+                                        "Hash Batches": 1,
+                                        "Original Hash Batches": 1,
+                                        "Peak Memory Usage": 5792,
+                                        "Shared Hit Blocks": 4992,
+                                        "Shared Read Blocks": 0,
+                                        "Shared Dirtied Blocks": 0,
+                                        "Shared Written Blocks": 0,
+                                        "Local Hit Blocks": 0,
+                                        "Local Read Blocks": 0,
+                                        "Local Dirtied Blocks": 0,
+                                        "Local Written Blocks": 0,
+                                        "Temp Read Blocks": 0,
+                                        "Temp Written Blocks": 0,
+                                        "Workers": [],
+                                        "Plans": [
+                                          {
+                                            "Node Type": "Seq Scan",
+                                            "Parent Relationship": "Outer",
+                                            "Parallel Aware": true,
+                                            "Async Capable": false,
+                                            "Relation Name": "assets",
+                                            "Alias": "a",
+                                            "Startup Cost": 0.0,
+                                            "Total Cost": 5512.83,
+                                            "Plan Rows": 41662,
+                                            "Plan Width": 16,
+                                            "Actual Startup Time": 0.007,
+                                            "Actual Total Time": 10.433,
+                                            "Actual Rows": 33333,
+                                            "Actual Loops": 3,
+                                            "Filter": "(filesize < 1700000)",
+                                            "Rows Removed by Filter": 0,
+                                            "Shared Hit Blocks": 4992,
+                                            "Shared Read Blocks": 0,
+                                            "Shared Dirtied Blocks": 0,
+                                            "Shared Written Blocks": 0,
+                                            "Local Hit Blocks": 0,
+                                            "Local Read Blocks": 0,
+                                            "Local Dirtied Blocks": 0,
+                                            "Local Written Blocks": 0,
+                                            "Temp Read Blocks": 0,
+                                            "Temp Written Blocks": 0,
+                                            "Workers": []
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 16,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 4.279,
+          "Triggers": [],
+          "Execution Time": 730.845
+        }
+      ],
+      "includes_connection_acquisition": true,
+      "concurrent": {
+        "1": {
+          "samples": 5,
+          "p50_ms": 821.2414480001371,
+          "p95_ms": 866.218918200093,
+          "p99_ms": null,
+          "minimum_ms": 751.5337439999712,
+          "maximum_ms": 870.4156240000884,
+          "queries_per_second": 1.2220604561514934,
+          "total_seconds": 4.0914506110000275
+        },
+        "5": {
+          "samples": 25,
+          "p50_ms": 2389.4525180000983,
+          "p95_ms": 2980.1955532000193,
+          "p99_ms": null,
+          "minimum_ms": 1554.171168000039,
+          "maximum_ms": 3083.0371580000246,
+          "queries_per_second": 2.075881215754828,
+          "total_seconds": 12.04307828900005
+        },
+        "20": {
+          "samples": 100,
+          "p50_ms": 10211.645050499897,
+          "p95_ms": 11924.007790349855,
+          "p99_ms": 12384.727737159936,
+          "minimum_ms": 6277.759850999928,
+          "maximum_ms": 12623.770578999938,
+          "queries_per_second": 1.942793993386391,
+          "total_seconds": 51.47226125899988
+        }
+      }
+    },
+    "album": {
+      "first_observed_ms": 19.782292999934725,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 22.372073000042292,
+        "p95_ms": 23.472729600143794,
+        "p99_ms": null,
+        "minimum_ms": 20.09842799998296,
+        "maximum_ms": 23.576289000175166
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 4264.6,
+            "Total Cost": 4264.75,
+            "Plan Rows": 60,
+            "Plan Width": 20,
+            "Actual Startup Time": 18.401,
+            "Actual Total Time": 18.41,
+            "Actual Rows": 60,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 575,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Sort",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 4264.6,
+                "Total Cost": 4277.1,
+                "Plan Rows": 5000,
+                "Plan Width": 20,
+                "Actual Startup Time": 18.4,
+                "Actual Total Time": 18.405,
+                "Actual Rows": 60,
+                "Actual Loops": 1,
+                "Sort Key": [
+                  "aa.\"position\""
+                ],
+                "Sort Method": "top-N heapsort",
+                "Sort Space Used": 32,
+                "Sort Space Type": "Memory",
+                "Shared Hit Blocks": 575,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Hash Join",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Join Type": "Inner",
+                    "Startup Cost": 181.42,
+                    "Total Cost": 4091.93,
+                    "Plan Rows": 5000,
+                    "Plan Width": 20,
+                    "Actual Startup Time": 1.147,
+                    "Actual Total Time": 18.013,
+                    "Actual Rows": 5000,
+                    "Actual Loops": 1,
+                    "Inner Unique": true,
+                    "Hash Cond": "(a.id = aa.asset_id)",
+                    "Shared Hit Blocks": 575,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0,
+                    "Plans": [
+                      {
+                        "Node Type": "Index Only Scan",
+                        "Parent Relationship": "Outer",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Scan Direction": "Forward",
+                        "Index Name": "assets_pkey",
+                        "Relation Name": "assets",
+                        "Alias": "a",
+                        "Startup Cost": 0.42,
+                        "Total Cost": 3648.41,
+                        "Plan Rows": 100000,
+                        "Plan Width": 16,
+                        "Actual Startup Time": 0.005,
+                        "Actual Total Time": 8.436,
+                        "Actual Rows": 100000,
+                        "Actual Loops": 1,
+                        "Heap Fetches": 0,
+                        "Shared Hit Blocks": 519,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0
+                      },
+                      {
+                        "Node Type": "Hash",
+                        "Parent Relationship": "Inner",
+                        "Parallel Aware": false,
+                        "Async Capable": false,
+                        "Startup Cost": 118.5,
+                        "Total Cost": 118.5,
+                        "Plan Rows": 5000,
+                        "Plan Width": 20,
+                        "Actual Startup Time": 1.134,
+                        "Actual Total Time": 1.135,
+                        "Actual Rows": 5000,
+                        "Actual Loops": 1,
+                        "Hash Buckets": 8192,
+                        "Original Hash Buckets": 8192,
+                        "Hash Batches": 1,
+                        "Original Hash Batches": 1,
+                        "Peak Memory Usage": 318,
+                        "Shared Hit Blocks": 56,
+                        "Shared Read Blocks": 0,
+                        "Shared Dirtied Blocks": 0,
+                        "Shared Written Blocks": 0,
+                        "Local Hit Blocks": 0,
+                        "Local Read Blocks": 0,
+                        "Local Dirtied Blocks": 0,
+                        "Local Written Blocks": 0,
+                        "Temp Read Blocks": 0,
+                        "Temp Written Blocks": 0,
+                        "Plans": [
+                          {
+                            "Node Type": "Seq Scan",
+                            "Parent Relationship": "Outer",
+                            "Parallel Aware": false,
+                            "Async Capable": false,
+                            "Relation Name": "album_assets",
+                            "Alias": "aa",
+                            "Startup Cost": 0.0,
+                            "Total Cost": 118.5,
+                            "Plan Rows": 5000,
+                            "Plan Width": 20,
+                            "Actual Startup Time": 0.005,
+                            "Actual Total Time": 0.647,
+                            "Actual Rows": 5000,
+                            "Actual Loops": 1,
+                            "Filter": "(album_id = 'a2ab4c73-9b69-4dcc-b572-5e5604593faf'::uuid)",
+                            "Rows Removed by Filter": 0,
+                            "Shared Hit Blocks": 56,
+                            "Shared Read Blocks": 0,
+                            "Shared Dirtied Blocks": 0,
+                            "Shared Written Blocks": 0,
+                            "Local Hit Blocks": 0,
+                            "Local Read Blocks": 0,
+                            "Local Dirtied Blocks": 0,
+                            "Local Written Blocks": 0,
+                            "Temp Read Blocks": 0,
+                            "Temp Written Blocks": 0
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 50,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.418,
+          "Triggers": [],
+          "Execution Time": 18.435
+        }
+      ],
+      "includes_connection_acquisition": true
+    },
+    "semantic_ann": {
+      "first_observed_ms": 20.82121700004791,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 10.949421999839615,
+        "p95_ms": 13.813671200023236,
+        "p99_ms": null,
+        "minimum_ms": 10.097154000050068,
+        "maximum_ms": 14.47241000005306
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 1380.99,
+            "Total Cost": 1422.29,
+            "Plan Rows": 20,
+            "Plan Width": 24,
+            "Actual Startup Time": 2.775,
+            "Actual Total Time": 2.905,
+            "Actual Rows": 20,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2433,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Index Scan",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Scan Direction": "Forward",
+                "Index Name": "ix_embeddings_cosine_hnsw",
+                "Relation Name": "embeddings",
+                "Alias": "embeddings",
+                "Startup Cost": 1380.99,
+                "Total Cost": 207722.58,
+                "Plan Rows": 99929,
+                "Plan Width": 24,
+                "Actual Startup Time": 2.774,
+                "Actual Total Time": 2.903,
+                "Actual Rows": 20,
+                "Actual Loops": 1,
+                "Order By": "(vector <=> '[0.06241239,0.007053546,0.09051298,0.02092264,-0.008080171,0.0205152,-0.003561088,0.001684032,-0.05369708,0.04913324,-0.04125039,-0.02618456,0.06868935,-0.02750847,0.02318659,-0.002856824,0.03787454,-0.02110215,0.0438166,-0.006549066,0.04136669,-0.05521606,-0.009389274,0.01457752,0.03498998,0.06972147,0.04744083,-0.05215168,-0.00138615,-0.02624003,0.06282534,0.02498893,0.129563,-0.01121235,-0.05482635,0.04636975,-0.004608613,-0.004046971,-0.04095703,0.0130372,-0.03193022,-0.01987289,0.003028365,0.02583174,-0.0690352,0.0740616,0.00145404,-0.01357202,0.06024252,-0.06627076,-0.02307068,0.03918414,-0.01800408,0.0159003,-0.04398945,0.02489788,-0.08415253,-0.000889744,0.005729797,-0.04215498,-0.002739392,-0.0262972,-0.01942142,0.01578483,0.02084831,0.00487939,-0.03761654,-0.001919328,0.08703817,0.01637371,0.03971551,-0.02269942,-0.06010566,-0.03801396,0.01300211,0.009041524,0.04472704,-0.01078234,0.01267152,0.001874962,-0.03613083,-0.05889504,0.02993925,0.01777145,-0.09371845,-0.01295525,0.02874855,-0.04850666,0.08009624,-0.01206425,0.0463971,0.01976551,0.007661922,-0.01344917,0.008317011,0.04557594,-0.01375346,-0.01583457,-0.02195055,0.003541439,0.07716971,-0.01707789,-0.0278342,0.00455216,0.02101765,0.00244623,0.03598183,-0.03114547,0.03400026,0.02624325,0.007616165,0.05415632,0.04178753,-0.05503123,-0.05121711,0.004842259,-0.02334028,0.03972943,-0.001956517,0.01005498,0.03705283,0.008267418,0.01225992,0.04745539,-0.02296503,-0.1024945,0.03568783,0.01574194,0.01111382,0.04018763,0.01172058,0.02260851,0.01694177,-0.01401879,-0.06249295,0.06158426,-0.05163515,0.003602247,-0.04638297,-0.03262522,0.01763461,-0.04153816,-0.0450548,0.06103424,-0.03092036,-0.005145626,-0.03370902,-0.006644431,0.05364853,-0.03581197,0.009014552,0.0404563,-0.0352539,0.03580192,0.01583217,-0.05203054,0.01788302,-0.03907516,0.05704955,0.06007307,0.0174628,0.02698291,0.02376099,0.03140083,0.0374081,0.05498135,-0.01418608,-0.03692097,-0.01722508,-0.0836419,-0.03999261,-0.03828637,-0.0886245,0.06021402,0.03460345,-0.02504338,0.01278668,0.01904186,-0.007494105,-0.008741874,0.03395987,-0.02302243,-0.007425216,0.01223192,-0.05555145,0.004169393,0.03034784,0.04605258,0.00522916,-0.001717796,-0.02641369,0.01380552,0.04859484,0.0240955,0.02789186,0.001593468,-0.03195882,0.0153795,-0.02900774,0.01017741,0.04732848,0.05211279,-0.06339464,-0.03554026,0.05744352,0.0133655,0.04368849,0.01838488,-0.06059778,-0.0753888,0.07607806,-0.01110213,-0.002799831,0.0169121,0.001277259,0.03778912,-0.03372313,0.02137339,-0.01462471,0.005887478,-0.02897812,-0.02045467,-0.02337207,-0.04549544,0.01062023,0.0002460869,0.05365724,0.0280369,-0.003877978,-0.02736993,0.01777408,-0.001369526,0.04058075,-0.04620159,-0.004823592,-0.01492901,-0.03244319,0.009348675,-0.03898529,0.02722326,-0.04551111,0.006922786,0.0493891,0.0280019,0.0247275,-0.000355046,-0.01453031,0.01198552,-0.05448702,0.02405518,0.05884464,-0.03547979,-0.035523,0.02560062,0.05605021,-0.01370235,0.0501898,-0.001502215,0.005664303,-0.01167575,0.04054284,0.0717514,0.0037157,-0.0005107704,-0.03990086,-0.003361003,0.01337573,0.04459935,-0.005654669,0.05490803,0.02454431,-0.004336959,0.1133543,-0.0003911871,-0.004202143,0.01442371,-0.004050627,-0.01635252,-0.02846185,0.06795871,-0.03366436,-0.004715078,-0.01183801,0.001302187,0.06905119,-0.04606843,0.02013724,-0.03660091,-0.002461718,-0.03863857,-0.03966001,-0.02111794,-0.0104924,-0.04449625,-0.03841011,-0.006365685,-0.08195016,-0.01867676,-0.009628811,-0.004317493,-0.02220977,0.03843567,0.0317995,-0.06227254,0.003883481,0.02930173,-0.004125977,0.02329477,-0.02925395,0.002126183,-0.043563,-0.05858439,0.02802566,-0.01281202,-0.02785807,-0.003473133,-0.01123122,-0.01794132,0.005218471,0.0420691,-0.01158487,0.02894689,0.05766442,-0.01340286,0.04018841,0.006199675,-0.007379426,0.05556057,0.06197809,0.01772066,0.03720323,0.005122764,0.04154705,0.0008733561,-0.05321463,0.01214682,0.03134152,0.03093834,0.01969781,0.002814474,-0.01831821,-0.03513515,-0.05000145,-0.01189104,-0.005354083,-0.0008664218,0.011784,0.06186883,0.03641559,-0.05860173,0.01240981,0.0370688,-0.003434413,-0.0005203356,-0.05619637,-0.002498172,0.05290749,0.02989425,0.02304339,0.01994443,0.02882328,0.02696438,0.01154726,-0.091632,0.04556665,-0.02606871,-0.01377004,-0.07020124,0.03770295,-0.008656231,-0.006799019,-0.00967927,0.003718559,0.09436218,-0.05600744,-0.002035167,-0.04420403,0.06237387,0.01734486,-0.05768214,0.05058266,-0.01754453,0.03186213,-0.00762172,0.01214001,0.05289081,-0.03075229,-0.02824332,-0.00279823,0.00433576,0.007429895,0.01464011,-0.05025532,-0.008093474,-0.05682101,0.02547888,0.02952407,-0.04633962,-0.0271358,-0.02415866,0.01370401,0.01504112,0.0119071,-0.02005575,0.0489448,0.01701034,-0.008113177,-0.01603977,-0.04804163,-0.08696765,0.03442375,0.003070702,-0.01751148,-0.02691029,-0.06761601,0.002595444,-0.001987026,-0.03491417,0.01997826,-0.004719708,0.02766025,0.06949691,-0.03731474,0.007199548,-0.02913384,-0.007032183,0.04019216,0.05082688,0.08018422,0.001830695,0.02578219,-0.06422501,-0.004173657,0.00496427,-0.01594665,0.03158278,-0.02197882,-0.02318651,-0.05179553,0.02820964,-0.004793348,-0.01834743,-0.01700606,-0.07775168,0.002937017,-0.05048592,-0.02634426,-0.01389296,-0.04115805,-0.0639142,0.02277667,0.007086322,-0.01359821,-0.02610212,-0.0006237559,-0.01718838,0.02613498,0.006697814,0.005440581,-0.01488637,0.06323794,-0.03821011,-0.01098008,0.05237117,-0.009310553,-0.00985892,-0.01279372,-0.02560739,0.002059119,-0.03330617,-0.009222673,0.01545699,-0.03850789,-0.03298023,-0.01239593,-0.0302374,0.03483596,0.006338473,-0.01900256,0.04162892,0.03368063,0.00528302,0.03966115,-0.01228992,-0.05484214,0.1134592,-0.04144697,0.01098353,-0.0156528,-0.08093524,0.03503021,0.02265202,-0.02030947,0.02310162,0.04419206,0.09085011,-0.06421745,-0.05497856,-0.04140661,0.03282744,0.03703163,-0.03521259,0.02422919,0.09797941,-0.003655981,0.01935892,0.01017565,-0.001412165,0.03378209,0.02457089,-0.03869145,-0.02224044,0.05241174,0.02813249,0.01891241,0.009718422,-0.07969934,-0.01227806,0.01641895,0.04477462,-0.04717738,-0.00591203,-0.004591861,0.04016374,0.006645798,-0.01015907,-0.00578716,0.02205159,-0.02411702,-0.07830425,-0.06265111,-0.01296418,-0.07342602,-0.007020492,-0.01285308,-0.05859505,-0.02909249,-0.04092404,-0.02666608,-0.04924959,0.01311511,0.02354653,-0.005021918,0.009377352,0.007152265,-0.06127184,0.01850491,0.03365128,-0.01417935,0.01650904,0.002478653,-0.01552505,0.005960125,-0.06021934,-0.03647996,-0.01627392,-0.0453299,0.0004513624,-0.006646856,0.02452735,-0.03004101,0.03562604,0.03102069,0.02764731,-0.05179675,-0.004303646,0.04457931,-0.003377957,0.03540791,-0.009138385,-0.007021783,0.02809144,0.006497879,0.02560195,0.01982908,-0.0132126,0.01311808,-0.009067786,-0.09486119,0.02925417,0.03830068,0.01895891,0.01108022,-0.07993136,0.05734251,-0.08071887,-0.02198397,-0.02314619,-0.03750451,-0.0269628,-0.006399501,0.01103064,0.0396265,-0.1049826,0.005634881,-0.05386573,-0.03359129,0.0308066,0.03436125,0.003936896,0.01657486,-0.03073647,0.04475752,0.03877307,-0.001094655,0.03939766,0.01404948,0.02915596,-0.01245116,-0.03289038,-0.03334845,0.03311918,-0.01474663,-0.02938502,0.006496397,-0.007974213,0.009316443,0.04361109,0.04333137,-0.005138021,0.02442423,0.04033116,-0.003343656,-0.001010078,-0.0192895,-0.04326442,0.001116679,-0.01939487,-0.008219152,0.02156171,0.02564265,-0.01524854,0.04564975,0.001375325,-0.06552909,-0.06014914,0.05965642,0.02210518,0.03854201,-0.05459742,-0.03824413,-0.0296694,-0.0392279,-0.01647434,0.0156597,-0.0191393,0.01921103,-0.04293242,0.008132717,0.009782487,-0.01507682,-0.003731651,-0.06282869,-0.01612618,0.0002555104,0.002270651,0.06000721,-0.06587911,-0.02477996,0.002675069,-0.05630549,-0.02206696,0.02207305,-0.03965311,-0.03193089,-0.004612758,0.01558382,0.03608135,0.01059166,-0.07396264,-0.00414852,0.02976016,-0.05286857,-0.02522465,0.03654253,-0.0005625288,0.07608877,-0.02906586,0.05880238,0.04550228,0.02797469,-0.05022398,0.0219631,-0.01820273,-0.03274017,0.03401984,-0.02998101,-0.01209189,-0.01781064,0.01648758,0.003355795,0.004130213,0.0484032,0.01660443,-0.04040548,-0.006987587,-0.002957666,0.01926056,0.01209657,0.03259611,-0.007828584,-0.0057733,0.06202312,0.01182227,0.04364468,-0.04437134,-0.04032582,0.003363658,0.08053163,-0.0178445,-0.003944896,-0.008132203,-0.003745674,-0.01065505,0.04602512,-0.01167672,-0.007207774,0.007988592,-0.00970682,-0.03606052,-0.003707944,0.01284857,0.03686144,-0.03767233,-0.0138828,-0.05689495,0.02941114,0.03071481,0.01420312,0.06553769,-0.0003977818,-0.02096241,0.01619721,-0.02936492,0.00182277,-0.003576204,0.08240318,-0.01440624,-0.01655124,0.01948985,-0.04306096,-0.01288033,-0.03127141,-0.01755291,-0.03268898,-0.01999504,0.003681676,0.01400198,0.03826644,-0.01423844,0.0001197134,-0.01168066,-0.003448996,0.01306364,-0.07068909,0.02950439,0.04449166,0.04099961,-0.03097593,0.003347942,0.02465937,0.04648578,-0.003643063,0.005319116,0.03109562,0.01249584,-0.05902874,0.01706814]'::vector)",
+                "Shared Hit Blocks": 2433,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 19,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.122,
+          "Triggers": [],
+          "Execution Time": 2.94
+        }
+      ],
+      "includes_connection_acquisition": true,
+      "concurrent": {
+        "1": {
+          "samples": 5,
+          "p50_ms": 13.404129000036846,
+          "p95_ms": 29.279482800075126,
+          "p99_ms": null,
+          "minimum_ms": 10.35165500002222,
+          "maximum_ms": 33.180714000081935,
+          "queries_per_second": 59.653009420335756,
+          "total_seconds": 0.08381806800002778
+        },
+        "5": {
+          "samples": 25,
+          "p50_ms": 24.253215000044293,
+          "p95_ms": 40.83538039999439,
+          "p99_ms": null,
+          "minimum_ms": 15.788478999866129,
+          "maximum_ms": 44.2757690000235,
+          "queries_per_second": 172.0332579098131,
+          "total_seconds": 0.14532073800000944
+        },
+        "20": {
+          "samples": 100,
+          "p50_ms": 111.27274649993524,
+          "p95_ms": 180.03289284996526,
+          "p99_ms": 188.00457760013623,
+          "minimum_ms": 38.97961000006944,
+          "maximum_ms": 207.23380300000827,
+          "queries_per_second": 162.21766603264732,
+          "total_seconds": 0.6164556700000503
+        }
+      }
+    },
+    "hybrid": {
+      "first_observed_ms": 14.096241000061127,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 12.768495000045732,
+        "p95_ms": 22.075612199842,
+        "p99_ms": null,
+        "minimum_ms": 11.448620000010123,
+        "maximum_ms": 24.301866999849153
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 1381.41,
+            "Total Cost": 1435.92,
+            "Plan Rows": 20,
+            "Plan Width": 24,
+            "Actual Startup Time": 2.455,
+            "Actual Total Time": 2.61,
+            "Actual Rows": 20,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 2507,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "Nested Loop",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Join Type": "Inner",
+                "Startup Cost": 1381.41,
+                "Total Cost": 273743.07,
+                "Plan Rows": 99919,
+                "Plan Width": 24,
+                "Actual Startup Time": 2.454,
+                "Actual Total Time": 2.607,
+                "Actual Rows": 20,
+                "Actual Loops": 1,
+                "Inner Unique": true,
+                "Shared Hit Blocks": 2507,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "ix_embeddings_cosine_hnsw",
+                    "Relation Name": "embeddings",
+                    "Alias": "e",
+                    "Startup Cost": 1380.99,
+                    "Total Cost": 207472.76,
+                    "Plan Rows": 99929,
+                    "Plan Width": 34,
+                    "Actual Startup Time": 2.428,
+                    "Actual Total Time": 2.441,
+                    "Actual Rows": 20,
+                    "Actual Loops": 1,
+                    "Order By": "(vector <=> '[0.06241239,0.007053546,0.09051298,0.02092264,-0.008080171,0.0205152,-0.003561088,0.001684032,-0.05369708,0.04913324,-0.04125039,-0.02618456,0.06868935,-0.02750847,0.02318659,-0.002856824,0.03787454,-0.02110215,0.0438166,-0.006549066,0.04136669,-0.05521606,-0.009389274,0.01457752,0.03498998,0.06972147,0.04744083,-0.05215168,-0.00138615,-0.02624003,0.06282534,0.02498893,0.129563,-0.01121235,-0.05482635,0.04636975,-0.004608613,-0.004046971,-0.04095703,0.0130372,-0.03193022,-0.01987289,0.003028365,0.02583174,-0.0690352,0.0740616,0.00145404,-0.01357202,0.06024252,-0.06627076,-0.02307068,0.03918414,-0.01800408,0.0159003,-0.04398945,0.02489788,-0.08415253,-0.000889744,0.005729797,-0.04215498,-0.002739392,-0.0262972,-0.01942142,0.01578483,0.02084831,0.00487939,-0.03761654,-0.001919328,0.08703817,0.01637371,0.03971551,-0.02269942,-0.06010566,-0.03801396,0.01300211,0.009041524,0.04472704,-0.01078234,0.01267152,0.001874962,-0.03613083,-0.05889504,0.02993925,0.01777145,-0.09371845,-0.01295525,0.02874855,-0.04850666,0.08009624,-0.01206425,0.0463971,0.01976551,0.007661922,-0.01344917,0.008317011,0.04557594,-0.01375346,-0.01583457,-0.02195055,0.003541439,0.07716971,-0.01707789,-0.0278342,0.00455216,0.02101765,0.00244623,0.03598183,-0.03114547,0.03400026,0.02624325,0.007616165,0.05415632,0.04178753,-0.05503123,-0.05121711,0.004842259,-0.02334028,0.03972943,-0.001956517,0.01005498,0.03705283,0.008267418,0.01225992,0.04745539,-0.02296503,-0.1024945,0.03568783,0.01574194,0.01111382,0.04018763,0.01172058,0.02260851,0.01694177,-0.01401879,-0.06249295,0.06158426,-0.05163515,0.003602247,-0.04638297,-0.03262522,0.01763461,-0.04153816,-0.0450548,0.06103424,-0.03092036,-0.005145626,-0.03370902,-0.006644431,0.05364853,-0.03581197,0.009014552,0.0404563,-0.0352539,0.03580192,0.01583217,-0.05203054,0.01788302,-0.03907516,0.05704955,0.06007307,0.0174628,0.02698291,0.02376099,0.03140083,0.0374081,0.05498135,-0.01418608,-0.03692097,-0.01722508,-0.0836419,-0.03999261,-0.03828637,-0.0886245,0.06021402,0.03460345,-0.02504338,0.01278668,0.01904186,-0.007494105,-0.008741874,0.03395987,-0.02302243,-0.007425216,0.01223192,-0.05555145,0.004169393,0.03034784,0.04605258,0.00522916,-0.001717796,-0.02641369,0.01380552,0.04859484,0.0240955,0.02789186,0.001593468,-0.03195882,0.0153795,-0.02900774,0.01017741,0.04732848,0.05211279,-0.06339464,-0.03554026,0.05744352,0.0133655,0.04368849,0.01838488,-0.06059778,-0.0753888,0.07607806,-0.01110213,-0.002799831,0.0169121,0.001277259,0.03778912,-0.03372313,0.02137339,-0.01462471,0.005887478,-0.02897812,-0.02045467,-0.02337207,-0.04549544,0.01062023,0.0002460869,0.05365724,0.0280369,-0.003877978,-0.02736993,0.01777408,-0.001369526,0.04058075,-0.04620159,-0.004823592,-0.01492901,-0.03244319,0.009348675,-0.03898529,0.02722326,-0.04551111,0.006922786,0.0493891,0.0280019,0.0247275,-0.000355046,-0.01453031,0.01198552,-0.05448702,0.02405518,0.05884464,-0.03547979,-0.035523,0.02560062,0.05605021,-0.01370235,0.0501898,-0.001502215,0.005664303,-0.01167575,0.04054284,0.0717514,0.0037157,-0.0005107704,-0.03990086,-0.003361003,0.01337573,0.04459935,-0.005654669,0.05490803,0.02454431,-0.004336959,0.1133543,-0.0003911871,-0.004202143,0.01442371,-0.004050627,-0.01635252,-0.02846185,0.06795871,-0.03366436,-0.004715078,-0.01183801,0.001302187,0.06905119,-0.04606843,0.02013724,-0.03660091,-0.002461718,-0.03863857,-0.03966001,-0.02111794,-0.0104924,-0.04449625,-0.03841011,-0.006365685,-0.08195016,-0.01867676,-0.009628811,-0.004317493,-0.02220977,0.03843567,0.0317995,-0.06227254,0.003883481,0.02930173,-0.004125977,0.02329477,-0.02925395,0.002126183,-0.043563,-0.05858439,0.02802566,-0.01281202,-0.02785807,-0.003473133,-0.01123122,-0.01794132,0.005218471,0.0420691,-0.01158487,0.02894689,0.05766442,-0.01340286,0.04018841,0.006199675,-0.007379426,0.05556057,0.06197809,0.01772066,0.03720323,0.005122764,0.04154705,0.0008733561,-0.05321463,0.01214682,0.03134152,0.03093834,0.01969781,0.002814474,-0.01831821,-0.03513515,-0.05000145,-0.01189104,-0.005354083,-0.0008664218,0.011784,0.06186883,0.03641559,-0.05860173,0.01240981,0.0370688,-0.003434413,-0.0005203356,-0.05619637,-0.002498172,0.05290749,0.02989425,0.02304339,0.01994443,0.02882328,0.02696438,0.01154726,-0.091632,0.04556665,-0.02606871,-0.01377004,-0.07020124,0.03770295,-0.008656231,-0.006799019,-0.00967927,0.003718559,0.09436218,-0.05600744,-0.002035167,-0.04420403,0.06237387,0.01734486,-0.05768214,0.05058266,-0.01754453,0.03186213,-0.00762172,0.01214001,0.05289081,-0.03075229,-0.02824332,-0.00279823,0.00433576,0.007429895,0.01464011,-0.05025532,-0.008093474,-0.05682101,0.02547888,0.02952407,-0.04633962,-0.0271358,-0.02415866,0.01370401,0.01504112,0.0119071,-0.02005575,0.0489448,0.01701034,-0.008113177,-0.01603977,-0.04804163,-0.08696765,0.03442375,0.003070702,-0.01751148,-0.02691029,-0.06761601,0.002595444,-0.001987026,-0.03491417,0.01997826,-0.004719708,0.02766025,0.06949691,-0.03731474,0.007199548,-0.02913384,-0.007032183,0.04019216,0.05082688,0.08018422,0.001830695,0.02578219,-0.06422501,-0.004173657,0.00496427,-0.01594665,0.03158278,-0.02197882,-0.02318651,-0.05179553,0.02820964,-0.004793348,-0.01834743,-0.01700606,-0.07775168,0.002937017,-0.05048592,-0.02634426,-0.01389296,-0.04115805,-0.0639142,0.02277667,0.007086322,-0.01359821,-0.02610212,-0.0006237559,-0.01718838,0.02613498,0.006697814,0.005440581,-0.01488637,0.06323794,-0.03821011,-0.01098008,0.05237117,-0.009310553,-0.00985892,-0.01279372,-0.02560739,0.002059119,-0.03330617,-0.009222673,0.01545699,-0.03850789,-0.03298023,-0.01239593,-0.0302374,0.03483596,0.006338473,-0.01900256,0.04162892,0.03368063,0.00528302,0.03966115,-0.01228992,-0.05484214,0.1134592,-0.04144697,0.01098353,-0.0156528,-0.08093524,0.03503021,0.02265202,-0.02030947,0.02310162,0.04419206,0.09085011,-0.06421745,-0.05497856,-0.04140661,0.03282744,0.03703163,-0.03521259,0.02422919,0.09797941,-0.003655981,0.01935892,0.01017565,-0.001412165,0.03378209,0.02457089,-0.03869145,-0.02224044,0.05241174,0.02813249,0.01891241,0.009718422,-0.07969934,-0.01227806,0.01641895,0.04477462,-0.04717738,-0.00591203,-0.004591861,0.04016374,0.006645798,-0.01015907,-0.00578716,0.02205159,-0.02411702,-0.07830425,-0.06265111,-0.01296418,-0.07342602,-0.007020492,-0.01285308,-0.05859505,-0.02909249,-0.04092404,-0.02666608,-0.04924959,0.01311511,0.02354653,-0.005021918,0.009377352,0.007152265,-0.06127184,0.01850491,0.03365128,-0.01417935,0.01650904,0.002478653,-0.01552505,0.005960125,-0.06021934,-0.03647996,-0.01627392,-0.0453299,0.0004513624,-0.006646856,0.02452735,-0.03004101,0.03562604,0.03102069,0.02764731,-0.05179675,-0.004303646,0.04457931,-0.003377957,0.03540791,-0.009138385,-0.007021783,0.02809144,0.006497879,0.02560195,0.01982908,-0.0132126,0.01311808,-0.009067786,-0.09486119,0.02925417,0.03830068,0.01895891,0.01108022,-0.07993136,0.05734251,-0.08071887,-0.02198397,-0.02314619,-0.03750451,-0.0269628,-0.006399501,0.01103064,0.0396265,-0.1049826,0.005634881,-0.05386573,-0.03359129,0.0308066,0.03436125,0.003936896,0.01657486,-0.03073647,0.04475752,0.03877307,-0.001094655,0.03939766,0.01404948,0.02915596,-0.01245116,-0.03289038,-0.03334845,0.03311918,-0.01474663,-0.02938502,0.006496397,-0.007974213,0.009316443,0.04361109,0.04333137,-0.005138021,0.02442423,0.04033116,-0.003343656,-0.001010078,-0.0192895,-0.04326442,0.001116679,-0.01939487,-0.008219152,0.02156171,0.02564265,-0.01524854,0.04564975,0.001375325,-0.06552909,-0.06014914,0.05965642,0.02210518,0.03854201,-0.05459742,-0.03824413,-0.0296694,-0.0392279,-0.01647434,0.0156597,-0.0191393,0.01921103,-0.04293242,0.008132717,0.009782487,-0.01507682,-0.003731651,-0.06282869,-0.01612618,0.0002555104,0.002270651,0.06000721,-0.06587911,-0.02477996,0.002675069,-0.05630549,-0.02206696,0.02207305,-0.03965311,-0.03193089,-0.004612758,0.01558382,0.03608135,0.01059166,-0.07396264,-0.00414852,0.02976016,-0.05286857,-0.02522465,0.03654253,-0.0005625288,0.07608877,-0.02906586,0.05880238,0.04550228,0.02797469,-0.05022398,0.0219631,-0.01820273,-0.03274017,0.03401984,-0.02998101,-0.01209189,-0.01781064,0.01648758,0.003355795,0.004130213,0.0484032,0.01660443,-0.04040548,-0.006987587,-0.002957666,0.01926056,0.01209657,0.03259611,-0.007828584,-0.0057733,0.06202312,0.01182227,0.04364468,-0.04437134,-0.04032582,0.003363658,0.08053163,-0.0178445,-0.003944896,-0.008132203,-0.003745674,-0.01065505,0.04602512,-0.01167672,-0.007207774,0.007988592,-0.00970682,-0.03606052,-0.003707944,0.01284857,0.03686144,-0.03767233,-0.0138828,-0.05689495,0.02941114,0.03071481,0.01420312,0.06553769,-0.0003977818,-0.02096241,0.01619721,-0.02936492,0.00182277,-0.003576204,0.08240318,-0.01440624,-0.01655124,0.01948985,-0.04306096,-0.01288033,-0.03127141,-0.01755291,-0.03268898,-0.01999504,0.003681676,0.01400198,0.03826644,-0.01423844,0.0001197134,-0.01168066,-0.003448996,0.01306364,-0.07068909,0.02950439,0.04449166,0.04099961,-0.03097593,0.003347942,0.02465937,0.04648578,-0.003643063,0.005319116,0.03109562,0.01249584,-0.05902874,0.01706814]'::vector)",
+                    "Shared Hit Blocks": 2347,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  },
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Inner",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "assets_pkey",
+                    "Relation Name": "assets",
+                    "Alias": "a",
+                    "Startup Cost": 0.42,
+                    "Total Cost": 0.66,
+                    "Plan Rows": 1,
+                    "Plan Width": 16,
+                    "Actual Startup Time": 0.003,
+                    "Actual Total Time": 0.003,
+                    "Actual Rows": 1,
+                    "Actual Loops": 20,
+                    "Index Cond": "(id = e.asset_id)",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "((filesize < 1700000) AND (width >= 3000))",
+                    "Rows Removed by Filter": 0,
+                    "Shared Hit Blocks": 80,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 20,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.403,
+          "Triggers": [],
+          "Execution Time": 2.632
+        }
+      ],
+      "includes_connection_acquisition": true,
+      "concurrent": {
+        "1": {
+          "samples": 5,
+          "p50_ms": 12.425634999999602,
+          "p95_ms": 13.83023599992157,
+          "p99_ms": null,
+          "minimum_ms": 11.819276000096579,
+          "maximum_ms": 13.954287999922599,
+          "queries_per_second": 78.00141893935381,
+          "total_seconds": 0.064101398000048
+        },
+        "5": {
+          "samples": 25,
+          "p50_ms": 28.521159999854717,
+          "p95_ms": 51.02179339992289,
+          "p99_ms": null,
+          "minimum_ms": 14.689524999994319,
+          "maximum_ms": 53.55660100008208,
+          "queries_per_second": 162.35138524677404,
+          "total_seconds": 0.1539869829998679
+        },
+        "20": {
+          "samples": 100,
+          "p50_ms": 131.81048799992823,
+          "p95_ms": 205.93743559998072,
+          "p99_ms": 239.0068801900226,
+          "minimum_ms": 42.13879100007034,
+          "maximum_ms": 266.8180780001421,
+          "queries_per_second": 133.26184705885225,
+          "total_seconds": 0.7504023259998576
+        }
+      }
+    },
+    "jobs_claim": {
+      "first_observed_ms": 7.961249000118187,
+      "cold_cache_claim": false,
+      "warm": {
+        "samples": 5,
+        "p50_ms": 7.528298000124778,
+        "p95_ms": 10.268693199941481,
+        "p99_ms": null,
+        "minimum_ms": 6.908695999982228,
+        "maximum_ms": 10.89370699992287
+      },
+      "plan": [
+        {
+          "Plan": {
+            "Node Type": "Limit",
+            "Parallel Aware": false,
+            "Async Capable": false,
+            "Startup Cost": 0.14,
+            "Total Cost": 2.09,
+            "Plan Rows": 1,
+            "Plan Width": 42,
+            "Actual Startup Time": 0.01,
+            "Actual Total Time": 0.01,
+            "Actual Rows": 1,
+            "Actual Loops": 1,
+            "Shared Hit Blocks": 3,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0,
+            "Plans": [
+              {
+                "Node Type": "LockRows",
+                "Parent Relationship": "Outer",
+                "Parallel Aware": false,
+                "Async Capable": false,
+                "Startup Cost": 0.14,
+                "Total Cost": 136.12,
+                "Plan Rows": 70,
+                "Plan Width": 42,
+                "Actual Startup Time": 0.01,
+                "Actual Total Time": 0.01,
+                "Actual Rows": 1,
+                "Actual Loops": 1,
+                "Shared Hit Blocks": 3,
+                "Shared Read Blocks": 0,
+                "Shared Dirtied Blocks": 0,
+                "Shared Written Blocks": 0,
+                "Local Hit Blocks": 0,
+                "Local Read Blocks": 0,
+                "Local Dirtied Blocks": 0,
+                "Local Written Blocks": 0,
+                "Temp Read Blocks": 0,
+                "Temp Written Blocks": 0,
+                "Plans": [
+                  {
+                    "Node Type": "Index Scan",
+                    "Parent Relationship": "Outer",
+                    "Parallel Aware": false,
+                    "Async Capable": false,
+                    "Scan Direction": "Forward",
+                    "Index Name": "ix_jobs_live_claim",
+                    "Relation Name": "jobs",
+                    "Alias": "jobs",
+                    "Startup Cost": 0.14,
+                    "Total Cost": 135.42,
+                    "Plan Rows": 70,
+                    "Plan Width": 42,
+                    "Actual Startup Time": 0.006,
+                    "Actual Total Time": 0.006,
+                    "Actual Rows": 1,
+                    "Actual Loops": 1,
+                    "Index Cond": "(scheduled_at <= now())",
+                    "Rows Removed by Index Recheck": 0,
+                    "Filter": "((status)::text = ANY ('{queued,retrying}'::text[]))",
+                    "Rows Removed by Filter": 0,
+                    "Shared Hit Blocks": 2,
+                    "Shared Read Blocks": 0,
+                    "Shared Dirtied Blocks": 0,
+                    "Shared Written Blocks": 0,
+                    "Local Hit Blocks": 0,
+                    "Local Read Blocks": 0,
+                    "Local Dirtied Blocks": 0,
+                    "Local Written Blocks": 0,
+                    "Temp Read Blocks": 0,
+                    "Temp Written Blocks": 0
+                  }
+                ]
+              }
+            ]
+          },
+          "Planning": {
+            "Shared Hit Blocks": 16,
+            "Shared Read Blocks": 0,
+            "Shared Dirtied Blocks": 0,
+            "Shared Written Blocks": 0,
+            "Local Hit Blocks": 0,
+            "Local Read Blocks": 0,
+            "Local Dirtied Blocks": 0,
+            "Local Written Blocks": 0,
+            "Temp Read Blocks": 0,
+            "Temp Written Blocks": 0
+          },
+          "Planning Time": 0.115,
+          "Triggers": [],
+          "Execution Time": 0.02
+        }
+      ],
+      "includes_connection_acquisition": true
+    }
+  },
+  "error_type": "RuntimeError",
+  "server_monitor": {
+    "container": "photointel-v11-postgres",
+    "scope": "shared local PostgreSQL container, includes other databases",
+    "sample_interval_seconds": 2,
+    "peak_database_connections_observed": 23,
+    "connection_observer_included": true,
+    "container_samples": [
+      {
+        "elapsed_monotonic": 420.613842469,
+        "cpu_percent": 34.26,
+        "memory_usage": "222.9MiB / 9.735GiB",
+        "memory_percent": 2.24
+      },
+      {
+        "elapsed_monotonic": 424.264769686,
+        "cpu_percent": 94.22,
+        "memory_usage": "229.5MiB / 9.735GiB",
+        "memory_percent": 2.3
+      },
+      {
+        "elapsed_monotonic": 427.806704526,
+        "cpu_percent": 111.05,
+        "memory_usage": "233.7MiB / 9.735GiB",
+        "memory_percent": 2.34
+      },
+      {
+        "elapsed_monotonic": 431.35873752,
+        "cpu_percent": 95.47,
+        "memory_usage": "239.6MiB / 9.735GiB",
+        "memory_percent": 2.4
+      },
+      {
+        "elapsed_monotonic": 434.903180384,
+        "cpu_percent": 105.59,
+        "memory_usage": "247.2MiB / 9.735GiB",
+        "memory_percent": 2.48
+      },
+      {
+        "elapsed_monotonic": 438.556814453,
+        "cpu_percent": 112.3,
+        "memory_usage": "296.7MiB / 9.735GiB",
+        "memory_percent": 2.98
+      },
+      {
+        "elapsed_monotonic": 442.154691129,
+        "cpu_percent": 102.64,
+        "memory_usage": "371.1MiB / 9.735GiB",
+        "memory_percent": 3.72
+      },
+      {
+        "elapsed_monotonic": 445.757552932,
+        "cpu_percent": 94.23,
+        "memory_usage": "393.7MiB / 9.735GiB",
+        "memory_percent": 3.95
+      },
+      {
+        "elapsed_monotonic": 449.368887674,
+        "cpu_percent": 89.74,
+        "memory_usage": "397.3MiB / 9.735GiB",
+        "memory_percent": 3.99
+      },
+      {
+        "elapsed_monotonic": 452.956905429,
+        "cpu_percent": 78.93,
+        "memory_usage": "391.8MiB / 9.735GiB",
+        "memory_percent": 3.93
+      },
+      {
+        "elapsed_monotonic": 456.502060442,
+        "cpu_percent": 97.31,
+        "memory_usage": "385.8MiB / 9.735GiB",
+        "memory_percent": 3.87
+      },
+      {
+        "elapsed_monotonic": 460.109320003,
+        "cpu_percent": 100.31,
+        "memory_usage": "390.8MiB / 9.735GiB",
+        "memory_percent": 3.92
+      },
+      {
+        "elapsed_monotonic": 463.649516738,
+        "cpu_percent": 82.77,
+        "memory_usage": "394.6MiB / 9.735GiB",
+        "memory_percent": 3.96
+      },
+      {
+        "elapsed_monotonic": 467.179286884,
+        "cpu_percent": 100.77,
+        "memory_usage": "407.6MiB / 9.735GiB",
+        "memory_percent": 4.09
+      },
+      {
+        "elapsed_monotonic": 470.729285624,
+        "cpu_percent": 88.48,
+        "memory_usage": "437.4MiB / 9.735GiB",
+        "memory_percent": 4.39
+      },
+      {
+        "elapsed_monotonic": 474.262435807,
+        "cpu_percent": 103.13,
+        "memory_usage": "512.9MiB / 9.735GiB",
+        "memory_percent": 5.14
+      },
+      {
+        "elapsed_monotonic": 477.813731203,
+        "cpu_percent": 100.54,
+        "memory_usage": "568.2MiB / 9.735GiB",
+        "memory_percent": 5.7
+      },
+      {
+        "elapsed_monotonic": 481.354144286,
+        "cpu_percent": 102.36,
+        "memory_usage": "601.9MiB / 9.735GiB",
+        "memory_percent": 6.04
+      },
+      {
+        "elapsed_monotonic": 484.898958875,
+        "cpu_percent": 101.44,
+        "memory_usage": "636.9MiB / 9.735GiB",
+        "memory_percent": 6.39
+      },
+      {
+        "elapsed_monotonic": 488.452983375,
+        "cpu_percent": 102.38,
+        "memory_usage": "660.4MiB / 9.735GiB",
+        "memory_percent": 6.63
+      },
+      {
+        "elapsed_monotonic": 491.983344035,
+        "cpu_percent": 101.42,
+        "memory_usage": "690.2MiB / 9.735GiB",
+        "memory_percent": 6.92
+      },
+      {
+        "elapsed_monotonic": 495.519636618,
+        "cpu_percent": 89.8,
+        "memory_usage": "712.9MiB / 9.735GiB",
+        "memory_percent": 7.15
+      },
+      {
+        "elapsed_monotonic": 499.16594453,
+        "cpu_percent": 86.03,
+        "memory_usage": "757MiB / 9.735GiB",
+        "memory_percent": 7.59
+      },
+      {
+        "elapsed_monotonic": 502.84823496,
+        "cpu_percent": 103.07,
+        "memory_usage": "793.1MiB / 9.735GiB",
+        "memory_percent": 7.96
+      },
+      {
+        "elapsed_monotonic": 506.397527415,
+        "cpu_percent": 103.51,
+        "memory_usage": "841MiB / 9.735GiB",
+        "memory_percent": 8.44
+      },
+      {
+        "elapsed_monotonic": 509.969904002,
+        "cpu_percent": 112.8,
+        "memory_usage": "939MiB / 9.735GiB",
+        "memory_percent": 9.42
+      },
+      {
+        "elapsed_monotonic": 513.653499313,
+        "cpu_percent": 109.65,
+        "memory_usage": "1.088GiB / 9.735GiB",
+        "memory_percent": 11.17
+      },
+      {
+        "elapsed_monotonic": 517.208999541,
+        "cpu_percent": 125.6,
+        "memory_usage": "1.084GiB / 9.735GiB",
+        "memory_percent": 11.14
+      },
+      {
+        "elapsed_monotonic": 520.840816495,
+        "cpu_percent": 74.66,
+        "memory_usage": "1.096GiB / 9.735GiB",
+        "memory_percent": 11.26
+      },
+      {
+        "elapsed_monotonic": 524.452742602,
+        "cpu_percent": 97.6,
+        "memory_usage": "1.13GiB / 9.735GiB",
+        "memory_percent": 11.61
+      },
+      {
+        "elapsed_monotonic": 528.080254942,
+        "cpu_percent": 63.14,
+        "memory_usage": "1.138GiB / 9.735GiB",
+        "memory_percent": 11.69
+      },
+      {
+        "elapsed_monotonic": 531.745546318,
+        "cpu_percent": 86.88,
+        "memory_usage": "1.146GiB / 9.735GiB",
+        "memory_percent": 11.77
+      },
+      {
+        "elapsed_monotonic": 535.472922478,
+        "cpu_percent": 72.68,
+        "memory_usage": "1.16GiB / 9.735GiB",
+        "memory_percent": 11.92
+      },
+      {
+        "elapsed_monotonic": 539.184990763,
+        "cpu_percent": 56.77,
+        "memory_usage": "1.166GiB / 9.735GiB",
+        "memory_percent": 11.97
+      },
+      {
+        "elapsed_monotonic": 542.873481805,
+        "cpu_percent": 66.62,
+        "memory_usage": "1.177GiB / 9.735GiB",
+        "memory_percent": 12.09
+      },
+      {
+        "elapsed_monotonic": 546.490516574,
+        "cpu_percent": 82.29,
+        "memory_usage": "1.19GiB / 9.735GiB",
+        "memory_percent": 12.22
+      },
+      {
+        "elapsed_monotonic": 550.160689936,
+        "cpu_percent": 85.58,
+        "memory_usage": "1.201GiB / 9.735GiB",
+        "memory_percent": 12.34
+      },
+      {
+        "elapsed_monotonic": 553.856598971,
+        "cpu_percent": 64.27,
+        "memory_usage": "1.213GiB / 9.735GiB",
+        "memory_percent": 12.46
+      },
+      {
+        "elapsed_monotonic": 557.499639675,
+        "cpu_percent": 71.43,
+        "memory_usage": "1.235GiB / 9.735GiB",
+        "memory_percent": 12.69
+      },
+      {
+        "elapsed_monotonic": 561.177674769,
+        "cpu_percent": 71.43,
+        "memory_usage": "1.301GiB / 9.735GiB",
+        "memory_percent": 13.36
+      },
+      {
+        "elapsed_monotonic": 564.857869845,
+        "cpu_percent": 67.46,
+        "memory_usage": "1.386GiB / 9.735GiB",
+        "memory_percent": 14.24
+      },
+      {
+        "elapsed_monotonic": 568.559598283,
+        "cpu_percent": 70.49,
+        "memory_usage": "1.386GiB / 9.735GiB",
+        "memory_percent": 14.24
+      },
+      {
+        "elapsed_monotonic": 572.186420033,
+        "cpu_percent": 79.42,
+        "memory_usage": "1.396GiB / 9.735GiB",
+        "memory_percent": 14.34
+      },
+      {
+        "elapsed_monotonic": 575.898278658,
+        "cpu_percent": 66.73,
+        "memory_usage": "1.408GiB / 9.735GiB",
+        "memory_percent": 14.46
+      },
+      {
+        "elapsed_monotonic": 579.593547592,
+        "cpu_percent": 70.22,
+        "memory_usage": "1.42GiB / 9.735GiB",
+        "memory_percent": 14.58
+      },
+      {
+        "elapsed_monotonic": 583.249793728,
+        "cpu_percent": 69.86,
+        "memory_usage": "1.429GiB / 9.735GiB",
+        "memory_percent": 14.68
+      },
+      {
+        "elapsed_monotonic": 586.802743404,
+        "cpu_percent": 79.69,
+        "memory_usage": "1.443GiB / 9.735GiB",
+        "memory_percent": 14.82
+      },
+      {
+        "elapsed_monotonic": 590.544773194,
+        "cpu_percent": 18.67,
+        "memory_usage": "1.447GiB / 9.735GiB",
+        "memory_percent": 14.87
+      },
+      {
+        "elapsed_monotonic": 594.300177187,
+        "cpu_percent": 23.37,
+        "memory_usage": "1.448GiB / 9.735GiB",
+        "memory_percent": 14.87
+      },
+      {
+        "elapsed_monotonic": 597.962645848,
+        "cpu_percent": 13.06,
+        "memory_usage": "1.45GiB / 9.735GiB",
+        "memory_percent": 14.9
+      },
+      {
+        "elapsed_monotonic": 601.797773552,
+        "cpu_percent": 17.82,
+        "memory_usage": "1.444GiB / 9.735GiB",
+        "memory_percent": 14.84
+      },
+      {
+        "elapsed_monotonic": 605.559510019,
+        "cpu_percent": 20.46,
+        "memory_usage": "1.442GiB / 9.735GiB",
+        "memory_percent": 14.81
+      },
+      {
+        "elapsed_monotonic": 609.252834836,
+        "cpu_percent": 16.42,
+        "memory_usage": "1.441GiB / 9.735GiB",
+        "memory_percent": 14.8
+      },
+      {
+        "elapsed_monotonic": 612.889704079,
+        "cpu_percent": 15.29,
+        "memory_usage": "1.44GiB / 9.735GiB",
+        "memory_percent": 14.79
+      },
+      {
+        "elapsed_monotonic": 616.643853521,
+        "cpu_percent": 38.45,
+        "memory_usage": "1.463GiB / 9.735GiB",
+        "memory_percent": 15.03
+      },
+      {
+        "elapsed_monotonic": 620.487342323,
+        "cpu_percent": 21.15,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 624.482401211,
+        "cpu_percent": 18.08,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 628.358178395,
+        "cpu_percent": 23.45,
+        "memory_usage": "1.474GiB / 9.735GiB",
+        "memory_percent": 15.14
+      },
+      {
+        "elapsed_monotonic": 631.985539246,
+        "cpu_percent": 23.4,
+        "memory_usage": "1.474GiB / 9.735GiB",
+        "memory_percent": 15.15
+      },
+      {
+        "elapsed_monotonic": 635.661087071,
+        "cpu_percent": 23.74,
+        "memory_usage": "1.474GiB / 9.735GiB",
+        "memory_percent": 15.15
+      },
+      {
+        "elapsed_monotonic": 639.272355977,
+        "cpu_percent": 27.36,
+        "memory_usage": "1.475GiB / 9.735GiB",
+        "memory_percent": 15.16
+      },
+      {
+        "elapsed_monotonic": 642.962143989,
+        "cpu_percent": 27.22,
+        "memory_usage": "1.474GiB / 9.735GiB",
+        "memory_percent": 15.14
+      },
+      {
+        "elapsed_monotonic": 646.752364302,
+        "cpu_percent": 16.83,
+        "memory_usage": "1.475GiB / 9.735GiB",
+        "memory_percent": 15.15
+      },
+      {
+        "elapsed_monotonic": 650.600278237,
+        "cpu_percent": 21.59,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 654.356822469,
+        "cpu_percent": 22.37,
+        "memory_usage": "1.471GiB / 9.735GiB",
+        "memory_percent": 15.11
+      },
+      {
+        "elapsed_monotonic": 658.062604356,
+        "cpu_percent": 16.1,
+        "memory_usage": "1.47GiB / 9.735GiB",
+        "memory_percent": 15.1
+      },
+      {
+        "elapsed_monotonic": 661.696900966,
+        "cpu_percent": 15.91,
+        "memory_usage": "1.47GiB / 9.735GiB",
+        "memory_percent": 15.11
+      },
+      {
+        "elapsed_monotonic": 665.379866994,
+        "cpu_percent": 21.21,
+        "memory_usage": "1.47GiB / 9.735GiB",
+        "memory_percent": 15.1
+      },
+      {
+        "elapsed_monotonic": 669.080717919,
+        "cpu_percent": 26.28,
+        "memory_usage": "1.478GiB / 9.735GiB",
+        "memory_percent": 15.18
+      },
+      {
+        "elapsed_monotonic": 672.765664545,
+        "cpu_percent": 28.68,
+        "memory_usage": "1.481GiB / 9.735GiB",
+        "memory_percent": 15.21
+      },
+      {
+        "elapsed_monotonic": 676.544423164,
+        "cpu_percent": 22.77,
+        "memory_usage": "1.49GiB / 9.735GiB",
+        "memory_percent": 15.31
+      },
+      {
+        "elapsed_monotonic": 680.251282586,
+        "cpu_percent": 21.99,
+        "memory_usage": "1.481GiB / 9.735GiB",
+        "memory_percent": 15.21
+      },
+      {
+        "elapsed_monotonic": 683.938926633,
+        "cpu_percent": 21.42,
+        "memory_usage": "1.476GiB / 9.735GiB",
+        "memory_percent": 15.16
+      },
+      {
+        "elapsed_monotonic": 687.594389826,
+        "cpu_percent": 21.98,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 691.385137475,
+        "cpu_percent": 10.56,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 695.294011086,
+        "cpu_percent": 24.79,
+        "memory_usage": "1.479GiB / 9.735GiB",
+        "memory_percent": 15.19
+      },
+      {
+        "elapsed_monotonic": 699.067418323,
+        "cpu_percent": 20.01,
+        "memory_usage": "1.48GiB / 9.735GiB",
+        "memory_percent": 15.2
+      },
+      {
+        "elapsed_monotonic": 702.882838915,
+        "cpu_percent": 13.28,
+        "memory_usage": "1.473GiB / 9.735GiB",
+        "memory_percent": 15.13
+      },
+      {
+        "elapsed_monotonic": 706.593521394,
+        "cpu_percent": 25.77,
+        "memory_usage": "1.474GiB / 9.735GiB",
+        "memory_percent": 15.14
+      },
+      {
+        "elapsed_monotonic": 710.237620638,
+        "cpu_percent": 31.9,
+        "memory_usage": "1.475GiB / 9.735GiB",
+        "memory_percent": 15.15
+      },
+      {
+        "elapsed_monotonic": 713.971208241,
+        "cpu_percent": 54.13,
+        "memory_usage": "1.48GiB / 9.735GiB",
+        "memory_percent": 15.2
+      },
+      {
+        "elapsed_monotonic": 717.646239521,
+        "cpu_percent": 71.89,
+        "memory_usage": "1.482GiB / 9.735GiB",
+        "memory_percent": 15.22
+      },
+      {
+        "elapsed_monotonic": 721.455076814,
+        "cpu_percent": 56.58,
+        "memory_usage": "1.483GiB / 9.735GiB",
+        "memory_percent": 15.23
+      },
+      {
+        "elapsed_monotonic": 725.2607529,
+        "cpu_percent": 49.51,
+        "memory_usage": "1.481GiB / 9.735GiB",
+        "memory_percent": 15.21
+      },
+      {
+        "elapsed_monotonic": 728.869587906,
+        "cpu_percent": 107.39,
+        "memory_usage": "1.568GiB / 9.735GiB",
+        "memory_percent": 16.11
+      },
+      {
+        "elapsed_monotonic": 732.760973328,
+        "cpu_percent": 114.36,
+        "memory_usage": "1.585GiB / 9.735GiB",
+        "memory_percent": 16.28
+      },
+      {
+        "elapsed_monotonic": 736.401351845,
+        "cpu_percent": 116.57,
+        "memory_usage": "1.595GiB / 9.735GiB",
+        "memory_percent": 16.39
+      },
+      {
+        "elapsed_monotonic": 740.08083702,
+        "cpu_percent": 124.17,
+        "memory_usage": "1.611GiB / 9.735GiB",
+        "memory_percent": 16.54
+      },
+      {
+        "elapsed_monotonic": 743.776870717,
+        "cpu_percent": 114.18,
+        "memory_usage": "1.619GiB / 9.735GiB",
+        "memory_percent": 16.63
+      },
+      {
+        "elapsed_monotonic": 747.57308502,
+        "cpu_percent": 105.8,
+        "memory_usage": "1.625GiB / 9.735GiB",
+        "memory_percent": 16.69
+      },
+      {
+        "elapsed_monotonic": 751.348294631,
+        "cpu_percent": 126.25,
+        "memory_usage": "1.63GiB / 9.735GiB",
+        "memory_percent": 16.74
+      },
+      {
+        "elapsed_monotonic": 755.071785698,
+        "cpu_percent": 121.33,
+        "memory_usage": "1.637GiB / 9.735GiB",
+        "memory_percent": 16.82
+      },
+      {
+        "elapsed_monotonic": 758.7998819,
+        "cpu_percent": 109.41,
+        "memory_usage": "1.638GiB / 9.735GiB",
+        "memory_percent": 16.82
+      },
+      {
+        "elapsed_monotonic": 762.50017546,
+        "cpu_percent": 127.48,
+        "memory_usage": "1.637GiB / 9.735GiB",
+        "memory_percent": 16.82
+      },
+      {
+        "elapsed_monotonic": 766.268220001,
+        "cpu_percent": 121.5,
+        "memory_usage": "1.646GiB / 9.735GiB",
+        "memory_percent": 16.91
+      },
+      {
+        "elapsed_monotonic": 769.965903322,
+        "cpu_percent": 137.48,
+        "memory_usage": "1.646GiB / 9.735GiB",
+        "memory_percent": 16.91
+      },
+      {
+        "elapsed_monotonic": 773.65390242,
+        "cpu_percent": 140.99,
+        "memory_usage": "1.645GiB / 9.735GiB",
+        "memory_percent": 16.9
+      },
+      {
+        "elapsed_monotonic": 777.292626868,
+        "cpu_percent": 116.93,
+        "memory_usage": "1.655GiB / 9.735GiB",
+        "memory_percent": 17.0
+      },
+      {
+        "elapsed_monotonic": 780.992217822,
+        "cpu_percent": 129.76,
+        "memory_usage": "1.654GiB / 9.735GiB",
+        "memory_percent": 16.99
+      },
+      {
+        "elapsed_monotonic": 784.679555338,
+        "cpu_percent": 109.68,
+        "memory_usage": "1.637GiB / 9.735GiB",
+        "memory_percent": 16.81
+      },
+      {
+        "elapsed_monotonic": 788.385946507,
+        "cpu_percent": 120.86,
+        "memory_usage": "1.647GiB / 9.735GiB",
+        "memory_percent": 16.92
+      },
+      {
+        "elapsed_monotonic": 792.048854325,
+        "cpu_percent": 134.8,
+        "memory_usage": "1.646GiB / 9.735GiB",
+        "memory_percent": 16.91
+      },
+      {
+        "elapsed_monotonic": 795.669064987,
+        "cpu_percent": 118.94,
+        "memory_usage": "1.648GiB / 9.735GiB",
+        "memory_percent": 16.93
+      },
+      {
+        "elapsed_monotonic": 799.34488118,
+        "cpu_percent": 119.17,
+        "memory_usage": "1.655GiB / 9.735GiB",
+        "memory_percent": 17.0
+      },
+      {
+        "elapsed_monotonic": 803.047068219,
+        "cpu_percent": 111.5,
+        "memory_usage": "1.655GiB / 9.735GiB",
+        "memory_percent": 17.01
+      },
+      {
+        "elapsed_monotonic": 806.67486671,
+        "cpu_percent": 148.98,
+        "memory_usage": "1.654GiB / 9.735GiB",
+        "memory_percent": 16.99
+      },
+      {
+        "elapsed_monotonic": 810.343377773,
+        "cpu_percent": 126.56,
+        "memory_usage": "1.664GiB / 9.735GiB",
+        "memory_percent": 17.09
+      },
+      {
+        "elapsed_monotonic": 814.074602387,
+        "cpu_percent": 104.01,
+        "memory_usage": "1.665GiB / 9.735GiB",
+        "memory_percent": 17.1
+      },
+      {
+        "elapsed_monotonic": 817.755314099,
+        "cpu_percent": 141.78,
+        "memory_usage": "1.665GiB / 9.735GiB",
+        "memory_percent": 17.1
+      },
+      {
+        "elapsed_monotonic": 821.360812136,
+        "cpu_percent": 158.89,
+        "memory_usage": "1.672GiB / 9.735GiB",
+        "memory_percent": 17.17
+      },
+      {
+        "elapsed_monotonic": 825.048226944,
+        "cpu_percent": 111.78,
+        "memory_usage": "1.672GiB / 9.735GiB",
+        "memory_percent": 17.17
+      },
+      {
+        "elapsed_monotonic": 828.780728858,
+        "cpu_percent": 119.65,
+        "memory_usage": "1.67GiB / 9.735GiB",
+        "memory_percent": 17.15
+      },
+      {
+        "elapsed_monotonic": 832.486959682,
+        "cpu_percent": 139.11,
+        "memory_usage": "1.67GiB / 9.735GiB",
+        "memory_percent": 17.15
+      },
+      {
+        "elapsed_monotonic": 836.199889258,
+        "cpu_percent": 118.44,
+        "memory_usage": "1.675GiB / 9.735GiB",
+        "memory_percent": 17.21
+      },
+      {
+        "elapsed_monotonic": 839.969681988,
+        "cpu_percent": 136.66,
+        "memory_usage": "1.679GiB / 9.735GiB",
+        "memory_percent": 17.25
+      },
+      {
+        "elapsed_monotonic": 843.762720075,
+        "cpu_percent": 126.29,
+        "memory_usage": "1.699GiB / 9.735GiB",
+        "memory_percent": 17.45
+      },
+      {
+        "elapsed_monotonic": 847.464509854,
+        "cpu_percent": 92.31,
+        "memory_usage": "1.73GiB / 9.735GiB",
+        "memory_percent": 17.77
+      },
+      {
+        "elapsed_monotonic": 851.088859106,
+        "cpu_percent": 124.86,
+        "memory_usage": "1.762GiB / 9.735GiB",
+        "memory_percent": 18.1
+      },
+      {
+        "elapsed_monotonic": 854.757992687,
+        "cpu_percent": 127.77,
+        "memory_usage": "1.778GiB / 9.735GiB",
+        "memory_percent": 18.26
+      },
+      {
+        "elapsed_monotonic": 858.471227523,
+        "cpu_percent": 114.7,
+        "memory_usage": "1.79GiB / 9.735GiB",
+        "memory_percent": 18.38
+      },
+      {
+        "elapsed_monotonic": 862.069547195,
+        "cpu_percent": 104.78,
+        "memory_usage": "1.806GiB / 9.735GiB",
+        "memory_percent": 18.55
+      },
+      {
+        "elapsed_monotonic": 865.768253452,
+        "cpu_percent": 102.24,
+        "memory_usage": "1.812GiB / 9.735GiB",
+        "memory_percent": 18.61
+      },
+      {
+        "elapsed_monotonic": 869.467655862,
+        "cpu_percent": 88.45,
+        "memory_usage": "1.817GiB / 9.735GiB",
+        "memory_percent": 18.67
+      },
+      {
+        "elapsed_monotonic": 873.342001315,
+        "cpu_percent": 106.23,
+        "memory_usage": "1.822GiB / 9.735GiB",
+        "memory_percent": 18.71
+      },
+      {
+        "elapsed_monotonic": 876.974965199,
+        "cpu_percent": 107.23,
+        "memory_usage": "1.825GiB / 9.735GiB",
+        "memory_percent": 18.74
+      },
+      {
+        "elapsed_monotonic": 880.662556839,
+        "cpu_percent": 105.18,
+        "memory_usage": "1.836GiB / 9.735GiB",
+        "memory_percent": 18.86
+      },
+      {
+        "elapsed_monotonic": 884.456588099,
+        "cpu_percent": 103.69,
+        "memory_usage": "1.842GiB / 9.735GiB",
+        "memory_percent": 18.93
+      },
+      {
+        "elapsed_monotonic": 888.084766236,
+        "cpu_percent": 116.77,
+        "memory_usage": "1.847GiB / 9.735GiB",
+        "memory_percent": 18.97
+      },
+      {
+        "elapsed_monotonic": 891.766318261,
+        "cpu_percent": 116.56,
+        "memory_usage": "1.851GiB / 9.735GiB",
+        "memory_percent": 19.01
+      },
+      {
+        "elapsed_monotonic": 895.445838181,
+        "cpu_percent": 102.72,
+        "memory_usage": "1.863GiB / 9.735GiB",
+        "memory_percent": 19.14
+      },
+      {
+        "elapsed_monotonic": 899.148801745,
+        "cpu_percent": 108.24,
+        "memory_usage": "1.865GiB / 9.735GiB",
+        "memory_percent": 19.16
+      },
+      {
+        "elapsed_monotonic": 902.760295878,
+        "cpu_percent": 111.39,
+        "memory_usage": "1.868GiB / 9.735GiB",
+        "memory_percent": 19.19
+      },
+      {
+        "elapsed_monotonic": 906.404553516,
+        "cpu_percent": 109.09,
+        "memory_usage": "1.871GiB / 9.735GiB",
+        "memory_percent": 19.22
+      },
+      {
+        "elapsed_monotonic": 910.092363126,
+        "cpu_percent": 128.38,
+        "memory_usage": "1.881GiB / 9.735GiB",
+        "memory_percent": 19.33
+      },
+      {
+        "elapsed_monotonic": 913.837725834,
+        "cpu_percent": 120.11,
+        "memory_usage": "1.884GiB / 9.735GiB",
+        "memory_percent": 19.35
+      },
+      {
+        "elapsed_monotonic": 917.50085634,
+        "cpu_percent": 119.31,
+        "memory_usage": "1.88GiB / 9.735GiB",
+        "memory_percent": 19.31
+      },
+      {
+        "elapsed_monotonic": 921.141196954,
+        "cpu_percent": 115.66,
+        "memory_usage": "1.88GiB / 9.735GiB",
+        "memory_percent": 19.31
+      },
+      {
+        "elapsed_monotonic": 924.766727407,
+        "cpu_percent": 106.1,
+        "memory_usage": "1.895GiB / 9.735GiB",
+        "memory_percent": 19.46
+      },
+      {
+        "elapsed_monotonic": 928.361820642,
+        "cpu_percent": 153.66,
+        "memory_usage": "1.897GiB / 9.735GiB",
+        "memory_percent": 19.49
+      },
+      {
+        "elapsed_monotonic": 931.951834311,
+        "cpu_percent": 178.01,
+        "memory_usage": "1.901GiB / 9.735GiB",
+        "memory_percent": 19.53
+      },
+      {
+        "elapsed_monotonic": 935.555363111,
+        "cpu_percent": 165.59,
+        "memory_usage": "1.905GiB / 9.735GiB",
+        "memory_percent": 19.57
+      },
+      {
+        "elapsed_monotonic": 939.150596253,
+        "cpu_percent": 157.04,
+        "memory_usage": "1.916GiB / 9.735GiB",
+        "memory_percent": 19.68
+      },
+      {
+        "elapsed_monotonic": 942.76535214,
+        "cpu_percent": 168.71,
+        "memory_usage": "1.923GiB / 9.735GiB",
+        "memory_percent": 19.75
+      },
+      {
+        "elapsed_monotonic": 946.340381562,
+        "cpu_percent": 171.46,
+        "memory_usage": "1.926GiB / 9.735GiB",
+        "memory_percent": 19.79
+      },
+      {
+        "elapsed_monotonic": 949.937533235,
+        "cpu_percent": 164.9,
+        "memory_usage": "1.937GiB / 9.735GiB",
+        "memory_percent": 19.9
+      },
+      {
+        "elapsed_monotonic": 953.564291687,
+        "cpu_percent": 161.96,
+        "memory_usage": "1.939GiB / 9.735GiB",
+        "memory_percent": 19.92
+      },
+      {
+        "elapsed_monotonic": 957.147993572,
+        "cpu_percent": 182.22,
+        "memory_usage": "1.942GiB / 9.735GiB",
+        "memory_percent": 19.95
+      },
+      {
+        "elapsed_monotonic": 960.737723076,
+        "cpu_percent": 139.25,
+        "memory_usage": "1.949GiB / 9.735GiB",
+        "memory_percent": 20.02
+      },
+      {
+        "elapsed_monotonic": 964.289672575,
+        "cpu_percent": 206.12,
+        "memory_usage": "1.953GiB / 9.735GiB",
+        "memory_percent": 20.06
+      },
+      {
+        "elapsed_monotonic": 967.869990617,
+        "cpu_percent": 205.76,
+        "memory_usage": "1.965GiB / 9.735GiB",
+        "memory_percent": 20.18
+      },
+      {
+        "elapsed_monotonic": 971.454282334,
+        "cpu_percent": 205.23,
+        "memory_usage": "1.969GiB / 9.735GiB",
+        "memory_percent": 20.22
+      },
+      {
+        "elapsed_monotonic": 975.046752737,
+        "cpu_percent": 205.56,
+        "memory_usage": "1.98GiB / 9.735GiB",
+        "memory_percent": 20.34
+      },
+      {
+        "elapsed_monotonic": 978.595922596,
+        "cpu_percent": 204.41,
+        "memory_usage": "1.984GiB / 9.735GiB",
+        "memory_percent": 20.38
+      },
+      {
+        "elapsed_monotonic": 982.240978137,
+        "cpu_percent": 206.07,
+        "memory_usage": "1.996GiB / 9.735GiB",
+        "memory_percent": 20.5
+      },
+      {
+        "elapsed_monotonic": 985.780548528,
+        "cpu_percent": 200.05,
+        "memory_usage": "1.999GiB / 9.735GiB",
+        "memory_percent": 20.54
+      },
+      {
+        "elapsed_monotonic": 989.366340957,
+        "cpu_percent": 207.86,
+        "memory_usage": "2.011GiB / 9.735GiB",
+        "memory_percent": 20.66
+      },
+      {
+        "elapsed_monotonic": 992.947265398,
+        "cpu_percent": 210.21,
+        "memory_usage": "2.014GiB / 9.735GiB",
+        "memory_percent": 20.69
+      },
+      {
+        "elapsed_monotonic": 996.551799997,
+        "cpu_percent": 200.94,
+        "memory_usage": "2.017GiB / 9.735GiB",
+        "memory_percent": 20.72
+      },
+      {
+        "elapsed_monotonic": 1000.161063731,
+        "cpu_percent": 203.98,
+        "memory_usage": "2.028GiB / 9.735GiB",
+        "memory_percent": 20.84
+      },
+      {
+        "elapsed_monotonic": 1003.73679441,
+        "cpu_percent": 204.97,
+        "memory_usage": "2.032GiB / 9.735GiB",
+        "memory_percent": 20.87
+      },
+      {
+        "elapsed_monotonic": 1007.280676451,
+        "cpu_percent": 203.61,
+        "memory_usage": "2.043GiB / 9.735GiB",
+        "memory_percent": 20.99
+      },
+      {
+        "elapsed_monotonic": 1010.876400682,
+        "cpu_percent": 193.35,
+        "memory_usage": "2.047GiB / 9.735GiB",
+        "memory_percent": 21.02
+      },
+      {
+        "elapsed_monotonic": 1014.46898286,
+        "cpu_percent": 204.27,
+        "memory_usage": "2.058GiB / 9.735GiB",
+        "memory_percent": 21.14
+      },
+      {
+        "elapsed_monotonic": 1018.059947937,
+        "cpu_percent": 207.92,
+        "memory_usage": "2.057GiB / 9.735GiB",
+        "memory_percent": 21.13
+      },
+      {
+        "elapsed_monotonic": 1021.654725705,
+        "cpu_percent": 207.2,
+        "memory_usage": "2.06GiB / 9.735GiB",
+        "memory_percent": 21.16
+      },
+      {
+        "elapsed_monotonic": 1025.248892924,
+        "cpu_percent": 199.01,
+        "memory_usage": "2.071GiB / 9.735GiB",
+        "memory_percent": 21.28
+      },
+      {
+        "elapsed_monotonic": 1028.788909235,
+        "cpu_percent": 202.51,
+        "memory_usage": "2.075GiB / 9.735GiB",
+        "memory_percent": 21.31
+      },
+      {
+        "elapsed_monotonic": 1032.369130928,
+        "cpu_percent": 209.61,
+        "memory_usage": "2.086GiB / 9.735GiB",
+        "memory_percent": 21.43
+      },
+      {
+        "elapsed_monotonic": 1035.961268235,
+        "cpu_percent": 207.38,
+        "memory_usage": "2.089GiB / 9.735GiB",
+        "memory_percent": 21.46
+      },
+      {
+        "elapsed_monotonic": 1039.547361695,
+        "cpu_percent": 207.93,
+        "memory_usage": "2.092GiB / 9.735GiB",
+        "memory_percent": 21.49
+      },
+      {
+        "elapsed_monotonic": 1043.090122147,
+        "cpu_percent": 213.67,
+        "memory_usage": "2.103GiB / 9.735GiB",
+        "memory_percent": 21.6
+      },
+      {
+        "elapsed_monotonic": 1046.682536601,
+        "cpu_percent": 208.61,
+        "memory_usage": "2.107GiB / 9.735GiB",
+        "memory_percent": 21.64
+      },
+      {
+        "elapsed_monotonic": 1050.274438905,
+        "cpu_percent": 223.88,
+        "memory_usage": "2.117GiB / 9.735GiB",
+        "memory_percent": 21.75
+      },
+      {
+        "elapsed_monotonic": 1053.872342317,
+        "cpu_percent": 207.97,
+        "memory_usage": "2.121GiB / 9.735GiB",
+        "memory_percent": 21.78
+      },
+      {
+        "elapsed_monotonic": 1057.480909324,
+        "cpu_percent": 203.43,
+        "memory_usage": "2.124GiB / 9.735GiB",
+        "memory_percent": 21.82
+      },
+      {
+        "elapsed_monotonic": 1061.074161562,
+        "cpu_percent": 200.4,
+        "memory_usage": "2.134GiB / 9.735GiB",
+        "memory_percent": 21.92
+      },
+      {
+        "elapsed_monotonic": 1064.657566026,
+        "cpu_percent": 219.77,
+        "memory_usage": "2.137GiB / 9.735GiB",
+        "memory_percent": 21.96
+      },
+      {
+        "elapsed_monotonic": 1068.24822038,
+        "cpu_percent": 209.35,
+        "memory_usage": "2.141GiB / 9.735GiB",
+        "memory_percent": 21.99
+      },
+      {
+        "elapsed_monotonic": 1071.837571912,
+        "cpu_percent": 202.47,
+        "memory_usage": "2.144GiB / 9.735GiB",
+        "memory_percent": 22.02
+      },
+      {
+        "elapsed_monotonic": 1075.393131982,
+        "cpu_percent": 208.75,
+        "memory_usage": "2.147GiB / 9.735GiB",
+        "memory_percent": 22.06
+      },
+      {
+        "elapsed_monotonic": 1078.980717189,
+        "cpu_percent": 205.15,
+        "memory_usage": "2.15GiB / 9.735GiB",
+        "memory_percent": 22.08
+      },
+      {
+        "elapsed_monotonic": 1082.558620599,
+        "cpu_percent": 205.14,
+        "memory_usage": "2.155GiB / 9.735GiB",
+        "memory_percent": 22.14
+      },
+      {
+        "elapsed_monotonic": 1086.149179143,
+        "cpu_percent": 209.58,
+        "memory_usage": "2.161GiB / 9.735GiB",
+        "memory_percent": 22.2
+      },
+      {
+        "elapsed_monotonic": 1089.738184435,
+        "cpu_percent": 210.25,
+        "memory_usage": "2.167GiB / 9.735GiB",
+        "memory_percent": 22.26
+      },
+      {
+        "elapsed_monotonic": 1093.340930703,
+        "cpu_percent": 210.31,
+        "memory_usage": "2.174GiB / 9.735GiB",
+        "memory_percent": 22.33
+      },
+      {
+        "elapsed_monotonic": 1096.884818794,
+        "cpu_percent": 204.22,
+        "memory_usage": "2.18GiB / 9.735GiB",
+        "memory_percent": 22.39
+      },
+      {
+        "elapsed_monotonic": 1100.463421481,
+        "cpu_percent": 212.1,
+        "memory_usage": "2.186GiB / 9.735GiB",
+        "memory_percent": 22.45
+      },
+      {
+        "elapsed_monotonic": 1104.048747321,
+        "cpu_percent": 213.23,
+        "memory_usage": "2.192GiB / 9.735GiB",
+        "memory_percent": 22.52
+      },
+      {
+        "elapsed_monotonic": 1107.640839541,
+        "cpu_percent": 211.4,
+        "memory_usage": "2.197GiB / 9.735GiB",
+        "memory_percent": 22.57
+      },
+      {
+        "elapsed_monotonic": 1111.241400535,
+        "cpu_percent": 207.02,
+        "memory_usage": "2.204GiB / 9.735GiB",
+        "memory_percent": 22.64
+      },
+      {
+        "elapsed_monotonic": 1114.792418689,
+        "cpu_percent": 209.96,
+        "memory_usage": "2.21GiB / 9.735GiB",
+        "memory_percent": 22.7
+      },
+      {
+        "elapsed_monotonic": 1118.381900934,
+        "cpu_percent": 206.35,
+        "memory_usage": "2.216GiB / 9.735GiB",
+        "memory_percent": 22.77
+      },
+      {
+        "elapsed_monotonic": 1121.965143074,
+        "cpu_percent": 208.48,
+        "memory_usage": "2.222GiB / 9.735GiB",
+        "memory_percent": 22.83
+      },
+      {
+        "elapsed_monotonic": 1125.557208488,
+        "cpu_percent": 203.37,
+        "memory_usage": "2.229GiB / 9.735GiB",
+        "memory_percent": 22.9
+      },
+      {
+        "elapsed_monotonic": 1129.148834531,
+        "cpu_percent": 206.02,
+        "memory_usage": "2.235GiB / 9.735GiB",
+        "memory_percent": 22.96
+      },
+      {
+        "elapsed_monotonic": 1132.737571612,
+        "cpu_percent": 199.17,
+        "memory_usage": "2.241GiB / 9.735GiB",
+        "memory_percent": 23.02
+      },
+      {
+        "elapsed_monotonic": 1136.293362378,
+        "cpu_percent": 206.96,
+        "memory_usage": "2.247GiB / 9.735GiB",
+        "memory_percent": 23.08
+      },
+      {
+        "elapsed_monotonic": 1139.879687896,
+        "cpu_percent": 216.1,
+        "memory_usage": "2.253GiB / 9.735GiB",
+        "memory_percent": 23.14
+      },
+      {
+        "elapsed_monotonic": 1143.48507392,
+        "cpu_percent": 196.61,
+        "memory_usage": "2.258GiB / 9.735GiB",
+        "memory_percent": 23.2
+      },
+      {
+        "elapsed_monotonic": 1147.063494901,
+        "cpu_percent": 206.22,
+        "memory_usage": "2.265GiB / 9.735GiB",
+        "memory_percent": 23.26
+      },
+      {
+        "elapsed_monotonic": 1150.648434165,
+        "cpu_percent": 207.59,
+        "memory_usage": "2.271GiB / 9.735GiB",
+        "memory_percent": 23.33
+      },
+      {
+        "elapsed_monotonic": 1154.244988214,
+        "cpu_percent": 201.51,
+        "memory_usage": "2.277GiB / 9.735GiB",
+        "memory_percent": 23.39
+      },
+      {
+        "elapsed_monotonic": 1157.786498911,
+        "cpu_percent": 206.27,
+        "memory_usage": "2.282GiB / 9.735GiB",
+        "memory_percent": 23.45
+      },
+      {
+        "elapsed_monotonic": 1161.375304755,
+        "cpu_percent": 205.6,
+        "memory_usage": "2.288GiB / 9.735GiB",
+        "memory_percent": 23.51
+      },
+      {
+        "elapsed_monotonic": 1164.975538999,
+        "cpu_percent": 204.86,
+        "memory_usage": "2.295GiB / 9.735GiB",
+        "memory_percent": 23.57
+      },
+      {
+        "elapsed_monotonic": 1168.584270415,
+        "cpu_percent": 202.67,
+        "memory_usage": "2.301GiB / 9.735GiB",
+        "memory_percent": 23.63
+      },
+      {
+        "elapsed_monotonic": 1172.17690668,
+        "cpu_percent": 207.56,
+        "memory_usage": "2.306GiB / 9.735GiB",
+        "memory_percent": 23.69
+      },
+      {
+        "elapsed_monotonic": 1175.708096673,
+        "cpu_percent": 92.57,
+        "memory_usage": "2.266GiB / 9.735GiB",
+        "memory_percent": 23.28
+      },
+      {
+        "elapsed_monotonic": 1179.238633097,
+        "cpu_percent": 182.37,
+        "memory_usage": "2.354GiB / 9.735GiB",
+        "memory_percent": 24.19
+      },
+      {
+        "elapsed_monotonic": 1182.768940035,
+        "cpu_percent": 103.31,
+        "memory_usage": "2.404GiB / 9.735GiB",
+        "memory_percent": 24.7
+      },
+      {
+        "elapsed_monotonic": 1186.301568246,
+        "cpu_percent": 102.9,
+        "memory_usage": "2.404GiB / 9.735GiB",
+        "memory_percent": 24.7
+      },
+      {
+        "elapsed_monotonic": 1189.887433273,
+        "cpu_percent": 204.38,
+        "memory_usage": "2.458GiB / 9.735GiB",
+        "memory_percent": 25.25
+      },
+      {
+        "elapsed_monotonic": 1193.471701937,
+        "cpu_percent": 194.76,
+        "memory_usage": "2.469GiB / 9.735GiB",
+        "memory_percent": 25.36
+      },
+      {
+        "elapsed_monotonic": 1197.044819991,
+        "cpu_percent": 208.37,
+        "memory_usage": "2.459GiB / 9.735GiB",
+        "memory_percent": 25.26
+      },
+      {
+        "elapsed_monotonic": 1200.66844954,
+        "cpu_percent": 209.4,
+        "memory_usage": "2.71GiB / 9.735GiB",
+        "memory_percent": 27.84
+      },
+      {
+        "elapsed_monotonic": 1204.269951908,
+        "cpu_percent": 200.41,
+        "memory_usage": "2.71GiB / 9.735GiB",
+        "memory_percent": 27.84
+      },
+      {
+        "elapsed_monotonic": 1207.861029388,
+        "cpu_percent": 204.69,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.84
+      },
+      {
+        "elapsed_monotonic": 1211.452161934,
+        "cpu_percent": 206.98,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.84
+      },
+      {
+        "elapsed_monotonic": 1215.040929337,
+        "cpu_percent": 208.11,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.85
+      },
+      {
+        "elapsed_monotonic": 1218.591588375,
+        "cpu_percent": 200.43,
+        "memory_usage": "2.699GiB / 9.735GiB",
+        "memory_percent": 27.72
+      },
+      {
+        "elapsed_monotonic": 1222.172652052,
+        "cpu_percent": 203.15,
+        "memory_usage": "2.715GiB / 9.735GiB",
+        "memory_percent": 27.89
+      },
+      {
+        "elapsed_monotonic": 1225.780784641,
+        "cpu_percent": 204.34,
+        "memory_usage": "2.715GiB / 9.735GiB",
+        "memory_percent": 27.89
+      },
+      {
+        "elapsed_monotonic": 1229.376035267,
+        "cpu_percent": 203.9,
+        "memory_usage": "2.704GiB / 9.735GiB",
+        "memory_percent": 27.78
+      },
+      {
+        "elapsed_monotonic": 1232.991782967,
+        "cpu_percent": 204.29,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.85
+      },
+      {
+        "elapsed_monotonic": 1236.595588435,
+        "cpu_percent": 213.23,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.85
+      },
+      {
+        "elapsed_monotonic": 1240.174688545,
+        "cpu_percent": 210.84,
+        "memory_usage": "2.688GiB / 9.735GiB",
+        "memory_percent": 27.62
+      },
+      {
+        "elapsed_monotonic": 1243.798861917,
+        "cpu_percent": 202.19,
+        "memory_usage": "2.702GiB / 9.735GiB",
+        "memory_percent": 27.76
+      },
+      {
+        "elapsed_monotonic": 1247.368337516,
+        "cpu_percent": 205.0,
+        "memory_usage": "2.711GiB / 9.735GiB",
+        "memory_percent": 27.85
+      },
+      {
+        "elapsed_monotonic": 1250.954389358,
+        "cpu_percent": 193.47,
+        "memory_usage": "2.391GiB / 9.735GiB",
+        "memory_percent": 24.56
+      },
+      {
+        "elapsed_monotonic": 1254.481685671,
+        "cpu_percent": 1.59,
+        "memory_usage": "2.373GiB / 9.735GiB",
+        "memory_percent": 24.38
+      }
+    ],
+    "server_cpu_memory_measured": true,
+    "cloud_run_execution_measured": false
+  },
+  "elapsed_seconds": 835.6904154420001,
+  "process_max_rss_kib": 72000,
+  "process_cpu_seconds": 71.854715437,
+  "server_cpu_memory_measured": true,
+  "cloud_run_execution_measured": false
+}
