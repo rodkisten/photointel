@@ -235,13 +235,19 @@ class ModelRegistry(Identifier, Base):
     provider: Mapped[str] = mapped_column(String(64))
     model_name: Mapped[str] = mapped_column(String(255))
     revision: Mapped[str] = mapped_column(String(128))
+    preprocessing_revision: Mapped[str] = mapped_column(
+        String(128), default="legacy-v1", server_default="legacy-v1"
+    )
     architecture: Mapped[str] = mapped_column(String(128))
     embedding_dimension: Mapped[int | None] = mapped_column(Integer)
     parameters: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE, default=dict)
     capabilities: Mapped[list[str]] = mapped_column(JSON_TYPE, default=list)
     active: Mapped[bool] = mapped_column(Boolean, default=False)
     __table_args__ = (
-        UniqueConstraint("provider", "model_name", "revision"),
+        UniqueConstraint(
+            "provider", "model_name", "revision", "preprocessing_revision",
+            name="uq_model_registry_pipeline",
+        ),
         CheckConstraint(
             "embedding_dimension IS NULL OR embedding_dimension = 768",
             name="ck_embedding_dimension_model",
@@ -250,6 +256,7 @@ class ModelRegistry(Identifier, Base):
             "uq_active_model_revision",
             "provider",
             "model_name",
+            "preprocessing_revision",
             unique=True,
             postgresql_where=text("active"),
         ),

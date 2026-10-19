@@ -796,7 +796,6 @@ async def cost_statistics(session: Session) -> dict[str, Any]:
 @router.get("/system/capabilities", tags=["system"])
 async def capabilities(session: Session) -> dict[str, Any]:
     settings = await effective_settings(session)
-    from photointel.services.ingestion import authentication_state
 
     async def has_current_result(
         name: str, revision: str, *, vectors: bool = False
@@ -817,6 +816,11 @@ async def capabilities(session: Session) -> dict[str, Any]:
         )
         if not vectors:
             query = query.where(InferenceRun.status == "completed")
+        else:
+            query = query.where(
+                ModelRegistry.preprocessing_revision
+                == settings.query_preprocessing_revision
+            )
         return await session.scalar(query) is not None
 
     joytag_ok = await has_current_result(
@@ -825,7 +829,7 @@ async def capabilities(session: Session) -> dict[str, Any]:
     siglip_ok = await has_current_result(
         settings.siglip_model_id, settings.siglip_model_revision, vectors=True
     )
-    apple_session = authentication_state(settings)
+    apple_session = (await ingestion_state(session))["authentication"]
     device = await session.scalar(
         select(BridgeDevice)
         .where(BridgeDevice.revoked_at.is_(None))
@@ -887,7 +891,9 @@ async def capabilities(session: Session) -> dict[str, Any]:
             "Leitura depende da capability reportada pelo dispositivo conectado",
         ),
         "apple_keywords_write": capability(
-            "experimental" if device and device.write_verified else "unavailable",
+            "experimental"
+            if settings.apple_native_write_enabled and device and device.write_verified
+            else "unavailable",
             "Sem bulk write; exige teste individual aprovado e capability verificada",
         ),
     }

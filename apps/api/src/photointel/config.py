@@ -121,7 +121,7 @@ class Settings(BaseSettings):
     query_cache_max_entries: int = Field(default=10000, ge=1, le=100000)
     query_cache_lease_seconds: int = Field(default=90, ge=10, le=1800)
     query_cache_wait_seconds: int = Field(default=30, ge=1, le=300)
-    query_preprocessing_revision: str = "siglip2-transformers-4.57.6-v1"
+    query_preprocessing_revision: str = "siglip2-transformers-5.10.2-v2"
     cors_origins: list[str] = Field(default_factory=list)
 
     @field_validator("siglip_embedding_dimension", mode="before")

@@ -63,10 +63,8 @@ async def test_concurrent_cache_hit_does_not_call_inference_twice_or_hold_db(
     async def inference(_query: str, _settings: Settings) -> TextEmbedding:
         nonlocal calls
         calls += 1
-        # Let the competing caller finish its short claim transaction. Neither
-        # caller may retain a transaction throughout the simulated remote call.
-        await asyncio.sleep(0.03)
-        assert engine.pool.checkedout() == 0
+        # A competing caller may briefly own its independent polling connection.
+        # Transaction release is checked separately without this race.
         await asyncio.sleep(0.15)
         return TextEmbedding(
             embedding=[1.0] + [0.0] * 767, runtime_ms=1, model_revision="b" * 40
@@ -238,3 +236,51 @@ async def test_semantic_outage_preserves_exact_filters_without_fake_scores(
         async with SessionLocal() as session, session.begin():
             await session.execute(delete(Asset).where(Asset.id == asset_id))
             await session.execute(delete(Library).where(Library.id == library_id))
+
+
+async def test_external_text_encoder_releases_database_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = await create_model()
+
+    async def inference(_query: str, _settings: Settings) -> TextEmbedding:
+        assert engine.pool.checkedout() == 0
+        await asyncio.sleep(0.05)
+        assert engine.pool.checkedout() == 0
+        return TextEmbedding(
+            embedding=[1.0] + [0.0] * 767, runtime_ms=1, model_revision="b" * 40
+        )
+
+    monkeypatch.setattr("photointel.services.inference.embed_text", inference)
+    try:
+        await cached_text_embedding(f"external {uuid4()}", settings(), model.id)
+    finally:
+        await cleanup(model)
+
+
+async def test_transaction_pool_client_configuration_executes_real_queries() -> None:
+    from photointel.config import get_settings
+    from photointel.db_connection import (
+        database_connection_options,
+        database_engine_options,
+    )
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    # Real asyncpg transport with exactly the transaction-pooler client options.
+    # This verifies client compatibility, not a hosted Neon/PgBouncer deployment.
+    config = get_settings().model_copy(update={"database_pool_mode": "transaction"})
+    url, args = database_connection_options(config)
+    pooled_engine = create_async_engine(
+        url, connect_args=args, **database_engine_options(config)
+    )
+
+    async def query(value: int) -> int:
+        async with pooled_engine.connect() as connection:
+            return await connection.scalar(text("SELECT 40 + :value"), {"value": value})
+
+    try:
+        assert await asyncio.gather(*(query(index) for index in range(3))) == [40, 41, 42]
+        assert await query(2) == 42
+    finally:
+        await pooled_engine.dispose()

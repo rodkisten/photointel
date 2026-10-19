@@ -16,6 +16,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from gpu.pipelines.contracts import (
     EMBEDDING_DIMENSION,
     MAX_IMAGE_BYTES,
+    PREPROCESSING_REVISION,
     ImageRequest,
     ImageResponse,
     ImageResult,
@@ -66,6 +67,10 @@ class RealModels:
     """Models loaded once per container/process and reused across bounded batches."""
 
     def __init__(self, models: ModelSpec, cache: Path, device: str = "cuda") -> None:
+        if models.preprocessing_revision != PREPROCESSING_REVISION:
+            raise ValueError(
+                "Unsupported preprocessing revision; deploy matching runtime"
+            )
         import torch
         from huggingface_hub import snapshot_download
         from transformers import AutoModel, AutoProcessor
@@ -164,7 +169,11 @@ class RealModels:
             inputs = self.processor(images=images, return_tensors="pt").to(self.device)
             embed_started = time.perf_counter()
             with self.torch.inference_mode(), self._autocast():
-                features = self.siglip.get_image_features(**inputs)
+                # Transformers 5 returns a model output, whose pooled projection
+                # is the cross-modal feature (last_hidden_state is token-level).
+                features = self.siglip.get_image_features(
+                    **inputs, return_dict=True
+                ).pooler_output
                 embeddings = (
                     self.torch.nn.functional.normalize(
                         features.float(),
@@ -220,7 +229,9 @@ class RealModels:
             return_tensors="pt",
         ).to(self.device)
         with self.torch.inference_mode(), self._autocast():
-            feature = self.siglip.get_text_features(**inputs)
+            feature = self.siglip.get_text_features(
+                **inputs, return_dict=True
+            ).pooler_output
             vector = (
                 self.torch.nn.functional.normalize(
                     feature.float(),

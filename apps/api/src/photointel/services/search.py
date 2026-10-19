@@ -211,6 +211,7 @@ async def semantic_vector(
             ModelRegistry.active.is_(True),
             ModelRegistry.model_name == settings.siglip_model_id,
             ModelRegistry.revision == settings.siglip_model_revision,
+            ModelRegistry.preprocessing_revision == settings.query_preprocessing_revision,
             ModelRegistry.embedding_dimension.is_not(None),
         )
         .limit(1)

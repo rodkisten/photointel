@@ -59,6 +59,7 @@ def model_spec(settings: Settings) -> ModelSpec:
         joytag_revision=settings.joytag_model_revision,
         siglip_model_id=settings.siglip_model_id,
         siglip_revision=settings.siglip_model_revision,
+        preprocessing_revision=settings.query_preprocessing_revision,
     )
 
 
@@ -353,10 +354,11 @@ async def registry(session: AsyncSession, settings: Settings) -> tuple[UUID, UUI
 
     await migrate_taxonomy(session)
     ids: list[UUID] = []
-    for name, revision, architecture, dimension, capabilities in [
+    for name, revision, preprocessing, architecture, dimension, capabilities in [
         (
             settings.joytag_model_id,
             settings.joytag_model_revision,
+            "legacy-v1",
             "JoyTag-ViT-B16-448",
             None,
             ["tag_classification"],
@@ -364,6 +366,7 @@ async def registry(session: AsyncSession, settings: Settings) -> tuple[UUID, UUI
         (
             settings.siglip_model_id,
             settings.siglip_model_revision,
+            settings.query_preprocessing_revision,
             "SigLIP2-base-patch16-224",
             768,
             ["image_embedding", "text_embedding", "multilingual"],
@@ -374,7 +377,10 @@ async def registry(session: AsyncSession, settings: Settings) -> tuple[UUID, UUI
             .where(
                 ModelRegistry.provider == "huggingface",
                 ModelRegistry.model_name == name,
-                ModelRegistry.revision != revision,
+                (
+                    (ModelRegistry.revision != revision)
+                    | (ModelRegistry.preprocessing_revision != preprocessing)
+                ),
             )
             .values(active=False)
         )
@@ -384,18 +390,29 @@ async def registry(session: AsyncSession, settings: Settings) -> tuple[UUID, UUI
                 provider="huggingface",
                 model_name=name,
                 revision=revision,
+                preprocessing_revision=preprocessing,
                 architecture=architecture,
                 embedding_dimension=dimension,
                 parameters={
                     "taxonomy_version": TAXONOMY_VERSION,
                     "normalized": dimension is not None,
+                    "preprocessing_revision": preprocessing,
                 },
                 capabilities=capabilities,
                 active=True,
             )
             .on_conflict_do_update(
-                index_elements=["provider", "model_name", "revision"],
-                set_={"active": True},
+                index_elements=[
+                    "provider", "model_name", "revision", "preprocessing_revision",
+                ],
+                set_={
+                    "active": True,
+                    "parameters": {
+                        "taxonomy_version": TAXONOMY_VERSION,
+                        "normalized": dimension is not None,
+                        "preprocessing_revision": preprocessing,
+                    },
+                },
             )
             .returning(ModelRegistry.id)
         )

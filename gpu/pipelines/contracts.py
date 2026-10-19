@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_REQUEST_BYTES = 40 * 1024 * 1024
 EMBEDDING_DIMENSION = 768
+PREPROCESSING_REVISION = "siglip2-transformers-5.10.2-v2"
 
 
 def validate_revision(value: str) -> str:
@@ -26,6 +27,9 @@ class ModelSpec(StrictModel):
     joytag_revision: str
     siglip_model_id: str = "google/siglip2-base-patch16-224"
     siglip_revision: str
+    preprocessing_revision: str = Field(
+        default=PREPROCESSING_REVISION, min_length=1, max_length=128
+    )
 
     _revision = field_validator("joytag_revision", "siglip_revision")(validate_revision)
 

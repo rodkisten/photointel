@@ -12,14 +12,14 @@ import httpx
 from gpu.pipelines.contracts import EMBEDDING_DIMENSION, validate_revision
 
 CONFIG_DEFAULTS_SOURCE = (
-    "https://github.com/huggingface/transformers/blob/v4.57.6/"
+    "https://github.com/huggingface/transformers/blob/v5.10.2/"
     "src/transformers/models/siglip/configuration_siglip.py"
 )
-CONFIG_DEFAULTS_BLOB = "0c182014fa272bb53b9e597894daa104a864a2c9"
+CONFIG_DEFAULTS_BLOB = "69f5fba89f1e0dbd6dea6a7082fbb0947eb54c27"
 
 
 def siglip_dimensions(config: dict[str, Any]) -> tuple[int, int]:
-    """Resolve the sparse checkpoint using verified Transformers 4.57.6 defaults.
+    """Resolve the sparse checkpoint using verified Transformers 5.10.2 defaults.
 
     The selected SigLIP 2 checkpoint serializes only values differing from SiglipConfig.
     RealModels also checks the fully instantiated model config before any inference.

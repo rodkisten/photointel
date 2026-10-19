@@ -125,8 +125,17 @@ uvx pip-audit -r var/runtime-requirements.txt --disable-pip
 Excluir o wheel local dessa exportação evita o erro de requisito local sem hash;
 suas dependências transitivas continuam incluídas. Ambos os workflows de CI foram
 corrigidos para esse formato. Os arquivos locais vendorizados têm proveniência,
-licença e hashes registrados separadamente. Esta rodada não instala nem audita
-o ambiente GPU remoto do Modal; ele exige sua própria imagem, lock e smoke test.
+licença e hashes registrados separadamente.
+
+A auditoria adicional do grupo GPU do lockfile, sem instalar modelos nem invocar
+Modal, encontrou **nove entradas de advisory** em `transformers==4.57.6`, algumas
+duplicadas entre fontes. Entre elas estão CVE-2026-4372, CVE-2026-5241 e
+CVE-2026-9856, com versões corrigidas publicadas na série 5. O alvo Modal estava
+fixado nessa mesma versão 4.57.6. **Esse resultado bloqueia considerar a imagem
+GPU auditada como limpa** até migrar/validar a dependência e repetir a auditoria.
+Não se presume que `trust_remote_code=False` elimine todos os caminhos descritos
+nesses advisories. A imagem efetivamente implantada, seu digest e inferência real
+continuam exigindo configuração e smoke test separado. Não houve deploy Modal.
 Vulnerabilidades conhecidas e bases de advisories mudam; repetir antes do release.
 
 O workflow Google usa Workload Identity Federation, permissão `id-token: write`
