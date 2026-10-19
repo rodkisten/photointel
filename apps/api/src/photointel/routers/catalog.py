@@ -319,8 +319,9 @@ async def asset_media(
             status_code=416, headers={**headers, "Content-Range": f"bytes */{size}"}
         )
     stream = await asyncio.to_thread(get_storage().open_stream, key, byte_range)
-    if size and stream.length != (
-        byte_range[1] - byte_range[0] + 1 if byte_range else size
+    if size and (
+        stream.total_length != size
+        or stream.length != (byte_range[1] - byte_range[0] + 1 if byte_range else size)
     ):
         stream.close()
         raise AppError(ErrorCode.STORAGE_UNAVAILABLE, "Revisão de mídia inválida", 503)

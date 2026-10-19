@@ -113,6 +113,10 @@ async def test_direct_origin_rejects_private_routes_before_database_or_r2(
             "/v1/search/facets",
             "/v1/jobs",
             "/v1/settings",
+            "/v1/release",
+            "/v1/setup/status",
+            "/v1/verification/gates",
+            "/v1/ingestion/failures",
             "/v1/apple-sync/status",
             "/v1/bridge/status",
             "/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_small",
@@ -135,6 +139,21 @@ async def test_direct_origin_rejects_private_routes_before_database_or_r2(
         assert (await client.get("/v1/bridge/status", headers=headers)).status_code == 401
         response = await client.post("/v1/bridge/enroll", json={})
         assert response.status_code == 401
+        for path in [
+            "/v1/search",
+            "/v1/ingestion/start",
+            "/v1/jobs/reindex",
+            "/v1/apple-sync/operations",
+        ]:
+            response = await client.post(
+                path,
+                json={},
+                headers={
+                    "Origin": access_configuration[0].frontend_origin,
+                    "Cf-Access-Authenticated-User-Email": "owner@example.invalid",
+                },
+            )
+            assert response.status_code == 401, (path, response.text)
 
 
 async def test_browser_cross_origin_is_rejected_even_with_service_jwt(

@@ -32,6 +32,7 @@ class ObjectStream:
 
     body: ReadableBody
     length: int
+    total_length: int | None = None
 
     def chunks(self) -> Iterator[bytes]:
         remaining = self.length
@@ -154,7 +155,7 @@ class LocalStorage:
             if start < 0 or end >= size or end < start:
                 raise AppError(ErrorCode.INVALID_REQUEST, "Intervalo inválido", 416)
             body.seek(start)
-            return ObjectStream(body, end - start + 1)
+            return ObjectStream(body, end - start + 1, size)
         except Exception:
             body.close()
             raise
@@ -269,15 +270,20 @@ class S3Storage:
                 raise AppError(
                     ErrorCode.STORAGE_UNAVAILABLE, "Tamanho de imagem inválido", 503
                 )
-            # R2/S3 must honor a requested range, never pass a whole body as 206.
-            if byte_range is not None and not response.get("ContentRange", "").startswith(
-                f"bytes {start}-{end}/"
-            ):
-                body.close()
-                raise AppError(
-                    ErrorCode.STORAGE_UNAVAILABLE, "Intervalo de imagem inválido", 503
+            # R2/S3 must honor ranges and report the entire object's bounded size.
+            total = length
+            if byte_range is not None:
+                content_range = re.fullmatch(
+                    rf"bytes {start}-{end}/([0-9]{{1,20}})",
+                    response.get("ContentRange", ""),
                 )
-            return ObjectStream(body, length)
+                total = int(content_range[1]) if content_range else 0
+                if not end < total <= self.max_read_bytes:
+                    body.close()
+                    raise AppError(
+                        ErrorCode.STORAGE_UNAVAILABLE, "Intervalo de imagem inválido", 503
+                    )
+            return ObjectStream(body, length, total)
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
                 raise AppError(ErrorCode.NOT_FOUND, "Imagem indisponível", 404) from exc

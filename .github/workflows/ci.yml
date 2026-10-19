@@ -169,7 +169,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - run: uv export --frozen --no-dev --no-emit-project > /tmp/runtime-requirements.txt
+      - run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
       - run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
       - uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}

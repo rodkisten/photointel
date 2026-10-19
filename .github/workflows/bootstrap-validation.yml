@@ -255,7 +255,7 @@ jobs:
         if: steps.python_install.outcome == 'success' && steps.node_install.outcome == 'success'
         continue-on-error: true
         run: |
-          uv export --frozen --no-dev --group ingest --no-emit-project > /tmp/photointel-runtime-requirements.txt
+          uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/photointel-runtime-requirements.txt
           uvx pip-audit -r /tmp/photointel-runtime-requirements.txt --disable-pip --format=json --output reports/python-audit.json &
           audit_process_id=$!
           npm --prefix apps/web audit --json > reports/npm-audit.json &

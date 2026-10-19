@@ -32,6 +32,7 @@ def test_full_and_ranged_local_streams_are_bounded_and_closed(tmp_path: Path) ->
     assert stream.body.closed
     partial = storage.open_stream("assets/private.webp", (12, 20))
     assert partial.length == 9
+    assert partial.total_length == len(data)
     assert b"".join(partial.chunks()) == data[12:21]
     assert partial.body.closed
 
@@ -69,6 +70,7 @@ def test_s3_does_not_read_until_response_iteration_and_passes_exact_range() -> N
         "ContentRange": "bytes 20-26/100",
     }
     stream = storage.open_stream("assets/private.webp", (20, 26))
+    assert stream.total_length == 100
     assert body.read_sizes == []
     assert storage.client.get_object.call_args.kwargs == {
         "Bucket": "unit-private",
@@ -85,6 +87,9 @@ def test_s3_provider_cannot_silently_ignore_range_or_omit_size() -> None:
     for response in [
         {"ContentLength": 7},
         {"ContentLength": 7, "ContentRange": "bytes 0-6/100"},
+        {"ContentLength": 7, "ContentRange": "bytes 20-26/26"},
+        {"ContentLength": 7, "ContentRange": "bytes 20-26/10000000"},
+        {"ContentLength": 7, "ContentRange": "bytes 20-26/100 trailing"},
         {},
         {"ContentLength": 10_000_000},
     ]:
@@ -230,3 +235,48 @@ async def test_http_disconnect_before_first_chunk_closes_provider() -> None:
         await response({"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send)
     assert body.closed
     assert body.read_sizes == []
+
+
+@pytest.mark.parametrize("ranged", [False, True])
+async def test_media_rejects_storage_total_different_from_recorded_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    ranged: bool,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    from photointel.routers import catalog
+    from starlette.requests import Request
+
+    resource = SimpleNamespace(
+        id=uuid4(),
+        byte_size=12,
+        object_key="assets/immutable-revision.webp",
+        mime_type="image/webp",
+        revision="representation-1",
+        sha256="recorded-digest",
+    )
+    session = SimpleNamespace(scalar=AsyncMock(return_value=resource), commit=AsyncMock())
+    body = RecordingBody(b"private" if ranged else b"private-body")
+    stream = ObjectStream(body, 7 if ranged else 12, total_length=20)
+    storage = SimpleNamespace(open_stream=Mock(return_value=stream))
+    monkeypatch.setattr(catalog, "get_storage", lambda: storage)
+    monkeypatch.setattr(
+        catalog,
+        "get_asset",
+        AsyncMock(return_value=SimpleNamespace(representation_revision="representation-1")),
+    )
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "headers": [(b"range", b"bytes=0-6")] if ranged else [],
+        }
+    )
+    with pytest.raises(AppError) as caught:
+        await catalog.asset_media(uuid4(), "thumbnail_small", session, request)
+    assert caught.value.status_code == 503
+    assert body.closed
+    assert body.read_sizes == []
+    session.commit.assert_awaited_once()

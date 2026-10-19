@@ -9,6 +9,7 @@ import pytest
 from photointel.database import engine, get_session
 from photointel.main import create_app
 from photointel.models import Asset, Library
+from photointel.routers import bridge as bridge_router
 from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
@@ -30,7 +31,13 @@ async def bridge_database() -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def bridge_client(
     bridge_database: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncIterator[httpx.AsyncClient]:
+    # Explicit test-only opt-in exercises simulated write receipts, never hardware.
+    settings = bridge_router.get_settings().model_copy(
+        update={"apple_native_write_enabled": True}
+    )
+    monkeypatch.setattr(bridge_router, "get_settings", lambda: settings)
     app = create_app()
 
     async def override() -> AsyncIterator[AsyncSession]:
@@ -59,6 +66,7 @@ def fixture_capabilities(write: bool = False) -> dict[str, object]:
 async def test_device_enrollment_inventory_mapping_and_safe_sync(
     bridge_client: httpx.AsyncClient,
     bridge_database: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = bridge_client
     assert (await client.get("/v1/bridge/status")).status_code == 401
@@ -172,6 +180,21 @@ async def test_device_enrollment_inventory_mapping_and_safe_sync(
     assert (
         await client.post(f"/v1/apple-sync/operations/{operation_id}/approve")
     ).status_code == 200
+    # The operator pause retains real persisted work even for a capable device.
+    enabled_settings = bridge_router.get_settings()
+    disabled_settings = enabled_settings.model_copy(
+        update={"apple_native_write_enabled": False}
+    )
+    with monkeypatch.context() as paused:
+        paused.setattr(bridge_router, "get_settings", lambda: disabled_settings)
+        unavailable = await client.get("/v1/bridge/operations", headers=headers)
+        assert unavailable.json()["items"] == []
+        assert unavailable.json()["error_code"] == "PHOTOKIT_WRITE_UNAVAILABLE"
+        paused_preview = await client.post("/v1/apple-sync/preview", json=proposal)
+        assert paused_preview.status_code == 200
+        assert paused_preview.json()["write_available"] is False
+        paused_status = await client.get("/v1/apple-sync/status")
+        assert paused_status.json()["native_write_enabled"] is False
     claimed = await client.get("/v1/bridge/operations", headers=headers)
     assert len(claimed.json()["items"]) == 1
     lease = claimed.json()["items"][0]["lease_token"]

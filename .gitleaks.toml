@@ -1,0 +1,18 @@
+title = "Photo Intelligence: default rules with reviewed non-secret constants"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public Apple OAuth client/widget identifier in pinned upstream source"
+condition = "AND"
+paths = ['''(?:^|/)packages/icloudpd-source/pyicloud_ipd/(?:base|sms)\.py$''']
+regexTarget = "secret"
+regexes = ['''^d39ba9916b7251055b22c7f910e2ea796ee65e98b2ddecea8f5dde8d9d1a815d$''']
+
+[[allowlists]]
+description = "Historical synthetic pepper fixture used only to verify log redaction"
+condition = "AND"
+paths = ['''(?:^|/)tests/test_infra_safety\.py$''']
+regexTarget = "secret"
+regexes = ['''^sensitive-pepper-456789$''']

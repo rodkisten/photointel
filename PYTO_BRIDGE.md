@@ -314,3 +314,22 @@ Bridge com `ACCESS_BRIDGE_AUDIENCE` e allowlist de Client IDs em
 O Pyto deve usar o hostname Cloudflare configurado em `access`; não enviar
 Client Secret para a origem Google. A sessão Safari não substitui esse par.
 Ausência/expiração/revogação exige recuperação explícita, nunca bypass.
+
+
+### Chave global de escrita nativa
+
+`APPLE_NATIVE_WRITE_ENABLED=false` é o padrão e é aplicado no backend. Mesmo um
+aparelho que declare `keywords_write=true` e tenha teste anterior registrado não
+adquire operações de escrita com essa chave desativada; as propostas permanecem
+armazenadas. A prévia declara `write_available=false` e um recibo
+`applied_on_device` é recusado sem alterar o estado da operação. Desativar
+`APPLE_KEYWORD_SYNC_MODE` também bloqueia aquisição e confirmação de aplicação.
+O estado `/v1/apple-sync/status` expõe `native_write_enabled` para diagnóstico,
+sem expor segredos. Testes de protocolo que simulam recibos usam opt-in explícito
+no processo de teste; não habilitam essa chave na produção.
+
+A chave não comprova suporte do OS nem substitui aprovação, identidade inequívoca,
+lease, leitura prévia, read-back ou o teste individual descrito acima. Somente
+ative após implementar/validar um adaptador real numa foto selecionada, mantendo
+`APPLE_BULK_WRITE_ENABLED=false`. O adaptador Pyto entregue continua read-only;
+ativar a chave sozinha não lhe fornece capacidade de escrita.

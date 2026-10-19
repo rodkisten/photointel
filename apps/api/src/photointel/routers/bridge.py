@@ -660,8 +660,11 @@ async def sync_preview(body: SyncProposal, session: AsyncSession) -> dict[str, A
         sorted(managed),
         body.approve_removals,
     )
-    can_write = bool(device.capabilities.get("keywords_write")) and (
-        device.write_verified or body.single_asset_test
+    can_write = (
+        get_settings().apple_native_write_enabled
+        and get_settings().apple_keyword_sync_mode != "disabled"
+        and bool(device.capabilities.get("keywords_write"))
+        and (device.write_verified or body.single_asset_test)
     )
     return {
         **delta,
@@ -899,6 +902,13 @@ async def cancel(operation_id: UUID, session: DB, identity: User) -> dict[str, A
 async def claim_operations(
     session: DB, device: Device, limit: int = Query(1, ge=1, le=20)
 ) -> dict[str, Any]:
+    if not get_settings().apple_native_write_enabled:
+        await session.commit()
+        return {
+            "items": [],
+            "error_code": "PHOTOKIT_WRITE_UNAVAILABLE",
+            "reason": "Escrita nativa desativada pelo operador; operações preservadas",
+        }
     await session.get(BridgeDevice, device.id, with_for_update=True)
     if get_settings().apple_keyword_sync_mode == "disabled":
         return {"items": [], "reason": "Sincronização desativada"}
@@ -1029,6 +1039,15 @@ async def preview_device_operations(
 async def acknowledge(
     operation_id: UUID, body: Acknowledgement, session: DB, device: Device
 ) -> dict[str, Any]:
+    if body.status == "applied_on_device" and not (
+        get_settings().apple_native_write_enabled
+        and get_settings().apple_keyword_sync_mode != "disabled"
+    ):
+        raise AppError(
+            ErrorCode.PHOTOKIT_WRITE_UNAVAILABLE,
+            "Escrita nativa desativada; recibo de aplicação não aceito",
+            409,
+        )
     operation = await session.get(SyncOperation, operation_id, with_for_update=True)
     if operation is None or operation.target_device_id != device.id:
         raise AppError(ErrorCode.NOT_FOUND, "Operação não encontrada", 404)
@@ -1161,6 +1180,7 @@ async def status(session: DB, identity: User) -> dict[str, Any]:
         "devices": [device_out(device) for device in devices],
         "operations": {status: count for status, count in counts},
         "mode": get_settings().apple_keyword_sync_mode,
+        "native_write_enabled": get_settings().apple_native_write_enabled,
         "bulk_write_enabled": get_settings().apple_bulk_write_enabled,
         "cloud_confirmation_available": False,
         "keyword_write_note": (
