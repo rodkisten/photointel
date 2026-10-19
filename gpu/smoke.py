@@ -17,8 +17,9 @@ async def smoke(asset_id: UUID) -> None:
     settings = get_settings()
     if not settings.gpu_enabled or settings.inference_backend == "test":
         raise SystemExit("Configure real inference and explicitly set GPU_ENABLED=true")
-    async with SessionLocal() as session, session.begin():
+    async with SessionLocal() as session:
         result = await infer_assets(session, [asset_id], settings)
+        await session.commit()
         asset = await session.get(Asset, asset_id)
         assert asset is not None
         joytag_id, siglip_id = await registry(session, settings)
@@ -52,12 +53,15 @@ async def smoke(asset_id: UUID) -> None:
         assert len(embedding.vector) == settings.siglip_embedding_dimension
         norm = math.sqrt(sum(float(value) ** 2 for value in embedding.vector))
         assert math.isfinite(norm) and abs(norm - 1) <= 0.002
+        # No transaction or model-registry lock may survive remote text inference.
+        vector = [float(value) for value in embedding.vector]
+        await session.commit()
         text_result = await embed_text("Fotografia de paisagem", settings)
         assert text_result.model_revision == settings.siglip_model_revision
         similarity = sum(
             float(a) * b
             for a, b in zip(
-                embedding.vector,
+                vector,
                 text_result.embedding,
                 strict=True,
             )

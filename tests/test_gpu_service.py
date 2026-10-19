@@ -100,3 +100,42 @@ async def test_service_bounds_chunked_body_without_content_length(
         assert response.status_code == 413
         assert "private" not in response.text
         assert models.calls == 0
+
+
+async def test_service_rejects_same_checkpoint_with_incompatible_preprocessing(
+    models: InTestModels,
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_service(models, SPEC, TOKEN)),
+        base_url="https://private.test",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    ) as client:
+        response = await client.post(
+            "/embed-text",
+            json={
+                "models": {
+                    **SPEC.model_dump(),
+                    "preprocessing_revision": "siglip2-transformers-4.57.6-v1",
+                },
+                "text": "private_query",
+            },
+        )
+        assert response.status_code == 422
+        assert models.calls == 0
+        assert "private_query" not in response.text
+
+
+async def test_older_client_cannot_omit_the_preprocessing_namespace(
+    models: InTestModels,
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_service(models, SPEC, TOKEN)),
+        base_url="https://private.test",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    ) as client:
+        old_spec = SPEC.model_dump(exclude={"preprocessing_revision"})
+        response = await client.post(
+            "/embed-text", json={"models": old_spec, "text": "private_query"}
+        )
+        assert response.status_code == 422
+        assert models.calls == 0

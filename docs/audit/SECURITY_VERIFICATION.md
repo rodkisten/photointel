@@ -127,15 +127,24 @@ suas dependências transitivas continuam incluídas. Ambos os workflows de CI fo
 corrigidos para esse formato. Os arquivos locais vendorizados têm proveniência,
 licença e hashes registrados separadamente.
 
-A auditoria adicional do grupo GPU do lockfile, sem instalar modelos nem invocar
-Modal, encontrou **nove entradas de advisory** em `transformers==4.57.6`, algumas
-duplicadas entre fontes. Entre elas estão CVE-2026-4372, CVE-2026-5241 e
-CVE-2026-9856, com versões corrigidas publicadas na série 5. O alvo Modal estava
-fixado nessa mesma versão 4.57.6. **Esse resultado bloqueia considerar a imagem
-GPU auditada como limpa** até migrar/validar a dependência e repetir a auditoria.
-Não se presume que `trust_remote_code=False` elimine todos os caminhos descritos
-nesses advisories. A imagem efetivamente implantada, seu digest e inferência real
-continuam exigindo configuração e smoke test separado. Não houve deploy Modal.
+A auditoria adicional do grupo GPU do lockfile, sem invocar Modal, encontrou
+**nove entradas de advisory** em `transformers==4.57.6`, algumas duplicadas entre
+fontes. Entre elas estavam CVE-2026-4372, CVE-2026-5241 e CVE-2026-9856. O código
+foi migrado para **Transformers 5.10.2 / Hub 1.33.0**, incluindo o pin da imagem
+Modal e a leitura correta de `pooler_output`. A auditoria do lock GPU atualizado
+retornou **zero vulnerabilidades conhecidas**. A versão 5.10.0 foi evitada por
+ter sido retirada pelo mantenedor.
+
+A migração 0007 cria IDs distintos de modelo por preprocessing e preserva
+embeddings existentes. O protocolo exige namespace explícito: nem um serviço
+antigo nem um cliente antigo podem ser aceitos silenciosamente pelo novo runtime.
+O teste PostgreSQL verifica preservação do vetor legado, recusa de sua utilização
+em busca nova e recusa de downgrade destrutivo. O procedimento com pausa de
+workers antigos está em `docs/operations/gpu-runtime-upgrade-v11.md`.
+
+Não se presume que `trust_remote_code=False` sozinho elimine todo risco. A imagem
+efetivamente implantada, seu digest e inferência GPU real continuam exigindo
+configuração e smoke test separado. Não houve deploy Modal.
 Vulnerabilidades conhecidas e bases de advisories mudam; repetir antes do release.
 
 O workflow Google usa Workload Identity Federation, permissão `id-token: write`

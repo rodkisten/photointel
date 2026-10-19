@@ -22,11 +22,11 @@ def test_cpu_requirements_remove_only_gpu_wheels_and_cuda_runtime() -> None:
         "cuda-toolkit[cupti]==13.2; sys_platform == 'linux'\n"
         "nvidia-cudnn-cu13==9.2\n"
         "triton==3.7\n"
-        "transformers==4.57.6\n"
+        "transformers==5.10.2\n"
         "numpy==2.4; python_version >= '3.12'\n"
     )
     assert cpu_script().cpu_requirements(original) == (
-        "transformers==4.57.6\nnumpy==2.4; python_version >= '3.12'\n"
+        "transformers==5.10.2\nnumpy==2.4; python_version >= '3.12'\n"
     )
 
 

@@ -116,8 +116,9 @@ async def validate_models(output: Path) -> None:
         if existing:
             raise RuntimeError("First-run proof requires no existing inference records")
 
-    async with SessionLocal() as session, session.begin():
+    async with SessionLocal() as session:
         metrics = await infer_assets(session, [asset_id], settings)
+        await session.commit()
         if metrics["completed"] != 1 or metrics["skipped"] != 0:
             raise RuntimeError("Expected newly executed inference for one image")
 
@@ -174,6 +175,7 @@ async def validate_models(output: Path) -> None:
         norm = math.sqrt(sum(value**2 for value in vector))
         if abs(norm - 1) > 0.002:
             raise RuntimeError("Image embedding must be normalized")
+        await session.commit()
         similarities = {}
         for query in ("Paisagem com montanhas", "Fotografia de uma planta"):
             text_result = await embed_text(query, settings)

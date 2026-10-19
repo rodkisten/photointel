@@ -508,6 +508,7 @@ async def test_capabilities_require_current_model_and_input_revision(
         provider="huggingface",
         model_name=settings.siglip_model_id,
         revision=settings.siglip_model_revision,
+        preprocessing_revision=settings.query_preprocessing_revision,
         architecture="siglip2",
         embedding_dimension=768,
         active=True,
@@ -535,6 +536,12 @@ async def test_capabilities_require_current_model_and_input_revision(
     assert current["joytag"]["state"] == "operational"
     assert current["semantic_search"]["state"] == "operational"
     assert current["apple_keywords_read"]["state"] == "unavailable"
+
+    siglip.preprocessing_revision = "legacy-v1"
+    await database.flush()
+    incompatible = await operations.capabilities(database)
+    assert incompatible["semantic_search"]["state"] == "not_configured"
+    siglip.preprocessing_revision = settings.query_preprocessing_revision
 
     asset.representation_revision = "replacement-input"
     await database.flush()

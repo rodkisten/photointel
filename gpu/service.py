@@ -42,6 +42,8 @@ def create_service(models: ModelRuntime, spec: ModelSpec, token: str) -> FastAPI
             chunks.append(chunk)
         try:
             value = schema.model_validate_json(b"".join(chunks))
+            if "preprocessing_revision" not in value.models.model_fields_set:
+                raise ValueError("Explicit preprocessing namespace required")
             if value.models != spec:
                 raise ValueError("Model revision mismatch")
             return value
