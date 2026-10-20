@@ -16,6 +16,11 @@ as capacidades reais do dispositivo e qualquer escrita de keywords precisam de
 validação e aprovação. Leia [LIMITATIONS.md](LIMITATIONS.md) antes de conectar
 uma biblioteca pessoal.
 
+Status verificado: **Local development ready**. Consulte o
+[relatório final v1.1](docs/audit/FINAL_REPORT_V11.md) e a
+[validação executada](VALIDATION.md) para resultados, commit testado e pré-requisitos
+externos. A validação local não aprova a biblioteca completa nem gastos cloud.
+
 ## Início local
 
 Requisitos: Python 3.12, uv, Node 22, Docker com Compose v2, armazenamento livre

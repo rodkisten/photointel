@@ -176,3 +176,17 @@ reais. Até essa evidência existir, a escrita de keywords e o aceite físico s�
 **não verificados**. R2 privado exige conferir bucket/domain/política na conta;
 ter credenciais para `head_bucket` comprova conectividade, não ausência de uma
 configuração pública feita fora do aplicativo.
+
+## Fechamento local em 20/10/2026
+
+No commit `2ce4015f5b5f89caa198bf5f186c23b5b6354806`, a repetição com Gitleaks
+8.30.1, arquivo oficial com SHA-256 validado, examinou **67 commits e 374 arquivos**
+e retornou zero achados. O escopo continua excluindo arquivos privados ignorados.
+Os 22 testes GCP offline, sete testes Node e a suíte Python/frontend passaram;
+58 cenários E2E passaram em Chromium/WebKit Linux, com duas capturas opcionais
+puladas. A imagem construída com TLS confirmou ausência do segredo CA no runtime
+e 36 derivados com autorização local e `private, no-store`.
+
+Os horários/hashes, a recuperação das limitações do host e o SHA estão em
+[release-validation-v11.json](../evidence/release-validation-v11.json). Isso não
+valida políticas nas contas, GPU Modal, Safari físico ou PhotoKit nativo.

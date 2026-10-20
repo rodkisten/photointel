@@ -81,29 +81,35 @@ Não houve transferência de dados reais Oracle → Neon.
 
 ## D. Testes executados e proveniência
 
-A suíte Python completa de 20/10 foi executada sobre a árvore limpa
-`1c1e4cd152f295f5abf62b8595327b736065fcfe`, anterior à incorporação das alterações
-remotas de build em `0790f82`. Os fontes backend/web são os mesmos nesse merge;
-a infraestrutura alterada exige validação separada. Os comandos e resultados
-exatos estão em [VALIDATION.md](../../VALIDATION.md).
+A rodada final de 20/10 usa o commit limpo
+`2ce4015f5b5f89caa198bf5f186c23b5b6354806`. O label da imagem e `/v1/release`
+correspondem a esse SHA; o diagnóstico dentro do container retorna v1.1.0.
+As correções de Cloud Build, ZIP, TLS e CI estão incluídas. O commit posterior
+destes documentos só publica evidências, sem reatribuir testes ao seu novo SHA.
 
-Nos commits incrementais `be1cf8c` e `3385d39`, a revisão do patch remoto corrigiu
-deploy automático e credenciais em ZIP. Cloud Build ficou restrito a build/push
-com manifesto do commit. Compose usa uma variante BuildKit com CA transitória;
-seu rebuild passou com TLS verificado. Foram executados 22 testes offline GCP e
-quatro testes da política ZIP, sem criar recursos Google.
+[Resultados e hashes](../evidence/release-validation-v11.json) e
+[manifesto](../evidence/release-manifest-v11.json) identificam a mesma origem.
+O digest de registro e o ID efetivo do frontend local continuam `null`; o ID
+local da imagem Docker é registrado separadamente. Não houve publicação cloud.
+Os comandos e escopos estão em [VALIDATION.md](../../VALIDATION.md).
 
 | Comando | Resultado |
 | --- | --- |
-| `APP_ENV=test .venv/bin/pytest -m 'not integration and not gpu and not e2e' -q --tb=short --junitxml=reports/unit-v11.xml` | 319 passaram + 24 subtestes |
-| `APP_ENV=test .venv/bin/pytest -m integration -q --tb=short --junitxml=reports/integration-release-sha.xml` | 94 passaram, 118,06 s |
+| `APP_ENV=test .venv/bin/pytest -m 'not integration and not gpu and not e2e' -q --tb=short --junitxml=reports/release-unit.xml` | 319 passaram + 24 subtestes |
+| `APP_ENV=test .venv/bin/pytest -m integration -q --tb=short --junitxml=reports/release-integration.xml` | 94 passaram, 235,68 s |
 | `.venv/bin/ruff check .` | Passou |
 | `.venv/bin/mypy apps/api/src gpu bridges` | Passou, 60 arquivos |
 | `npm --prefix apps/web run typecheck` | Passou |
 | `npm --prefix apps/web run lint` | 0 erros, 3 avisos Fast Refresh |
 | `npm --prefix apps/web test -- --maxWorkers=2` | 37 passaram |
-| `python3 -m unittest discover -s infra/gcp/tests -q` | 18 passaram sem Google |
-| `node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs` | 3 passaram |
+| `python3 -m unittest discover -s infra/gcp/tests -q` | 22 passaram sem Google |
+| `node --test infra/scripts/zip-patch-policy.test.cjs infra/cloudflare/cloud-run-proxy/worker.test.mjs` | 7 passaram |
+
+A rodada final E2E passou **58 cenários**, com duas capturas opcionais puladas,
+em Chromium e WebKit Linux. O JSON registra a recuperação de falta de disco e
+de biblioteca gráfica após o reinício do ambiente. O WebKit real foi executado
+com a biblioteca Debian extraída, sem simular o navegador. Gitleaks 8.30.1 não
+encontrou segredos nos **67 commits e 374 arquivos** examinados.
 
 Integração recebeu URL de banco descartável por ambiente privado, sem credenciais
 publicadas. Os testes cobrem os lotes 500/1.000, foto 137, retomada, posse concorrente,
@@ -205,6 +211,12 @@ O [relatório de capacidade](../../CAPACITY_REPORT.md) mediu dados sintéticos:
 30 tags/foto e resultados brutos completos em somente 1% da amostra. A execução
 100k é parcial: as fases SQL/população concluíram, mas o ciclo API não concluiu.
 A preflight recusou 176k por falta de disco; **não existe medição completa 176k**.
+
+Não há comparação quantitativa equivalente entre o benchmark antigo e este
+dataset: dimensões, densidade de tags e condições diferem. Não foi atribuída uma
+melhoria percentual ao backfill sem iCloud real. O comparativo reproduzível de
+mídia mede alocação local, não latência R2/Cloud Run: veja
+[segurança e streaming](SECURITY_VERIFICATION.md).
 
 A projeção de retenção bruta completa para 176k é 21,429 GB, extrapolada de 100k;
 não é tamanho medido nem cotação Neon. Derivados R2 também são projeções, não

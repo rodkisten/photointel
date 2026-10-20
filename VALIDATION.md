@@ -10,30 +10,40 @@ e/ou hash do arquivo testado. Não são retroativamente atribuídas ao commit fi
 
 ## Resultado consolidado em 20/10/2026
 
-**Local development ready.** A rodada completa Python foi repetida sobre a árvore
-limpa `1c1e4cd152f295f5abf62b8595327b736065fcfe`. As alterações remotas incorporadas
-em `0790f82` modificam infraestrutura de build, Docker e automação ZIP; os fontes
-da API/PWA testados permaneceram iguais. Essa rodada não valida as alterações
-posteriores do container nem uma implantação externa.
+**Local development ready.** A rodada final usa o commit limpo
+`2ce4015f5b5f89caa198bf5f186c23b5b6354806`, incluindo a correção do Cloud Build,
+a política ZIP e a versão correta do diagnóstico. A imagem local registra esse
+SHA em seu label OCI e em `/v1/release`. Os testes e hashes estão em
+[release-validation-v11.json](docs/evidence/release-validation-v11.json) e o
+[manifesto](docs/evidence/release-manifest-v11.json) identifica essa mesma origem.
+O commit posterior que publica estes documentos não muda o código testado.
 
-As correções posteriores preservam o Dockerfile clássico Cloud Build e usam uma
-variante BuildKit no Compose para o segredo CA temporário. A configuração raiz
-Cloud Build apenas constrói a imagem e identifica o commit, sem deploy automático.
-Regressões adicionais: **22 testes GCP offline** e **4 testes da política ZIP**
-passaram. O rebuild local pelo Compose passou com TLS verificado. A execução
-real do Cloud Build permanece pendente da conta/autorização do operador.
+Cloud Build usa o Dockerfile clássico e somente constrói/envia imagem, sem
+deploy automático. Compose usa BuildKit com CA transitória; o rebuild final
+passou com TLS, e a CA não está no runtime. API, workers, banco, storage e PWA
+ficaram saudáveis; as 12 imagens e 36 derivados privados foram decodificados.
+O diagnóstico retorna v1.1.0, banco/storage prontos e iCloud/GPU desligados.
+A execução do Cloud Build na conta do operador continua não verificada.
 
 | Verificação executada | Resultado | Escopo da evidência |
 | --- | --- | --- |
-| `APP_ENV=test .venv/bin/pytest -m 'not integration and not gpu and not e2e' -q --tb=short --junitxml=reports/unit-v11.xml` | 319 passaram + 24 subtestes | Sem Apple, Modal ou recursos pagos |
-| `APP_ENV=test .venv/bin/pytest -m integration -q --tb=short --junitxml=reports/integration-release-sha.xml` | 94 passaram em 118,06 s | PostgreSQL local descartável, credencial via ambiente privado |
+| `APP_ENV=test .venv/bin/pytest -m 'not integration and not gpu and not e2e' -q --tb=short --junitxml=reports/release-unit.xml` | 319 passaram + 24 subtestes | Sem Apple, Modal ou recursos pagos |
+| `APP_ENV=test .venv/bin/pytest -m integration -q --tb=short --junitxml=reports/release-integration.xml` | 94 passaram em 235,68 s | PostgreSQL local descartável, credencial via ambiente privado |
 | `.venv/bin/ruff check .` | Passou | Fontes Python |
 | `.venv/bin/mypy apps/api/src gpu bridges` | Passou em 60 arquivos | Tipos Python |
 | `npm --prefix apps/web run typecheck` | Passou | TypeScript strict |
 | `npm --prefix apps/web run lint` | 0 erros, 3 avisos Fast Refresh | Avisos conhecidos de organização de exports |
 | `npm --prefix apps/web test -- --maxWorkers=2` | 37 passaram, 11 arquivos | Componentes e estado do frontend |
-| `python3 -m unittest discover -s infra/gcp/tests -q` | 18 passaram | Planos/comandos offline; não invocou Google |
-| `node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs` | 3 passaram | Relay Cloudflare com transporte controlado |
+| `python3 -m unittest discover -s infra/gcp/tests -q` | 22 passaram | Planos/comandos offline; não invocou Google |
+| `node --test infra/scripts/zip-patch-policy.test.cjs infra/cloudflare/cloud-run-proxy/worker.test.mjs` | 7 passaram | Relay Cloudflare com transporte controlado |
+
+A rodada final de navegador passou 58 cenários e pulou duas capturas opcionais.
+O banco/bucket descartáveis foram removidos. O executor sem root precisou de
+`libgles2` extraída de pacote Debian oficial em `var/tools`, via `LD_LIBRARY_PATH`.
+`PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1` contornou apenas a consulta
+`ldconfig`, que não reconhece esse diretório; o WebKit real abriu e executou os
+fluxos. Isso não é Safari físico. Os incidentes anteriores de disco e biblioteca
+ausente, e suas recuperações, constam no JSON da rodada final.
 
 As evidências anteriores abaixo preservam os horários e hashes originais; os
 runners CPU/E2E não registraram SHA Git. Não são promovidas automaticamente a
@@ -100,6 +110,8 @@ comuns e não autoriza gasto de GPU automaticamente.
 
 ## Evidência disponível
 
+- [Rodada final vinculada ao commit](docs/evidence/release-validation-v11.json).
+- [Manifesto da imagem testada](docs/evidence/release-manifest-v11.json).
 - [Ingestão e recuperação](docs/architecture/ingestion-manifest-v11.md).
 - [Transações e fencing](docs/audit/WORKER_TRANSACTION_REMEDIATION.md).
 - [Segurança](docs/audit/SECURITY_VERIFICATION.md).

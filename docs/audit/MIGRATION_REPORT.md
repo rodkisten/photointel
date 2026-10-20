@@ -21,6 +21,12 @@ A integração posterior de `0790f82` trouxe mudanças remotas de Docker/Cloud B
 esta evidência não é um atestado de build ou deploy dessas mudanças. O relatório
 consolidado está em [FINAL_REPORT_V11.md](FINAL_REPORT_V11.md).
 
+Atualização final: o commit `2ce4015f5b5f89caa198bf5f186c23b5b6354806` teve imagem
+local compilada com TLS e executada com API/workers saudáveis. Passaram 319 testes
+unitários + 24 subtestes, 94 de integração, 37 do frontend, 22 GCP offline, sete
+Node e 58 E2E. O relatório final e o manifesto em `docs/evidence/` vinculam esses
+resultados ao SHA; não houve deploy Google nem teste do pooler Neon hospedado.
+
 ## Mudanças implementadas
 
 | Componente | Implementação | Evidência e limite |

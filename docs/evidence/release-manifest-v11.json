@@ -1,0 +1,72 @@
+{
+  "manifest_version": 1,
+  "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+  "branch": "main",
+  "build_timestamp": "2026-10-20T10:58:52.019658+00:00",
+  "container_digest": null,
+  "frontend_release_id": null,
+  "api_version": "1.1.0",
+  "database_migration_head": "0007_model_preprocessing",
+  "models": {
+    "joytag": {
+      "model_id": "fancyfeast/joytag",
+      "revision": "6b7f16331a6ccf0fdce37d5a9564715f6e772b22"
+    },
+    "siglip2": {
+      "model_id": "google/siglip2-base-patch16-224",
+      "revision": "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2",
+      "preprocessing_revision": "siglip2-transformers-5.10.2-v2"
+    }
+  },
+  "modal_deployment_id": null,
+  "infrastructure_hash": "4711845688a9fa25612f60629b3a54e820c3a3a58cd4dd852959732e76658bfe",
+  "ci_run_ids": [],
+  "test_results": [
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "backend-unit",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "postgresql-integration",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "frontend-unit-and-build",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "offline-cloud-and-zip",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "local-private-gallery",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "browser-e2e",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    },
+    {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "name": "source-secret-scan",
+      "status": "passed",
+      "reference": "docs/evidence/release-validation-v11.json"
+    }
+  ],
+  "provenance_status": "identified",
+  "validation_status": "referenced",
+  "manifest_generated_at": "2026-10-20T11:03:53.641560+00:00",
+  "frontend_release_note": "Local frontend runtime ID was not attested; backend image and source are identified independently."
+}

@@ -1,0 +1,329 @@
+{
+  "recorded_at": "2026-10-20T11:03:53.595375+00:00",
+  "source_git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+  "source_branch": "main",
+  "tracked_source_clean": true,
+  "release_status": "Local development ready",
+  "checks": [
+    {
+      "name": "python-unit",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:58:49.185868+00:00",
+      "finished_at": "2026-10-20T10:58:55.706934+00:00",
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/pytest",
+        "-m",
+        "not integration and not gpu and not e2e",
+        "-q",
+        "--tb=short",
+        "--junitxml=reports/release-unit.xml"
+      ],
+      "log": "reports/final-python-unit.log",
+      "artifact": {
+        "path": "reports/final-python-unit.log",
+        "sha256": "390d5adb639a30b327de1207461b505deda22ffd50414f8f2f950212488d0299"
+      }
+    },
+    {
+      "name": "web-unit",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:58:55.707227+00:00",
+      "finished_at": "2026-10-20T10:59:22.783430+00:00",
+      "exit_code": 0,
+      "command": [
+        "npm",
+        "--prefix",
+        "apps/web",
+        "test",
+        "--",
+        "--maxWorkers=2"
+      ],
+      "log": "reports/final-web-unit.log",
+      "artifact": {
+        "path": "reports/final-web-unit.log",
+        "sha256": "b1a17f9a0ebc257504b55741df94c6b56e7c37df0a595dec007e6a7d58462507"
+      }
+    },
+    {
+      "name": "ruff",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:22.783833+00:00",
+      "finished_at": "2026-10-20T10:59:22.801517+00:00",
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/ruff",
+        "check",
+        "."
+      ],
+      "log": "reports/final-ruff.log",
+      "artifact": {
+        "path": "reports/final-ruff.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      }
+    },
+    {
+      "name": "mypy",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:22.801740+00:00",
+      "finished_at": "2026-10-20T10:59:24.908515+00:00",
+      "exit_code": 0,
+      "command": [
+        ".venv/bin/mypy",
+        "apps/api/src",
+        "gpu",
+        "bridges"
+      ],
+      "log": "reports/final-mypy.log",
+      "artifact": {
+        "path": "reports/final-mypy.log",
+        "sha256": "61bd8cb9959645a85c4ae3dffd6695b2b000164bf38ab0bdef0fc9ba4a4072b6"
+      }
+    },
+    {
+      "name": "web-typecheck",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:24.908836+00:00",
+      "finished_at": "2026-10-20T10:59:32.916659+00:00",
+      "exit_code": 0,
+      "command": [
+        "npm",
+        "--prefix",
+        "apps/web",
+        "run",
+        "typecheck"
+      ],
+      "log": "reports/final-web-typecheck.log",
+      "artifact": {
+        "path": "reports/final-web-typecheck.log",
+        "sha256": "d289e78d11ac1deebf6230fcb723506ac87266fc9cb1f1a0543f4f7a020935b9"
+      }
+    },
+    {
+      "name": "web-lint",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:32.916955+00:00",
+      "finished_at": "2026-10-20T10:59:36.731826+00:00",
+      "exit_code": 0,
+      "command": [
+        "npm",
+        "--prefix",
+        "apps/web",
+        "run",
+        "lint"
+      ],
+      "log": "reports/final-web-lint.log",
+      "artifact": {
+        "path": "reports/final-web-lint.log",
+        "sha256": "eda12403cba068d7029b2bc93b7961e960203f09dae4210bb954ac2daebbc68b"
+      }
+    },
+    {
+      "name": "web-build",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:36.732102+00:00",
+      "finished_at": "2026-10-20T10:59:54.386844+00:00",
+      "exit_code": 0,
+      "command": [
+        "npm",
+        "--prefix",
+        "apps/web",
+        "run",
+        "build"
+      ],
+      "log": "reports/final-web-build.log",
+      "artifact": {
+        "path": "reports/final-web-build.log",
+        "sha256": "1058d450093d1f3f9aad01fba094bfe9b8264a13c75191cdc942d87cd92e3c13"
+      }
+    },
+    {
+      "name": "gcp-offline",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:54.389562+00:00",
+      "finished_at": "2026-10-20T10:59:54.911401+00:00",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "infra/gcp/tests",
+        "-q"
+      ],
+      "log": "reports/final-gcp-offline.log",
+      "artifact": {
+        "path": "reports/final-gcp-offline.log",
+        "sha256": "095febcecf138f8014f61c7d20eb2338bfd9d939a981308a6c9c9c81dfee1d8c"
+      }
+    },
+    {
+      "name": "node-security",
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:59:54.911752+00:00",
+      "finished_at": "2026-10-20T10:59:55.637695+00:00",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--test",
+        "infra/scripts/zip-patch-policy.test.cjs",
+        "infra/cloudflare/cloud-run-proxy/worker.test.mjs"
+      ],
+      "log": "reports/final-node-security.log",
+      "artifact": {
+        "path": "reports/final-node-security.log",
+        "sha256": "1c0152ab47f9609a43a486d8ac85d5c580b838b12208692a3dbf40770e82f7d0"
+      }
+    }
+  ],
+  "unit": {
+    "tests": 343,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 4.849,
+    "started_at": "2026-10-20T10:58:49.450906+00:00",
+    "artifact": {
+      "path": "reports/release-unit.xml",
+      "sha256": "ff75e5d3903b6473e92daf475426d7cc0b1f5fc52b3eed9ca9223af5525cd717"
+    },
+    "pytest_cases_passed": 319,
+    "subtests_passed": 24
+  },
+  "integration": {
+    "tests": 94,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 235.678,
+    "started_at": "2026-10-20T10:58:50.874874+00:00",
+    "artifact": {
+      "path": "reports/release-integration.xml",
+      "sha256": "9d6d702e4e1b81f3c95c3b76347036a55206fb6e14ab1bc876fb2f4f4a26256d"
+    },
+    "provenance": {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T10:58:50.536026+00:00",
+      "finished_at": "2026-10-20T11:02:48.052792+00:00",
+      "command": [
+        ".venv/bin/pytest",
+        "-m",
+        "integration",
+        "-q",
+        "--tb=short",
+        "--junitxml=reports/release-integration.xml"
+      ],
+      "exit_code": 0
+    },
+    "scope": "Local disposable PostgreSQL; controlled storage/inference adapters"
+  },
+  "frontend": {
+    "passed": 37,
+    "files": 11
+  },
+  "offline_infrastructure": {
+    "python_unittest_passed": 22,
+    "node_tests_passed": 7,
+    "google_cloud_invocations": 0
+  },
+  "e2e": {
+    "started_at": "2026-10-20T11:00:17.920699+00:00",
+    "synthetic_only": true,
+    "inference_backend": "test",
+    "real_external_inference_validated": false,
+    "bucket_removed": true,
+    "database_removed": true,
+    "finished_at": "2026-10-20T11:02:41.584807+00:00",
+    "exit_code": 0,
+    "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+    "provenance": {
+      "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+      "started_at": "2026-10-20T11:00:16.572449+00:00",
+      "finished_at": "2026-10-20T11:02:41.780598+00:00",
+      "exit_code": 0,
+      "scope": "Real Chromium and Linux WebKit with synthetic assets; not physical Safari"
+    },
+    "passed": 58,
+    "skipped": 2,
+    "failed": 0,
+    "projects": [
+      "iphone-chromium",
+      "desktop-chromium",
+      "iphone-webkit-linux"
+    ],
+    "artifact": {
+      "path": "var/v11-test/e2e-final-release.log",
+      "sha256": "c916a9962dad83b7ebc580ca63fa2d75e9929a38aec7ff9c2dbd30623986e519"
+    },
+    "host_note": "Non-root host: official Debian libgles2 1.6.0-1 was extracted under var/tools and supplied through LD_LIBRARY_PATH. PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1 skips only the ldconfig cache probe. The real WebKit binary launched and executed all browser workflows; no browser behavior was mocked."
+  },
+  "runtime": {
+    "checked_at": "2026-10-20T11:02:19.030559+00:00",
+    "git_sha": "2ce4015f5b5f89caa198bf5f186c23b5b6354806",
+    "image_id": "sha256:c67cae20dfddfea982b4120455db1e969fbed6b6702221f8f18c02aa0911ef06",
+    "registry_digest": null,
+    "image_label_matches_source": true,
+    "api_release_matches_source": true,
+    "migration_head": "0007_model_preprocessing",
+    "build_timestamp": "2026-10-20T10:58:52.019658+00:00",
+    "readiness_status": 200,
+    "synthetic_asset_count": 12,
+    "image_decode_and_private_no_store_verified": {
+      "thumbnail_small": 12,
+      "thumbnail_medium": 12,
+      "preview_large": 12
+    },
+    "build_file": "infra/docker/api.buildkit.Dockerfile",
+    "tls_certificate_verification": true,
+    "build_ca_absent_from_runtime": true,
+    "doctor": {
+      "version": "1.1.0",
+      "environment": "development",
+      "checks": {
+        "database": "ready",
+        "storage": "ready",
+        "gpu": "disabled",
+        "icloud": "disabled"
+      },
+      "privacy": "Segredos e configurações privadas omitidos."
+    },
+    "scope": "Local Docker Compose; procedural synthetic assets; no cloud deployment"
+  },
+  "secret_scan": {
+    "gitleaks_version": "8.30.1",
+    "official_archive_checksum_verified": true,
+    "commits_scanned": 67,
+    "source_files": 374,
+    "findings": 0,
+    "scope": "Git history and trackable source; ignored files excluded",
+    "artifact": {
+      "path": "var/v11-test/security-final-release.log",
+      "sha256": "2dd2b7509020497386577b0df490451cd4f9aa2c0b6c4f722312e5052feee46e"
+    }
+  },
+  "environment_recovery": [
+    {
+      "issue": "An earlier candidate browser run could not create its isolated database after image builds exhausted writable disk.",
+      "resolution": "Removed only named unused intermediate application images and build cache; no database or media volumes deleted.",
+      "final_result": "Recovered writable space; current candidate completed with isolated resources cleaned."
+    },
+    {
+      "issue": "An earlier candidate retry passed 41 cases and failed 18 WebKit launches because libGLESv2.so.2 was absent after restart.",
+      "resolution": "Official Debian package obtained through signed APT metadata in a disposable container; extracted library in var/tools; real WebKit page verified before rerunning.",
+      "final_result": "Current candidate: 58 passed and 2 optional screenshots skipped."
+    }
+  ],
+  "external_not_validated": [
+    "Google Cloud Run/Jobs/Scheduler/IAM",
+    "Neon hosted TLS/pooler",
+    "Cloudflare account Access/R2 policies",
+    "iCloud real session and assets",
+    "Modal GPU/CUDA/billing",
+    "Physical iPhone Safari/Pyto/PhotoKit",
+    "Complete 176000-asset benchmark"
+  ],
+  "real_cpu_evidence": "docs/evidence/real-cpu-v11.json",
+  "real_cpu_git_sha_note": "Earlier real CPU runner did not record a Git SHA; its artifact hash/timestamp remain separate.",
+  "gate_policy": "These synthetic/local results do not approve real-provider gates B-F or full-library imports."
+}
