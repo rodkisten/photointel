@@ -1,6 +1,6 @@
 # Situação dos achados — v1.1
 
-Atualizado em 19/10/2026. A inspeção confirmou os defeitos no código existente;
+Atualizado em 20/10/2026. A inspeção confirmou os defeitos no código existente;
 o arquivo `PHOTO_INTELLIGENCE_AUDITORIA_2026-10-17.md` não estava no checkout.
 Compose/VPS e os contratos anteriores foram preservados. Não houve criação de
 recursos Google, autenticação Apple, implantação Modal ou teste físico no iPhone.
@@ -130,8 +130,10 @@ Resultados de v1.0, árvore suja ou outro SHA não aprovam esta release.
   Histórico não foi reescrito. Isso não audita secrets ignorados nem substitui rotação.
 - **Resultado:** defaults/varredura locais corrigidos. Auditoria GPU encontrou
   advisories em Transformers 4.57.6; atualização para 5.10.2 e namespace de
-  preprocessamento `0007` estão em validação separada. Não declarar imagem GPU
-  limpa/validada antes de repetir auditoria e smoke compatível.
+  preprocessamento `0007` passaram nos testes locais. A auditoria atualizada não
+  encontrou advisories conhecidos; o smoke CPU real com Transformers 5.10.2
+  confirmou os dois modelos e persistência. Isso não valida imagem Modal/CUDA
+  implantada: [evidência CPU](../evidence/real-cpu-v11.json).
 
 ## P1-02 — Backfill de 176 mil fotos
 
@@ -234,7 +236,9 @@ Resultados de v1.0, árvore suja ou outro SHA não aprovam esta release.
   A atualização de preprocessamento em `0007` impede reutilização entre convenções
   incompatíveis e exige validação própria do modelo.
 - **Resultado:** cache/fallback implementados e exercitados localmente; checkpoint
-  atualizado e ranking real ainda não declarados validados.
+  atualizado passou no smoke CPU real com uma imagem sintética e texto em
+  português. Ranking de uma biblioteca real, cold start e Modal continuam não
+  validados: [evidência CPU](../evidence/real-cpu-v11.json).
 
 ## P1-08 — Backup e restore completos
 
@@ -249,8 +253,8 @@ Resultados de v1.0, árvore suja ou outro SHA não aprovam esta release.
   descartáveis e imagens procedurais.
 - **Evidência:** [application-restore-v11.json](../evidence/application-restore-v11.json)
   passou com fingerprints iguais, três imagens decodificadas, embedding 768,
-  tags/álbum/jobs, retry e preview reparado. Rodada documentada usou head `0006`;
-  repetir no head final da release.
+  tags/álbum/jobs, retry e preview reparado. A rodada de 19/10 às 18:51 UTC
+  confirmou head `0007_model_preprocessing`, registrado no próprio JSON.
 - **Resultado:** mecanismo local verificado; segunda cópia independente, retenção,
   custos e restore Neon/R2 reais dependem do operador. Não copia originais iCloud.
 

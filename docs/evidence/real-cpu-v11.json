@@ -1,0 +1,49 @@
+{
+  "real_inference": true,
+  "device": "cpu",
+  "provider_gpu_allocated": false,
+  "fixture_assets": 1,
+  "database_persistence_verified_in_new_session": true,
+  "joytag_revision": "6b7f16331a6ccf0fdce37d5a9564715f6e772b22",
+  "joytag_probabilities": 5813,
+  "siglip_revision": "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2",
+  "embedding_dimension": 768,
+  "image_embedding_norm": 0.9999999755071609,
+  "text_image_cosine_similarities": {
+    "Paisagem com montanhas": 0.11870364007025648,
+    "Fotografia de uma planta": 0.049286328573078304
+  },
+  "installed_versions": {
+    "torch": "2.14.1+cpu",
+    "torchvision": "0.29.1+cpu",
+    "transformers": "5.10.2"
+  },
+  "wall_seconds": 584.4800704610007,
+  "inference_metrics": {
+    "completed": 1,
+    "skipped": 0,
+    "gpu_runtime_ms": 1956.6145310000138,
+    "bytes_transferred": 3434,
+    "estimated_cost": 0.0,
+    "inference_models": [
+      "joytag",
+      "siglip2"
+    ]
+  },
+  "limitations": [
+    "CPU result does not validate Modal deployment, CUDA or provider billing",
+    "One synthetic image is not an accuracy or multilingual retrieval benchmark"
+  ],
+  "evidence_provenance": {
+    "source_artifact": {
+      "path": "reports/real-cpu/result.json",
+      "sha256": "1f232a43f2cfd4b5ae634b7cf3eb76f654685996bda41e6a14c28ce439e57645",
+      "mtime_utc": "2026-10-19T19:01:06.760664+00:00"
+    },
+    "source_git_sha": null,
+    "source_git_sha_status": "not recorded by the original run; not attributed to the documentation commit",
+    "model_preprocessing_revision": "siglip2-transformers-5.10.2-v2",
+    "scope": "one procedural synthetic image; real model weights; local PostgreSQL",
+    "metric_note": "gpu_runtime_ms is a historical shared field name; this run used CPU only"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "started_at": "2026-10-19T18:53:39.551453+00:00",
+  "synthetic_only": true,
+  "inference_backend": "test",
+  "real_external_inference_validated": false,
+  "bucket_removed": true,
+  "database_removed": true,
+  "finished_at": "2026-10-19T18:56:17.736526+00:00",
+  "exit_code": 0,
+  "tests_passed": 58,
+  "tests_skipped": 2,
+  "tests_failed": 0,
+  "browser_projects": [
+    "iphone",
+    "desktop",
+    "iphone-webkit"
+  ],
+  "physical_iphone_safari_validated": false,
+  "scope": "Linux browser automation, synthetic images, disposable PostgreSQL and MinIO; test-only deterministic inference",
+  "evidence_provenance": {
+    "source_artifact": {
+      "path": "reports/e2e-local-latest.json",
+      "sha256": "60cdca78655fdafe026b66c283aa83a646fb8fd1ab15c3051d87c63654251ca1",
+      "mtime_utc": "2026-10-19T18:56:17.736855+00:00"
+    },
+    "test_log": {
+      "path": "reports/e2e-local-generic-v11.log",
+      "sha256": "5d3e07ee60a5faecc40bb660b57996bb02fa13bca582b600ffa884d85aa32f34",
+      "mtime_utc": "2026-10-19T18:56:17.279353+00:00"
+    },
+    "source_git_sha": null,
+    "source_git_sha_status": "not recorded by the original runner; not attributed to the documentation commit"
+  },
+  "browser_engines": {
+    "iphone": "chromium",
+    "desktop": "chromium",
+    "iphone-webkit": "webkit"
+  }
+}

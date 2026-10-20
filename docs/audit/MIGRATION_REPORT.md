@@ -14,6 +14,13 @@ identificadas pelos commits incrementais posteriores. Esta referência identific
 o contexto da execução; não representa uma release imutável validada. O manifesto
 final deve ser gerado após commit limpo e os testes devem apontar para seu SHA.
 
+Atualização de 20/10/2026: a suíte Python completa foi repetida na árvore limpa
+`1c1e4cd152f295f5abf62b8595327b736065fcfe`: 319 testes unitários + 24 subtestes e
+94 testes de integração passaram. O restore registrado confirmou o head `0007`.
+A integração posterior de `0790f82` trouxe mudanças remotas de Docker/Cloud Build;
+esta evidência não é um atestado de build ou deploy dessas mudanças. O relatório
+consolidado está em [FINAL_REPORT_V11.md](FINAL_REPORT_V11.md).
+
 ## Mudanças implementadas
 
 | Componente | Implementação | Evidência e limite |
@@ -22,7 +29,7 @@ final deve ser gerado após commit limpo e os testes devem apontar para seu SHA.
 | Trabalho assíncrono | Jobs finitos `discover`, `backfill`, `worker`, `maintenance` e `migrate` | Fila PostgreSQL, leases e fencing; execução Google pendente |
 | Agendamento | Três chamadas OAuth para `jobs:run`, publicadas pausadas | Plano e assertions de IAM; nenhuma rotina foi ativada |
 | Dispatch | Outbox transacional, nomes fixos, ADC com transporte limitado, HTTP fora da transação | Cinco testes com PostgreSQL real e chamadas Google simuladas |
-| Migrações | Task separada, URL direta, serialização Alembic, somente credenciais de banco | Migração real até `0006_query_embedding_cache` em banco descartável |
+| Migrações | Task separada, URL direta, serialização Alembic, somente credenciais de banco | Migração real até `0007_model_preprocessing` em banco descartável |
 | Neon | TLS verificado, perfil limitado/completo e adaptação ao endpoint transacional | Configuração e PostgreSQL local; TLS e cold start Neon aguardam conta |
 | Sessão Apple | Snapshot autenticado AES-GCM, objeto imutável, ponteiro e lease em PostgreSQL | Implementação local; sessão Apple real ainda requer autenticação interativa |
 | Autenticação | JWT Access validado na aplicação, inclusive acesso direto `run.app`; Bridge com identidade separada | Testes locais; smoke do origin real ainda não executado |

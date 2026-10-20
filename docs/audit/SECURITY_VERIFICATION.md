@@ -142,6 +142,16 @@ O teste PostgreSQL verifica preservação do vetor legado, recusa de sua utiliza
 em busca nova e recusa de downgrade destrutivo. O procedimento com pausa de
 workers antigos está em `docs/operations/gpu-runtime-upgrade-v11.md`.
 
+O smoke de pesos reais com **Transformers 5.10.2** terminou em CPU: uma imagem
+procedural, **5.813 probabilidades JoyTag**, embeddings SigLIP 2 de **768 dimensões**
+e persistência confirmada em nova sessão PostgreSQL. A execução levou 584,48 s
+no executor local, incluindo preparação/cache; não é latência estável de produção.
+A [evidência atualizada](../evidence/real-cpu-v11.json) preserva hash e mtime do
+artefato original, cujo SHA Git não foi registrado. O campo histórico
+`gpu_runtime_ms` nessa resposta não significa que houve GPU: `device=cpu` e
+`provider_gpu_allocated=false`. O relatório CPU anterior de Transformers 4.57.6
+não valida esta atualização.
+
 Não se presume que `trust_remote_code=False` sozinho elimine todo risco. A imagem
 efetivamente implantada, seu digest e inferência GPU real continuam exigindo
 configuração e smoke test separado. Não houve deploy Modal.
