@@ -24,5 +24,7 @@ jobs:
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
       - name: Validate fixed-origin Cloudflare relay
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+      - name: Reject private data in source ZIP imports
+        run: node --test infra/scripts/zip-patch-policy.test.cjs
       - uses: actions/upload-artifact@v4
         with: {name: gcp-offline-definitions, path: reports/gcp-*}
