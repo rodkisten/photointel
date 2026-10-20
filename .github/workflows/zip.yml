@@ -52,6 +52,9 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
+      - name: Verify private-file rejection policy
+        run: node --test infra/scripts/zip-patch-policy.test.cjs
+
       - name: 🔎 Validate selected branch and ZIP path
         id: zip
         shell: bash
@@ -159,6 +162,9 @@ jobs:
           const childProcess = require("node:child_process");
           const fs = require("node:fs");
           const path = require("node:path");
+          const { assertSafePatchPaths } = require(
+            path.join(process.env.GITHUB_WORKSPACE, "infra/scripts/zip-patch-policy.cjs"),
+          );
 
           function fail(message) {
             console.error(`::error::${message}`);
@@ -408,6 +414,9 @@ jobs:
             }
 
             const relative = parts.join("/");
+
+            // A source archive must never import credentials or private artifacts.
+            assertSafePatchPaths([relative]);
 
             if (seen.has(relative)) {
               fail(
@@ -1069,6 +1078,9 @@ jobs:
           const childProcess = require("node:child_process");
           const fs = require("node:fs");
           const path = require("node:path");
+          const { assertSafePatchPaths } = require(
+            path.join(process.env.GITHUB_WORKSPACE, "infra/scripts/zip-patch-policy.cjs"),
+          );
 
           function fail(message) {
             console.error(`::error::${message}`);
@@ -1211,6 +1223,12 @@ jobs:
           const files = walkFiles(
             patchRoot,
           );
+
+          // Validate resolved targets after root stripping, before copying or committing
+          // any file. A wrapped ZIP must not bypass private-root restrictions.
+          assertSafePatchPaths(files.map((source) =>
+            path.relative(patchRoot, source).split(path.sep).join("/"),
+          ));
 
           let changedCount = 0;
           let skippedCount = 0;
