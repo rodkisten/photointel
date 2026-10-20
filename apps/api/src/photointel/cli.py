@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select, text
 
+from photointel import __version__
 from photointel.config import get_settings
 from photointel.database import SessionLocal, engine
 from photointel.models import Asset, AssetTag, Library, Tag
@@ -467,7 +468,7 @@ async def doctor() -> dict[str, Any]:
         "configured_not_verified" if settings.icloud_enabled else "disabled"
     )
     return {
-        "version": "1.0.0",
+        "version": __version__,
         "environment": settings.app_env,
         "checks": checks,
         "privacy": "Segredos e configurações privadas omitidos.",

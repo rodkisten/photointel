@@ -1,10 +1,26 @@
 name: Google Cloud deployment definitions
 on:
   pull_request:
-    paths: ['infra/gcp/**', 'apps/api/src/photointel/services/cloud_dispatch.py', '.github/workflows/gcp*.yml']
+    paths:
+      - infra/gcp/**
+      - infra/docker/api*.Dockerfile
+      - infra/docker/compose.dev.yml
+      - infra/scripts/zip-patch-policy*.cjs
+      - apps/api/src/photointel/services/cloud_dispatch.py
+      - cloudbuild.yaml
+      - .github/workflows/gcp*.yml
+      - .github/workflows/zip.yml
   push:
     branches: [main]
-    paths: ['infra/gcp/**', 'apps/api/src/photointel/services/cloud_dispatch.py', '.github/workflows/gcp*.yml']
+    paths:
+      - infra/gcp/**
+      - infra/docker/api*.Dockerfile
+      - infra/docker/compose.dev.yml
+      - infra/scripts/zip-patch-policy*.cjs
+      - apps/api/src/photointel/services/cloud_dispatch.py
+      - cloudbuild.yaml
+      - .github/workflows/gcp*.yml
+      - .github/workflows/zip.yml
   workflow_dispatch:
 permissions:
   contents: read
