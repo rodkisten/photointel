@@ -3,7 +3,7 @@ x-runtime: &runtime
   image: ${PHOTOINTEL_IMAGE:-photointel-api:local}
   build:
     context: ../..
-    dockerfile: infra/docker/api.Dockerfile
+    dockerfile: infra/docker/api.buildkit.Dockerfile
     secrets: [build_ca]
   env_file: ../../.env
   environment: &runtime-env

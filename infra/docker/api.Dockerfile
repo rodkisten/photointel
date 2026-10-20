@@ -2,6 +2,7 @@
 #   docker build -f infra/docker/api.Dockerfile -t photointel-api .
 # The official Cloud Build Docker builder does not enable BuildKit by default.
 # Keep this file compatible with classic Docker builds (no RUN --mount).
+# Compose uses api.buildkit.Dockerfile for transient custom CA secrets.
 
 FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
 

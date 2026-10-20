@@ -1,86 +1,44 @@
-# GitHub -> Cloud Build -> Artifact Registry -> EXISTING Cloud Run resources.
-# In Cloud Build / Triggers choose "Cloud Build configuration file" at /cloudbuild.yaml.
-# IMPORTANT: the build context is the REPOSITORY ROOT (last argument: .).
-# The previous automatically generated Dockerfile trigger used infra/docker/ as
-# context and could not access pyproject.toml, uv.lock, apps/, or packages/.
-#
-# Safe defaults:
-#   - Build & push a commit/build-specific image.
-#   - Update the API only if it already exists (preserves env, secrets, IAM, ingress).
-#   - Never run DB migrations, create cloud resources, execute Jobs or start ingest.
-#   - Existing Jobs are updated only when _UPDATE_JOBS=true in trigger settings.
-# Before first deploy, provision API/Jobs with infra/gcp/manage.py or Console.
-# Screenshot defaults: Artifact Registry 'cloud-run-source-deploy', service 'photointel'.
-
+# GitHub -> Cloud Build -> Artifact Registry, with the REPOSITORY ROOT context.
+# Select /cloudbuild.yaml in a repository trigger. Creating/running that trigger
+# is an operator action that can incur build/storage charges.
+# This file only builds an image. Deploy with the guarded infra/gcp/manage.py
+# workflow after migration/backup/auth checks; never update a live API on push.
+# Provision the private Artifact Registry repository separately before building.
 substitutions:
   _REGION: us-central1
   _REPOSITORY: cloud-run-source-deploy
   _IMAGE_NAME: photointel
-  _SERVICE_NAME: photointel
-  _DEPLOY_API: 'auto'
-  _UPDATE_JOBS: 'false'
 
 steps:
-  - id: validate-monorepo
+  - id: validate-and-identify-source
     name: python:3.12-slim
     entrypoint: bash
+    env:
+      - SOURCE_GIT_SHA=$COMMIT_SHA
+      - SOURCE_BRANCH=$BRANCH_NAME
+      - SOURCE_BUILD_ID=$BUILD_ID
     args:
       - -c
       - |
         set -euo pipefail
         test -f pyproject.toml
         test -f uv.lock
-        test -f infra/docker/api.Dockerfile
         test -d packages/icloudpd-source
         test -d apps/api/src/photointel
-        if grep -nE '^[[:space:]]*RUN[[:space:]]+--mount=' infra/docker/api.Dockerfile; then
-          echo 'ERROR: Dockerfile requires BuildKit; remove RUN --mount.' >&2
-          exit 1
-        fi
+        python infra/gcp/build_source_manifest.py
         python -m compileall -q apps/api/src infra/gcp
         python -m unittest discover -s infra/gcp/tests -v
 
-  - id: verify-existing-resources
+  - id: verify-existing-repository
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: bash
+    entrypoint: gcloud
     args:
-      - -c
-      - |
-        set -euo pipefail
-        gcloud artifacts repositories describe '${_REPOSITORY}' \
-          --project='$PROJECT_ID' --location='${_REGION}' >/dev/null
-        case '${_DEPLOY_API}' in
-          auto)
-            existing_services="$$(gcloud run services list --project='$PROJECT_ID' \
-              --region='${_REGION}' --format='value(metadata.name)')"
-            if ! printf '%s\n' "$$existing_services" | grep -Fxq '${_SERVICE_NAME}'; then
-              echo 'API does not exist yet: build will succeed, deploy will be skipped.'
-              echo 'Provision the API with its production authentication and secrets, then rebuild.'
-            fi
-            ;;
-          true)
-            gcloud run services describe '${_SERVICE_NAME}' \
-              --project='$PROJECT_ID' --region='${_REGION}' >/dev/null || {
-                echo 'ERROR: Cloud Run API not provisioned. Configure secrets/auth and create the service first.' >&2
-                exit 1
-              }
-            ;;
-          false) ;;
-          *) echo 'ERROR: _DEPLOY_API must be auto, true or false.' >&2; exit 1 ;;
-        esac
-        case '${_UPDATE_JOBS}' in
-          true)
-            for job in photointel-discover photointel-backfill photointel-worker photointel-maintenance; do
-              gcloud run jobs describe "$$job" \
-                --project='$PROJECT_ID' --region='${_REGION}' >/dev/null || {
-                  echo "ERROR: Job $$job does not exist. Provision it before enabling _UPDATE_JOBS." >&2
-                  exit 1
-                }
-            done
-            ;;
-          false) ;;
-          *) echo 'ERROR: _UPDATE_JOBS must be true or false.' >&2; exit 1 ;;
-        esac
+      - artifacts
+      - repositories
+      - describe
+      - ${_REPOSITORY}
+      - --project=$PROJECT_ID
+      - --location=${_REGION}
 
   - id: docker-build
     name: gcr.io/cloud-builders/docker
@@ -90,68 +48,11 @@ steps:
       - --label=org.opencontainers.image.revision=$COMMIT_SHA
       - --tag=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID
       - .
-    waitFor: [validate-monorepo, verify-existing-resources]
-
-  - id: docker-push
-    name: gcr.io/cloud-builders/docker
-    args:
-      - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID
-    waitFor: [docker-build]
-
-  - id: deploy-existing-api
-    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        if [ '${_DEPLOY_API}' = false ]; then
-          echo 'API deploy disabled; image was built and pushed.'
-        elif [ '${_DEPLOY_API}' = auto ]; then
-          existing_services="$$(gcloud run services list --project='$PROJECT_ID' \
-            --region='${_REGION}' --format='value(metadata.name)')"
-          if printf '%s\n' "$$existing_services" | grep -Fxq '${_SERVICE_NAME}'; then
-            gcloud run services update '${_SERVICE_NAME}' \
-              --project='$PROJECT_ID' --region='${_REGION}' \
-              --image='${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID' \
-              --quiet
-          else
-            echo 'API is not provisioned yet. Skipping deploy without weakening security.'
-          fi
-        else
-          gcloud run services update '${_SERVICE_NAME}' \
-            --project='$PROJECT_ID' \
-            --region='${_REGION}' \
-            --image='${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID' \
-            --quiet
-        fi
-    waitFor: [docker-push]
-
-  - id: update-existing-jobs
-    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        set -euo pipefail
-        if [ '${_UPDATE_JOBS}' = true ]; then
-          for job in photointel-discover photointel-backfill photointel-worker photointel-maintenance; do
-            gcloud run jobs update "$$job" \
-              --project='$PROJECT_ID' \
-              --region='${_REGION}' \
-              --image='${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID' \
-              --quiet
-          done
-        else
-          echo 'Job updates disabled; configure _UPDATE_JOBS=true after provisioning.'
-        fi
-    waitFor: [docker-push]
+    waitFor: [validate-and-identify-source, verify-existing-repository]
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE_NAME}:$BUILD_ID
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
 timeout: 1800s

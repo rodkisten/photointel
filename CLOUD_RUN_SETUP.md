@@ -120,6 +120,23 @@ limites diários/mensais do backend e os controles do provedor.
 
 ## 4. Compilar, migrar e publicar
 
+Um trigger de repositório no Cloud Build deve usar **arquivo de configuração**
+`/cloudbuild.yaml`, com contexto na raiz do repositório. Selecionar somente
+`infra/docker/` como contexto impede o acesso a `uv.lock`, `apps/` e `packages/`.
+Esse fluxo constrói e envia a imagem ao Artifact Registry já provisionado; não
+publica API, não altera Jobs e não executa ingestão. O trigger precisa informar
+`COMMIT_SHA`; o manifesto dentro da imagem identifica esse commit e não aprova
+gates. A tag `$BUILD_ID` é única; obtenha o digest da imagem no registro e
+configure `image` e `release_git_sha` no JSON antes dos comandos de deploy abaixo.
+Não conceda `run.admin` à identidade usada somente para builds. Configure
+`_REGION`, `_REPOSITORY` e `_IMAGE_NAME` no trigger conforme o registro existente.
+Criar/executar o trigger pode gerar cobrança e continua sendo ação do operador.
+
+O Dockerfile Cloud Build é compatível com o builder clássico. O Compose local
+usa `api.buildkit.Dockerfile` para disponibilizar um certificado CA personalizado
+pelo segredo temporário `build_ca`, sem incorporar esse certificado à imagem
+final nem desativar validação TLS. `BUILD_CA_FILE` seleciona o bundle local.
+
 Antes de migrar dados existentes, crie backup PostgreSQL + cópia dos objetos R2,
 verifique integridade autenticada e restaure uma amostra isolada; consulte
 [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md). O runner Alembic é separado do
