@@ -1,4 +1,5 @@
 name: Google Cloud controlled deployment
+
 on:
   workflow_dispatch:
     inputs:
@@ -10,17 +11,21 @@ on:
       authorize_charges:
         description: 'I authorize Google Cloud resources and applicable charges'
         type: boolean
-        default: false
+        default: true
         required: true
       confirm_project:
         description: 'Exact Google Cloud project ID configured in production environment'
         type: string
         required: true
+        default: 'photointel'
+
 permissions:
   contents: read
+
 concurrency:
   group: photointel-gcp-production
   cancel-in-progress: false
+
 jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
@@ -29,43 +34,109 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
       - uses: actions/checkout@v4
-        with: {persist-credentials: false}
-      - name: Check reviewed project configuration before obtaining credentials
+        with:
+          persist-credentials: false
+
+      - name: Install .env parser
+        run: python -m pip install --disable-pip-version-check python-dotenv==1.2.4
+
+      - name: Convert production .env secret to JSON and validate project
         env:
-          GCP_CONFIG_JSON: ${{ vars.GCP_CONFIG_JSON }}
+          GCP_CONFIG_ENV: ${{ secrets.GCP_CONFIG_ENV }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
           python - <<'PY'
-          import json, os, pathlib, re
-          config = json.loads(os.environ['GCP_CONFIG_JSON'])
+          import json
+          import os
+          import pathlib
+          import re
+          from io import StringIO
+
+          from dotenv import dotenv_values
+
+          raw = os.environ.get('GCP_CONFIG_ENV', '')
+          if not raw.strip():
+              raise SystemExit('Missing production environment secret: GCP_CONFIG_ENV')
+
+          env_values = dotenv_values(stream=StringIO(raw), interpolate=False)
+          config = {}
+
+          for name, raw_value in env_values.items():
+              if raw_value is None:
+                  raise SystemExit(f'Environment key without value: {name}')
+
+              # PROJECT_ID -> project_id; SERVICE__CPU -> service.cpu
+              path_parts = [part.lower() for part in name.split('__')]
+              if not all(re.fullmatch(r'[a-z][a-z0-9_]*', part) for part in path_parts):
+                  raise SystemExit(f'Invalid environment key: {name}')
+
+              # Explicit typed values: ENABLED=json:true, CPU=json:2
+              if raw_value.startswith('json:'):
+                  try:
+                      value = json.loads(raw_value[len('json:'):])
+                  except json.JSONDecodeError as exc:
+                      raise SystemExit(f'Invalid JSON value for {name}: {exc}') from exc
+              else:
+                  value = raw_value
+
+              target = config
+              for part in path_parts[:-1]:
+                  if part not in target:
+                      target[part] = {}
+                  if not isinstance(target[part], dict):
+                      raise SystemExit(f'Conflicting nested configuration key: {name}')
+                  target = target[part]
+
+              leaf = path_parts[-1]
+              if leaf in target:
+                  raise SystemExit(f'Duplicate configuration key: {name}')
+              target[leaf] = value
+
+          for field in ('project_id', 'region', 'repository'):
+              if not isinstance(config.get(field), str) or not config[field].strip():
+                  raise SystemExit(f'Missing or invalid configuration field: {field}')
+
           if config['project_id'] != os.environ['CONFIRM_PROJECT']:
               raise SystemExit('Project confirmation mismatch')
+
           sha = os.environ['RELEASE_SHA']
-          if not re.fullmatch('[a-f0-9]{40}', sha):
+          if not re.fullmatch(r'[a-f0-9]{40}', sha):
               raise SystemExit('Invalid release SHA')
-          # This workflow always builds/deploys this exact checked-out commit.
+
+          # The image always points to the exact checked-out commit.
           config['release_git_sha'] = sha
-          config['image'] = (f"{config['region']}-docker.pkg.dev/{config['project_id']}/"
-                             f"{config['repository']}/api:{sha}")
+          config['image'] = (
+              f"{config['region']}-docker.pkg.dev/{config['project_id']}/"
+              f"{config['repository']}/api:{sha}"
+          )
+
           path = pathlib.Path('infra/gcp/config.local.json')
-          path.write_text(json.dumps(config))
+          path.parent.mkdir(parents=True, exist_ok=True)
+          os.umask(0o077)
+          path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
           path.chmod(0o600)
+          print('Deployment configuration generated and validated.')
           PY
           python infra/gcp/manage.py render
+
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
       - uses: google-github-actions/setup-gcloud@v2
+
       - name: Execute only the explicitly selected operation
         env:
           OPERATION: ${{ inputs.action }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: |
           python infra/gcp/manage.py "$OPERATION" --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+
       - name: Remove local deployment metadata
         if: always()
         run: rm -f infra/gcp/config.local.json
