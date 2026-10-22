@@ -45,7 +45,7 @@ jobs:
 
       - name: Convert production .env secret to JSON and validate project
         env:
-          GCP_CONFIG_ENV: ${{ secrets.GCP_CONFIG_ENV }}
+          GCP_CONFIG_ENV: ${{ env.GCP_CONFIG_ENV }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
