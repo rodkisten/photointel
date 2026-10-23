@@ -11,7 +11,7 @@ on:
       authorize_charges:
         description: 'I authorize Google Cloud resources and applicable charges'
         type: boolean
-        default: true
+        default: false
         required: true
       confirm_project:
         description: 'Exact Google Cloud project ID configured in production environment'
@@ -43,19 +43,21 @@ jobs:
       - name: Install .env parser
         run: python -m pip install --disable-pip-version-check python-dotenv==1.2.4
 
-      - name: Convert production .env secret to JSON and validate project
+      - name: Convert production .env and validate configuration
+        id: config
         env:
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
+          GCP_CONFIG_ENV: ${{ secrets.GCP_CONFIG_ENV }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
           python infra/gcp/gcp-env.py
           python infra/gcp/manage.py render
 
-      - uses: google-github-actions/auth@v2
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -68,4 +70,6 @@ jobs:
 
       - name: Remove local deployment metadata
         if: always()
-        run: rm -f infra/gcp/config.local.json
+        run: |
+          rm -f infra/gcp/config.local.json
+          rm -rf infra/gcp/rendered
