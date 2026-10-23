@@ -76,6 +76,10 @@ config['image'] = (
 path = pathlib.Path('infra/gcp/config.local.json')
 path.parent.mkdir(parents=True, exist_ok=True)
 os.umask(0o077)
-path.write_text(json.dumps(config, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+
+final = json.dumps(config, ensure_ascii=False, indent=2) 
+path.write_text(final + '\n', encoding='utf-8')
 path.chmod(0o600)
-print("Sucesso!")
+
+print("FINAL ENV!")
+print(final)
