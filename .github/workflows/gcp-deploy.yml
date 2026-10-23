@@ -11,7 +11,7 @@ on:
       authorize_charges:
         description: 'I authorize Google Cloud resources and applicable charges'
         type: boolean
-        default: false
+        default: true
         required: true
       confirm_project:
         description: 'Exact Google Cloud project ID configured in production environment'
@@ -46,7 +46,7 @@ jobs:
       - name: Convert production .env and validate configuration
         id: config
         env:
-          GCP_CONFIG_ENV: ${{ secrets.GCP_CONFIG_ENV }}
+          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
