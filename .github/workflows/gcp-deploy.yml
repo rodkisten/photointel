@@ -6,18 +6,26 @@ on:
       action:
         description: 'Operation (migration remains a separate backed-up operator command)'
         type: choice
-        options: [build, jobs-deploy, deploy, scheduler, cleanup]
+        options:
+          - bootstrap
+          - build
+          - jobs-deploy
+          - deploy
+          - scheduler
+          - cleanup
         required: true
+
       authorize_charges:
         description: 'I authorize Google Cloud resources and applicable charges'
         type: boolean
-        default: true
+        default: false
         required: true
+
       confirm_project:
         description: 'Exact Google Cloud project ID configured in production environment'
         type: string
+        default: photointel
         required: true
-        default: 'photointel'
 
 permissions:
   contents: read
@@ -28,28 +36,38 @@ concurrency:
 
 jobs:
   deploy:
+    name: ${{ inputs.action }} · ${{ inputs.confirm_project }}
     if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
-    environment: production
     runs-on: ubuntu-latest
+    environment: production
+
     permissions:
       contents: read
       id-token: write
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install .env parser
-        run: python -m pip install --disable-pip-version-check python-dotenv==1.2.4
+        run: |
+          python -m pip install --disable-pip-version-check python-dotenv==1.2.4
 
       - name: Convert production .env and validate configuration
         id: config
         env:
+          # Environment Variable (not a GitHub Secret): references/config only.
           GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           python infra/gcp/gcp-env.py
           python infra/gcp/manage.py render
 
@@ -59,14 +77,56 @@ jobs:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Execute only the explicitly selected operation
+      # The bootstrap operation creates the staging bucket and builder service account.
+      # Never require either of those resources to exist before bootstrap runs.
+      - name: Diagnose Cloud Build prerequisites
+        if: inputs.action == 'build'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+
+          BUCKET="gs://${CONFIRM_PROJECT}-photointel-build-source"
+          BUILDER="photointel-builder@${CONFIRM_PROJECT}.iam.gserviceaccount.com"
+
+          echo 'Checking authenticated Google Cloud identity...'
+          gcloud auth list --filter='status:ACTIVE' --format='value(account)'
+
+          echo 'Checking Cloud Build API...'
+          gcloud services list \
+            --project="$CONFIRM_PROJECT" \
+            --enabled \
+            --filter='config.name=cloudbuild.googleapis.com' \
+            --format='value(config.name)'
+
+          echo "Checking staging bucket: ${BUCKET}"
+          if ! gcloud storage buckets describe "$BUCKET" \
+            --project="$CONFIRM_PROJECT" \
+            --format='value(name,location)'; then
+            echo "::error::Staging bucket is missing or inaccessible: ${BUCKET}. Run bootstrap with an authorized operator, or fix the deployer's bucket IAM permissions."
+            exit 1
+          fi
+
+          echo "Checking Cloud Build service account: ${BUILDER}"
+          gcloud iam service-accounts describe "$BUILDER" \
+            --project="$CONFIRM_PROJECT" \
+            --format='value(email)'
+
+          echo 'Preflight checks completed. Storage write and build permissions are not guaranteed by these read checks.'
+
+      - name: Execute selected operation
         env:
           OPERATION: ${{ inputs.action }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: |
-          python infra/gcp/manage.py "$OPERATION" --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          set -euo pipefail
+          python infra/gcp/manage.py "$OPERATION" \
+            --apply \
+            --authorize-charges \
+            --confirm-project "$CONFIRM_PROJECT"
 
       - name: Remove local deployment metadata
         if: always()
