@@ -1,4 +1,4 @@
-name: Google Cloud controlled deployment
+name: 🚀 Google Cloud controlled deployment
 
 on:
   workflow_dispatch:
