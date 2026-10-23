@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Convert a GitHub environment secret containing dotenv text into GCP config.
+"""Convert GitHub dotenv config to GCP JSON and log a safe, redacted preview.
 
-No sensitive dotenv values or JSON documents are logged. The GitHub WIF identifiers
-are emitted as step outputs and intentionally excluded from deployment config.
+Only partial string values are shown in logs. Full values are written to the
+private deployment config and, for WIF identifiers, to GitHub step outputs.
 """
 
 from __future__ import annotations
@@ -16,8 +16,6 @@ from typing import Any
 
 from dotenv import dotenv_values
 
-# Keep in sync with infra/gcp/manage.py. Importing the shared constants avoids
-# silently drifting from the schema understood by the deployment manager.
 from manage import REQUIRED_SECRETS, SECRET_FIELDS
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -74,7 +72,7 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     config: dict[str, Any] = {}
     for key, raw_value in entries.items():
         if key in REQUIRED_WIF:
-            continue  # authentication metadata is NOT application configuration
+            continue  # WIF authentication metadata is not application configuration
         segments = key.split("__")
         if not all(ENV_PART_PATTERN.fullmatch(item) for item in segments):
             fail(f"Invalid .env key: {key}")
@@ -153,6 +151,54 @@ def write_outputs(provider: str, service_account: str) -> None:
         output.write(f"service_account={service_account}\n")
 
 
+def redact_string(value: str) -> str:
+    """Reveal a small prefix/suffix, never the complete original string."""
+    if not value:
+        return "<empty>"
+    if len(value) < 8:
+        return "***"
+    if len(value) < 24:
+        return f"{value[:3]}...{value[-3:]}"
+    return f"{value[:6]}...{value[-6:]}"
+
+
+def redact_preview(value: Any, path: tuple[str, ...] = ()) -> Any:
+    """Mask every string recursively, including strings in JSON arrays.
+
+    Secret Manager version numbers are non-sensitive identifiers and are shown
+    completely to aid troubleshooting. Integers, booleans and nulls retain type.
+    """
+    if isinstance(value, dict):
+        return {key: redact_preview(item, path + (key,)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact_preview(item, path) for item in value]
+    if isinstance(value, str):
+        if len(path) == 3 and path[0] == "secrets" and path[-1] == "version":
+            return value
+        return redact_string(value)
+    return value
+
+
+def print_redacted_summary(config: dict[str, Any], provider: str, service_account: str) -> None:
+    """Only the masked representation is sent to GitHub Actions stdout."""
+    provider_parts = provider.split("/")
+    service_account_project = service_account.split("@", 1)[1].split(".", 1)[0]
+    preview = {
+        "deployment_config": redact_preview(config),
+        "github_workload_identity": {
+            "provider": redact_string(provider),
+            "project_number": redact_string(provider_parts[1]),
+            "pool_id": redact_string(provider_parts[5]),
+            "provider_id": redact_string(provider_parts[7]),
+            "service_account": redact_string(service_account),
+            "service_account_project": redact_string(service_account_project),
+        },
+    }
+    print("\n=== REDACTED CONFIGURATION PREVIEW ===")
+    print(json.dumps(preview, ensure_ascii=False, indent=2))
+    print("=== END REDACTED CONFIGURATION PREVIEW ===")
+
+
 def main() -> None:
     entries = checked_dotenv()
     config = decode_config(entries)
@@ -180,6 +226,7 @@ def main() -> None:
     CONFIG_PATH.chmod(0o600)
     write_outputs(provider, service_account)
     print(f"Configuration converted successfully ({len(config['secrets'])} Secret Manager references validated).")
+    print_redacted_summary(config, provider, service_account)
 
 
 if __name__ == "__main__":
