@@ -68,6 +68,31 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: "📱 [LIVE] Start deployment activity on iPhone"
+        id: notify_live_start
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: start
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.checkout.outcome == 'success' || steps.checkout.outcome == 'failure' || steps.checkout.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.checkout.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "6"
       - name: "🛡️ [GATE] Confirm database and Access readiness before publishing API"
         id: database_gate
         if: inputs.action == 'all' || inputs.action == 'deploy'
@@ -76,6 +101,20 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh gate
 
+      - name: "🔔 [NOTIFY] 🛡️ [GATE] Confirm database and Access readiness before publishing API"
+        if: ${{ always() && (steps.database_gate.outcome == 'success' || steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🛡️ [GATE] Confirm database and Access readiness before publishing API"
+          outcome: ${{ steps.database_gate.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "13"
       - name: "⚙️ [RUN] Prepare production vars using the shared action"
         id: config
         uses: ./.github/actions/gcp-config
@@ -85,16 +124,60 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Prepare production vars using the shared action"
+        if: ${{ always() && (steps.config.outcome == 'success' || steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Prepare production vars using the shared action"
+          outcome: ${{ steps.config.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "20"
       - name: "🔐 [AUTH] Authenticate to Google Cloud"
+        id: notify_observed_001
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Authenticate to Google Cloud"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Authenticate to Google Cloud"
+          outcome: ${{ steps.notify_observed_001.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "27"
       - name: "🧰 [SETUP] Set up Google Cloud CLI"
+        id: notify_observed_002
         uses: google-github-actions/setup-gcloud@v2
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Set up Google Cloud CLI"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Set up Google Cloud CLI"
+          outcome: ${{ steps.notify_observed_002.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "33"
       - name: "🏗️ [BUILD] Diagnose build prerequisites (read-only)"
         id: preflight
         if: inputs.action == 'build' || inputs.action == 'all'
@@ -102,6 +185,20 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh preflight
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Diagnose build prerequisites (read-only)"
+        if: ${{ always() && (steps.preflight.outcome == 'success' || steps.preflight.outcome == 'failure' || steps.preflight.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Diagnose build prerequisites (read-only)"
+          outcome: ${{ steps.preflight.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "40"
       - name: "🏗️ [BUILD] Skip build if commit image already exists"
         id: image_cache
         if: inputs.action == 'build' || inputs.action == 'all'
@@ -110,6 +207,20 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh cache
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Skip build if commit image already exists"
+        if: ${{ always() && (steps.image_cache.outcome == 'success' || steps.image_cache.outcome == 'failure' || steps.image_cache.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Skip build if commit image already exists"
+          outcome: ${{ steps.image_cache.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "47"
       - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
         id: build_image
         if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
@@ -117,6 +228,20 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh build
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Compile, publish and verify Docker image"
+        if: ${{ always() && (steps.build_image.outcome == 'success' || steps.build_image.outcome == 'failure' || steps.build_image.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Compile, publish and verify Docker image"
+          outcome: ${{ steps.build_image.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "54"
       - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
         id: verify_image
         if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
@@ -125,6 +250,20 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh verify
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Verify commit image exists before release (read-only)"
+        if: ${{ always() && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
+          outcome: ${{ steps.verify_image.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "61"
       - name: "📦 [JOBS] Publish five Cloud Run Jobs"
         id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
@@ -132,6 +271,20 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh jobs-deploy
 
+      - name: "🔔 [NOTIFY] 📦 [JOBS] Publish five Cloud Run Jobs"
+        if: ${{ always() && (steps.deploy_jobs.outcome == 'success' || steps.deploy_jobs.outcome == 'failure' || steps.deploy_jobs.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [JOBS] Publish five Cloud Run Jobs"
+          outcome: ${{ steps.deploy_jobs.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "67"
       - name: "🚀 [API] Publish Cloud Run service"
         id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'all'
@@ -140,6 +293,20 @@ jobs:
           DATABASE_READY: ${{ inputs.database_ready }}
         run: bash infra/gcp/release.sh deploy
 
+      - name: "🔔 [NOTIFY] 🚀 [API] Publish Cloud Run service"
+        if: ${{ always() && (steps.deploy_api.outcome == 'success' || steps.deploy_api.outcome == 'failure' || steps.deploy_api.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [API] Publish Cloud Run service"
+          outcome: ${{ steps.deploy_api.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "74"
       - name: "⏰ [SCHEDULER] Create or update schedules (paused)"
         id: deploy_scheduler
         if: inputs.action == 'scheduler' || inputs.action == 'all'
@@ -147,6 +314,20 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh scheduler
 
+      - name: "🔔 [NOTIFY] ⏰ [SCHEDULER] Create or update schedules (paused)"
+        if: ${{ always() && (steps.deploy_scheduler.outcome == 'success' || steps.deploy_scheduler.outcome == 'failure' || steps.deploy_scheduler.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⏰ [SCHEDULER] Create or update schedules (paused)"
+          outcome: ${{ steps.deploy_scheduler.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "81"
       - name: "🧹 [SCHEDULER] Pause schedules without deleting resources"
         id: pause_scheduler
         if: inputs.action == 'cleanup'
@@ -154,8 +335,50 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh cleanup
 
+      - name: "🔔 [NOTIFY] 🧹 [SCHEDULER] Pause schedules without deleting resources"
+        if: ${{ always() && (steps.pause_scheduler.outcome == 'success' || steps.pause_scheduler.outcome == 'failure' || steps.pause_scheduler.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 [SCHEDULER] Pause schedules without deleting resources"
+          outcome: ${{ steps.pause_scheduler.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "88"
       - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+        id: notify_observed_003
         if: always() && steps.checkout.outcome == 'success'
         uses: ./.github/actions/gcp-config
         with:
           mode: cleanup
+
+      - name: "🔔 [NOTIFY] 🧹 [CLEANUP] Remove local deployment metadata (always)"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+          outcome: ${{ steps.notify_observed_003.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "95"
+      - name: "📱 [LIVE] End deployment activity on iPhone"
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: end
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          outcome: ${{ job.status }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
