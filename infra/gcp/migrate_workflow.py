@@ -55,7 +55,7 @@ def run_gcloud(args: list[str], project: str, *, capture: bool = False) -> str:
     return result.stdout if capture else ""
 
 
-def job_spec(image: str, project: str, region: str) -> dict[str, Any]:
+def job_spec(image_prefix: str, project: str, region: str) -> str:
     payload = json.loads(
         run_gcloud(
             [
@@ -81,18 +81,20 @@ def job_spec(image: str, project: str, region: str) -> dict[str, Any]:
         args = container["args"]
     except (KeyError, IndexError, TypeError, AttributeError) as exc:
         raise MigrationWorkflowError("Cannot inspect the deployed migration Job") from exc
-    if current_image != image:
+    if not isinstance(current_image, str) or not current_image.startswith(image_prefix + ":"):
         raise MigrationWorkflowError(
-            "Migration Job image does not match the checked-out release. "
-            "Run jobs-deploy for this commit before migrating."
+            "Migration Job must use the configured Artifact Registry repository image"
         )
+    deployed_sha = current_image[len(image_prefix) + 1 :]
+    if not SHA_RE.fullmatch(deployed_sha):
+        raise MigrationWorkflowError("Migration Job must use an immutable full Git SHA tag")
     if str(retries) != "0":
         raise MigrationWorkflowError("Migration Job must have maxRetries=0")
     if service_account != f"photointel-migrate@{project}.iam.gserviceaccount.com":
         raise MigrationWorkflowError("Migration Job uses an unexpected service account")
     if len(args) < 3 or args[:3] != ["-m", "photointel.services.task_runner", "migrate"]:
         raise MigrationWorkflowError("Migration Job command does not match the approved runner")
-    return payload
+    return deployed_sha
 
 
 def migration_command(project: str, *, initial_empty: bool, backup: Path | None = None) -> list[str]:
@@ -166,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--initial-empty-database", choices=("true", "false"), default="false")
     parser.add_argument("--backup-prefix", default="")
+    parser.add_argument("--approved-sha", default="")
     parser.add_argument("--config", type=Path, default=CONFIG)
     args = parser.parse_args(argv)
     try:
@@ -177,8 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         if config["project_id"] != args.project or config.get("release_git_sha") != args.sha:
             raise MigrationWorkflowError("Project and release SHA must match production config")
         print("🔎 Inspecting deployed Cloud Run migration Job (read-only).", flush=True)
-        job_spec(config["image"], args.project, config["region"])
-        print(f"✅ Migration Job matches release SHA {args.sha}.", flush=True)
+        deployed_sha = job_spec(
+            config["image"].rsplit(":", 1)[0], args.project, config["region"]
+        )
+        print(f"✅ Migration Job is deployed from release SHA {deployed_sha}.", flush=True)
         if args.mode == "plan":
             if args.backup_prefix:
                 check_backup_prefix(args.backup_prefix, args.project)
@@ -190,10 +195,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(
                 "🛡️ The plan does not verify database emptiness, run SQL, "
-                "or certify the restore receipt."
+                "or certify the restore receipt. Copy the installed Job SHA "
+                "into migration_release_sha for apply."
             )
             return 0
 
+        if not SHA_RE.fullmatch(args.approved_sha) or args.approved_sha != deployed_sha:
+            raise MigrationWorkflowError(
+                "Apply requires migration_release_sha matching the exact installed "
+                "migration Job SHA printed by plan"
+            )
         print("🛡️ APPLY: validating database profile and recovery evidence.", flush=True)
         apply_migration(
             args.project,
