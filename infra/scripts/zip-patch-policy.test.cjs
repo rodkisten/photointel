@@ -47,7 +47,8 @@ test("actual workflow rejects a wrapped private batch before copying any file", 
     const workflow = fs.readFileSync(
       path.join(__dirname, "../../.github/workflows/zip.yml"), "utf8",
     );
-    const applyStep = workflow.split("- name: 🧩 Apply and commit files one by one")[1];
+    const applyStep = workflow.split(/\n        id: apply\n/)[1];
+    assert.ok(applyStep, "workflow must define the stable apply step ID");
     const script = applyStep.match(/node <<'NODE'\n([\s\S]*?)\n          NODE/)[1]
       .split("\n").map((line) => line.slice(10)).join("\n");
     const result = spawnSync(process.execPath, ["-e", script], {
