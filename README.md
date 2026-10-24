@@ -85,6 +85,8 @@ JWT e falha fechado; a proteção do Pages sozinha não autentica a API. Veja
 6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). A migração é **separada**, condicionada a banco comprovadamente vazio ou backup/restauração verificados. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
 7. Testar autenticação e rotas privadas, revisar custos e só então liberar imports, iCloud, GPU e agendamentos conforme os gates de segurança.
 
+Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
+
 O `gcp-validation.yml` testa offline, sem credenciais Google. O `gcp-deploy.yml` só executa manualmente na `main` com confirmação de projeto, ambiente `production` e autorização explícita de custos. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
 
 ## Comandos
@@ -156,6 +158,7 @@ Modal/CUDA nem a uma integração iCloud autenticada.
 - [ARCHITECTURE.md](ARCHITECTURE.md): componentes, identidade e fluxos.
 - [DATABASE.md](DATABASE.md): entidades, índices, evolução e backup.
 - [API.md](API.md): autenticação, paginação e contrato HTTP.
+- [docs/deployment/ARTIFACT_RETENTION.md](docs/deployment/ARTIFACT_RETENTION.md): retenção GitHub Actions, staging GCS, imagens Docker, dry-run e rollback.
 - [docs/deployment/CLOUD_RUN_FROM_ZERO.md](docs/deployment/CLOUD_RUN_FROM_ZERO.md): do zero ao deploy: CA local, GCP, IAM/WIF, GitHub Actions, Cloud Run e diagnóstico.
 - [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md): implantação e rollback pelo iPhone.
 - [NEON_SETUP.md](NEON_SETUP.md): TLS, pooling, migrações e perfis de capacidade.
