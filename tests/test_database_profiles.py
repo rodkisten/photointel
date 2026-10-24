@@ -49,14 +49,92 @@ def test_required_tls_and_unsupported_libpq_options_fail_closed() -> None:
                 update={"database_url": "postgresql://u:p@db.invalid/db?sslmode=disable"}
             )
         )
-    with pytest.raises(ValueError, match="channel_binding"):
+    with pytest.raises(ValueError, match="TLS cannot be disabled"):
         database_connection_options(
             settings.model_copy(
                 update={
-                    "database_url": "postgresql://u:p@db.invalid/db?channel_binding=require"
+                    "database_url": (
+                        "postgresql://u:p@db.invalid/db?"
+                        "sslmode=disable&channel_binding=require"
+                    )
                 }
             )
         )
+    with pytest.raises(ValueError, match="Unsupported PostgreSQL channel_binding"):
+        database_connection_options(
+            settings.model_copy(
+                update={
+                    "database_url": "postgresql://u:p@db.invalid/db?channel_binding=unknown"
+                }
+            )
+        )
+
+
+def test_neon_default_url_selects_async_psycopg_and_preserves_channel_binding() -> None:
+    """Neon's default require policy must never degrade to TLS without SCRAM-PLUS."""
+    for driver in ("postgresql", "postgresql+asyncpg", "postgresql+psycopg"):
+        settings = Settings(
+            _env_file=None,
+            database_require_tls=True,
+            database_url=(
+                f"{driver}://example:secret@ep-test.us-east-1.aws.neon.tech/photos"
+                "?sslmode=require&channel_binding=require"
+            ),
+        )
+        url, args = database_connection_options(settings)
+        assert url.drivername == "postgresql+psycopg"
+        assert url.query["channel_binding"] == "require"
+        assert url.query["sslmode"] == "verify-full"
+        assert args["connect_timeout"] == 15
+        assert "ssl" not in args
+        assert "command_timeout" not in args
+
+        # Creating an async engine exercises actual SQLAlchemy dialect loading
+        # without contacting Neon or using a production credential.
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        engine = create_async_engine(url, connect_args=args)
+        assert engine.dialect.driver == "psycopg"
+
+
+def test_neon_pooler_disables_prepares_and_migrations_keep_direct_binding() -> None:
+    settings = Settings(
+        _env_file=None,
+        database_pool_mode="transaction",
+        database_require_tls=True,
+        database_url=(
+            "postgresql://u:p@ep-test-pooler.us-east-1.aws.neon.tech/db"
+            "?sslmode=require&channel_binding=require"
+        ),
+        migration_database_url=(
+            "postgresql://u:p@ep-test.us-east-1.aws.neon.tech/db"
+            "?sslmode=require&channel_binding=require"
+        ),
+    )
+    url, args = database_connection_options(settings)
+    assert url.drivername == "postgresql+psycopg"
+    assert args["prepare_threshold"] is None
+    assert database_engine_options(settings) == {"poolclass": NullPool}
+
+    migration_url, migration_args = database_connection_options(settings, migration=True)
+    assert migration_url.drivername == "postgresql+psycopg"
+    assert migration_url.query["channel_binding"] == "require"
+    assert migration_url.query["sslmode"] == "verify-full"
+    assert "prepare_threshold" not in migration_args
+
+
+def test_psycopg_with_custom_ca_uses_libpq_hostname_verification(tmp_path) -> None:
+    ca = tmp_path / "my-ca.pem"
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://u:p@db.invalid/db?channel_binding=require",
+        database_tls_ca_file=ca,
+        database_require_tls=True,
+    )
+    url, _ = database_connection_options(settings)
+    assert url.query["sslrootcert"] == str(ca)
+    assert url.query["sslmode"] == "verify-full"
+    assert url.query["channel_binding"] == "require"
 
 
 def test_query_cache_normalizes_without_persisting_plaintext_and_versions_keys() -> None:
