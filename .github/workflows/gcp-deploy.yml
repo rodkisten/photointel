@@ -1,4 +1,4 @@
-name: 🚀 Google Cloud controlled deployment
+name: "🚀 [GCP DEPLOY] Controlled release"
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: ${{ inputs.action }} · ${{ inputs.confirm_project }}
+    name: "🚀 [GCP DEPLOY] ${{ inputs.action }} · ${{ inputs.confirm_project }}"
     if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
     runs-on: ubuntu-latest
     environment: production
@@ -54,13 +54,13 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout repository
+      - name: "📥 [SOURCE] Checkout repository"
         id: checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: "🧩 [CONFIG] Prepare production vars using the shared action"
+      - name: "⚙️ [RUN] Prepare production vars using the shared action"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -69,17 +69,17 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: Authenticate to Google Cloud
+      - name: "🔐 [AUTH] Authenticate to Google Cloud"
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
-      - name: Set up Google Cloud CLI
+      - name: "🧰 [SETUP] Set up Google Cloud CLI"
         uses: google-github-actions/setup-gcloud@v2
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
-      - name: Diagnose build prerequisites (read-only)
+      - name: "🏗️ [BUILD] Diagnose build prerequisites (read-only)"
         if: inputs.action == 'build'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -127,7 +127,7 @@ jobs:
 
           echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
 
-      - name: Skip build if commit image already exists
+      - name: "🏗️ [BUILD] Skip build if commit image already exists"
         if: inputs.action == 'build'
         id: image_cache
         env:
@@ -184,7 +184,7 @@ jobs:
             fi
           fi
 
-      - name: Verify commit image exists before release (read-only)
+      - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -211,7 +211,7 @@ jobs:
           print(f"Found immutable release tag {sha}; deploy may proceed.")
           '
 
-      - name: Execute selected operation
+      - name: "⚙️ [RUN] Execute selected operation"
         if: inputs.action != 'build' || steps.image_cache.outputs.skip != 'true'
         env:
           OPERATION: ${{ inputs.action }}
