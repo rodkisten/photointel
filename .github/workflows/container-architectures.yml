@@ -1,4 +1,4 @@
-name: Validate container architectures
+name: "🏗️ [ARCH] Validate image architectures"
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-run:
-    name: ${{ matrix.component }} / linux/${{ matrix.architecture }}
+    name: "🏗️ [ARCH] ${{ matrix.component }} / linux/${{ matrix.architecture }}"
     runs-on: ubuntu-latest
     timeout-minutes: 50
     defaults:
@@ -31,21 +31,21 @@ jobs:
       VALIDATION_PLATFORM: linux/${{ matrix.architecture }}
       VALIDATION_COMPONENT: ${{ matrix.component }}
     steps:
-      - name: Check out the exact revision
+      - name: "📥 [SOURCE] Check out the exact revision"
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Register ARM64 user-mode emulation
+      - name: "⚙️ [RUN] Register ARM64 user-mode emulation"
         if: matrix.architecture == 'arm64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
-      - name: Set up Buildx
+      - name: "🧰 [SETUP] Set up Buildx"
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and load the target architecture without publishing
+      - name: "🏗️ [BUILD] Build and load the target architecture without publishing"
         id: image
         uses: docker/build-push-action@v6
         with:
@@ -58,7 +58,7 @@ jobs:
           cache-from: type=gha,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }}
           cache-to: type=gha,mode=max,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }},ignore-error=true
 
-      - name: Record image architecture and source revision
+      - name: "🏗️ [BUILD] Record image architecture and source revision"
         env:
           BUILD_IMAGE_ID: ${{ steps.image.outputs.imageid }}
           BUILD_DIGEST: ${{ steps.image.outputs.digest }}
@@ -90,7 +90,7 @@ jobs:
           print(json.dumps(record))
           PY
 
-      - name: Execute the API native-extension smoke test
+      - name: "🧪 [TEST] Execute the API native-extension smoke test"
         if: matrix.component == 'api'
         run: |
           docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
@@ -121,7 +121,7 @@ jobs:
           }))
           ' | tee reports/container-architectures/runtime-api.json
 
-      - name: Execute the static web server and check its health endpoint
+      - name: "🧪 [TEST] Execute the static web server and check its health endpoint"
         if: matrix.component == 'web'
         run: |
           docker run -d --name architecture-web --network none \
@@ -147,7 +147,7 @@ jobs:
           print("Nginx health endpoint and the actual built application returned successfully.")
           PY
 
-      - name: Execute the cross-compiled MinIO binary
+      - name: "⚙️ [RUN] Execute the cross-compiled MinIO binary"
         if: matrix.component == 'minio'
         run: |
           docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
@@ -166,7 +166,7 @@ jobs:
           print("The binary built from the pinned upstream source executed on the target platform.")
           PY
 
-      - name: Capture web server diagnostics and stop the isolated container
+      - name: "🧹 [CLEANUP] Capture web server diagnostics and stop the isolated container"
         if: always() && matrix.component == 'web'
         run: |
           if docker container inspect architecture-web > /dev/null 2>&1; then
@@ -175,7 +175,7 @@ jobs:
             docker rm -f architecture-web
           fi
 
-      - name: Upload architecture-specific execution evidence
+      - name: "📦 [EVIDENCE] Upload architecture-specific execution evidence"
         if: always()
         uses: actions/upload-artifact@v4
         with:
