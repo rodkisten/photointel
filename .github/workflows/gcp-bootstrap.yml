@@ -1,4 +1,4 @@
-name: 🧱 Google Cloud administrative bootstrap
+name: "🧱 [GCP BOOTSTRAP] Provision Google Cloud"
 on:
   workflow_dispatch:
     inputs:
@@ -28,8 +28,9 @@ concurrency:
 
 jobs:
   bootstrap:
+    name: "🧱 [GCP BOOTSTRAP] bootstrap"
     if: github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
-    name: ${{ inputs.mode }} · ${{ inputs.confirm_project }}
+    name: "🧱 [GCP BOOTSTRAP] ${{ inputs.mode }} · ${{ inputs.confirm_project }}"
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 45
@@ -46,7 +47,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: "🧩 [CONFIG] Prepare Environment vars using the shared action"
+      - name: "⚙️ [RUN] Prepare Environment vars using the shared action"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -55,10 +56,10 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: "🧪 [VALIDATE] Check administrative bootstrap shell"
+      - name: "🧪 [TEST] Check administrative bootstrap shell"
         run: bash -n infra/gcp/bootstrap.sh
 
-      - name: Validate dedicated bootstrap identity
+      - name: "🧪 [TEST] Validate dedicated bootstrap identity"
         env:
           WIF: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           BOOTSTRAP_ACCOUNT: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
@@ -69,20 +70,20 @@ jobs:
           test "$BOOTSTRAP_ACCOUNT" = "photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" || { echo "::error::Dedicated bootstrap account is not configured"; exit 1; }
           test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
 
-      - name: Authenticate as bootstrap administrator (WIF, no JSON key)
+      - name: "🔐 [AUTH] Authenticate as bootstrap administrator (WIF, no JSON key)"
         uses: google-github-actions/auth@v3
         with:
           project_id: ${{ inputs.confirm_project }}
           workload_identity_provider: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
 
-      - name: Set up Google Cloud CLI
+      - name: "🧰 [SETUP] Set up Google Cloud CLI"
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ inputs.confirm_project }}
           version: '>= 500.0.0'
 
-      - name: Plan or reconcile Google Cloud resources
+      - name: "⚙️ [RUN] Plan or reconcile Google Cloud resources"
         env:
           BOOTSTRAP_MODE: ${{ inputs.mode }}
           AUTHORIZE_CHARGES: ${{ inputs.authorize_charges }}
