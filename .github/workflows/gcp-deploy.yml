@@ -1,4 +1,4 @@
-name: "🚀 [GCP DEPLOY] Controlled release"
+name: "🚀 [GCP] Controlled release"
 
 on:
   workflow_dispatch:
@@ -85,7 +85,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: "🚀 [GCP DEPLOY] ${{ inputs.action }} · ${{ inputs.confirm_project }}"
+    name: "🚀 [GCP] ${{ inputs.action }} · ${{ inputs.confirm_project }}"
     if: github.ref == 'refs/heads/main' && (inputs.authorize_charges == true || (inputs.action == 'migrate' && inputs.migration_mode == 'plan'))
     runs-on: ubuntu-latest
     environment: production
