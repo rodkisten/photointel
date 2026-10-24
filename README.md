@@ -51,6 +51,18 @@ Esse comando altera apenas as três configurações de origem e preserva os dema
 valores. A origem precisa corresponder à URL aberta no iPhone para que alterações
 de tags, álbuns e jobs passem pela proteção CSRF.
 
+### Certificado TLS do build local (`BUILD_CA_FILE`)
+
+`BUILD_CA_FILE` **não é uma credencial para gerar**: é o caminho, na **máquina que roda o Docker Compose**, para um bundle PEM/CRT de autoridades certificadoras confiáveis. O Compose envia o arquivo como secret temporário `build_ca` ao BuildKit, mantendo a verificação HTTPS ligada. No Ubuntu, Codespaces e WSL2:
+
+```bash
+ls -l /etc/ssl/certs/ca-certificates.crt
+# No .env da raiz:
+BUILD_CA_FILE=/etc/ssl/certs/ca-certificates.crt
+```
+
+Se o arquivo não existir, instale o pacote `ca-certificates` do Linux; no macOS ou Windows nativo, use o caminho retornado por `python -c "import certifi; print(certifi.where())"` (instale `certifi`) ou prefira o WSL2. Em redes com inspeção HTTPS, use o bundle com a CA aprovada do proxy; não desative TLS. Veja as diferenças por SO em [Cloud Run do zero: ambiente local](docs/deployment/CLOUD_RUN_FROM_ZERO.md#1-desenvolvimento-local-e-build_ca_file).
+
 O modo de autenticação local serve ao desenvolvimento em loopback. Produção
 exige JWT criptograficamente validado do Cloudflare Access, allowlist explícita,
 HTTPS e R2/S3 privado. O origin `run.app` é publicamente alcançável, mas cada endpoint privado valida o
@@ -58,6 +70,22 @@ JWT e falha fechado; a proteção do Pages sozinha não autentica a API. Veja
 [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md), [NEON_SETUP.md](NEON_SETUP.md) e
 [CLOUDFLARE_SETUP.md](CLOUDFLARE_SETUP.md). O caminho
 [Oracle/VPS](docs/deployment/oracle-arm.md) continua disponível como alternativa.
+
+## Google Cloud Run: do zero ao deploy
+
+**[Guia completo e atualizado, com comandos e telas](docs/deployment/CLOUD_RUN_FROM_ZERO.md).** Ele cobre o que foi necessário para provisionar esta instalação real: APIs, Cloud Shell, Neon/R2, Cloudflare Access, Secret Manager, IAM, bucket de staging, Artifact Registry, WIF do GitHub, workflows, build, migração e rollback.
+
+**Sequência recomendada:**
+
+1. Preparar Google Cloud (projeto `photointel`, `us-central1`, billing/budgets) e contas Neon, Cloudflare Access e R2.
+2. Configurar os valores **não secretos** de `GCP_CONFIG_ENV`; segredos reais ficam no Google Secret Manager, não no GitHub.
+3. Rodar **`bootstrap` como operador administrativo no Cloud Shell**; ele cria o repositório Docker, bucket, seis service accounts e políticas IAM. Não manter papéis administrativos na identidade CI.
+4. Preencher os secrets com prompts ocultos, configurar o pool `github-actions` / provider `photo-intelligence` e conceder WIF **somente** ao repo `rodkisten/photointel`, `main` e ambiente `production`.
+5. No GitHub `Settings → Environments → production → Environment variables`, definir a variável multiline **`GCP_CONFIG_ENV`**. O workflow `gcp-deploy.yml` usa `vars.GCP_CONFIG_ENV`, **não** `GCP_CONFIG_JSON`.
+6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). A migração é **separada**, condicionada a banco comprovadamente vazio ou backup/restauração verificados. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
+7. Testar autenticação e rotas privadas, revisar custos e só então liberar imports, iCloud, GPU e agendamentos conforme os gates de segurança.
+
+O `gcp-validation.yml` testa offline, sem credenciais Google. O `gcp-deploy.yml` só executa manualmente na `main` com confirmação de projeto, ambiente `production` e autorização explícita de custos. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
 
 ## Comandos
 
@@ -105,8 +133,8 @@ limites ou alertas de cobrança do provedor. Revise
 
 Todos os comandos GCP planejam offline por padrão. Criar recursos ou executar
 cargas requer `--apply --authorize-charges --confirm-project PROJETO`, após
-revisão explícita pelo operador. Não foi criada infraestrutura paga automaticamente.
-A implantação pelo iPhone está detalhada em [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md).
+revisão explícita pelo operador. O desenvolvimento local, os testes e os planos offline não provisionam infraestrutura
+paga. Para criar recursos, siga a aprovação operacional e o [guia do zero ao deploy](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Preview e validação
 
@@ -128,6 +156,7 @@ Modal/CUDA nem a uma integração iCloud autenticada.
 - [ARCHITECTURE.md](ARCHITECTURE.md): componentes, identidade e fluxos.
 - [DATABASE.md](DATABASE.md): entidades, índices, evolução e backup.
 - [API.md](API.md): autenticação, paginação e contrato HTTP.
+- [docs/deployment/CLOUD_RUN_FROM_ZERO.md](docs/deployment/CLOUD_RUN_FROM_ZERO.md): do zero ao deploy: CA local, GCP, IAM/WIF, GitHub Actions, Cloud Run e diagnóstico.
 - [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md): implantação e rollback pelo iPhone.
 - [NEON_SETUP.md](NEON_SETUP.md): TLS, pooling, migrações e perfis de capacidade.
 - [ICLOUD_SETUP.md](ICLOUD_SETUP.md): login interativo e ingestão.
