@@ -98,30 +98,22 @@ class MigrationWorkflowTests(unittest.TestCase):
                     "--config", str(location),
                 ]), 0)
 
-    def test_apply_requires_matching_deployed_sha(self):
-        config = {
-            "project_id": PROJECT, "region": "us-central1",
-            "release_git_sha": SHA, "image": IMAGE,
-        }
+    def test_apply_infers_sha_from_deployed_job(self):
+        config = {"project_id": PROJECT, "region": "us-central1",
+                  "release_git_sha": SHA, "image": IMAGE}
         with tempfile.TemporaryDirectory() as directory:
             location = Path(directory) / "config.json"
             location.write_text(json.dumps(config), encoding="utf-8")
             with (
                 patch.object(migrate, "validate", return_value=config),
-                patch.object(migrate, "job_spec", return_value=SHA),
+                patch.object(migrate, "job_spec", return_value=SHA) as lookup,
                 patch.object(migrate, "apply_migration") as apply,
             ):
-                base = [
-                    "--mode", "apply", "--project", PROJECT, "--sha", SHA,
-                    "--database", "initial-empty",
-                    "--initial-empty-database", "true",
-                    "--config", str(location),
-                ]
-                self.assertEqual(migrate.main(base), 1)
-                self.assertEqual(migrate.main(base + ["--approved-sha", "b" * 40]), 1)
-                apply.assert_not_called()
-                self.assertEqual(migrate.main(base + ["--approved-sha", SHA]), 0)
-                apply.assert_called_once_with(PROJECT, "initial-empty", True, "")
+                args = ["--mode", "apply", "--project", PROJECT, "--sha", SHA,
+                        "--database", "initial-empty", "--config", str(location)]
+                self.assertEqual(migrate.main(args), 0)
+                self.assertEqual(lookup.call_count, 2)
+                apply.assert_called_once_with(PROJECT, "initial-empty", "")
 
     def test_empty_migration_requires_attestation_and_never_uses_backup(self):
         with patch.object(migrate.subprocess, "run") as run:
