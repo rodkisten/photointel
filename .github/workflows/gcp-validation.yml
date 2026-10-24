@@ -74,6 +74,7 @@ jobs:
       - name: "🧪 [TEST] Validate standalone bootstrap shell and idempotency"
         run: |
           bash -n infra/gcp/bootstrap.sh
+          bash -n infra/gcp/release.sh
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
       - name: "🧪 [TEST] Validate fixed-origin Cloudflare relay"
