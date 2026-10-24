@@ -316,6 +316,21 @@ No IAM verifique especificamente:
 
 Uma conta builder **não é criada** por `build`. Execute bootstrap administrativo antes, ou crie/configure manualmente com os papéis acima.
 
+## 🧩 Scripts do release separados do GitHub Actions
+
+O [YAML do deploy](https://github.com/rodkisten/photointel/blob/main/.github/workflows/gcp-deploy.yml) **não contém blocos Bash ou Python inline**. Ele define permissões, `vars.GCP_CONFIG_ENV`, inputs, condições e ordem das fases. Toda execução chama arquivos versionados:
+
+| Arquivo | Responsabilidade |
+|---|---|
+| [`infra/gcp/release.sh`](../../infra/gcp/release.sh) | Entrypoint Bash, gates de segurança, dispatch das fases `gate`, `preflight`, `cache`, `build`, `verify`, `jobs-deploy`, `deploy`, `scheduler` e `cleanup` |
+| [`infra/gcp/release_image.py`](../../infra/gcp/release_image.py) | Preflight do Cloud Build, consulta read-only ao Artifact Registry, validação de SHA/digest e output `skip=true/false` para reutilizar builds |
+| [`infra/gcp/manage.py`](../../infra/gcp/manage.py) | Executa comandos de publicação `gcloud`, com verificação de flags de autorização |
+| [`.github/actions/gcp-config/action.yml`](../../.github/actions/gcp-config/action.yml) | Reutiliza `vars.GCP_CONFIG_ENV` para gerar JSON temporário e limpar arquivos após qualquer resultado |
+
+O workflow chama, por exemplo, `bash infra/gcp/release.sh preflight` e `bash infra/gcp/release.sh build`. `release.sh` usa as variáveis `CONFIRM_PROJECT` e `RELEASE_SHA` que o workflow injeta. As verificações de imagem **falham com permissão negada ou digest inválido**, sem disparar um novo build erroneamente.
+
+A CI testa esses scripts sem acessar Google Cloud, em [`test_release_workflow.py`](../../infra/gcp/tests/test_release_workflow.py) e [`test_release_image.py`](../../infra/gcp/tests/test_release_image.py). Para validar localmente: `bash -n infra/gcp/release.sh && python3 -m unittest discover -s infra/gcp/tests -v`.
+
 ## 🚀 Workflow único: dropdown por etapa ou ALL
 
 O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece o dropdown **`action`** com `build`, `jobs-deploy`, `deploy`, `scheduler`, `cleanup` e **`all`**. Todas as opções executam no mesmo workflow, com os mesmos valores de `vars.GCP_CONFIG_ENV` do Environment `production`.
