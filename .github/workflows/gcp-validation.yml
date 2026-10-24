@@ -59,7 +59,8 @@ jobs:
           for workflow in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
               source = (Path(".github/workflows") / workflow).read_text()
               assert source.count("uses: ./.github/actions/gcp-config") == 2
-              assert "config-env: ${{ vars.GCP_CONFIG_ENV }}" in source
+              expected = "config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}"
+              assert expected in source
               assert "mode: cleanup" in source
               assert "if: always()" in source
               assert "environment: production" in source
