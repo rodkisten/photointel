@@ -1,4 +1,4 @@
-name: 📦 Apply ZIP patch
+name: "📦 [ZIP] Apply patch via pull request"
 
 on:
   workflow_dispatch:
@@ -35,27 +35,27 @@ concurrency:
 
 jobs:
   apply-zip:
-    name: 📦 Apply ZIP file by file
+    name: "📦 [ZIP] Apply ZIP file by file"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
-      - name: 📥 Checkout selected branch
+      - name: "📥 [SOURCE] Checkout selected branch"
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: 🟢 Setup Node.js
+      - name: "🧰 [SETUP] Setup Node.js"
         uses: actions/setup-node@v6
         with:
           node-version: 24
           package-manager-cache: false
 
-      - name: Verify private-file rejection policy
+      - name: "🧪 [TEST] Verify private-file rejection policy"
         run: node --test infra/scripts/zip-patch-policy.test.cjs
 
-      - name: 🔎 Validate selected branch and ZIP path
+      - name: "🧪 [TEST] Validate selected branch and ZIP path"
         id: zip
         shell: bash
         env:
@@ -152,7 +152,7 @@ jobs:
           );
           NODE
 
-      - name: 🛡️ Validate and safely extract ZIP
+      - name: "🧪 [TEST] Validate and safely extract ZIP"
         id: extract
         shell: bash
         env:
@@ -488,7 +488,7 @@ jobs:
           );
           NODE
 
-      - name: 🧭 Resolve repository structure
+      - name: "⚙️ [RUN] Resolve repository structure"
         id: structure
         shell: bash
         env:
@@ -741,7 +741,7 @@ jobs:
           );
           NODE
 
-      - name: 🌳 Inspect normalized file structure
+      - name: "⚙️ [RUN] Inspect normalized file structure"
         shell: bash
         env:
           PATCH_ROOT: ${{ steps.structure.outputs.patch_root }}
@@ -833,7 +833,7 @@ jobs:
           }
           NODE
 
-      - name: 📝 Find CHANGELOG for pull request description
+      - name: "🚀 [DEPLOY] Find CHANGELOG for pull request description"
         id: changelog
         shell: bash
         env:
@@ -990,7 +990,7 @@ jobs:
           }
           NODE
 
-      - name: 🌿 Create patch branch
+      - name: "🧩 [PATCH] Create patch branch"
         id: branch
         shell: bash
         run: |
@@ -1068,7 +1068,7 @@ jobs:
           );
           NODE
 
-      - name: 🧩 Apply and commit files one by one
+      - name: "🧩 [PATCH] Apply and commit files one by one"
         id: apply
         shell: bash
         env:
@@ -1410,13 +1410,13 @@ jobs:
           );
           NODE
 
-      - name: ✨ Nothing to apply
+      - name: "⚙️ [RUN] Nothing to apply"
         if: steps.apply.outputs.changed_count == '0'
         run: |
           echo \
             "The ZIP contents are already synchronized with the repository."
 
-      - name: 🚀 Push patch branch
+      - name: "🚀 [DEPLOY] Push patch branch"
         if: steps.apply.outputs.changed_count != '0'
         shell: bash
         env:
@@ -1450,7 +1450,7 @@ jobs:
           }
           NODE
 
-      - name: 📋 Prepare pull request
+      - name: "🚀 [DEPLOY] Prepare pull request"
         if: steps.apply.outputs.changed_count != '0'
         id: pr
         shell: bash
@@ -1535,7 +1535,7 @@ jobs:
           );
           NODE
 
-      - name: 🔀 Open pull request
+      - name: "🚀 [DEPLOY] Open pull request"
         if: steps.apply.outputs.changed_count != '0'
         id: open-pr
         shell: bash
@@ -1599,7 +1599,7 @@ jobs:
           );
           NODE
 
-      - name: 📊 Summary
+      - name: "📦 [EVIDENCE] Summary"
         if: steps.apply.outputs.changed_count != '0'
         shell: bash
         env:
