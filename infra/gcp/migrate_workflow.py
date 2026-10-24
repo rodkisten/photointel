@@ -122,19 +122,28 @@ def discover_unambiguous_backup(project: str) -> str:
             project, capture=True,
         )
     except subprocess.CalledProcessError:
-        raise MigrationWorkflowError("Could not discover backup receipts in private GCS. Supply an explicit backup prefix.") from None
+        raise MigrationWorkflowError(
+            "Could not discover private backup receipts. Supply an explicit backup prefix."
+        ) from None
     candidates = {
         line.strip().rsplit("/", 1)[0]
         for line in listing.splitlines()
-        if line.strip().startswith(root) and line.strip().endswith("/restore-verification.json")
+        if line.strip().startswith(root)
+        and line.strip().endswith("/restore-verification.json")
     }
     candidates = {check_backup_prefix(candidate, project) for candidate in candidates}
     if len(candidates) != 1:
         raise MigrationWorkflowError(
-            f"Expected exactly one private backup receipt, found {len(candidates)}. Provide the verified prefix if ambiguous."
+            f"Expected one private backup receipt, found {len(candidates)}. "
+            "Supply an exact backup prefix if ambiguous."
         )
-    print("🔎 One private backup receipt discovered; validating encrypted manifest.", flush=True)
+    print(
+        "🔎 One private backup receipt discovered; validating encrypted manifest.",
+        flush=True,
+    )
     return next(iter(candidates))
+
+
 
 def apply_migration(
     project: str,
@@ -144,12 +153,23 @@ def apply_migration(
     if profile == "initial-empty":
         if prefix:
             raise MigrationWorkflowError("Initial-empty mode cannot reference a backup")
-        print("🛡️ Operator selected initial-empty: Neon database must already be verified empty.", flush=True)
-        subprocess.run(migration_command(project, initial_empty=True), check=True, timeout=3600)
+        print(
+            "🛡️ initial-empty selected: Neon must already be verified empty.",
+            flush=True,
+        )
+        subprocess.run(
+            migration_command(project, initial_empty=True), check=True, timeout=3600
+        )
         return
     if profile != "existing-with-backup":
-        raise MigrationWorkflowError("Select initial-empty or existing-with-backup for apply")
-    prefix = check_backup_prefix(prefix, project) if prefix else discover_unambiguous_backup(project)
+        raise MigrationWorkflowError(
+            "Select initial-empty or existing-with-backup for apply"
+        )
+    prefix = (
+        check_backup_prefix(prefix, project)
+        if prefix
+        else discover_unambiguous_backup(project)
+    )
     # Download only ciphertext + small verification metadata. Temporary files
     # disappear even when receipt verification or the Cloud Run Job fails.
     with tempfile.TemporaryDirectory(prefix="photointel-migration-") as directory:
@@ -211,11 +231,21 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.database == "unselected":
-            raise MigrationWorkflowError("Apply requires initial-empty or existing-with-backup as safety choice")
+            raise MigrationWorkflowError(
+                "Apply requires initial-empty or existing-with-backup"
+            )
         # Compare again immediately before the run, not against an operator-copied SHA.
-        if job_spec(config["image"].rsplit(":", 1)[0], args.project, config["region"]) != deployed_sha:
+        if (
+            job_spec(
+                config["image"].rsplit(":", 1)[0], args.project, config["region"]
+            )
+            != deployed_sha
+        ):
             raise MigrationWorkflowError("Deployed migration Job changed during preflight")
-        print(f"🛡️ APPLY using installed Job SHA {deployed_sha}; validating recovery evidence.", flush=True)
+        print(
+            f"🛡️ APPLY using installed Job SHA {deployed_sha}; checking evidence.",
+            flush=True,
+        )
         apply_migration(args.project, args.database, args.backup_prefix.strip())
 
         print("✅ Cloud Run migration Job completed successfully.", flush=True)
