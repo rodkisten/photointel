@@ -75,6 +75,10 @@ JWT e falha fechado; a proteção do Pages sozinha não autentica a API. Veja
 
 Use o [workflow independente de bootstrap](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml) para provisionamento idempotente com gcloud, após [configurar a identidade administrativa e o WIF separados](docs/deployment/GCP_BOOTSTRAP_ACTION.md). O workflow de deploy normal não executa bootstrap; ele usa uma identidade menos privilegiada.
 
+## 📱 Notify! Live Activities e notificações por step
+
+Todos os 13 workflows incluem notificações por step executado, agrupadas por ID da execução. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone, atualizada e finalizada conforme as fases avançam. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
+
 ## 🧭 GitHub Actions: workflows, ambientes e segredos
 
 A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
