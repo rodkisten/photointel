@@ -135,7 +135,9 @@ Para usar exatamente a mesma configuração no Cloud Shell, salve o texto acima 
 
 ```bash
 chmod 600 "$HOME/photointel-production.env"
-python3 -m pip install --user python-dotenv==1.2.4
+python3 -m venv "$HOME/.venvs/photointel-gcp"
+source "$HOME/.venvs/photointel-gcp/bin/activate"
+python -m pip install python-dotenv==1.2.4
 export GCP_CONFIG_ENV="$(cat "$HOME/photointel-production.env")"
 export CONFIRM_PROJECT=photointel
 export RELEASE_SHA="$(git rev-parse HEAD)"
@@ -183,7 +185,7 @@ O bucket existente pode estar na multirregião `US`: **não o recrie** somente p
 | `photointel-deployer` | Contas `api`, `jobs`, `migrate`, `scheduler` e **`builder`** | `roles/iam.serviceAccountUser` |
 | `api`, `jobs`, `migrate` | Cada Secret Manager pertinente | `roles/secretmanager.secretAccessor`, conforme `bootstrap()` |
 
-A permissão `serviceusage.services.use` pode ser necessária para o Deployer. Conceda **`roles/serviceusage.serviceUsageConsumer`** no projeto, usando um operador autorizado:
+O `bootstrap()` atual também concede **`roles/serviceusage.serviceUsageConsumer`** ao Deployer para o uso de APIs, mas **não** concede poderes de habilitar serviços. Se o bootstrap executado antes desta revisão não concluiu essa etapa, o operador autorizado pode regularizar com:
 
 ```bash
 gcloud projects add-iam-policy-binding photointel \
@@ -214,7 +216,7 @@ python3 -c 'import base64,secrets; print(base64.b64encode(secrets.token_bytes(32
 
 **Não** cole saídas de secrets no GitHub Variables, no README, nos logs, no shell history ou nos tickets. Se credenciais R2 já foram expostas, **revogue e gere novas** antes do deploy.
 
-Verifique os números reais das versões e atualize ``SECRETS__...__VERSION`` na configuração. O `bootstrap` cria apenas o contêiner do secret; a **versão 1 não passa a existir** até incluir o valor.
+Verifique os números reais das versões e atualize `SECRETS__...__VERSION` na configuração. O `bootstrap` cria apenas o contêiner do secret; a **versão 1 não passa a existir** até incluir o valor.
 
 ## 6. Workload Identity Federation (GitHub → Google sem chave JSON)
 
