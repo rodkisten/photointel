@@ -150,8 +150,8 @@ jobs:
           echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
 
       - name: "🏗️ [BUILD] Skip build if commit image already exists"
-        if: inputs.action == 'build' || inputs.action == 'all'
         id: image_cache
+        if: inputs.action == 'build' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
