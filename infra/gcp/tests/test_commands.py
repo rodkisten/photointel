@@ -37,28 +37,27 @@ class CloudRunCommandsTests(unittest.TestCase):
     def test_bootstrap_skips_enabled_apis_during_apply(self) -> None:
         class RecordingRunner:
             apply = True
-            config = self.config
 
-            def __init__(self, enabled):
+            def __init__(self, enabled, config):
+                self.config = config
                 self.enabled = enabled
                 self.commands = []
 
             def command(self, args, *, capture=False):
                 self.commands.append(args)
                 if args[:2] == ["services", "list"]:
-                    self_outer = self
-                    return "\\n".join(self_outer.enabled)
+                    return "\n".join(self.enabled)
                 return ""
 
             def ensure(self, query, create):
                 self.commands.append(["ensure", *query])
 
-        complete = RecordingRunner(manage.SERVICES)
+        complete = RecordingRunner(manage.SERVICES, self.config)
         with contextlib.redirect_stdout(io.StringIO()):
             manage.bootstrap(complete)
         self.assertFalse(any(cmd[:2] == ["services", "enable"] for cmd in complete.commands))
 
-        partial = RecordingRunner(manage.SERVICES[:-1])
+        partial = RecordingRunner(manage.SERVICES[:-1], self.config)
         with contextlib.redirect_stdout(io.StringIO()):
             manage.bootstrap(partial)
         enabled = [cmd for cmd in partial.commands if cmd[:2] == ["services", "enable"]]
