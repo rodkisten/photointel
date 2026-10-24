@@ -78,10 +78,10 @@ Não crie JSON key. O GitHub Action troca tokens curtos por WIF. Os próprios va
 
 Abra [GitHub Actions: Administrative bootstrap](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml), selecione a branch `main`, informe `confirm_project=photointel`:
 
-1. **`mode=plan`**, `authorize_charges=false`: valida a configuração, autentica como bootstrap e lista o escopo sem alterar recursos.
+1. **`mode=plan`**, `authorize_charges=false`: valida a configuração e lista o escopo **offline, sem exigir WIF administrativo nem acesso ao Google Cloud**, sem alterar recursos.
 2. **`mode=apply`**, `authorize_charges=true`: aprova o provisionamento e reconcilia o projeto. O Environment pode exigir revisão antes de permitir execução.
 
-A ação valida `GCP_CONFIG_ENV`, instala `gcloud` com `setup-gcloud`, autentica como `photointel-bootstrap` com `auth` e executa `bash infra/gcp/bootstrap.sh`. Os comandos `gcloud` da execução têm acesso aos logs do próprio Actions e param no primeiro erro.
+A ação valida `GCP_CONFIG_ENV` e executa `bash infra/gcp/bootstrap.sh`. Em `plan`, não autentica no Google nem instala `gcloud`; em `apply`, autentica como `photointel-bootstrap` com `auth` e instala `gcloud` por `setup-gcloud` antes de executar o script. Os comandos `gcloud` da execução têm acesso aos logs do próprio Actions e param no primeiro erro.
 
 ### Idempotência e limites
 
