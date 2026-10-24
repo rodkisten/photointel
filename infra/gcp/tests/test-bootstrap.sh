@@ -8,6 +8,12 @@ cat > "$TMP/gcloud" <<'FAKE'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 printf '%s\n' "$*" >> "$GCLOUD_TRACE"
+# Simulate existing conditional IAM bindings at any scope. Noninteractive
+# gcloud refuses unconditional grants unless --condition=None is explicit.
+if [[ " $* " == *" add-iam-policy-binding "* && " $* " != *" --condition=None "* ]]; then
+  echo "Adding a binding without specifying a condition to a policy containing conditions is prohibited in non-interactive mode." >&2
+  exit 1
+fi
 case "$*" in
   "auth list"*) echo fake-admin@testing.invalid; exit 0 ;;
   "services list"*)
@@ -36,6 +42,11 @@ for attempt in 1 2; do
     echo "ERROR: existing resources were recreated" >&2; exit 1
   fi
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
+  grep -q 'projects add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
+  grep -q 'secrets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
+  grep -q 'storage buckets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
+  grep -q 'artifacts repositories add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
+  grep -q 'iam service-accounts add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
 done
 : > "$GCLOUD_TRACE"
 if FAKE_PERMISSION_DENIED=true BOOTSTRAP_MODE=apply AUTHORIZE_CHARGES=true bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/denied" 2>&1; then
