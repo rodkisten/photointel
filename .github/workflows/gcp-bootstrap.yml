@@ -59,6 +59,7 @@ jobs:
         run: bash -n infra/gcp/bootstrap.sh
 
       - name: "🧪 [TEST] Validate dedicated bootstrap identity"
+        if: inputs.mode == 'apply'
         env:
           WIF: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           BOOTSTRAP_ACCOUNT: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
@@ -70,6 +71,7 @@ jobs:
           test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
 
       - name: "🔐 [AUTH] Authenticate as bootstrap administrator (WIF, no JSON key)"
+        if: inputs.mode == 'apply'
         uses: google-github-actions/auth@v3
         with:
           project_id: ${{ inputs.confirm_project }}
@@ -77,6 +79,7 @@ jobs:
           service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
 
       - name: "🧰 [SETUP] Set up Google Cloud CLI"
+        if: inputs.mode == 'apply'
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: ${{ inputs.confirm_project }}
