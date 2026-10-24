@@ -71,12 +71,38 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.checkout.outcome == 'success' || steps.checkout.outcome == 'failure' || steps.checkout.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.checkout.outcome }}
       - name: "🧰 [SETUP] Setup Python"
+        id: notify_observed_001
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Setup Python"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Setup Python"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 [SETUP] Setup uv with persistent cache"
+        id: notify_observed_002
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -86,14 +112,40 @@ jobs:
             pyproject.toml
           ignore-nothing-to-cache: true
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Setup uv with persistent cache"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Setup uv with persistent cache"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧰 [SETUP] Setup Node.js"
+        id: notify_observed_003
         uses: actions/setup-node@v7
         with:
           node-version: "24"
           # Its automatic cache looks for a root lockfile. Our lockfile is in apps/web.
           package-manager-cache: false
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Setup Node.js"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Setup Node.js"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧰 [SETUP] Restore npm download cache"
+        id: notify_observed_004
         if: ${{ hashFiles('apps/web/package.json') != '' }}
         uses: actions/cache@v4
         with:
@@ -102,7 +154,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node24-photointel-npm-
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Restore npm download cache"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Restore npm download cache"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧰 [SETUP] Install Make and development tools"
+        id: notify_observed_005
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -121,24 +186,76 @@ jobs:
           node --version
           npm --version
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Install Make and development tools"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Install Make and development tools"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "⚙️ [RUN] Initialize session marker"
+        id: notify_observed_006
         if: ${{ inputs.command == 'ssh' }}
         run: rm -f -- "$(git rev-parse --git-path dev-ssh-finish)"
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Initialize session marker"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Initialize session marker"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "🧰 [SETUP] Install project dependencies"
+        id: notify_observed_007
         if: ${{ inputs.command != 'setup' && inputs.command != 'help' && inputs.command != 'info' && inputs.command != 'stop' && inputs.command != 'cleanup' }}
         # SSH is a recovery shell too: allow login even if project installation fails.
         # Non-interactive Make commands continue to fail fast when setup fails.
         continue-on-error: ${{ inputs.command == 'ssh' }}
         run: make setup
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Install project dependencies"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Install project dependencies"
+          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "⚙️ [RUN] Run Make command"
+        id: notify_observed_008
         if: ${{ inputs.command != 'ssh' }}
         env:
           MAKE_TARGET: ${{ inputs.command }}
         run: make "$MAKE_TARGET"
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Run Make command"
+        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Run Make command"
+          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "🔐 [AUTH] Verify Tailscale OAuth secrets"
+        id: notify_observed_009
         if: ${{ inputs.command == 'ssh' }}
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -149,7 +266,20 @@ jobs:
             exit 1
           fi
 
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Verify Tailscale OAuth secrets"
+        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Verify Tailscale OAuth secrets"
+          outcome: ${{ steps.notify_observed_009.outcome }}
       - name: "🔐 [AUTH] Connect Tailscale using OAuth"
+        id: notify_observed_010
         if: ${{ inputs.command == 'ssh' }}
         uses: tailscale/github-action@v4
         with:
@@ -157,6 +287,18 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
 
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Connect Tailscale using OAuth"
+        if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Connect Tailscale using OAuth"
+          outcome: ${{ steps.notify_observed_010.outcome }}
       - name: "🔐 [AUTH] Enable Tailscale SSH"
         if: ${{ inputs.command == 'ssh' }}
         id: ssh
@@ -178,16 +320,55 @@ jobs:
           echo 'To save and finish: make finish'
           ln -sfn "$GITHUB_WORKSPACE" "$HOME/photointel"
 
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Enable Tailscale SSH"
+        if: ${{ always() && (steps.ssh.outcome == 'success' || steps.ssh.outcome == 'failure' || steps.ssh.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Enable Tailscale SSH"
+          outcome: ${{ steps.ssh.outcome }}
       - name: "🔐 [AUTH] Keep SSH session alive"
+        id: notify_observed_011
         if: ${{ inputs.command == 'ssh' }}
         env:
           SESSION_MINUTES: ${{ inputs.session_minutes }}
         run: make keepalive
 
       # IMPORTANT: immediately after SSH. Preserve it in this position.
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Keep SSH session alive"
+        if: ${{ always() && (steps.notify_observed_011.outcome == 'success' || steps.notify_observed_011.outcome == 'failure' || steps.notify_observed_011.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Keep SSH session alive"
+          outcome: ${{ steps.notify_observed_011.outcome }}
       - name: "🚀 [DEPLOY] Auto Commit & Push session changes"
+        id: notify_observed_012
         if: ${{ always() && steps.checkout.outcome == 'success' && steps.ssh.outcome == 'success' }}
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: bash scripts/commit-session.sh
 
+
+      - name: "🔔 [NOTIFY] 🚀 [DEPLOY] Auto Commit & Push session changes"
+        if: ${{ always() && (steps.notify_observed_012.outcome == 'success' || steps.notify_observed_012.outcome == 'failure' || steps.notify_observed_012.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [DEPLOY] Auto Commit & Push session changes"
+          outcome: ${{ steps.notify_observed_012.outcome }}
