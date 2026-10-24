@@ -3,7 +3,8 @@ on:
   pull_request:
     paths:
       - infra/gcp/**
-      - '!infra/gcp/*.json'
+      - '!infra/gcp/artifact-registry-cleanup.json'
+      - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
@@ -15,7 +16,8 @@ on:
     branches: [main]
     paths:
       - infra/gcp/**
-      - '!infra/gcp/*.json'
+      - '!infra/gcp/artifact-registry-cleanup.json'
+      - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
