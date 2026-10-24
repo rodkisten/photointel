@@ -22,6 +22,10 @@ RUN test -f pyproject.toml && \
     (echo >&2 'ERROR: Docker build context must be the repository root (.). Use cloudbuild.yaml.'; exit 1)
 RUN uv sync --frozen --no-dev --group ingest
 
+# Catch broken Python imports in Cloud Build instead of discovering them via
+# Cloud Run startup probes. No production secrets or network services required.
+RUN /app/.venv/bin/python -c "from photointel.main import app; assert app.title == 'Photo Intelligence Cloud'"
+
 FROM python:3.12-slim-bookworm AS runtime
 RUN set -eu; \
     apt-get update; \

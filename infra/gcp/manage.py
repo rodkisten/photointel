@@ -636,6 +636,8 @@ def bootstrap(runner: Runner) -> None:
         "roles/cloudscheduler.admin",
         "roles/cloudbuild.builds.editor",
         "roles/artifactregistry.reader",
+        # Needed to show classified failed-revision logs without exposing secret values.
+        "roles/logging.viewer",
         # Allows service usage (not API enablement); bootstrap itself uses an admin.
         "roles/serviceusage.serviceUsageConsumer",
     ):

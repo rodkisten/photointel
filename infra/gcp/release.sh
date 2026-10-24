@@ -55,8 +55,15 @@ case "$PHASE" in
     ;;
   deploy)
     database_gate
-    manage deploy
-    summary "✅ Cloud Run API deployment requested. Test authentication before importing data."
+    if manage deploy; then
+      summary "✅ Cloud Run API deployment requested. Test authentication before importing data."
+    else
+      status=$?
+      log "::error::Cloud Run service deployment failed. Collecting safe startup diagnostics."
+      # Do not mask the deployment failure; troubleshooting is read-only and best-effort.
+      python3 infra/gcp/diagnose_startup.py --project "$PROJECT" || true
+      exit "$status"
+    fi
     ;;
   scheduler)
     manage scheduler
