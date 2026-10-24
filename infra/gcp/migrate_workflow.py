@@ -76,7 +76,7 @@ def job_spec(image_prefix: str, project: str, region: str) -> str:
             container_spec = spec["template"]
         container = container_spec["containers"][0]
         current_image = container["image"]
-        retries = container_spec.get("maxRetries", spec.get("maxRetries", 0))
+        retries = container_spec.get("maxRetries", spec.get("maxRetries"))
         service_account = container_spec.get("serviceAccountName") or container_spec.get("serviceAccount")
         args = container["args"]
     except (KeyError, IndexError, TypeError, AttributeError) as exc:
