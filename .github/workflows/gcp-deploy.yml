@@ -11,10 +11,42 @@ on:
           - all
           - build
           - jobs-deploy
+          - migrate
           - deploy
           - scheduler
           - cleanup
         required: true
+
+      migration_mode:
+        description: 'Only for migrate: read-only plan or execute the Cloud Run Job'
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+        required: true
+
+      migration_database:
+        description: 'Only for migrate apply: verified empty Neon or existing database with restore receipt'
+        type: choice
+        options:
+          - unselected
+          - initial-empty
+          - existing-with-backup
+        default: unselected
+        required: true
+
+      initial_empty_database:
+        description: 'I independently verified Neon has no existing application data (migrate apply only)'
+        type: boolean
+        default: false
+        required: true
+
+      migration_backup_prefix:
+        description: 'For existing database: private gs://photointel-photointel-build-source/migration-backups/NAME'
+        type: string
+        default: ''
+        required: false
 
       database_ready:
         description: 'For deploy/all: I verified Neon migration, secret versions and Cloudflare Access readiness'
@@ -48,7 +80,7 @@ concurrency:
 jobs:
   deploy:
     name: "🚀 [GCP DEPLOY] ${{ inputs.action }} · ${{ inputs.confirm_project }}"
-    if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
+    if: github.ref == 'refs/heads/main' && (inputs.authorize_charges == true || (inputs.action == 'migrate' && inputs.migration_mode == 'plan'))
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 90
@@ -285,6 +317,32 @@ jobs:
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "67"
+      - name: "🗃️ [MIGRATE] Plan or execute protected Neon migration"
+        id: migrate_database
+        if: inputs.action == 'migrate'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          RELEASE_SHA: ${{ github.sha }}
+          MIGRATION_MODE: ${{ inputs.migration_mode }}
+          MIGRATION_DATABASE: ${{ inputs.migration_database }}
+          INITIAL_EMPTY_DATABASE: ${{ inputs.initial_empty_database }}
+          MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
+        run: bash infra/gcp/release.sh migrate
+
+      - name: "🔔 [NOTIFY] 🗃️ [MIGRATE] Plan or execute protected Neon migration"
+        if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃️ [MIGRATE] Plan or execute protected Neon migration"
+          outcome: ${{ steps.migrate_database.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          progress: "71"
       - name: "🚀 [API] Publish Cloud Run service"
         id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'all'
