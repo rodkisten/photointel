@@ -316,6 +316,25 @@ No IAM verifique especificamente:
 
 Uma conta builder **não é criada** por `build`. Execute bootstrap administrativo antes, ou crie/configure manualmente com os papéis acima.
 
+## 🚀 Workflow único: dropdown por etapa ou ALL
+
+O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece o dropdown **`action`** com `build`, `jobs-deploy`, `deploy`, `scheduler`, `cleanup` e **`all`**. Todas as opções executam no mesmo workflow, com os mesmos valores de `vars.GCP_CONFIG_ENV` do Environment `production`.
+
+| Seleção | Operações executadas | Observação |
+|---|---|---|
+| `build` | Verifica prerequisitos → reutiliza imagem do SHA, ou compila/publica | Não cria recursos Cloud Run de runtime |
+| `jobs-deploy` | Confere imagem do SHA → publica 5 Jobs | Não executa migração |
+| `deploy` | Confirma `database_ready` → confere imagem → publica API | A migração deve estar concluída |
+| `scheduler` | Cria/atualiza 3 cron jobs **pausados** | Não dispara processamento |
+| `cleanup` | Pausa cron jobs | Não deleta imagens, dados ou services |
+| **`all`** | Confirma `database_ready` → build/reuso → verifica imagem → Jobs → API → Scheduler pausado | Tudo em **uma execução**, interrompendo na primeira falha |
+
+**⚠️ Primeira implantação:** o `all` **não executa migrações**. O booleano `database_ready` começa **desmarcado** e só deve ser marcado após confirmar que a migração do Neon foi realizada, as versões referenciadas dos secrets existem e o controle de acesso Cloudflare foi preparado. Isso protege a publicação da API sem banco pronto. Para sua primeira instalação, siga `build` → `jobs-deploy` → migração manual validada → `deploy` → `scheduler`. Para **releases seguintes**, com o banco migrado/compatível, use `all`.
+
+O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita uma imagem existente desse SHA; caso contrário, constrói uma nova, publica-a e verifica o digest antes de alterar os Jobs. Alterar `main` depois de um build anterior significa um SHA novo e portanto uma imagem potencialmente nova.
+
+**Como acionar:** `Run workflow` → branch `main` → action `all` (ou etapa isolada) → `confirm_project=photointel` → `authorize_charges=true` após revisão → para `all`/`deploy`, marque `database_ready` somente se verificado. A execução publica um resumo por etapa e remove arquivos temporários do runner ao final.
+
 ## 9. Build → Jobs → migração → API → Scheduler
 
 Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), escolha `Run workflow`, branch `main`, `confirm_project=photointel` e marque a autorização de cobrança **após revisar** a ação.
