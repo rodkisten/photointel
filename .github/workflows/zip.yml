@@ -41,20 +41,59 @@ jobs:
 
     steps:
       - name: "📥 [SOURCE] Checkout selected branch"
+        id: notify_observed_001
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout selected branch"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout selected branch"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 [SETUP] Setup Node.js"
+        id: notify_observed_002
         uses: actions/setup-node@v6
         with:
           node-version: 24
           package-manager-cache: false
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Setup Node.js"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Setup Node.js"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧪 [TEST] Verify private-file rejection policy"
+        id: notify_observed_003
         run: node --test infra/scripts/zip-patch-policy.test.cjs
 
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Verify private-file rejection policy"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Verify private-file rejection policy"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧪 [TEST] Validate selected branch and ZIP path"
         id: zip
         shell: bash
@@ -152,6 +191,18 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Validate selected branch and ZIP path"
+        if: ${{ always() && (steps.zip.outcome == 'success' || steps.zip.outcome == 'failure' || steps.zip.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Validate selected branch and ZIP path"
+          outcome: ${{ steps.zip.outcome }}
       - name: "🧪 [TEST] Validate and safely extract ZIP"
         id: extract
         shell: bash
@@ -488,6 +539,18 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Validate and safely extract ZIP"
+        if: ${{ always() && (steps.extract.outcome == 'success' || steps.extract.outcome == 'failure' || steps.extract.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Validate and safely extract ZIP"
+          outcome: ${{ steps.extract.outcome }}
       - name: "⚙️ [RUN] Resolve repository structure"
         id: structure
         shell: bash
@@ -741,7 +804,20 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Resolve repository structure"
+        if: ${{ always() && (steps.structure.outcome == 'success' || steps.structure.outcome == 'failure' || steps.structure.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Resolve repository structure"
+          outcome: ${{ steps.structure.outcome }}
       - name: "⚙️ [RUN] Inspect normalized file structure"
+        id: notify_observed_004
         shell: bash
         env:
           PATCH_ROOT: ${{ steps.structure.outputs.patch_root }}
@@ -833,6 +909,18 @@ jobs:
           }
           NODE
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Inspect normalized file structure"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Inspect normalized file structure"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🚀 [DEPLOY] Find CHANGELOG for pull request description"
         id: changelog
         shell: bash
@@ -990,6 +1078,18 @@ jobs:
           }
           NODE
 
+      - name: "🔔 [NOTIFY] 🚀 [DEPLOY] Find CHANGELOG for pull request description"
+        if: ${{ always() && (steps.changelog.outcome == 'success' || steps.changelog.outcome == 'failure' || steps.changelog.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [DEPLOY] Find CHANGELOG for pull request description"
+          outcome: ${{ steps.changelog.outcome }}
       - name: "🧩 [PATCH] Create patch branch"
         id: branch
         shell: bash
@@ -1068,6 +1168,18 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🧩 [PATCH] Create patch branch"
+        if: ${{ always() && (steps.branch.outcome == 'success' || steps.branch.outcome == 'failure' || steps.branch.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧩 [PATCH] Create patch branch"
+          outcome: ${{ steps.branch.outcome }}
       - name: "🧩 [PATCH] Apply and commit files one by one"
         id: apply
         shell: bash
@@ -1410,13 +1522,39 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🧩 [PATCH] Apply and commit files one by one"
+        if: ${{ always() && (steps.apply.outcome == 'success' || steps.apply.outcome == 'failure' || steps.apply.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧩 [PATCH] Apply and commit files one by one"
+          outcome: ${{ steps.apply.outcome }}
       - name: "⚙️ [RUN] Nothing to apply"
+        id: notify_observed_005
         if: steps.apply.outputs.changed_count == '0'
         run: |
           echo \
             "The ZIP contents are already synchronized with the repository."
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Nothing to apply"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Nothing to apply"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🚀 [DEPLOY] Push patch branch"
+        id: notify_observed_006
         if: steps.apply.outputs.changed_count != '0'
         shell: bash
         env:
@@ -1450,6 +1588,18 @@ jobs:
           }
           NODE
 
+      - name: "🔔 [NOTIFY] 🚀 [DEPLOY] Push patch branch"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [DEPLOY] Push patch branch"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "🚀 [DEPLOY] Prepare pull request"
         if: steps.apply.outputs.changed_count != '0'
         id: pr
@@ -1535,6 +1685,18 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🚀 [DEPLOY] Prepare pull request"
+        if: ${{ always() && (steps.pr.outcome == 'success' || steps.pr.outcome == 'failure' || steps.pr.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [DEPLOY] Prepare pull request"
+          outcome: ${{ steps.pr.outcome }}
       - name: "🚀 [DEPLOY] Open pull request"
         if: steps.apply.outputs.changed_count != '0'
         id: open-pr
@@ -1599,7 +1761,20 @@ jobs:
           );
           NODE
 
+      - name: "🔔 [NOTIFY] 🚀 [DEPLOY] Open pull request"
+        if: ${{ always() && (steps.open-pr.outcome == 'success' || steps.open-pr.outcome == 'failure' || steps.open-pr.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 [DEPLOY] Open pull request"
+          outcome: ${{ steps.open-pr.outcome }}
       - name: "📦 [EVIDENCE] Summary"
+        id: notify_observed_007
         if: steps.apply.outputs.changed_count != '0'
         shell: bash
         env:
@@ -1636,3 +1811,16 @@ jobs:
             summary,
           );
           NODE
+
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Summary"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Summary"
+          outcome: ${{ steps.notify_observed_007.outcome }}
