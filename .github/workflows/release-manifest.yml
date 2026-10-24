@@ -1,4 +1,4 @@
-name: Generate release provenance (no deployment)
+name: "🧾 [RELEASE] Generate provenance"
 on:
   workflow_dispatch:
     inputs:
@@ -14,11 +14,13 @@ permissions:
   contents: read
 jobs:
   manifest:
+    name: "🧾 [RELEASE] manifest"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: Generate commit-bound provenance without claiming tests ran
+      - name: "🧪 [TEST] Generate commit-bound provenance without claiming tests ran"
         env:
           CONTAINER_DIGEST: ${{ inputs.container_digest }}
           MODAL_DEPLOYMENT_ID: ${{ inputs.modal_deployment_id }}
@@ -31,7 +33,8 @@ jobs:
             arguments+=(--modal-deployment-id "$MODAL_DEPLOYMENT_ID")
           fi
           python3 infra/scripts/release-manifest.py "${arguments[@]}"
-      - uses: actions/upload-artifact@v4
+      - name: "📦 [EVIDENCE] Upload test artifacts"
+        uses: actions/upload-artifact@v4
         with:
           name: release-provenance-${{ github.sha }}
           path: reports/release-manifest.json
