@@ -75,6 +75,10 @@ JWT e falha fechado; a proteção do Pages sozinha não autentica a API. Veja
 
 Use o [workflow independente de bootstrap](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml) para provisionamento idempotente com gcloud, após [configurar a identidade administrativa e o WIF separados](docs/deployment/GCP_BOOTSTRAP_ACTION.md). O workflow de deploy normal não executa bootstrap; ele usa uma identidade menos privilegiada.
 
+## 🧭 GitHub Actions: workflows, ambientes e segredos
+
+A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
+
 ## Google Cloud Run: do zero ao deploy
 
 **[Guia completo e atualizado, com comandos e telas](docs/deployment/CLOUD_RUN_FROM_ZERO.md).** Ele cobre o que foi necessário para provisionar esta instalação real: APIs, Cloud Shell, Neon/R2, Cloudflare Access, Secret Manager, IAM, bucket de staging, Artifact Registry, WIF do GitHub, workflows, build, migração e rollback.
