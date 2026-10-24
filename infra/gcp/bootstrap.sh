@@ -4,7 +4,8 @@ set -Eeuo pipefail
 MODE="${BOOTSTRAP_MODE:-plan}"
 CONFIG="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
 [[ "$MODE" == "plan" || "$MODE" == "apply" ]] || { echo "::error::Invalid mode" >&2; exit 2; }
-command -v jq >/dev/null && command -v gcloud >/dev/null || { echo "::error::Requires gcloud and jq" >&2; exit 2; }
+command -v jq >/dev/null || { echo "::error::jq is required" >&2; exit 2; }
+if [[ "$MODE" == apply ]]; then command -v gcloud >/dev/null || { echo "::error::gcloud is required for apply" >&2; exit 2; }; fi
 PROJECT="$(jq -er '.project_id' "$CONFIG")"
 REGION="$(jq -er '.region' "$CONFIG")"
 REPO="$(jq -er '.repository' "$CONFIG")"
@@ -50,7 +51,7 @@ for key in "${KEYS[@]}"; do
   SECRET_NAMES["$key"]="$name"
 done
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
-log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"
+if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
   log "No mutations. Will reconcile APIs, Docker repository, six service accounts, ${#KEYS[@]} secret containers, staging bucket, and IAM."
   exit 0
