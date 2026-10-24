@@ -23,6 +23,15 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: "🛡️ [GUARD] Validate action mode"
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in
+          prepare|cleanup) ;;
+          *) echo "::error::Unsupported gcp-config action mode: $MODE" >&2; exit 2 ;;
+        esac
     - name: "📦 [CONFIG] Install dotenv parser"
       if: inputs.mode == 'prepare'
       shell: bash
