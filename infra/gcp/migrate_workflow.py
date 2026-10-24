@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.backup_prefix:
                 check_backup_prefix(args.backup_prefix, args.project)
             if args.database == "existing-with-backup" and not args.backup_prefix:
-                print("⚠️ Apply to an existing database requires a private GCS backup prefix.")
+                print("🔎 Apply will discover a single private backup receipt automatically.")
             print(
                 "🧾 PLAN ONLY. No database changes. "
                 "Apply executes photointel-migrate once, with --wait, after backup guards."
