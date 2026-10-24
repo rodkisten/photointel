@@ -148,6 +148,12 @@ python3 infra/gcp/manage.py bootstrap               # plano offline, sem mutaç�
 
 O exemplo `config.example.json` é outro ponto de partida possível, mas requer preencher manualmente `image` e `release_git_sha`, além dos demais campos. `config.local.json` é privado e fica fora do Git.
 
+## 4. Bootstrap com GitHub Actions (fluxo preferencial)
+
+Foi criado um [workflow administrativo idempotente](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml), separado do deploy, que utiliza a conta `photointel-bootstrap` e comandos `gcloud` para verificar e criar recursos ausentes. Antes do primeiro uso, crie uma vez a conta e a confiança WIF com sua identidade humana. Consulte [passo a passo do bootstrap administrativo](GCP_BOOTSTRAP_ACTION.md). O modo `plan` não altera recursos; `apply` exige autorização explícita. O deploy normal não oferece mais a opção `bootstrap`.
+
+A alternativa abaixo é a execução inicial no Cloud Shell pela conta humana administradora.
+
 ## 4. Bootstrap: uma única vez com operador administrativo
 
 **Recomendado:** execute o `bootstrap` no Cloud Shell com sua identidade **humana** administradora, não pelo token WIF do `photointel-deployer`. A conta Deployer é criada/configurada pelo próprio bootstrap, então tentar usá-la para conceder seu próprio IAM gera um ciclo de privilégios.
