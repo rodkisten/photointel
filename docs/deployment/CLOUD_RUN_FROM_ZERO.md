@@ -416,6 +416,7 @@ O smoke anônimo verifica a proteção de rotas privadas (esperado `401/403`); d
 | `Repository "photointel" not found` | Crie Docker Artifact Registry `photointel` na região `us-central1`; não é o repositório GitHub |
 | `containeranalysis.occurrences.list denied` | `images describe` antigo exigia Artifact Analysis. O `manage.py` atual lista imagens e confere SHA/digest via Artifact Registry Reader |
 | Cloud Build `SUCCESS` mas workflow falha | Inspecione a **etapa após o build** e não reconstrua sem necessidade; o push anterior pode já ter sido concluído |
+| Cloud Run `channel_binding=require` / `asyncpg does not support channel_binding` | URL padrão do Neon exige SCRAM-SHA-256-PLUS, que `asyncpg` não implementa. `db_connection.py` seleciona `postgresql+psycopg` automaticamente e preserva `channel_binding=require`, `sslmode=verify-full` e CAs do sistema. A imagem Docker valida esse perfil sem credenciais antes da publicação. Faça **novo build** da `main` com a correção, depois `deploy` ou `all` após verificar `database_ready`. Não remova `channel_binding=require` nem exponha o URL do banco. |
 
 ## Política de retenção e builds idempotentes
 
