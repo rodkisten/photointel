@@ -42,6 +42,12 @@ on:
         default: false
         required: true
 
+      migration_release_sha:
+        description: 'For migrate apply: exact installed Job SHA shown by migrate plan'
+        type: string
+        default: ''
+        required: false
+
       migration_backup_prefix:
         description: 'For existing database: private gs://photointel-photointel-build-source/migration-backups/NAME'
         type: string
@@ -324,6 +330,7 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
           MIGRATION_MODE: ${{ inputs.migration_mode }}
+          MIGRATION_RELEASE_SHA: ${{ inputs.migration_release_sha }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
           INITIAL_EMPTY_DATABASE: ${{ inputs.initial_empty_database }}
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
