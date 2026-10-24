@@ -22,37 +22,115 @@ jobs:
       COMPOSE_PARALLEL_LIMIT: '1'
     steps:
       - name: "📥 [SOURCE] Check out the exact revision"
+        id: notify_observed_001
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Check out the exact revision"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Check out the exact revision"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 [SETUP] Install the documented Python dependency manager"
+        id: notify_observed_002
         uses: astral-sh/setup-uv@v6
         with:
           version: '0.12.23'
           enable-cache: true
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Install the documented Python dependency manager"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Install the documented Python dependency manager"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧰 [SETUP] Select Python 3.12"
+        id: notify_observed_003
         run: uv python install 3.12
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Select Python 3.12"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Select Python 3.12"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧰 [SETUP] Select Node 22"
+        id: notify_observed_004
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Select Node 22"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Select Node 22"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧰 [SETUP] Run documented setup with committed lockfiles"
+        id: notify_observed_005
         run: |
           make setup
           git diff --exit-code -- uv.lock apps/web/package-lock.json
           python3 infra/scripts/validate-compose.py --phase configuration
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Run documented setup with committed lockfiles"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Run documented setup with committed lockfiles"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧰 [SETUP] Set up the shared BuildKit builder"
         id: builder
         uses: docker/setup-buildx-action@v3
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Set up the shared BuildKit builder"
+        if: ${{ always() && (steps.builder.outcome == 'success' || steps.builder.outcome == 'failure' || steps.builder.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Set up the shared BuildKit builder"
+          outcome: ${{ steps.builder.outcome }}
       - name: "🧰 [SETUP] Warm the real source-built MinIO cache without publishing"
+        id: notify_observed_006
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -63,25 +141,77 @@ jobs:
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Warm the real source-built MinIO cache without publishing"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Warm the real source-built MinIO cache without publishing"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "⚙️ [RUN] Start the actual documented Compose services"
+        id: notify_observed_007
         env:
           BUILDX_BUILDER: ${{ steps.builder.outputs.name }}
         run: |
           make dev
           uv run python infra/scripts/validate-compose.py --phase startup --expected-assets 0
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Start the actual documented Compose services"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Start the actual documented Compose services"
+          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "🗃️ [DATA] Reapply migrations and import sixteen synthetic photos"
+        id: notify_observed_008
         run: |
           make migrate
           make seed ASSETS=16
           uv run python infra/scripts/validate-compose.py --phase seeded --expected-assets 16
 
+      - name: "🔔 [NOTIFY] 🗃️ [DATA] Reapply migrations and import sixteen synthetic photos"
+        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃️ [DATA] Reapply migrations and import sixteen synthetic photos"
+          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "🗃️ [DATA] Verify repeat import does not duplicate persisted work"
+        id: notify_observed_009
         run: |
           make seed ASSETS=16
           uv run python infra/scripts/validate-compose.py --phase repeated --expected-assets 16 --compare seeded
 
+      - name: "🔔 [NOTIFY] 🗃️ [DATA] Verify repeat import does not duplicate persisted work"
+        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃️ [DATA] Verify repeat import does not duplicate persisted work"
+          outcome: ${{ steps.notify_observed_009.outcome }}
       - name: "🧹 [CLEANUP] Stop and restart the documented stack with its volumes preserved"
+        id: notify_observed_010
         env:
           BUILDX_BUILDER: ${{ steps.builder.outputs.name }}
         run: |
@@ -89,18 +219,57 @@ jobs:
           make dev
           uv run python infra/scripts/validate-compose.py --phase restarted --expected-assets 16 --compare seeded
 
+      - name: "🔔 [NOTIFY] 🧹 [CLEANUP] Stop and restart the documented stack with its volumes preserved"
+        if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 [CLEANUP] Stop and restart the documented stack with its volumes preserved"
+          outcome: ${{ steps.notify_observed_010.outcome }}
       - name: "⚙️ [RUN] Capture health and allowlisted redacted failure summaries"
+        id: notify_observed_011
         if: always()
         run: python3 infra/scripts/validate-compose.py --phase final-health
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Capture health and allowlisted redacted failure summaries"
+        if: ${{ always() && (steps.notify_observed_011.outcome == 'success' || steps.notify_observed_011.outcome == 'failure' || steps.notify_observed_011.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Capture health and allowlisted redacted failure summaries"
+          outcome: ${{ steps.notify_observed_011.outcome }}
       - name: "🧹 [CLEANUP] Stop the isolated runner stack and preserve its volumes"
+        id: notify_observed_012
         if: always()
         run: |
           if test -f .env; then
             bash infra/scripts/compose.sh down --remove-orphans
           fi
 
+      - name: "🔔 [NOTIFY] 🧹 [CLEANUP] Stop the isolated runner stack and preserve its volumes"
+        if: ${{ always() && (steps.notify_observed_012.outcome == 'success' || steps.notify_observed_012.outcome == 'failure' || steps.notify_observed_012.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 [CLEANUP] Stop the isolated runner stack and preserve its volumes"
+          outcome: ${{ steps.notify_observed_012.outcome }}
       - name: "📦 [EVIDENCE] Upload redacted counts, health, and persistence fingerprints"
+        id: notify_observed_013
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -108,3 +277,16 @@ jobs:
           path: reports/compose-validation/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload redacted counts, health, and persistence fingerprints"
+        if: ${{ always() && (steps.notify_observed_013.outcome == 'success' || steps.notify_observed_013.outcome == 'failure' || steps.notify_observed_013.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload redacted counts, health, and persistence fingerprints"
+          outcome: ${{ steps.notify_observed_013.outcome }}
