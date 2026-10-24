@@ -85,6 +85,7 @@ def test_neon_default_url_selects_async_psycopg_and_preserves_channel_binding() 
         assert url.drivername == "postgresql+psycopg"
         assert url.query["channel_binding"] == "require"
         assert url.query["sslmode"] == "verify-full"
+        assert url.query["sslrootcert"] == "system"
         assert args["connect_timeout"] == 15
         assert "ssl" not in args
         assert "command_timeout" not in args
@@ -135,6 +136,20 @@ def test_psycopg_with_custom_ca_uses_libpq_hostname_verification(tmp_path) -> No
     assert url.query["sslrootcert"] == str(ca)
     assert url.query["sslmode"] == "verify-full"
     assert url.query["channel_binding"] == "require"
+
+
+def test_explicit_libpq_sslrootcert_is_preserved() -> None:
+    settings = Settings(
+        _env_file=None,
+        database_require_tls=True,
+        database_url=(
+            "postgresql://u:p@db.invalid/db?"
+            "sslmode=require&channel_binding=require&sslrootcert=/custom/ca.pem"
+        ),
+    )
+    url, _ = database_connection_options(settings)
+    assert url.query["sslrootcert"] == "/custom/ca.pem"
+    assert url.query["sslmode"] == "verify-full"
 
 
 def test_query_cache_normalizes_without_persisting_plaintext_and_versions_keys() -> None:
