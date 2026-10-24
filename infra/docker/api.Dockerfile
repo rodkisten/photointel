@@ -24,7 +24,9 @@ RUN uv sync --frozen --no-dev --group ingest
 
 # Catch broken Python imports in Cloud Build instead of discovering them via
 # Cloud Run startup probes. No production secrets or network services required.
-RUN /app/.venv/bin/python -c "from photointel.main import app; assert app.title == 'Photo Intelligence Cloud'"
+# Exercise Neon's default libpq URL without connecting to any database. Catch
+# incompatible SSL/channel-binding profiles during Cloud Build, not Cloud Run startup.
+RUN /app/.venv/bin/python -c "from photointel.main import app; assert app.title == 'Photo Intelligence Cloud'; from photointel.config import Settings; from photointel.db_connection import database_connection_options; from sqlalchemy.ext.asyncio import create_async_engine; settings = Settings(_env_file=None, database_require_tls=True, database_url='postgresql://test:test@ep-test.neon.tech/db?sslmode=require&channel_binding=require'); url, args = database_connection_options(settings); assert url.drivername == 'postgresql+psycopg' and url.query['channel_binding'] == 'require' and url.query['sslmode'] == 'verify-full'; engine = create_async_engine(url, connect_args=args); assert engine.dialect.driver == 'psycopg'"
 
 FROM python:3.12-slim-bookworm AS runtime
 RUN set -eu; \
