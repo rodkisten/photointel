@@ -10,7 +10,7 @@
 - Uma identidade humana com privilégios administrativos **somente para o primeiro bootstrap**. Não dê Owner/Editor ou administração permanente ao `photointel-deployer`.
 - Cloud Shell ou terminal Linux com `gcloud`, Python 3.12, Git e acesso ao código. No Codespaces, use o Dev Container; o `gcloud` não está disponível diretamente no a-Shell iOS.
 - Defina alertas de cobrança, quotas e limites de instâncias. Alertas não interrompem automaticamente o faturamento. Consulte [COST_MODEL.md](../../COST_MODEL.md) e [LIMITATIONS.md](../../LIMITATIONS.md).
-- Migrações de banco **não** são executadas pelo workflow do GitHub: exigem confirmação específica e, para bases existentes, recibo de backup/restauração válido.
+- Migrações de banco só são executadas com **`action=migrate`, `migration_mode=apply`** e confirmações explícitas. O modo `all` nunca migra; bases existentes exigem recibo válido de backup e restauração.
 
 ## 1. Desenvolvimento local e BUILD_CA_FILE
 
@@ -339,12 +339,13 @@ O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/
 |---|---|---|
 | `build` | Verifica prerequisitos → reutiliza imagem do SHA, ou compila/publica | Não cria recursos Cloud Run de runtime |
 | `jobs-deploy` | Confere imagem do SHA → publica 5 Jobs | Não executa migração |
+| **`migrate`** | `plan` somente leitura → `apply` opcional com confirmação do SHA e backup | Não faz parte de `all` |
 | `deploy` | Confirma `database_ready` → confere imagem → publica API | A migração deve estar concluída |
 | `scheduler` | Cria/atualiza 3 cron jobs **pausados** | Não dispara processamento |
 | `cleanup` | Pausa cron jobs | Não deleta imagens, dados ou services |
 | **`all`** | Confirma `database_ready` → build/reuso → verifica imagem → Jobs → API → Scheduler pausado | Tudo em **uma execução**, interrompendo na primeira falha |
 
-**⚠️ Primeira implantação:** o `all` **não executa migrações**. O booleano `database_ready` começa **desmarcado** e só deve ser marcado após confirmar que a migração do Neon foi realizada, as versões referenciadas dos secrets existem e o controle de acesso Cloudflare foi preparado. Isso protege a publicação da API sem banco pronto. Para sua primeira instalação, siga `build` → `jobs-deploy` → migração manual validada → `deploy` → `scheduler`. Para **releases seguintes**, com o banco migrado/compatível, use `all`.
+**⚠️ Primeira implantação:** o `all` **não executa migrações**. O booleano `database_ready` começa **desmarcado** e só deve ser marcado após confirmar que a migração do Neon foi realizada, as versões referenciadas dos secrets existem e o controle de acesso Cloudflare foi preparado. Isso protege a publicação da API sem banco pronto. Para sua primeira instalação, siga `build` → `jobs-deploy` → **`migrate` (plan e depois apply protegido)** → `deploy` → `scheduler`. Para **releases seguintes**, com o banco migrado/compatível, use `all`.
 
 O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita uma imagem existente desse SHA; caso contrário, constrói uma nova, publica-a e verifica o digest antes de alterar os Jobs. Alterar `main` depois de um build anterior significa um SHA novo e portanto uma imagem potencialmente nova.
 
@@ -383,7 +384,9 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
 1. Execute **`build`**. Ele gera o manifesto de release e a imagem `us-central1-docker.pkg.dev/photointel/photointel/api:COMMIT_SHA_COMPLETO`; upload GCS → Docker → push Artifact Registry → verificação tag/digest. **Build não publica a API.**
 2. Confira o status **SUCCESS** e o digest/tag no [Artifact Registry](https://console.cloud.google.com/artifacts?project=photointel). O builder usa `infra/gcp/cloudbuild.yaml` com logs em Cloud Logging; `gcloud builds submit` pode não transmitir esses logs ao terminal. Consulte a página do build.
 3. Execute **`jobs-deploy`**. Publica os cinco Jobs Run, incluindo `photointel-migrate`, com a imagem tagueada pelo SHA deste workflow; concede invocações restritas.
-4. **Migração é fora do workflow**, intencionalmente. Com o mesmo checkout/tag/config do build e após verificar que o banco Neon está realmente vazio, no Cloud Shell:
+4. **Migração é uma ação individual do mesmo workflow**, mas nunca executada no modo `all`. Use `migrate` → `plan` para inspecionar a imagem instalada e copiar o SHA, depois `migrate` → `apply` com confirmação de banco vazio ou backup e recibo de restauração. Veja a seção **Executar `migrate` pelo mesmo GitHub Actions** acima. O Cloud Shell permanece uma alternativa avançada:
+
+   Para banco realmente vazio:
 
    ```bash
    python3 infra/gcp/manage.py migrate \
@@ -391,7 +394,7 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
      --initial-empty-database
    ```
 
-   Para **banco existente**, **não** use `--initial-empty-database`. Exija backup PostgreSQL + R2, teste de restauração isolada e recibo dentro da validade, então use:
+   Para **banco existente**, **não** use `--initial-empty-database`. Exija backup PostgreSQL + R2, teste de restauração isolada e recibo dentro da validade, então, como alternativa via Cloud Shell, use:
 
    ```bash
    python3 infra/gcp/manage.py migrate \
