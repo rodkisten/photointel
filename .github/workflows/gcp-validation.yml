@@ -42,18 +42,58 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 [SETUP] Configure actions/setup-python"
+        id: notify_observed_002
         uses: actions/setup-python@v5
         with: {python-version: '3.12'}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure actions/setup-python"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure actions/setup-python"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🔐 [AUTH] Validate finite resources and command authorization without cloud credentials"
+        id: notify_observed_003
         run: |
           python -m unittest discover -s infra/gcp/tests -v
           python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
           python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
+      - name: "🔔 [NOTIFY] 🔐 [AUTH] Validate finite resources and command authorization without cloud credentials"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [AUTH] Validate finite resources and command authorization without cloud credentials"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧩 [CONFIG] Audit shared config action and cleanup references"
+        id: notify_observed_004
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -71,19 +111,71 @@ jobs:
               assert "if: always()" in source
               assert "environment: production" in source
           PY
+      - name: "🔔 [NOTIFY] 🧩 [CONFIG] Audit shared config action and cleanup references"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧩 [CONFIG] Audit shared config action and cleanup references"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧪 [TEST] Validate standalone bootstrap shell and idempotency"
+        id: notify_observed_005
         run: |
           bash -n infra/gcp/bootstrap.sh
           bash -n infra/gcp/release.sh
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Validate standalone bootstrap shell and idempotency"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Validate standalone bootstrap shell and idempotency"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧪 [TEST] Validate fixed-origin Cloudflare relay"
+        id: notify_observed_006
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Validate fixed-origin Cloudflare relay"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Validate fixed-origin Cloudflare relay"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "🧩 [PATCH] Reject private data in source ZIP imports"
+        id: notify_observed_007
         run: node --test infra/scripts/zip-patch-policy.test.cjs
       # Successful push/PR validation is already visible in the Actions log.
       # Only keep the generated plans when useful for manual review or failures.
+      - name: "🔔 [NOTIFY] 🧩 [PATCH] Reject private data in source ZIP imports"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧩 [PATCH] Reject private data in source ZIP imports"
+          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "📦 [EVIDENCE] Upload test artifacts"
+        id: notify_observed_008
         uses: actions/upload-artifact@v4
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_evidence == true }}
         with:
@@ -91,3 +183,16 @@ jobs:
           path: reports/gcp-*
           if-no-files-found: ignore
           retention-days: 3
+
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload test artifacts"
+        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload test artifacts"
+          outcome: ${{ steps.notify_observed_008.outcome }}
