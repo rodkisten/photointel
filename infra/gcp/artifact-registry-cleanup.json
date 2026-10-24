@@ -1,0 +1,42 @@
+[
+  {
+    "name": "delete-old-api-versions",
+    "action": {
+      "type": "Delete"
+    },
+    "condition": {
+      "packageNamePrefixes": [
+        "api"
+      ],
+      "tagState": "any",
+      "olderThan": "90d"
+    }
+  },
+  {
+    "name": "keep-recent-api-versions",
+    "action": {
+      "type": "Keep"
+    },
+    "mostRecentVersions": {
+      "packageNamePrefixes": [
+        "api"
+      ],
+      "keepCount": 20
+    }
+  },
+  {
+    "name": "keep-pinned-releases",
+    "action": {
+      "type": "Keep"
+    },
+    "condition": {
+      "tagState": "tagged",
+      "tagPrefixes": [
+        "retain-"
+      ],
+      "packageNamePrefixes": [
+        "api"
+      ]
+    }
+  }
+]
