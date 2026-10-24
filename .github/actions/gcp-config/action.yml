@@ -1,0 +1,48 @@
+name: "🧩 [GCP CONFIG] Prepare / clean"
+description: "Reuse the production Environment GCP_CONFIG_ENV parser and securely remove temporary deployment files."
+inputs:
+  mode:
+    description: "prepare or cleanup"
+    required: true
+  config-env:
+    description: "Non-secret multiline configuration from vars.GCP_CONFIG_ENV in the selected GitHub Environment"
+    required: false
+  confirm-project:
+    description: "Exact project ID approved by the caller"
+    required: false
+  release-sha:
+    description: "Full SHA of the checked-out Git commit"
+    required: false
+outputs:
+  workload_identity_provider:
+    description: "Provider resource from the validated configuration (deployment identity)"
+    value: ${{ steps.prepare.outputs.workload_identity_provider }}
+  service_account:
+    description: "Service account from the validated configuration (deployment identity)"
+    value: ${{ steps.prepare.outputs.service_account }}
+runs:
+  using: composite
+  steps:
+    - name: "📦 [CONFIG] Install dotenv parser"
+      if: inputs.mode == 'prepare'
+      shell: bash
+      run: python3 -m pip install --disable-pip-version-check python-dotenv==1.2.4
+    - name: "🧩 [CONFIG] Validate Environment vars and render private deployment files"
+      id: prepare
+      if: inputs.mode == 'prepare'
+      shell: bash
+      env:
+        GCP_CONFIG_ENV: ${{ inputs.config-env }}
+        CONFIRM_PROJECT: ${{ inputs.confirm-project }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+      run: |
+        set -euo pipefail
+        python3 infra/gcp/gcp-env.py
+        python3 infra/gcp/manage.py render
+    - name: "🧹 [CLEANUP] Remove private configuration and generated manifests"
+      if: inputs.mode == 'cleanup'
+      shell: bash
+      run: |
+        set -euo pipefail
+        rm -f infra/gcp/config.local.json
+        rm -rf infra/gcp/rendered
