@@ -1,9 +1,8 @@
 name: Bootstrap and validate
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
+  push:
+    branches: [validation/bootstrap]
 permissions:
   contents: read
 concurrency:
