@@ -115,17 +115,15 @@ class MigrationWorkflowTests(unittest.TestCase):
                 self.assertEqual(lookup.call_count, 2)
                 apply.assert_called_once_with(PROJECT, "initial-empty", "")
 
-    def test_empty_migration_requires_attestation_and_never_uses_backup(self):
-        with patch.object(migrate.subprocess, "run") as run:
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "empty"):
-                migrate.apply_migration(PROJECT, "initial-empty", False, "")
+    def test_initial_empty_selection_is_sufficient_attestation(self):
+        with patch.object(migrate.subprocess, "run") as execute:
             with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.apply_migration(PROJECT, "initial-empty", True, PREFIX)
-            run.assert_not_called()
-            migrate.apply_migration(PROJECT, "initial-empty", True, "")
-            commands = run.call_args.args[0]
-            self.assertIn("--initial-empty-database", commands)
-            self.assertNotIn("--backup-directory", commands)
+                migrate.apply_migration(PROJECT, "initial-empty", PREFIX)
+            execute.assert_not_called()
+            migrate.apply_migration(PROJECT, "initial-empty", "")
+            command = execute.call_args.args[0]
+            self.assertIn("--initial-empty-database", command)
+            self.assertNotIn("--backup-directory", command)
 
     def test_existing_db_never_uses_empty_flag_or_skips_restore_receipt(self):
         with (
