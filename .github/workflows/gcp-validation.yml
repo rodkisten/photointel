@@ -1,4 +1,4 @@
-name: Google Cloud deployment definitions
+name: "☁️ [GCP VALIDATE] Validate deployment definitions"
 on:
   pull_request:
     paths:
@@ -30,30 +30,34 @@ permissions:
   contents: read
 jobs:
   offline:
+    name: "☁️ [GCP VALIDATE] offline"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - uses: actions/setup-python@v5
+      - name: "🧰 [SETUP] Configure actions/setup-python"
+        uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: Validate finite resources and command authorization without cloud credentials
+      - name: "🔐 [AUTH] Validate finite resources and command authorization without cloud credentials"
         run: |
           python -m unittest discover -s infra/gcp/tests -v
           python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
           python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
-      - name: Validate standalone bootstrap shell and idempotency
+      - name: "🧪 [TEST] Validate standalone bootstrap shell and idempotency"
         run: |
           bash -n infra/gcp/bootstrap.sh
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
-      - name: Validate fixed-origin Cloudflare relay
+      - name: "🧪 [TEST] Validate fixed-origin Cloudflare relay"
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-      - name: Reject private data in source ZIP imports
+      - name: "🧩 [PATCH] Reject private data in source ZIP imports"
         run: node --test infra/scripts/zip-patch-policy.test.cjs
       # Successful push/PR validation is already visible in the Actions log.
       # Only keep the generated plans when useful for manual review or failures.
-      - uses: actions/upload-artifact@v4
+      - name: "📦 [EVIDENCE] Upload test artifacts"
+        uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: gcp-offline-definitions
