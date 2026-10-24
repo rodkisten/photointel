@@ -28,14 +28,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_dropdown_supports_all_and_each_stage(self) -> None:
         self.assertIn("          - all\n", self.workflow)
-        for value in ("build", "jobs-deploy", "deploy", "scheduler", "cleanup"):
+        for value in ("build", "jobs-deploy", "migrate", "deploy", "scheduler", "cleanup"):
             self.assertIn(f"          - {value}\n", self.workflow)
         self.assertIn("        default: all", self.workflow)
 
     def test_all_stages_keep_expected_order(self) -> None:
         expected = (
             "database_gate", "preflight", "image_cache", "build_image",
-            "verify_image", "deploy_jobs", "deploy_api",
+            "verify_image", "deploy_jobs", "migrate_database", "deploy_api",
             "deploy_scheduler", "pause_scheduler",
         )
         positions = [self.stages.get(stage, -1) for stage in expected]
@@ -69,6 +69,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("manage.py migrate", self.workflow, "No automatic database migrations")
         self.assertLess(self.stages["database_gate"], self.stages["build_image"])
 
+    def test_migration_is_opt_in_and_requires_database_safety_evidence(self) -> None:
+        migrate = self.stage("migrate_database")
+        self.assertIn("inputs.action == 'migrate'", migrate)
+        self.assertNotIn("inputs.action == 'all'", migrate)
+        self.assertIn("run: bash infra/gcp/release.sh migrate", migrate)
+        self.assertIn("inputs.migration_mode", migrate)
+        self.assertIn("inputs.migration_database", migrate)
+        self.assertIn("inputs.initial_empty_database", migrate)
+        self.assertIn("inputs.migration_backup_prefix", migrate)
+        self.assertIn("id: migrate_database", migrate)
+        self.assertIn("steps.migrate_database.outcome", self.workflow)
+        self.assertIn("steps.notify_live_start.outputs.activity_id", self.workflow)
+        self.assertIn("        default: plan", self.workflow)
+        self.assertIn("        default: unselected", self.workflow)
+        self.assertIn("inputs.migration_mode == 'plan'", self.workflow)
+        self.assertTrue((ROOT / "infra/gcp/migrate_workflow.py").is_file())
+
     def test_workflow_has_no_embedded_bash_or_python_scripts(self) -> None:
         self.assertNotIn("run: |", self.workflow)
         self.assertNotIn("python3 -c", self.workflow)
@@ -81,6 +98,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "verify_image": "verify",
             "build_image": "build",
             "deploy_jobs": "jobs-deploy",
+            "migrate_database": "migrate",
             "deploy_api": "deploy",
             "deploy_scheduler": "scheduler",
             "pause_scheduler": "cleanup",
