@@ -204,6 +204,15 @@ jobs:
             fi
           fi
 
+      - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
+        if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          python3 infra/gcp/manage.py build --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Docker image for this exact commit built and verified." >> "$GITHUB_STEP_SUMMARY"
+
       - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
         env:
@@ -230,15 +239,6 @@ jobs:
               sys.exit(f"::error::Expected exactly one image tagged {sha}; found {len(matches)}. Run build for this commit first.")
           print(f"Found immutable release tag {sha}; deploy may proceed.")
           '
-
-      - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
-        if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
-        env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py build --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Docker image for this exact commit built and verified." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "📦 [JOBS] Publish five Cloud Run Jobs"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
