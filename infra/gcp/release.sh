@@ -60,8 +60,6 @@ case "$PHASE" in
       --project "$PROJECT"
       --sha "$SHA"
       --database "${MIGRATION_DATABASE:-unselected}"
-      --approved-sha "${MIGRATION_RELEASE_SHA:-}"
-      --initial-empty-database "${INITIAL_EMPTY_DATABASE:-false}"
       --backup-prefix "${MIGRATION_BACKUP_PREFIX:-}"
     )
     python3 infra/gcp/migrate_workflow.py "${migration_args[@]}"
