@@ -45,6 +45,10 @@ somente consultas. Mutações exigem simultaneamente `--apply`,
 `--authorize-charges` e `--confirm-project` com o projeto exato. Ninguém deve
 ativar isso por instalar dependências ou executar testes.
 
+## Bootstrap pelo GitHub Actions (novo padrão)
+
+O bootstrap administrativo está agora separado em [`.github/workflows/gcp-bootstrap.yml`](.github/workflows/gcp-bootstrap.yml), usando [`infra/gcp/bootstrap.sh`](infra/gcp/bootstrap.sh) e comandos `gcloud` idempotentes. O workflow de deploy normal não permite mais a operação `bootstrap`. Antes da primeira execução, configure a service account `photointel-bootstrap`, um provider WIF exclusivo, o GitHub Environment `production` e as duas variáveis do bootstrap conforme [passo a passo de preparação única](docs/deployment/GCP_BOOTSTRAP_ACTION.md). Execute primeiro `plan` e, após revisão, `apply`. Nenhuma exclusão nem versão de secret é criada pelo bootstrap.
+
 ## 2. Criar infraestrutura após autorização de cobrança
 
 Depois de revisar o plano e autorizar os custos, substitua o projeto abaixo:
