@@ -71,6 +71,8 @@ class CloudRunCommandsTests(unittest.TestCase):
         self.assertIn("roles/serviceusage.serviceUsageConsumer", plan)
         self.assertIn("photointel-deployer@", plan)
         self.assertIn("roles/iam.serviceAccountUser", plan)
+        self.assertIn("roles/logging.viewer", plan)
+        self.assertIn("logging.googleapis.com", manage.SERVICES)
         self.assertIn("photointel-builder@", plan)
 
     def test_api_scales_to_zero_request_billing_no_worker(self) -> None:
