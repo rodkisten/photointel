@@ -377,6 +377,14 @@ O smoke anônimo verifica a proteção de rotas privadas (esperado `401/403`); d
 | `containeranalysis.occurrences.list denied` | `images describe` antigo exigia Artifact Analysis. O `manage.py` atual lista imagens e confere SHA/digest via Artifact Registry Reader |
 | Cloud Build `SUCCESS` mas workflow falha | Inspecione a **etapa após o build** e não reconstrua sem necessidade; o push anterior pode já ter sido concluído |
 
+## Política de retenção e builds idempotentes
+
+Para entender por que uma nova tag SHA aparece no Artifact Registry e por que CI gerava ZIPs em cada commit, consulte [Retenção e limpeza de artefatos](ARTIFACT_RETENTION.md). O workflow GCP é **manual**: commits no GitHub não iniciam o Cloud Build automaticamente. O build só é executado quando você escolhe a operação `build`; a mesma tag SHA agora é reaproveitada se a imagem já existe no registro, com digest verificado.
+
+A validação offline do GCP não publica mais artifacts para cada sucesso e não é disparada por mudanças somente na documentação. Os artifacts de testes problemáticos ou manuais expiram em 3 dias.
+
+Os arquivos `infra/gcp/artifact-registry-cleanup.json` (versões `api` com mais de 90 dias, mantendo as últimas 20 e tags `retain-*`) e `infra/gcp/staging-bucket-lifecycle.json` (tarballs `source/` com mais de 7 dias) estão versionados. **Não são aplicados automaticamente**. O primeiro exige dry-run e proteção de versões usadas em Cloud Run, Jobs e rollback; o segundo exige inspeção da configuração de lifecycle existente.
+
 ## 11. Rollback, custos e próximos releases
 
 - `cleanup` no Actions apenas **pausa os agendamentos**, não remove dados/repositórios.
