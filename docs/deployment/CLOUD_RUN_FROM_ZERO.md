@@ -351,6 +351,16 @@ O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita um
 
 **Como acionar:** `Run workflow` → branch `main` → action `all` (ou etapa isolada) → `confirm_project=photointel` → `authorize_charges=true` após revisão → para `all`/`deploy`, marque `database_ready` somente se verificado. A execução publica um resumo por etapa e remove arquivos temporários do runner ao final.
 
+## 🔎 Troubleshooting de migrações diretamente no GitHub Actions
+
+O modo **`migrate → diagnose`** é **somente leitura**, não executa migrations e não exige `authorize_charges`. Serve inclusive para investigar o último Job que já falhou. Ele procura a execução mais recente do `photointel-migrate` na região configurada, consulta status, exit code das tasks e registros de Cloud Logging filtrados pelo **ID exato da execução**. Apresenta no próprio GitHub Actions um resumo Markdown com link para o Cloud Run, sinais conhecidos (`DATABASE_AUTH`, `DATABASE_TLS`, `DATABASE_PERMISSION`, `SCHEMA_CONFLICT`, `ALEMBIC_REVISION`, entre outros) e trechos de traceback permitidos após filtragem de valores sensíveis. **Os logs completos ficam no Cloud Console** porque podem incluir secrets.
+
+Se `migrate → apply` falhar, o workflow executa automaticamente o step **`🔎 [TROUBLESHOOT] Inspect failed migration execution and container logs`**, mesmo depois de o step de migração falhar. Ele utiliza o horário de início registrado pelo runner para vincular com a execução recente, não escolhe arbitrariamente outra execução concorrente, e **não dispara uma segunda migration**. O step de diagnóstico não mascara a falha original e também envia uma notificação Notify!.
+
+Para a leitura no CI funcionar, a identidade `photointel-deployer` precisa de `roles/logging.viewer` e a API `logging.googleapis.com` habilitada. Essas duas declarações foram acrescentadas ao `infra/gcp/bootstrap.sh`; após atualizar `main`, execute **GCP Bootstrap → apply** uma vez para reconciliar IAM e APIs. Se não conseguir fazer isso imediatamente, o `migrate → diagnose` ainda mostra o status acessível por Cloud Run e um aviso de permissão faltante. Também é possível consultar [as execuções no Cloud Console](https://console.cloud.google.com/run/jobs?project=photointel) com a sua conta pessoal autorizada.
+
+Evite repetir um `apply` após uma falha sem verificar antes o histórico de execuções e se o Alembic aplicou parte das migrations. O comando de diagnóstico é seguro para repetir quantas vezes forem necessárias.
+
 ## 🗃️ Migrar o Neon usando valores detectados automaticamente
 
 No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), selecione `action=migrate` e `migration_mode=plan` ou `apply`. O próprio CLI lê `GCP_CONFIG_ENV`, descobre o projeto, região, identidade, **SHA da imagem realmente instalada no Job** e garante que o Job é `photointel-migrate`, tem retry desativado e usa o comando permitido. **Não precisa copiar nenhum SHA nem executar o plan antes de aplicar.** O `plan` é recomendado para inspecionar, mas opcional.
