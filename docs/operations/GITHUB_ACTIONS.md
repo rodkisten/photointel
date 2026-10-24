@@ -26,11 +26,11 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 
 Selecione `action=all` para executar **num único job e com a mesma tag de commit**: `build` (pula se já existe) → verificação no Artifact Registry → `jobs-deploy` → `deploy` → `scheduler` (pausado). A primeira falha interrompe as etapas seguintes; o cleanup dos arquivos temporários ocorre sempre.
 
-**Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` e `apply` com confirmação do SHA e backup, conforme o perfil) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
+**Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` opcional, `apply` com uma escolha de segurança; SHA automático) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
 
 ### 🗃️ Migração protegida no dropdown
 
-A opção `migrate` só executa o Job quando `migration_mode=apply` e existe uma confirmação explícita do SHA já instalado (`migration_release_sha`). `plan` é somente leitura, funciona sem autorizar cobranças e informa o SHA atualmente publicado. Para banco novo, exige a atestação `initial_empty_database`; para banco existente, baixa de um prefixo privado do GCS os arquivos `backup.json`, `manifest.enc` e `restore-verification.json`, verificando identidade do backup, hash e restauração recente. O script separado `infra/gcp/migrate_workflow.py` valida tudo antes de chamar `manage.py migrate`. As notificações Notify! acompanham essa etapa. Veja o [guia operacional](../deployment/CLOUD_RUN_FROM_ZERO.md).
+A opção `migrate` infere do próprio Cloud Run o SHA do Job instalado, a região, a identidade e os comandos. `plan` é somente leitura e opcional; `apply` exige `authorize_charges` e a escolha `migration_database=initial-empty` (declaração explícita de banco vazio) ou `existing-with-backup` (recibo válido de backup e restauração de banco/objetos). O CLI descobre automaticamente o backup quando há um único recibo privado, recusando ambiguidade e verificando SHA256 e prazo de 24h. Não é mais necessário colar SHA nem marcar um segundo checkbox para banco vazio. Veja o [guia operacional](../deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## 🔑 Escopo de Environment, vars e secrets
 
