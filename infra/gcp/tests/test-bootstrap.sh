@@ -17,7 +17,7 @@ fi
 case "$*" in
   "auth list"*) echo fake-admin@testing.invalid; exit 0 ;;
   "services list"*)
-    printf '%s\n' run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
+    printf '%s\n' run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
     exit 0 ;;
   "artifacts repositories describe "*"--format=value(format)"*) echo DOCKER; exit 0 ;;
   "storage buckets describe "*"--format=value(location)"*) echo US; exit 0 ;;
