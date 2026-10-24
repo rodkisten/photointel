@@ -15,7 +15,7 @@ if [[ "$MODE" == "apply" && "${AUTHORIZE_CHARGES:-false}" != "true" ]]; then ech
 BUCKET="gs://$PROJECT-photointel-build-source"
 BUILDER="serviceAccount:photointel-builder@$PROJECT.iam.gserviceaccount.com"
 DEPLOYER="serviceAccount:photointel-deployer@$PROJECT.iam.gserviceaccount.com"
-APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
+APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
 gcp() { gcloud "$@" "--project=$PROJECT" --quiet; }
 change() { if [[ "$MODE" == "apply" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
