@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - infra/gcp/**
+      - .github/actions/gcp-config/**
       - '!infra/gcp/artifact-registry-cleanup.json'
       - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - infra/gcp/**
+      - .github/actions/gcp-config/**
       - '!infra/gcp/artifact-registry-cleanup.json'
       - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
@@ -45,6 +47,23 @@ jobs:
           python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
           python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
+      - name: "🧩 [CONFIG] Audit shared config action and cleanup references"
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          action = Path(".github/actions/gcp-config/action.yml").read_text()
+          assert "inputs.mode == 'prepare'" in action
+          assert "inputs.mode == 'cleanup'" in action
+          assert "GCP_CONFIG_ENV:" in action
+          assert "rm -f infra/gcp/config.local.json" in action
+          for workflow in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
+              source = (Path(".github/workflows") / workflow).read_text()
+              assert source.count("uses: ./.github/actions/gcp-config") == 2
+              assert "config-env: ${{ vars.GCP_CONFIG_ENV }}" in source
+              assert "mode: cleanup" in source
+              assert "if: always()" in source
+              assert "environment: production" in source
+          PY
       - name: "🧪 [TEST] Validate standalone bootstrap shell and idempotency"
         run: |
           bash -n infra/gcp/bootstrap.sh
