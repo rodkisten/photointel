@@ -1,4 +1,4 @@
-name: Validate
+name: "🧪 [CI] Validate application"
 on:
   push:
     branches: [main]
@@ -16,11 +16,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   locks:
+    name: "🧪 [CI] locks"
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with: {persist-credentials: false}
       - id: check
         name: Require actual generated locks before frozen validation
@@ -43,19 +45,28 @@ jobs:
                   summary.write("Frozen validation deferred: run Bootstrap and validate, retrieve its generated-locks-contracts artifact, and commit the locks. No tests were executed by this workflow.\n")
           PY
   python:
+    name: "🧪 [CI] python"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
+      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23', enable-cache: true}
-      - run: uv python install 3.12
-      - run: uv sync --frozen --group ingest
-      - run: uv run ruff check .
-      - run: uv run mypy apps/api/src gpu bridges
-      - run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
-      - uses: actions/upload-artifact@v4
+      - name: "▶️ [RUN] Execute command"
+        run: uv python install 3.12
+      - name: "▶️ [RUN] Execute command"
+        run: uv sync --frozen --group ingest
+      - name: "▶️ [RUN] Execute command"
+        run: uv run ruff check .
+      - name: "▶️ [RUN] Execute command"
+        run: uv run mypy apps/api/src gpu bridges
+      - name: "▶️ [RUN] Execute command"
+        run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+      - name: "📦 [EVIDENCE] Upload test artifacts"
+        uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: unit-results
@@ -63,20 +74,30 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
   frontend:
+    name: "🧪 [CI] frontend"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
+      - name: "🧰 [SETUP] Configure actions/setup-node"
+        uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - run: npm --prefix apps/web ci
-      - run: npm --prefix apps/web run lint
-      - run: npm --prefix apps/web run typecheck
-      - run: npm --prefix apps/web test
-      - run: npm --prefix apps/web run build
-      - run: npm --prefix apps/web audit --audit-level=high
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web ci
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web run lint
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web run typecheck
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web test
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web run build
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web audit --audit-level=high
   integration:
+    name: "🧪 [CI] integration"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
@@ -99,14 +120,18 @@ jobs:
       STORAGE_SECRET_KEY: ci-only-not-a-production-secret
       INFERENCE_BACKEND: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
+      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - run: uv python install 3.12
-      - run: uv sync --frozen --group ingest
-      - name: Set up cached source builds for local object storage
+      - name: "▶️ [RUN] Execute command"
+        run: uv python install 3.12
+      - name: "▶️ [RUN] Execute command"
+        run: uv sync --frozen --group ingest
+      - name: "🧰 [SETUP] Set up cached source builds for local object storage"
         uses: docker/setup-buildx-action@v3
-      - name: Build real MinIO from pinned upstream source with CI cache
+      - name: "🧰 [SETUP] Build real MinIO from pinned upstream source with CI cache"
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -116,23 +141,28 @@ jobs:
           push: false
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
-      - name: Start private local object storage
+      - name: "⚙️ [RUN] Start private local object storage"
         run: |
           docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
-      - name: Wait for storage and create private bucket
+      - name: "⚙️ [RUN] Wait for storage and create private bucket"
         run: |
           uv run python infra/scripts/init-private-bucket.py
-      - run: uv run alembic -c infra/migrations/alembic.ini upgrade head
-      - name: Verify dump and restore using isolated synthetic databases
+      - name: "▶️ [RUN] Execute command"
+        run: uv run alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "🗃️ [DATA] Verify dump and restore using isolated synthetic databases"
         run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
-      - name: Verify encrypted PostgreSQL and private image-content restore
+      - name: "🗃️ [DATA] Verify encrypted PostgreSQL and private image-content restore"
         run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
-      - run: uv run pytest -m integration --junitxml=reports/integration.xml
-      - uses: actions/setup-node@v4
+      - name: "▶️ [RUN] Execute command"
+        run: uv run pytest -m integration --junitxml=reports/integration.xml
+      - name: "🧰 [SETUP] Configure actions/setup-node"
+        uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - run: npm --prefix apps/web ci
-      - run: npx --prefix apps/web playwright install --with-deps chromium
-      - name: Browser E2E against real API and synthetic media
+      - name: "▶️ [RUN] Execute command"
+        run: npm --prefix apps/web ci
+      - name: "▶️ [RUN] Execute command"
+        run: npx --prefix apps/web playwright install --with-deps chromium
+      - name: "⚙️ [RUN] Browser E2E against real API and synthetic media"
         run: bash infra/scripts/run-e2e.sh
         env:
           APP_ENV: test
@@ -142,14 +172,16 @@ jobs:
           GPU_ENABLED: 'true'
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
-      - uses: actions/upload-artifact@v4
+      - name: "📦 [EVIDENCE] Upload test artifacts"
+        uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: integration-results
           path: reports/integration.xml
           if-no-files-found: ignore
           retention-days: 3
-      - uses: actions/upload-artifact@v4
+      - name: "📦 [EVIDENCE] Upload test artifacts"
+        uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: browser-results
@@ -157,41 +189,53 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
   images:
+    name: "🧪 [CI] images"
     needs: locks
     if: needs.locks.outputs.ready == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
+      - name: "🧰 [SETUP] Configure docker/setup-qemu-action"
+        uses: docker/setup-qemu-action@v3
+      - name: "🧰 [SETUP] Configure docker/setup-buildx-action"
+        uses: docker/setup-buildx-action@v3
+      - name: "🏗️ [BUILD] Configure docker/build-push-action"
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/docker/api.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
-      - uses: docker/build-push-action@v6
+      - name: "🏗️ [BUILD] Configure docker/build-push-action"
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/docker/web.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
   security:
+    name: "🧪 [CI] security"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v6
+      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
-      - run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
-      - name: Audit pinned inference dependencies without loading models
+      - name: "▶️ [RUN] Execute command"
+        run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
+      - name: "▶️ [RUN] Execute command"
+        run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
+      - name: "🧰 [SETUP] Audit pinned inference dependencies without loading models"
         run: |
           uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
           uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
-      - uses: gitleaks/gitleaks-action@v2
+      - name: "🔐 [SECURITY] Scan secrets"
+        uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
