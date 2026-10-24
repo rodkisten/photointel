@@ -113,7 +113,7 @@ class NotifyOfflineTests(unittest.TestCase):
             self.assertIn("secrets.NOTIFY_TOKEN", text, name)
             self.assertIn("continue-on-error: true", text, name)
             self.assertIn("uses: ./.github/actions/notify", text, name)
-        self.assertEqual(total, 198, "Keep notifications on all 198 operational steps")
+        self.assertEqual(total, 199, "Keep notifications on all 199 operational steps")
 
     def test_gcp_only_live_activity_lifecycle(self):
         for name in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
