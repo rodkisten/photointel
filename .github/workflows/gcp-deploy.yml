@@ -27,7 +27,7 @@ on:
         required: true
 
       migration_database:
-        description: 'Only for migrate apply: verified empty Neon or existing database with restore receipt'
+        description: 'For migrate apply: selecting initial-empty affirms database is confirmed empty'
         type: choice
         options:
           - unselected
@@ -36,14 +36,8 @@ on:
         default: unselected
         required: true
 
-      initial_empty_database:
-        description: 'I independently verified Neon has no existing application data (migrate apply only)'
-        type: boolean
-        default: false
-        required: true
-
       migration_backup_prefix:
-        description: 'For existing database: private gs://photointel-photointel-build-source/migration-backups/NAME'
+        description: 'Optional: private backup prefix, automatically resolved when uniquely identifiable'
         type: string
         default: ''
         required: false
@@ -325,7 +319,6 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
-          INITIAL_EMPTY_DATABASE: ${{ inputs.initial_empty_database }}
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
         run: bash infra/gcp/release.sh migrate
 
