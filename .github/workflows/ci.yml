@@ -2,7 +2,13 @@ name: Validate
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
@@ -50,8 +56,12 @@ jobs:
       - run: uv run mypy apps/api/src gpu bridges
       - run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
       - uses: actions/upload-artifact@v4
-        if: always()
-        with: {name: unit-results, path: reports/unit.xml}
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        with:
+          name: unit-results
+          path: reports/unit.xml
+          if-no-files-found: ignore
+          retention-days: 3
   frontend:
     needs: locks
     if: needs.locks.outputs.ready == 'true'
@@ -133,11 +143,19 @@ jobs:
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
       - uses: actions/upload-artifact@v4
-        if: always()
-        with: {name: integration-results, path: reports/integration.xml}
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        with:
+          name: integration-results
+          path: reports/integration.xml
+          if-no-files-found: ignore
+          retention-days: 3
       - uses: actions/upload-artifact@v4
-        if: always()
-        with: {name: browser-results, path: apps/web/playwright-report}
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        with:
+          name: browser-results
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 3
   images:
     needs: locks
     if: needs.locks.outputs.ready == 'true' && github.event_name == 'workflow_dispatch'
