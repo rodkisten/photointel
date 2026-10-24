@@ -1,4 +1,4 @@
-name: Bootstrap and validate
+name: "🧰 [BOOTSTRAP] Resolve locks and validate"
 on:
   workflow_dispatch:
   push:
@@ -10,6 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
+    name: "🧰 [BOOTSTRAP] validate"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -40,15 +41,18 @@ jobs:
       UV_CACHE_DIR: /tmp/photointel-uv-cache
       npm_config_cache: /tmp/photointel-npm-cache
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@v6
+      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - uses: actions/setup-node@v4
+      - name: "🧰 [SETUP] Configure actions/setup-node"
+        uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - name: Initialize evidence directory
+      - name: "🧰 [SETUP] Initialize evidence directory"
         run: mkdir -p reports packages/contracts
-      - name: Resolve Python dependencies only when no lock exists
+      - name: "🧰 [SETUP] Resolve Python dependencies only when no lock exists"
         id: python_install
         continue-on-error: true
         run: |
@@ -58,14 +62,14 @@ jobs:
           else
             uv sync --group ingest
           fi
-      - name: Export standalone validation tool for offline source fixes
+      - name: "🧪 [TEST] Export standalone validation tool for offline source fixes"
         if: steps.python_install.outcome == 'success'
         run: |
           mkdir -p reports/tools
           cp .venv/bin/ruff reports/tools/ruff
           uv run --no-sync ruff --version > reports/tools/ruff-version.txt
           sha256sum reports/tools/ruff > reports/tools/ruff.sha256
-      - name: Upload public standalone Ruff executable early
+      - name: "📦 [EVIDENCE] Upload public standalone Ruff executable early"
         if: steps.python_install.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
@@ -73,7 +77,7 @@ jobs:
           path: reports/tools/
           if-no-files-found: error
           retention-days: 7
-      - name: Resolve missing or placeholder npm lock
+      - name: "⚙️ [RUN] Resolve missing or placeholder npm lock"
         id: node_install
         continue-on-error: true
         run: |
@@ -93,7 +97,7 @@ jobs:
             npm --prefix apps/web install --package-lock-only --ignore-scripts
           fi
           npm --prefix apps/web ci
-      - name: Capture installed ingestion CLI without authenticating
+      - name: "🔐 [AUTH] Capture installed ingestion CLI without authenticating"
         id: icloud_help
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
@@ -109,7 +113,7 @@ jobs:
               "authentication_attempted": False,
           }, indent=2) + "\n")
           PY
-      - name: Generate OpenAPI from the real application
+      - name: "⚙️ [RUN] Generate OpenAPI from the real application"
         id: openapi
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
@@ -125,55 +129,55 @@ jobs:
               json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
           )
           PY
-      - name: Generate typed frontend contract
+      - name: "🧪 [TEST] Generate typed frontend contract"
         id: contracts
         if: steps.openapi.outcome == 'success' && steps.node_install.outcome == 'success'
         continue-on-error: true
         run: npm --prefix apps/web run generate:api
-      - name: Python lint
+      - name: "🧪 [TEST] Python lint"
         id: python_lint
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync ruff check . --output-format=github
-      - name: Python type checking
+      - name: "🧪 [TEST] Python type checking"
         id: python_types
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync mypy apps/api/src gpu bridges
-      - name: Unit tests without GPU or external accounts
+      - name: "🧪 [TEST] Unit tests without GPU or external accounts"
         id: python_tests
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
-      - name: Dependency-free worker policy smoke checks
+      - name: "🧪 [TEST] Dependency-free worker policy smoke checks"
         id: worker_smoke
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync python tests/worker_core_smoke.py > reports/worker-core-smoke.txt
-      - name: Frontend lint
+      - name: "🧪 [TEST] Frontend lint"
         id: web_lint
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
         run: npm --prefix apps/web run lint
-      - name: Frontend type checking
+      - name: "🧪 [TEST] Frontend type checking"
         id: web_types
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
         run: npm --prefix apps/web run typecheck
-      - name: Frontend unit tests
+      - name: "🧪 [TEST] Frontend unit tests"
         id: web_tests
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
         run: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
-      - name: Frontend production build
+      - name: "🏗️ [BUILD] Frontend production build"
         id: web_build
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
         run: npm --prefix apps/web run build
-      - name: Set up cached source builds for local object storage
+      - name: "🧰 [SETUP] Set up cached source builds for local object storage"
         if: steps.python_install.outcome == 'success'
         uses: docker/setup-buildx-action@v3
-      - name: Build real MinIO from pinned upstream source with CI cache
+      - name: "🧰 [SETUP] Build real MinIO from pinned upstream source with CI cache"
         id: minio_build
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
@@ -186,37 +190,37 @@ jobs:
           push: false
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
-      - name: Start real private object storage
+      - name: "⚙️ [RUN] Start real private object storage"
         id: storage
         if: steps.minio_build.outcome == 'success'
         continue-on-error: true
         run: |
           docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
           uv run --no-sync python infra/scripts/init-private-bucket.py
-      - name: Apply actual PostgreSQL migrations
+      - name: "🗃️ [DATA] Apply actual PostgreSQL migrations"
         id: migrate
         if: steps.storage.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
-      - name: Verify real dump and restore using isolated synthetic databases
+      - name: "🗃️ [DATA] Verify real dump and restore using isolated synthetic databases"
         id: restore
         if: steps.migrate.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
-      - name: Provision limited application role after privileged migrations
+      - name: "🗃️ [DATA] Provision limited application role after privileged migrations"
         id: app_role
         if: steps.migrate.outcome == 'success'
         continue-on-error: true
         run: |
           docker exec -i "${{ job.services.postgres.id }}" psql --username=photointel --dbname=photointel --set=app_role=photointel_app --set=app_password=ci-app-only --set=database_name=photointel --set=ON_ERROR_STOP=1 < infra/oracle/provision-app-role.sql
-      - name: Integration tests against PostgreSQL and MinIO
+      - name: "🗃️ [DATA] Integration tests against PostgreSQL and MinIO"
         id: integration
         if: steps.app_role.outcome == 'success'
         continue-on-error: true
         run: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
         env:
           DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
-      - name: Browser E2E on real API and synthetic media
+      - name: "⚙️ [RUN] Browser E2E on real API and synthetic media"
         id: e2e
         if: steps.app_role.outcome == 'success' && steps.node_install.outcome == 'success'
         continue-on-error: true
@@ -233,7 +237,7 @@ jobs:
           GPU_ENABLED: 'true'
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
-      - name: Measure synthetic metadata queries
+      - name: "⚙️ [RUN] Measure synthetic metadata queries"
         id: benchmark
         if: steps.migrate.outcome == 'success'
         continue-on-error: true
@@ -242,14 +246,14 @@ jobs:
           uv run --no-sync python -m photointel.cli benchmark --assets 100000 --timeout-seconds 600 --output reports/benchmark-100000.json
           uv run --no-sync python -m photointel.cli benchmark --assets 176000 --timeout-seconds 600 --output reports/benchmark-176000.json
           uv run --no-sync python -m photointel.cli benchmark --assets 10000 --vectors 10000 --timeout-seconds 600 --output reports/benchmark-vectors-10000.json
-      - name: Build one backend image and check native libraries
+      - name: "🏗️ [BUILD] Build one backend image and check native libraries"
         id: api_build
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
         run: |
           docker build -f infra/docker/api.Dockerfile -t photointel-api:bootstrap .
           docker run --rm --entrypoint python photointel-api:bootstrap -c 'import cv2, pillow_heif, psycopg; print("native runtime imports passed")'
-      - name: Dependency security reports
+      - name: "📦 [EVIDENCE] Dependency security reports"
         id: security
         if: steps.python_install.outcome == 'success' && steps.node_install.outcome == 'success'
         continue-on-error: true
@@ -265,12 +269,12 @@ jobs:
           uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/photointel-gpu-requirements.txt
           uvx pip-audit -r /tmp/photointel-gpu-requirements.txt --disable-pip --format=json --output reports/gpu-python-audit.json || audit_status=1
           exit "$audit_status"
-      - name: Capture public model and Apple/Pyto evidence without model weights
+      - name: "📦 [EVIDENCE] Capture public model and Apple/Pyto evidence without model weights"
         id: references
         if: always()
         continue-on-error: true
         run: python3 infra/scripts/fetch-public-references.py --output reports/public-references
-      - name: Record check outcomes
+      - name: "📥 [SOURCE] Record check outcomes"
         id: evidence
         if: always()
         env:
@@ -297,7 +301,7 @@ jobs:
               for name, outcome in checks.items():
                   summary.write(f"| {name} | {outcome} |\n")
           PY
-      - name: Upload exact generated dependency locks and contracts
+      - name: "📦 [EVIDENCE] Upload exact generated dependency locks and contracts"
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -309,7 +313,7 @@ jobs:
             apps/web/package-lock.json
             packages/contracts/openapi.json
             apps/web/src/api/schema.d.ts
-      - name: Upload actual validation and public research evidence
+      - name: "📦 [EVIDENCE] Upload actual validation and public research evidence"
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -320,7 +324,7 @@ jobs:
             reports/
             apps/web/test-results/
             apps/web/playwright-report/
-      - name: Fail when a required check did not pass
+      - name: "🧪 [TEST] Fail when a required check did not pass"
         if: always()
         run: |
           python3 - <<'PY'
