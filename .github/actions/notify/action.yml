@@ -1,0 +1,52 @@
+name: "🔔 [NOTIFY] GitHub step push + iOS Live Activity"
+description: "Send one best-effort Notify! push after a workflow step; optionally start, update or end an iOS Live Activity."
+inputs:
+  action:
+    description: "start, step or end"
+    required: true
+  device-id:
+    description: "Repository secret NOTIFY_DEVICE_ID"
+    required: false
+  token:
+    description: "Repository secret NOTIFY_TOKEN"
+    required: false
+  workflow:
+    description: "Display name for the workflow"
+    required: false
+  job:
+    description: "Job name"
+    required: false
+  step:
+    description: "Completed step label"
+    required: false
+  outcome:
+    description: "steps.<id>.outcome for step, job.status for end"
+    required: false
+  activity-id:
+    description: "Unique activityId from start; never a device id"
+    required: false
+  progress:
+    description: "Current Live Activity progress percentage"
+    required: false
+    default: "0"
+outputs:
+  activity-id:
+    description: "New unique Live Activity ID, empty if Notify! unavailable"
+    value: ${{ steps.send.outputs.activity_id }}
+runs:
+  using: composite
+  steps:
+    - name: "🔔 [NOTIFY] Deliver push or Live Activity event"
+      id: send
+      shell: bash
+      env:
+        NOTIFY_DEVICE_ID: ${{ inputs.device-id }}
+        NOTIFY_TOKEN: ${{ inputs.token }}
+        ACTION: ${{ inputs.action }}
+        WORKFLOW_LABEL: ${{ inputs.workflow }}
+        JOB_LABEL: ${{ inputs.job }}
+        STEP_LABEL: ${{ inputs.step }}
+        STEP_OUTCOME: ${{ inputs.outcome }}
+        LIVE_ID: ${{ inputs.activity-id }}
+        LIVE_PROGRESS: ${{ inputs.progress }}
+      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS"
