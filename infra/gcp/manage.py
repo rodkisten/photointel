@@ -430,6 +430,33 @@ def render(config: dict[str, Any], directory: Path) -> list[Path]:
     return paths
 
 
+
+def verified_docker_digest(listing: str, git_sha: str) -> str:
+    """Find the immutable digest for exactly one image carrying the release SHA tag."""
+    try:
+        images = json.loads(listing)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Artifact Registry did not return a valid JSON image list") from exc
+    if not isinstance(images, list):
+        raise RuntimeError("Artifact Registry image list must be a JSON array")
+    matches = []
+    for entry in images:
+        if not isinstance(entry, dict):
+            continue
+        tags = entry.get("tags")
+        if not isinstance(tags, list) or git_sha not in tags:
+            continue
+        digest = entry.get("version")
+        if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+            raise RuntimeError("Artifact Registry returned an invalid digest for the release tag")
+        matches.append(digest)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one Artifact Registry image tagged with release SHA; got {len(matches)}"
+        )
+    return matches[0]
+
+
 class Runner:
     def __init__(self, config: dict[str, Any], apply: bool) -> None:
         self.config = config
@@ -979,16 +1006,28 @@ def main() -> None:
         finally:
             if runner.apply:
                 manifest.unlink(missing_ok=True)
-        runner.command(
+        # Listing digests/tags uses Artifact Registry Reader, without requiring
+        # Container Analysis occurrence permissions needed by "images describe".
+        image_name = image.rsplit(":", 1)[0]
+        listing = runner.command(
             [
                 "artifacts",
                 "docker",
                 "images",
-                "describe",
-                image,
-                "--format=value(image_summary.digest)",
-            ]
+                "list",
+                image_name,
+                "--include-tags",
+                "--format=json",
+            ],
+            capture=True,
         )
+        if runner.apply:
+            digest = verified_docker_digest(listing, sha)
+            print(
+                f"Verified Artifact Registry image: {image_name}@{digest} "
+                f"(commit {sha})",
+                flush=True,
+            )
     elif args.action == "deploy":
         runner.command(
             [
