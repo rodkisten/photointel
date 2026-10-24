@@ -4,6 +4,8 @@ on:
     paths:
       - infra/gcp/**
       - .github/actions/gcp-config/**
+      - .github/actions/notify/**
+      - infra/notify/**
       - '!infra/gcp/artifact-registry-cleanup.json'
       - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
@@ -18,6 +20,8 @@ on:
     paths:
       - infra/gcp/**
       - .github/actions/gcp-config/**
+      - .github/actions/notify/**
+      - infra/notify/**
       - '!infra/gcp/artifact-registry-cleanup.json'
       - '!infra/gcp/staging-bucket-lifecycle.json'
       - infra/docker/api*.Dockerfile
