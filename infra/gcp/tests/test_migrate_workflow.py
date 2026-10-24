@@ -65,9 +65,12 @@ class MigrationWorkflowTests(unittest.TestCase):
 
     def test_job_rejects_old_image_wrong_identity_retry_or_command(self):
         with patch.object(migrate, "run_gcloud", return_value=json.dumps(fake_job())):
-            migrate.job_spec(IMAGE, PROJECT, "us-central1")
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "image"):
-                migrate.job_spec("other-image", PROJECT, "us-central1")
+            self.assertEqual(
+                migrate.job_spec(IMAGE.rsplit(":", 1)[0], PROJECT, "us-central1"),
+                SHA,
+            )
+            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "repository image"):
+                migrate.job_spec("us-central1-docker.pkg.dev/other/project/api", PROJECT, "us-central1")
         for payload in (
             fake_job(retries=1),
             fake_job(sa="someone-else@example.com"),
@@ -75,7 +78,7 @@ class MigrationWorkflowTests(unittest.TestCase):
         ):
             with patch.object(migrate, "run_gcloud", return_value=json.dumps(payload)):
                 with self.assertRaises(migrate.MigrationWorkflowError):
-                    migrate.job_spec(IMAGE, PROJECT, "us-central1")
+                    migrate.job_spec(IMAGE.rsplit(":", 1)[0], PROJECT, "us-central1")
 
     def test_plan_does_not_execute_migration(self):
         config = {
@@ -87,13 +90,38 @@ class MigrationWorkflowTests(unittest.TestCase):
             location.write_text(json.dumps(config), encoding="utf-8")
             with (
                 patch.object(migrate, "validate", return_value=config),
-                patch.object(migrate, "job_spec", return_value=fake_job()),
+                patch.object(migrate, "job_spec", return_value=SHA),
                 patch.object(migrate, "apply_migration", side_effect=AssertionError("apply prohibited")),
             ):
                 self.assertEqual(migrate.main([
                     "--mode", "plan", "--project", PROJECT, "--sha", SHA,
                     "--config", str(location),
                 ]), 0)
+
+    def test_apply_requires_matching_deployed_sha(self):
+        config = {
+            "project_id": PROJECT, "region": "us-central1",
+            "release_git_sha": SHA, "image": IMAGE,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            location = Path(directory) / "config.json"
+            location.write_text(json.dumps(config), encoding="utf-8")
+            with (
+                patch.object(migrate, "validate", return_value=config),
+                patch.object(migrate, "job_spec", return_value=SHA),
+                patch.object(migrate, "apply_migration") as apply,
+            ):
+                base = [
+                    "--mode", "apply", "--project", PROJECT, "--sha", SHA,
+                    "--database", "initial-empty",
+                    "--initial-empty-database", "true",
+                    "--config", str(location),
+                ]
+                self.assertEqual(migrate.main(base), 1)
+                self.assertEqual(migrate.main(base + ["--approved-sha", "b" * 40]), 1)
+                apply.assert_not_called()
+                self.assertEqual(migrate.main(base + ["--approved-sha", SHA]), 0)
+                apply.assert_called_once_with(PROJECT, "initial-empty", True, "")
 
     def test_empty_migration_requires_attestation_and_never_uses_backup(self):
         with patch.object(migrate.subprocess, "run") as run:
