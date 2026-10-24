@@ -85,6 +85,10 @@ jobs:
 
 Limpeza de `config.local.json` no runner **não apaga** imagens do Artifact Registry, tarballs do bucket GCS ou ZIPs/artifacts de Actions. Consulte [retenção de artifacts](../deployment/ARTIFACT_RETENTION.md). Na validação GCP, o upload do artifact de planos é **desativado por padrão** e pode ser habilitado manualmente com `upload_evidence=true`. Isso reduz falhas decorrentes do limite atual de armazenamento de artifacts do GitHub.
 
+## 📱 Notificações Notify!
+
+Todos os 13 workflows receberam um observador local por step operacional concluído, que envia um push agrupado por execução sem modificar o resultado do job. Os workflows GCP Deploy e GCP Bootstrap também iniciam, atualizam e encerram uma Live Activity por execução, usando seu próprio `activityId`. Os demais enviam apenas notificações de steps. A integração é desativada automaticamente quando faltam os Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`, e não exige um Environment `production` nos testes. Veja [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md). 
+
 ## 🎨 Labels e emojis
 
 O padrão adotado em **todos os 13 workflows** é nome legível para workflow, job e cada step: `<emoji> [ÁREA] Ação`. Labels usuais: `[SOURCE]`, `[SETUP]`, `[CONFIG]`, `[AUTH]`, `[TEST]`, `[BUILD]`, `[DEPLOY]`, `[DATA]`, `[EVIDENCE]`, `[CLEANUP]` e `[PATCH]`.
