@@ -90,7 +90,7 @@ A ação valida `GCP_CONFIG_ENV` e executa `bash infra/gcp/bootstrap.sh`. Em `pl
 - Seis service accounts: cria apenas ausentes.
 - Secret Manager: cria apenas *containers* de secret inexistentes, **sem** versões ou valores.
 - GCS: cria bucket privado somente se ausente; não tenta mover um bucket existente na multirregião `US`.
-- IAM: reaplica `add-iam-policy-binding`; o Google não cria concessões duplicadas para o mesmo membro/papel. Corrige vinculações que ainda faltam.
+- IAM: reaplica `add-iam-policy-binding`; o Google não cria concessões duplicadas para o mesmo membro/papel. Corrige vinculações que ainda faltam. Cada concessão declara `--condition=None` para compatibilidade com políticas IAM do projeto que já possuem bindings condicionais, sem remover ou modificar condições existentes. Essas novas concessões são **incondicionais**, como definido na matriz de acesso do bootstrap.
 - **Não** deleta recursos, imagens, dados privados, versões de secrets nem revisões Cloud Run. Não ativa cobrança automaticamente: isso depende dos termos e configuração do projeto e de `apply` explicitamente autorizado.
 - `plan` não faz inventário detalhado de diferenças no GCP; imprime um **resumo de alterações possíveis**. `apply` inspeciona e altera conforme necessário. Uma falha de IAM não é interpretada como “recurso não existe”.
 - IAM bindings adicionados são reconciliados, mas políticas inesperadas de acesso **não são removidas**. Faça auditoria de IAM separadamente.
