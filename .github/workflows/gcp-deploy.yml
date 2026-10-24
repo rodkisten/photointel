@@ -4,14 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Normal release operation (administrative bootstrap is a separate workflow)'
+        description: 'Run a single stage or all in sequence; migration remains manual'
         type: choice
+        default: all
         options:
+          - all
           - build
           - jobs-deploy
           - deploy
           - scheduler
           - cleanup
+        required: true
+
+      database_ready:
+        description: 'For deploy/all: I verified Neon migration, secret versions and Cloudflare Access readiness'
+        type: boolean
+        default: false
         required: true
 
       authorize_charges:
@@ -43,7 +51,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     permissions:
       contents: read
@@ -59,6 +67,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      - name: "🛡️ [GATE] Confirm database and Access readiness before publishing API"
+        if: inputs.action == 'all' || inputs.action == 'deploy'
+        env:
+          DATABASE_READY: ${{ inputs.database_ready }}
+        run: |
+          set -euo pipefail
+          if [[ "$DATABASE_READY" != "true" ]]; then
+            echo "::error::API publication requires database_ready=true. First build + jobs-deploy, then verify the separately executed Neon migration and security configuration."
+            exit 1
+          fi
+          echo "Operator confirmed the Neon migration, Secret Manager versions and Cloudflare Access readiness."
 
       - name: "⚙️ [RUN] Prepare production vars using the shared action"
         id: config
@@ -80,7 +100,7 @@ jobs:
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
       - name: "🏗️ [BUILD] Diagnose build prerequisites (read-only)"
-        if: inputs.action == 'build'
+        if: inputs.action == 'build' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: |
@@ -128,7 +148,7 @@ jobs:
           echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
 
       - name: "🏗️ [BUILD] Skip build if commit image already exists"
-        if: inputs.action == 'build'
+        if: inputs.action == 'build' || inputs.action == 'all'
         id: image_cache
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -185,7 +205,7 @@ jobs:
           fi
 
       - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy'
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
@@ -211,17 +231,50 @@ jobs:
           print(f"Found immutable release tag {sha}; deploy may proceed.")
           '
 
-      - name: "⚙️ [RUN] Execute selected operation"
-        if: inputs.action != 'build' || steps.image_cache.outputs.skip != 'true'
+      - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
+        if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
         env:
-          OPERATION: ${{ inputs.action }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: |
           set -euo pipefail
-          python infra/gcp/manage.py "$OPERATION" \
-            --apply \
-            --authorize-charges \
-            --confirm-project "$CONFIRM_PROJECT"
+          python3 infra/gcp/manage.py build --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Docker image for this exact commit built and verified." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "📦 [JOBS] Publish five Cloud Run Jobs"
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          python3 infra/gcp/manage.py jobs-deploy --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Five Cloud Run Jobs deployed. ⚠️ Database migration has NOT been executed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "🚀 [API] Publish Cloud Run service"
+        if: inputs.action == 'deploy' || inputs.action == 'all'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          python3 infra/gcp/manage.py deploy --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Cloud Run API deployment requested. Test authentication before importing any data." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "⏰ [SCHEDULER] Create or update schedules (paused)"
+        if: inputs.action == 'scheduler' || inputs.action == 'all'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          python3 infra/gcp/manage.py scheduler --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Scheduler created/updated with all jobs paused. No automatic ingestion enabled." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "🧹 [SCHEDULER] Pause schedules without deleting resources"
+        if: inputs.action == 'cleanup'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          python3 infra/gcp/manage.py cleanup --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
+          echo "✅ Scheduler paused. No database, image, bucket or service was deleted." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
         if: always() && steps.checkout.outcome == 'success'
