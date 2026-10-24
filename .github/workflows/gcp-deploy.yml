@@ -55,25 +55,19 @@ jobs:
 
     steps:
       - name: Checkout repository
+        id: checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Install .env parser
-        run: |
-          python -m pip install --disable-pip-version-check python-dotenv==1.2.4
-
-      - name: Convert production .env and validate configuration
+      - name: "🧩 [CONFIG] Prepare production vars using the shared action"
         id: config
-        env:
-          # Environment Variable (not a GitHub Secret): references/config only.
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          python infra/gcp/gcp-env.py
-          python infra/gcp/manage.py render
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: ${{ inputs.confirm_project }}
+          release-sha: ${{ github.sha }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -229,8 +223,8 @@ jobs:
             --authorize-charges \
             --confirm-project "$CONFIRM_PROJECT"
 
-      - name: Remove local deployment metadata
-        if: always()
-        run: |
-          rm -f infra/gcp/config.local.json
-          rm -rf infra/gcp/rendered
+      - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+        if: always() && steps.checkout.outcome == 'success'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
