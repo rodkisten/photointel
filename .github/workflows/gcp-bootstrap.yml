@@ -1,0 +1,96 @@
+name: 🧱 Google Cloud administrative bootstrap
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Plan only or reconcile infrastructure using gcloud"
+        type: choice
+        required: true
+        default: plan
+        options: [plan, apply]
+      authorize_charges:
+        description: "I approve Google Cloud resource changes and potential charges"
+        type: boolean
+        required: true
+        default: false
+      confirm_project:
+        description: "Type the exact GCP project ID"
+        type: string
+        required: true
+        default: photointel
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photointel-gcp-production
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
+    name: ${${ inputs.mode }} · ${${ inputs.confirm_project }}
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate the production configuration
+        env:
+          GCP_CONFIG_ENV: ${${ vars.GCP_CONFIG_ENV }}
+          CONFIRM_PROJECT: ${${ inputs.confirm_project }}
+          RELEASE_SHA: ${${ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check python-dotenv==1.2.4
+          python3 infra/gcp/gcp-env.py
+          python3 infra/gcp/manage.py render
+          bash -n infra/gcp/bootstrap.sh
+
+      - name: Validate dedicated bootstrap identity
+        env:
+          WIF: ${${ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
+          BOOTSTRAP_ACCOUNT: ${${ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
+          PROJECT: ${${ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          test "$PROJECT" = photointel || { echo "::error::Unexpected target project"; exit 1; }
+          test "$BOOTSTRAP_ACCOUNT" = "photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" || { echo "::error::Dedicated bootstrap account is not configured"; exit 1; }
+          test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
+
+      - name: Authenticate as bootstrap administrator (WIF, no JSON key)
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${${ inputs.confirm_project }}
+          workload_identity_provider: ${${ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${${ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${${ inputs.confirm_project }}
+          version: '>= 500.0.0'
+
+      - name: Plan or reconcile Google Cloud resources
+        env:
+          BOOTSTRAP_MODE: ${${ inputs.mode }}
+          AUTHORIZE_CHARGES: ${${ inputs.authorize_charges }}
+          CONFIRM_PROJECT: ${${ inputs.confirm_project }}
+        run: |
+          set -euo pipefail
+          bash infra/gcp/bootstrap.sh
+
+      - name: Remove generated Google credential and config files
+        if: always()
+        run: |
+          rm -f infra/gcp/config.local.json
+          rm -rf infra/gcp/rendered
