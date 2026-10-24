@@ -497,7 +497,30 @@ class Runner:
 
 def bootstrap(runner: Runner) -> None:
     config = runner.config
-    runner.command(["services", "enable", *SERVICES])
+    # gcloud services enable needs serviceusage.services.enable even when APIs
+    # are already enabled. Avoid that unnecessary privileged mutation on retries.
+    # This does NOT replace the administrative IAM needed for remaining bootstrap.
+    if runner.apply:
+        enabled = set(
+            runner.command(
+                ["services", "list", "--enabled", "--format=value(config.name)"],
+                capture=True,
+            ).splitlines()
+        )
+        missing = [api for api in SERVICES if api not in enabled]
+        if missing:
+            print("APIs not enabled: " + ", ".join(missing), flush=True)
+            print(
+                "Enabling APIs requires serviceusage.services.enable; "
+                "use a project administrator for initial bootstrap.",
+                flush=True,
+            )
+            runner.command(["services", "enable", *missing])
+        else:
+            print("All required APIs already enabled; skipping services enable.", flush=True)
+    else:
+        runner.command(["services", "list", "--enabled", "--format=value(config.name)"])
+        runner.command(["services", "enable", *SERVICES])
     repository = config["repository"]
     region = config["region"]
     runner.ensure(
