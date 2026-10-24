@@ -30,7 +30,7 @@ inputs:
     required: false
     default: "0"
 outputs:
-  activity-id:
+  activity_id:
     description: "New unique Live Activity ID, empty if Notify! unavailable"
     value: ${{ steps.send.outputs.activity_id }}
 runs:
