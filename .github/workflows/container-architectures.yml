@@ -32,19 +32,58 @@ jobs:
       VALIDATION_COMPONENT: ${{ matrix.component }}
     steps:
       - name: "📥 [SOURCE] Check out the exact revision"
+        id: notify_observed_001
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Check out the exact revision"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Check out the exact revision"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "⚙️ [RUN] Register ARM64 user-mode emulation"
+        id: notify_observed_002
         if: matrix.architecture == 'arm64'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Register ARM64 user-mode emulation"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Register ARM64 user-mode emulation"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧰 [SETUP] Set up Buildx"
+        id: notify_observed_003
         uses: docker/setup-buildx-action@v3
 
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Set up Buildx"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Set up Buildx"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🏗️ [BUILD] Build and load the target architecture without publishing"
         id: image
         uses: docker/build-push-action@v6
@@ -58,7 +97,20 @@ jobs:
           cache-from: type=gha,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }}
           cache-to: type=gha,mode=max,scope=photointel-${{ matrix.component }}-${{ matrix.architecture }},ignore-error=true
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Build and load the target architecture without publishing"
+        if: ${{ always() && (steps.image.outcome == 'success' || steps.image.outcome == 'failure' || steps.image.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Build and load the target architecture without publishing"
+          outcome: ${{ steps.image.outcome }}
       - name: "🏗️ [BUILD] Record image architecture and source revision"
+        id: notify_observed_004
         env:
           BUILD_IMAGE_ID: ${{ steps.image.outputs.imageid }}
           BUILD_DIGEST: ${{ steps.image.outputs.digest }}
@@ -90,7 +142,20 @@ jobs:
           print(json.dumps(record))
           PY
 
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Record image architecture and source revision"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Record image architecture and source revision"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧪 [TEST] Execute the API native-extension smoke test"
+        id: notify_observed_005
         if: matrix.component == 'api'
         run: |
           docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
@@ -121,7 +186,20 @@ jobs:
           }))
           ' | tee reports/container-architectures/runtime-api.json
 
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Execute the API native-extension smoke test"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Execute the API native-extension smoke test"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧪 [TEST] Execute the static web server and check its health endpoint"
+        id: notify_observed_006
         if: matrix.component == 'web'
         run: |
           docker run -d --name architecture-web --network none \
@@ -147,7 +225,20 @@ jobs:
           print("Nginx health endpoint and the actual built application returned successfully.")
           PY
 
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Execute the static web server and check its health endpoint"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Execute the static web server and check its health endpoint"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "⚙️ [RUN] Execute the cross-compiled MinIO binary"
+        id: notify_observed_007
         if: matrix.component == 'minio'
         run: |
           docker run --rm --network none --platform "$VALIDATION_PLATFORM" \
@@ -166,7 +257,20 @@ jobs:
           print("The binary built from the pinned upstream source executed on the target platform.")
           PY
 
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Execute the cross-compiled MinIO binary"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Execute the cross-compiled MinIO binary"
+          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "🧹 [CLEANUP] Capture web server diagnostics and stop the isolated container"
+        id: notify_observed_008
         if: always() && matrix.component == 'web'
         run: |
           if docker container inspect architecture-web > /dev/null 2>&1; then
@@ -175,7 +279,20 @@ jobs:
             docker rm -f architecture-web
           fi
 
+      - name: "🔔 [NOTIFY] 🧹 [CLEANUP] Capture web server diagnostics and stop the isolated container"
+        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 [CLEANUP] Capture web server diagnostics and stop the isolated container"
+          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "📦 [EVIDENCE] Upload architecture-specific execution evidence"
+        id: notify_observed_009
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -183,3 +300,16 @@ jobs:
           path: reports/container-architectures/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload architecture-specific execution evidence"
+        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload architecture-specific execution evidence"
+          outcome: ${{ steps.notify_observed_009.outcome }}
