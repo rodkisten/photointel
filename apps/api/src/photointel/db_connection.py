@@ -74,6 +74,10 @@ def database_connection_options(
         # AND hostname even when the original libpq URL says sslmode=require.
         if require_tls:
             query["sslmode"] = "verify-full"
+            # libpq defaults to ~/.postgresql/root.crt, absent in minimal
+            # Cloud Run containers. Use trusted system CAs by default while
+            # keeping any explicit sslrootcert in the URL or custom CA path.
+            query.setdefault("sslrootcert", "system")
         elif sslmode:
             query["sslmode"] = sslmode
         if channel_binding:
