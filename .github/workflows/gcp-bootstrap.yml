@@ -40,21 +40,23 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        id: checkout
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Validate the production configuration
-        env:
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          python3 -m pip install --disable-pip-version-check python-dotenv==1.2.4
-          python3 infra/gcp/gcp-env.py
-          python3 infra/gcp/manage.py render
-          bash -n infra/gcp/bootstrap.sh
+      - name: "🧩 [CONFIG] Prepare Environment vars using the shared action"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: ${{ inputs.confirm_project }}
+          release-sha: ${{ github.sha }}
+
+      - name: "🧪 [VALIDATE] Check administrative bootstrap shell"
+        run: bash -n infra/gcp/bootstrap.sh
 
       - name: Validate dedicated bootstrap identity
         env:
@@ -89,8 +91,8 @@ jobs:
           set -euo pipefail
           bash infra/gcp/bootstrap.sh
 
-      - name: Remove generated Google credential and config files
-        if: always()
-        run: |
-          rm -f infra/gcp/config.local.json
-          rm -rf infra/gcp/rendered
+      - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+        if: always() && steps.checkout.outcome == 'success'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
