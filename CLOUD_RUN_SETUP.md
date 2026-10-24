@@ -1,10 +1,8 @@
 # Google Cloud Run + Neon — implantação controlada pelo iPhone
 
-Este é um segundo destino de produção, preservando Compose e Oracle/VPS como
-alternativas. Os arquivos implementam a implantação; sua presença não comprova
-provisionamento. Não foram criados recursos Google, não foram fornecidas
-credenciais e não houve cobrança cloud neste trabalho. A autorização para
-implementar não é autorização para contratar recursos.
+**[Comece pelo guia completo: do zero ao deploy](docs/deployment/CLOUD_RUN_FROM_ZERO.md).** Ele traz os comandos e configurações atuais de Cloud Shell, GCP IAM, WIF com GitHub, Artifact Registry, Cloud Build, Secret Manager, Cloudflare, BUILD_CA_FILE e GitHub Actions, incluindo diagnóstico de erros já encontrados.
+
+Este documento aprofunda migração/rollback, recursos finitos e autenticação. **O estado de contas Google, permissões, domínio e bancos deve ser confirmado no Console e pelos logs de cada execução:** repositório versionado ou teste offline não prova que a produção está operacional. Criar recursos pode gerar cobranças.
 
 ## 1. Preparar contas e limites
 
@@ -56,7 +54,7 @@ make gcp-doctor GCP_ARGS='--apply'
 make gcp-bootstrap GCP_ARGS='--apply --authorize-charges --confirm-project SEU_PROJECT_ID'
 ```
 
-O bootstrap habilita APIs, cria Artifact Registry privado, bucket privado de
+**Execute esse bootstrap inicialmente com identidade humana administrativa no Cloud Shell**, ou com identidade de CI que recebeu poderes administrativos temporários e aprovados. A conta `photointel-deployer` não consegue habilitar APIs e criar sua própria infraestrutura sem permissões extras. O bootstrap habilita APIs, cria Artifact Registry privado, bucket privado de
 staging do código, seis service accounts e secrets **vazios**. Não cria banco
 Neon, bucket R2, recursos Modal nem políticas Access. O staging não contém
 `.env`, sessões, backups, fotos ou credenciais: `build.gcloudignore` e
@@ -120,17 +118,9 @@ limites diários/mensais do backend e os controles do provedor.
 
 ## 4. Compilar, migrar e publicar
 
-Um trigger de repositório no Cloud Build deve usar **arquivo de configuração**
-`/cloudbuild.yaml`, com contexto na raiz do repositório. Selecionar somente
-`infra/docker/` como contexto impede o acesso a `uv.lock`, `apps/` e `packages/`.
-Esse fluxo constrói e envia a imagem ao Artifact Registry já provisionado; não
-publica API, não altera Jobs e não executa ingestão. O trigger precisa informar
-`COMMIT_SHA`; o manifesto dentro da imagem identifica esse commit e não aprova
-gates. A tag `$BUILD_ID` é única; obtenha o digest da imagem no registro e
-configure `image` e `release_git_sha` no JSON antes dos comandos de deploy abaixo.
-Não conceda `run.admin` à identidade usada somente para builds. Configure
-`_REGION`, `_REPOSITORY` e `_IMAGE_NAME` no trigger conforme o registro existente.
-Criar/executar o trigger pode gerar cobrança e continua sendo ação do operador.
+O caminho de implantação adotado por este projeto é o workflow **manual** `.github/workflows/gcp-deploy.yml`: a ação `build` executa `infra/gcp/manage.py build`, que utiliza `infra/gcp/cloudbuild.yaml`, envia o contexto da **raiz do repositório** e publica a imagem `api:SHA_COMPLETO` no Artifact Registry previamente criado. Não faz deploy da API ou dos Jobs. O workflow gera `release_git_sha` e `image` do mesmo commit de `main`; não é necessário registrar manualmente um digest antes desse fluxo. Ele verifica ao final que a tag aparece no registro com digest SHA-256, por `gcloud artifacts docker images list --include-tags --format=json`, sem exigir Container Analysis.
+
+O trigger alternativo em `/cloudbuild.yaml` permanece disponível para operadores que preferem Cloud Build nativo e exige configurar suas próprias substituições/digests. **Não confunda os dois fluxos.** Em qualquer um, o repositório Docker `photointel` deve existir na região `us-central1`. O build pode gerar custos; inspecione logs no Cloud Logging quando `gcloud builds submit` não exibir o log completo.
 
 O Dockerfile Cloud Build é compatível com o builder clássico. O Compose local
 usa `api.buildkit.Dockerfile` para disponibilizar um certificado CA personalizado
@@ -218,28 +208,32 @@ mascare acesso. A validação completa com JWT válido/inválido/expirado e Medi
 está na suíte de segurança e deve ser repetida no ambiente real. Verifique `/v1`
 através do Access no Safari antes de importar dados.
 
-## 6. CI sem chave Google persistente
+## 6. GitHub Actions, WIF, identidade e preflight
 
-`.github/workflows/gcp-validation.yml` valida recursos offline sem credenciais.
-`gcp-deploy.yml` é somente manual, branch main, ambiente `production`, permissão
-OIDC e confirmação explícita de projeto/cobrança. Configure aprovadores do
-ambiente no GitHub. Ele executa apenas a operação escolhida; não faz migração
-sem backup e não provisiona contas automaticamente.
+**Fluxo detalhado no [guia do zero ao deploy](docs/deployment/CLOUD_RUN_FROM_ZERO.md#6-workload-identity-federation-github--google-sem-chave-json).** O workflow `.github/workflows/gcp-validation.yml` valida offline sem credenciais nem criação de recursos. `.github/workflows/gcp-deploy.yml` só executa por `workflow_dispatch` em `main`, ambiente GitHub `production`, com `id-token: write`, confirmação do projeto e autorização explícita de cobranças (desmarcada por padrão). Uma execução realiza apenas a operação escolhida. A migração permanece bloqueada no Actions até a verificação manual do banco e dos backups.
 
-Crie Workload Identity Federation no Console: provider GitHub OIDC,
-`https://token.actions.githubusercontent.com`, audience padrão do provider,
-attribute mapping `google.subject=assertion.sub`,
-`attribute.repository=assertion.repository`, `attribute.ref=assertion.ref` e
-condição restringindo **seu repositório exato**, branch main e environment
-production. Conceda `roles/iam.workloadIdentityUser` na conta
-`photointel-deployer` somente ao principalSet desse repositório. Nunca conceda a
-todos os repositórios do GitHub.
+No Google Cloud, use o Pool WIF **`github-actions`** e Provider OIDC **`photo-intelligence`** em `global` com issuer `https://token.actions.githubusercontent.com`. O recurso correto nesta instalação é:
 
-No ambiente GitHub `production`, configure variáveis não secretas:
-`GCP_WORKLOAD_IDENTITY_PROVIDER` (nome completo do provider),
-`GCP_DEPLOY_SERVICE_ACCOUNT` e `GCP_CONFIG_JSON` (mesmo JSON sem valores secretos).
-Credenciais vêm da identidade federada de curta duração. A aplicação usa ADC da
-service account Run, sem arquivo Google JSON ou token no bundle web.
+```text
+projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence
+```
+
+Restrinja o provider via `assertion.repository == 'rodkisten/photointel'`, `assertion.ref == 'refs/heads/main'` e `assertion.environment == 'production'`, com mapeamento `google.subject` e `attribute.repository` (e atributos auxiliares utilizados pela condição). Conceda `roles/iam.workloadIdentityUser` **na service account** `photointel-deployer@photointel.iam.gserviceaccount.com` para o principalSet do repo exato. Não use `providers/photointel` nem e-mail `@799387180206.iam.gserviceaccount.com`.
+
+No GitHub `Settings → Environments → production → Environment variables`, crie a única variável **multiline** `GCP_CONFIG_ENV`, com valores não secretos e referências `SECRETS__...__NAME/VERSION`, além de `GCP_WORKLOAD_IDENTITY_PROVIDER` e `GCP_DEPLOY_SERVICE_ACCOUNT`. O workflow passa **`vars.GCP_CONFIG_ENV`** para `infra/gcp/gcp-env.py`, que gera `config.local.json` privado, adiciona o SHA de `main` e expõe os dois identificadores WIF como outputs. **As instruções antigas com `GCP_CONFIG_JSON` não se aplicam a este workflow.** Nunca inclua R2 secrets, senha Neon, Bridge pepper, cookies iCloud ou chaves Google no dotenv do GitHub.
+
+### IAM mínimo para o fluxo de build
+
+| Conta | Recurso e papel |
+|---|---|
+| `photointel-deployer` | `roles/cloudbuild.builds.editor`, `roles/artifactregistry.reader` e, quando exigido, `roles/serviceusage.serviceUsageConsumer` no projeto |
+| `photointel-deployer` | `roles/storage.objectAdmin` no bucket `gs://photointel-photointel-build-source` |
+| `photointel-deployer` | `roles/iam.serviceAccountUser` **sobre** `photointel-builder`, para `iam.serviceAccounts.actAs` |
+| `photointel-builder` | `roles/storage.objectViewer` no bucket de staging, `roles/artifactregistry.writer` no repositório Docker e `roles/logging.logWriter` no projeto |
+
+O `bootstrap` também concede papéis extras de deploy Run/Scheduler/actAs sobre as demais identidades. O operador inicial precisa dos poderes administrativos para criar recursos e definir IAM; **não os mantenha permanentemente no Deployer**. O preflight de `build` consulta identidade, API, bucket, conta Builder e repositório Artifact Registry, mas não garante sozinho toda a permissão de escrita. O build real é a última confirmação.
+
+**Erros já solucionados:** `invalid_target` (provider ID), `serviceusage.services.enable` (bootstrap com conta sem privilégio), bucket de staging inacessível, Builder ausente, `caller does not have permission to act as service account` (falta actAs), `Repository "photointel" not found` (Artifact Registry não criado) e `containeranalysis.occurrences.list` (consulta antiga substituída no manage). Veja tabela de diagnóstico no guia novo.
 
 ## 7. Rollback e interrupção
 
@@ -254,9 +248,7 @@ Jobs/R2. Para Jobs, volte o digest no JSON e execute `gcp-jobs-deploy`. Preserve
 compatibilidade expand-migrate-contract e os dados. Se uma migração falhar,
 interrompa rollout e siga o runbook de recuperação antes de repetir.
 
-A implantação real permanece pendente de autorização de cobrança, contas,
-credenciais, quotas e gates físicos. Uma definição renderizada ou um teste
-mockado não comprova Cloud Run, Neon, R2, Apple ou Modal operacionais.
+Não presuma que o deploy está completo porque o Cloud Build retornou SUCCESS: isso comprova a construção/publicação da imagem, não os Jobs, migrações, Cloud Run Service, Zero Trust, Apple ou Modal. Verifique cada recurso e seus gates com os comandos do guia.
 
 Os identificadores públicos de service token do Bridge podem ser informados em
 `extra_environment.ACCESS_BRIDGE_SERVICE_TOKENS` como string JSON de uma lista,
