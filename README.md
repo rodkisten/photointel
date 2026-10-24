@@ -87,7 +87,7 @@ A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS
 
 No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), o dropdown `action` permite escolher `build`, `jobs-deploy`, **`migrate`** (`plan`/`apply`), `deploy`, `scheduler`, `cleanup` ou **`all`**. O modo `all` executa em sequência, com o **mesmo SHA**, `build` (reutiliza a imagem existente, se houver) → verificação → Jobs → API → agendamentos pausados. Uma falha interrompe os steps seguintes; o cleanup da configuração local ocorre no final.
 
-**Atenção na primeira instalação:** `all` **não** migra o banco. `database_ready` começa desmarcado e deve ser confirmado apenas depois de migrar e validar Neon, secrets e Cloudflare Access. Na primeira instalação, use `jobs-deploy` → **`migrate` (`plan`, depois `apply` com confirmação)** → `deploy`; migrações nunca fazem parte de `all`. [Detalhes do fluxo e de cada opção](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
+**Atenção na primeira instalação:** `all` **não** migra o banco. `database_ready` começa desmarcado e deve ser confirmado apenas depois de migrar e validar Neon, secrets e Cloudflare Access. Na primeira instalação, use `jobs-deploy` → **`migrate` (`plan` opcional; `apply` com uma única escolha de segurança)** → `deploy`. O CLI identifica o SHA instalado e, se houver um único backup privado, seu prefixo; migrações nunca fazem parte de `all`. [Detalhes do fluxo e de cada opção](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Google Cloud Run: do zero ao deploy
 
