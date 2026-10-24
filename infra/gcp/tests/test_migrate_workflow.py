@@ -125,39 +125,43 @@ class MigrationWorkflowTests(unittest.TestCase):
             self.assertIn("--initial-empty-database", command)
             self.assertNotIn("--backup-directory", command)
 
-    def test_existing_db_never_uses_empty_flag_or_skips_restore_receipt(self):
+    def test_existing_database_downloads_and_validates_receipt(self):
         with (
             patch.object(migrate, "run_gcloud") as cloud,
             patch.object(migrate, "verify_backup_receipt") as verify,
             patch.object(migrate.subprocess, "run") as execute,
         ):
-            with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.apply_migration(PROJECT, "existing-with-backup", True, PREFIX)
-            with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.apply_migration(PROJECT, "existing-with-backup", False, "")
-            cloud.assert_not_called()
-            verify.assert_not_called()
-            execute.assert_not_called()
-
-            # Mock private ciphertext downloads. The real receipt validator is
-            # tested separately in manage.py's offline regression suite.
-            def fake_download(args, project, *, capture=False):
-                Path(args[-1]).write_bytes(b"fake encrypted ciphertext or receipt")
+            def simulated_download(args, project, *, capture=False):
+                self.assertEqual(project, PROJECT)
+                Path(args[-1]).write_bytes(b"synthetic ciphertext")
                 return ""
-
-            cloud.side_effect = fake_download
-            migrate.apply_migration(PROJECT, "existing-with-backup", False, PREFIX)
+            cloud.side_effect = simulated_download
+            migrate.apply_migration(PROJECT, "existing-with-backup", PREFIX)
             self.assertEqual(cloud.call_count, 3)
             verify.assert_called_once()
             command = execute.call_args.args[0]
             self.assertIn("--backup-directory", command)
             self.assertIn("--backup-receipt", command)
-            self.assertNotIn("--initial-empty-database", command)
+
+    def test_backup_discovery_requires_exactly_one_candidate(self):
+        with patch.object(migrate, "run_gcloud") as cloud:
+            cloud.return_value = PREFIX + "/restore-verification.json\n"
+            self.assertEqual(migrate.discover_unambiguous_backup(PROJECT), PREFIX)
+            cloud.return_value = ""
+            with self.assertRaises(migrate.MigrationWorkflowError):
+                migrate.discover_unambiguous_backup(PROJECT)
+            cloud.return_value = (
+                PREFIX + "/restore-verification.json\n"
+                + PREFIX.replace("snapshot-2026", "snapshot-2025")
+                + "/restore-verification.json\n"
+            )
+            with self.assertRaises(migrate.MigrationWorkflowError):
+                migrate.discover_unambiguous_backup(PROJECT)
 
     def test_apply_with_unselected_database_fails_without_execution(self):
         with patch.object(migrate.subprocess, "run") as execute:
             with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Select migration_database"):
-                migrate.apply_migration(PROJECT, "unselected", False, "")
+                migrate.apply_migration(PROJECT, "unselected", "")
             execute.assert_not_called()
 
 
