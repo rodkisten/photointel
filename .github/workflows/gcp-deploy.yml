@@ -4,10 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Operation (migration remains a separate backed-up operator command)'
+        description: 'Normal release operation (administrative bootstrap is a separate workflow)'
         type: choice
         options:
-          - bootstrap
           - build
           - jobs-deploy
           - deploy
