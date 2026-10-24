@@ -86,7 +86,7 @@ done
 change storage buckets add-iam-policy-binding "$BUCKET" "--member=$BUILDER" --role=roles/storage.objectViewer --condition=None --format=none
 change artifacts repositories add-iam-policy-binding "$REPO" "--location=$REGION" "--member=$BUILDER" --role=roles/artifactregistry.writer --condition=None --format=none
 change projects add-iam-policy-binding "$PROJECT" "--member=$BUILDER" --role=roles/logging.logWriter --condition=None --format=none
-for role in roles/run.admin roles/cloudscheduler.admin roles/cloudbuild.builds.editor roles/artifactregistry.reader roles/serviceusage.serviceUsageConsumer; do
+for role in roles/run.admin roles/cloudscheduler.admin roles/cloudbuild.builds.editor roles/artifactregistry.reader roles/logging.viewer roles/serviceusage.serviceUsageConsumer; do
   change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
 done
 change storage buckets add-iam-policy-binding "$BUCKET" "--member=$DEPLOYER" --role=roles/storage.objectAdmin --condition=None --format=none
