@@ -34,6 +34,16 @@ class CloudRunCommandsTests(unittest.TestCase):
                 manage.scheduler(runner)
                 manage.deploy_jobs(runner, Path("/tmp/rendered"))
 
+    def test_bootstrap_grants_deployer_service_usage_consumer(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            manage.bootstrap(manage.Runner(self.config, apply=False))
+        plan = output.getvalue()
+        self.assertIn("roles/serviceusage.serviceUsageConsumer", plan)
+        self.assertIn("photointel-deployer@", plan)
+        self.assertIn("roles/iam.serviceAccountUser", plan)
+        self.assertIn("photointel-builder@", plan)
+
     def test_api_scales_to_zero_request_billing_no_worker(self) -> None:
         document = manage.service(self.config)
         template = document["spec"]["template"]
