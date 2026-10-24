@@ -44,6 +44,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && inputs.authorize_charges == true
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 60
 
     permissions:
       contents: read
@@ -84,42 +85,81 @@ jobs:
       - name: Set up Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v2
 
-      # The bootstrap operation creates the staging bucket and builder service account.
-      # Never require either of those resources to exist before bootstrap runs.
-      - name: Diagnose Cloud Build prerequisites
+      # Bootstrap creates infrastructure; its resources may not exist yet.
+      - name: Diagnose build prerequisites (read-only)
         if: inputs.action == 'build'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: |
           set -euo pipefail
+          PROJECT="$CONFIRM_PROJECT"
+          BUCKET="gs://$PROJECT-photointel-build-source"
+          BUILDER="photointel-builder@$PROJECT.iam.gserviceaccount.com"
+          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
+          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
 
-          BUCKET="gs://${CONFIRM_PROJECT}-photointel-build-source"
-          BUILDER="photointel-builder@${CONFIRM_PROJECT}.iam.gserviceaccount.com"
-
-          echo 'Checking authenticated Google Cloud identity...'
+          echo 'Checking authenticated identity...'
           gcloud auth list --filter='status:ACTIVE' --format='value(account)'
 
           echo 'Checking Cloud Build API...'
-          gcloud services list \
-            --project="$CONFIRM_PROJECT" \
-            --enabled \
+          API="$(gcloud services list --project="$PROJECT" --enabled \
             --filter='config.name=cloudbuild.googleapis.com' \
-            --format='value(config.name)'
-
-          echo "Checking staging bucket: ${BUCKET}"
-          if ! gcloud storage buckets describe "$BUCKET" \
-            --project="$CONFIRM_PROJECT" \
-            --format='value(name,location)'; then
-            echo "::error::Staging bucket is missing or inaccessible: ${BUCKET}. Run bootstrap with an authorized operator, or fix the deployer's bucket IAM permissions."
+            --format='value(config.name)')"
+          if [[ "$API" != "cloudbuild.googleapis.com" ]]; then
+            echo '::error::Cloud Build API is not enabled. Run bootstrap with an authorized operator.'
             exit 1
           fi
 
-          echo "Checking Cloud Build service account: ${BUILDER}"
-          gcloud iam service-accounts describe "$BUILDER" \
-            --project="$CONFIRM_PROJECT" \
-            --format='value(email)'
+          echo "Checking staging bucket $BUCKET..."
+          if ! gcloud storage buckets describe "$BUCKET" --project="$PROJECT" \
+            --format='value(name,location)'; then
+            echo "::error::Staging bucket missing or inaccessible: $BUCKET. Inspect Storage IAM."
+            exit 1
+          fi
 
-          echo 'Preflight checks completed. Storage write and build permissions are not guaranteed by these read checks.'
+          echo "Checking builder service account $BUILDER..."
+          if ! gcloud iam service-accounts describe "$BUILDER" --project="$PROJECT" \
+            --format='value(email)'; then
+            echo "::error::Builder service account missing or inaccessible. Run administrative bootstrap."
+            exit 1
+          fi
+
+          echo "Checking Docker registry $REPOSITORY in $REGION..."
+          if ! gcloud artifacts repositories describe "$REPOSITORY" \
+            --project="$PROJECT" --location="$REGION" \
+            --format='value(name,format)'; then
+            echo "::error::Artifact Registry repository missing or inaccessible in $REGION."
+            exit 1
+          fi
+
+          echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
+
+      - name: Verify commit image exists before release (read-only)
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy'
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
+          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
+          IMAGE="$REGION-docker.pkg.dev/$CONFIRM_PROJECT/$REPOSITORY/api"
+          echo "Checking Artifact Registry image tag $RELEASE_SHA ..."
+          gcloud artifacts docker images list "$IMAGE" \
+            --project="$CONFIRM_PROJECT" --include-tags --format=json |
+          python3 -c '
+          import json, os, sys
+          try:
+              rows = json.load(sys.stdin)
+          except (ValueError, TypeError) as exc:
+              sys.exit(f"::error::Cannot read Artifact Registry images: {exc}")
+          sha = os.environ["RELEASE_SHA"]
+          matches = [row for row in rows if isinstance(row, dict)
+                     and sha in row.get("tags", [])]
+          if len(matches) != 1:
+              sys.exit(f"::error::Expected exactly one image tagged {sha}; found {len(matches)}. Run build for this commit first.")
+          print(f"Found immutable release tag {sha}; deploy may proceed.")
+          '
 
       - name: Execute selected operation
         env:
