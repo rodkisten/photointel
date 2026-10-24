@@ -3,9 +3,7 @@ on:
   pull_request:
     paths:
       - infra/gcp/**
-      - README.md
-      - CLOUD_RUN_SETUP.md
-      - docs/deployment/CLOUD_RUN_FROM_ZERO.md
+      - '!infra/gcp/*.json'
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
@@ -17,9 +15,7 @@ on:
     branches: [main]
     paths:
       - infra/gcp/**
-      - README.md
-      - CLOUD_RUN_SETUP.md
-      - docs/deployment/CLOUD_RUN_FROM_ZERO.md
+      - '!infra/gcp/*.json'
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
@@ -48,5 +44,12 @@ jobs:
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
       - name: Reject private data in source ZIP imports
         run: node --test infra/scripts/zip-patch-policy.test.cjs
+      # Successful push/PR validation is already visible in the Actions log.
+      # Only keep the generated plans when useful for manual review or failures.
       - uses: actions/upload-artifact@v4
-        with: {name: gcp-offline-definitions, path: reports/gcp-*}
+        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        with:
+          name: gcp-offline-definitions
+          path: reports/gcp-*
+          if-no-files-found: ignore
+          retention-days: 3
