@@ -28,6 +28,12 @@ on:
       - .github/workflows/gcp*.yml
       - .github/workflows/zip.yml
   workflow_dispatch:
+    inputs:
+      upload_evidence:
+        description: 'Upload optional plan artifacts (may consume GitHub storage quota)'
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 jobs:
@@ -78,7 +84,7 @@ jobs:
       # Only keep the generated plans when useful for manual review or failures.
       - name: "📦 [EVIDENCE] Upload test artifacts"
         uses: actions/upload-artifact@v4
-        if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_evidence == true }}
         with:
           name: gcp-offline-definitions
           path: reports/gcp-*
