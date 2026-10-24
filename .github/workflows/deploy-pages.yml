@@ -9,22 +9,101 @@ jobs:
     environment: production
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_001
         uses: actions/checkout@v4
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 [SETUP] Configure actions/setup-node"
+        id: notify_observed_002
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure actions/setup-node"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure actions/setup-node"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_003
         run: npm --prefix apps/web ci
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_004
         run: npm --prefix apps/web run build
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           VITE_RELEASE_ID: ${{ github.sha }}
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_005
         run: cp infra/cloudflare/pages-headers apps/web/dist/_headers
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_006
         run: npx --yes wrangler@4 pages deploy apps/web/dist --project-name "$PAGES_PROJECT"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
+
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_006.outcome }}
