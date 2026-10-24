@@ -28,7 +28,6 @@ concurrency:
 
 jobs:
   bootstrap:
-    name: "🧱 [GCP BOOTSTRAP] bootstrap"
     if: github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
     name: "🧱 [GCP BOOTSTRAP] ${{ inputs.mode }} · ${{ inputs.confirm_project }}"
     runs-on: ubuntu-latest
