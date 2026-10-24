@@ -12,7 +12,7 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 | [🏗️ Arquiteturas](../../.github/workflows/container-architectures.yml) | Manual ou `validation/container-architectures` | Testa AMD64/ARM64 e bibliotecas nativas sem enviar imagens |
 | [🌐 Cloudflare Pages](../../.github/workflows/deploy-pages.yml) | Manual, `production` | Publica a PWA; independente do Cloud Run API |
 | [🧱 Bootstrap GCP](../../.github/workflows/gcp-bootstrap.yml) | Manual `plan` / `apply`, `production` | Provisiona IAM, SAs, bucket, secrets e Artifact Registry via gcloud, com WIF administrativo separado |
-| [🚀 Deploy GCP](../../.github/workflows/gcp-deploy.yml) | Manual, `main`, `production` | Dropdown `all` (build/reuso → Jobs → API → Scheduler pausado) ou opções individuais; exige confirmação de migração do banco para publicar API; usa identidade Deployer limitada |
+| [🚀 Deploy GCP](../../.github/workflows/gcp-deploy.yml) | Manual, `main`, `production` | Dropdown `all` (build/reuso → Jobs → API → Scheduler pausado) ou opções individuais, incluindo `migrate` (plan/apply protegido); exige confirmação de migração do banco para publicar API; usa identidade Deployer limitada |
 | [☁️ Validação GCP](../../.github/workflows/gcp-validation.yml) | Push/PR em infra GCP e action compartilhada, manual | Testes de CLI/bootstrap, config, Worker e política ZIP sem GCP real |
 | [🧠 CPU real](../../.github/workflows/real-cpu-smoke.yml) | Manual confirmado ou `validation/real-cpu` | Testa JoyTag/SigLIP com pesos públicos, custo de minutos de runner/download |
 | [🧾 Proveniência](../../.github/workflows/release-manifest.yml) | Manual | Manifesto de evidência do release, sem realizar deploy |
@@ -26,7 +26,11 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 
 Selecione `action=all` para executar **num único job e com a mesma tag de commit**: `build` (pula se já existe) → verificação no Artifact Registry → `jobs-deploy` → `deploy` → `scheduler` (pausado). A primeira falha interrompe as etapas seguintes; o cleanup dos arquivos temporários ocorre sempre.
 
-**Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute as etapas individuais e a migração controlada entre Jobs e API. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
+**Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` e `apply` com confirmação do SHA e backup, conforme o perfil) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
+
+### 🗃️ Migração protegida no dropdown
+
+A opção `migrate` só executa o Job quando `migration_mode=apply` e existe uma confirmação explícita do SHA já instalado (`migration_release_sha`). `plan` é somente leitura, funciona sem autorizar cobranças e informa o SHA atualmente publicado. Para banco novo, exige a atestação `initial_empty_database`; para banco existente, baixa de um prefixo privado do GCS os arquivos `backup.json`, `manifest.enc` e `restore-verification.json`, verificando identidade do backup, hash e restauração recente. O script separado `infra/gcp/migrate_workflow.py` valida tudo antes de chamar `manage.py migrate`. As notificações Notify! acompanham essa etapa. Veja o [guia operacional](../deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## 🔑 Escopo de Environment, vars e secrets
 
