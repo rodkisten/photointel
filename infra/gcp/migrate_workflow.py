@@ -113,31 +113,43 @@ def migration_command(project: str, *, initial_empty: bool, backup: Path | None 
     return result
 
 
+def discover_unambiguous_backup(project: str) -> str:
+    """Select one private recovery receipt, never guess among multiple backups."""
+    root = f"gs://{project}-photointel-build-source/migration-backups/"
+    try:
+        listing = run_gcloud(
+            ["storage", "ls", root + "*/restore-verification.json"],
+            project, capture=True,
+        )
+    except subprocess.CalledProcessError:
+        raise MigrationWorkflowError("Could not discover backup receipts in private GCS. Supply an explicit backup prefix.") from None
+    candidates = {
+        line.strip().rsplit("/", 1)[0]
+        for line in listing.splitlines()
+        if line.strip().startswith(root) and line.strip().endswith("/restore-verification.json")
+    }
+    candidates = {check_backup_prefix(candidate, project) for candidate in candidates}
+    if len(candidates) != 1:
+        raise MigrationWorkflowError(
+            f"Expected exactly one private backup receipt, found {len(candidates)}. Provide the verified prefix if ambiguous."
+        )
+    print("🔎 One private backup receipt discovered; validating encrypted manifest.", flush=True)
+    return next(iter(candidates))
+
 def apply_migration(
     project: str,
     profile: str,
-    empty_attested: bool,
     prefix: str,
 ) -> None:
     if profile == "initial-empty":
-        if not empty_attested:
-            raise MigrationWorkflowError(
-                "Refusing to migrate: check initial_empty_database only after "
-                "independently verifying the Neon database is empty"
-            )
         if prefix:
             raise MigrationWorkflowError("Initial-empty mode cannot reference a backup")
+        print("🛡️ Operator selected initial-empty: Neon database must already be verified empty.", flush=True)
         subprocess.run(migration_command(project, initial_empty=True), check=True, timeout=3600)
         return
     if profile != "existing-with-backup":
-        raise MigrationWorkflowError(
-            "Select migration_database=initial-empty or existing-with-backup for apply"
-        )
-    if empty_attested:
-        raise MigrationWorkflowError(
-            "Conflicting migration inputs: an existing database cannot be declared empty"
-        )
-    prefix = check_backup_prefix(prefix, project)
+        raise MigrationWorkflowError("Select initial-empty or existing-with-backup for apply")
+    prefix = check_backup_prefix(prefix, project) if prefix else discover_unambiguous_backup(project)
     # Download only ciphertext + small verification metadata. Temporary files
     # disappear even when receipt verification or the Cloud Run Job fails.
     with tempfile.TemporaryDirectory(prefix="photointel-migration-") as directory:
@@ -166,9 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("unselected", "initial-empty", "existing-with-backup"),
         default="unselected",
     )
-    parser.add_argument("--initial-empty-database", choices=("true", "false"), default="false")
     parser.add_argument("--backup-prefix", default="")
-    parser.add_argument("--approved-sha", default="")
     parser.add_argument("--config", type=Path, default=CONFIG)
     args = parser.parse_args(argv)
     try:
@@ -195,23 +205,19 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(
                 "🛡️ The plan does not verify database emptiness, run SQL, "
-                "or certify the restore receipt. Copy the installed Job SHA "
-                "into migration_release_sha for apply."
+                "or certify the restore receipt. The CLI automatically uses the installed Job SHA "
+                "for apply."
             )
             return 0
 
-        if not SHA_RE.fullmatch(args.approved_sha) or args.approved_sha != deployed_sha:
-            raise MigrationWorkflowError(
-                "Apply requires migration_release_sha matching the exact installed "
-                "migration Job SHA printed by plan"
-            )
-        print("🛡️ APPLY: validating database profile and recovery evidence.", flush=True)
-        apply_migration(
-            args.project,
-            args.database,
-            args.initial_empty_database == "true",
-            args.backup_prefix.strip(),
-        )
+        if args.database == "unselected":
+            raise MigrationWorkflowError("Apply requires initial-empty or existing-with-backup as safety choice")
+        # Compare again immediately before the run, not against an operator-copied SHA.
+        if job_spec(config["image"].rsplit(":", 1)[0], args.project, config["region"]) != deployed_sha:
+            raise MigrationWorkflowError("Deployed migration Job changed during preflight")
+        print(f"🛡️ APPLY using installed Job SHA {deployed_sha}; validating recovery evidence.", flush=True)
+        apply_migration(args.project, args.database, args.backup_prefix.strip())
+
         print("✅ Cloud Run migration Job completed successfully.", flush=True)
         return 0
     except (
