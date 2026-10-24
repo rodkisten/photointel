@@ -22,8 +22,21 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - id: check
         name: Require actual generated locks before frozen validation
         run: |
@@ -44,6 +57,18 @@ jobs:
               with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
                   summary.write("Frozen validation deferred: run Bootstrap and validate, retrieve its generated-locks-contracts artifact, and commit the locks. No tests were executed by this workflow.\n")
           PY
+      - name: "🔔 [NOTIFY] Step check"
+        if: ${{ always() && (steps.check.outcome == 'success' || steps.check.outcome == 'failure' || steps.check.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "Step check"
+          outcome: ${{ steps.check.outcome }}
   python:
     name: "🧪 [CI] python"
     needs: locks
@@ -51,21 +76,113 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_002
         uses: actions/checkout@v4
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        id: notify_observed_003
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23', enable-cache: true}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure astral-sh/setup-uv"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure astral-sh/setup-uv"
+          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_004
         run: uv python install 3.12
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_005
         run: uv sync --frozen --group ingest
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_006
         run: uv run ruff check .
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_007
         run: uv run mypy apps/api/src gpu bridges
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_008
         run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "📦 [EVIDENCE] Upload test artifacts"
+        id: notify_observed_009
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
@@ -73,6 +190,18 @@ jobs:
           path: reports/unit.xml
           if-no-files-found: ignore
           retention-days: 3
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload test artifacts"
+        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload test artifacts"
+          outcome: ${{ steps.notify_observed_009.outcome }}
   frontend:
     name: "🧪 [CI] frontend"
     needs: locks
@@ -80,22 +209,126 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_010
         uses: actions/checkout@v4
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_010.outcome }}
       - name: "🧰 [SETUP] Configure actions/setup-node"
+        id: notify_observed_011
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure actions/setup-node"
+        if: ${{ always() && (steps.notify_observed_011.outcome == 'success' || steps.notify_observed_011.outcome == 'failure' || steps.notify_observed_011.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure actions/setup-node"
+          outcome: ${{ steps.notify_observed_011.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_012
         run: npm --prefix apps/web ci
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_012.outcome == 'success' || steps.notify_observed_012.outcome == 'failure' || steps.notify_observed_012.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_012.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_013
         run: npm --prefix apps/web run lint
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_013.outcome == 'success' || steps.notify_observed_013.outcome == 'failure' || steps.notify_observed_013.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_013.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_014
         run: npm --prefix apps/web run typecheck
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_014.outcome == 'success' || steps.notify_observed_014.outcome == 'failure' || steps.notify_observed_014.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_014.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_015
         run: npm --prefix apps/web test
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_015.outcome == 'success' || steps.notify_observed_015.outcome == 'failure' || steps.notify_observed_015.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_015.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_016
         run: npm --prefix apps/web run build
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_016.outcome == 'success' || steps.notify_observed_016.outcome == 'failure' || steps.notify_observed_016.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_016.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_017
         run: npm --prefix apps/web audit --audit-level=high
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_017.outcome == 'success' || steps.notify_observed_017.outcome == 'failure' || steps.notify_observed_017.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_017.outcome }}
   integration:
     name: "🧪 [CI] integration"
     needs: locks
@@ -121,17 +354,83 @@ jobs:
       INFERENCE_BACKEND: test
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_018
         uses: actions/checkout@v4
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_018.outcome == 'success' || steps.notify_observed_018.outcome == 'failure' || steps.notify_observed_018.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_018.outcome }}
       - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        id: notify_observed_019
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure astral-sh/setup-uv"
+        if: ${{ always() && (steps.notify_observed_019.outcome == 'success' || steps.notify_observed_019.outcome == 'failure' || steps.notify_observed_019.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure astral-sh/setup-uv"
+          outcome: ${{ steps.notify_observed_019.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_020
         run: uv python install 3.12
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_020.outcome == 'success' || steps.notify_observed_020.outcome == 'failure' || steps.notify_observed_020.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_020.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_021
         run: uv sync --frozen --group ingest
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_021.outcome == 'success' || steps.notify_observed_021.outcome == 'failure' || steps.notify_observed_021.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_021.outcome }}
       - name: "🧰 [SETUP] Set up cached source builds for local object storage"
+        id: notify_observed_022
         uses: docker/setup-buildx-action@v3
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Set up cached source builds for local object storage"
+        if: ${{ always() && (steps.notify_observed_022.outcome == 'success' || steps.notify_observed_022.outcome == 'failure' || steps.notify_observed_022.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Set up cached source builds for local object storage"
+          outcome: ${{ steps.notify_observed_022.outcome }}
       - name: "🧰 [SETUP] Build real MinIO from pinned upstream source with CI cache"
+        id: notify_observed_023
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -141,28 +440,158 @@ jobs:
           push: false
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Build real MinIO from pinned upstream source with CI cache"
+        if: ${{ always() && (steps.notify_observed_023.outcome == 'success' || steps.notify_observed_023.outcome == 'failure' || steps.notify_observed_023.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Build real MinIO from pinned upstream source with CI cache"
+          outcome: ${{ steps.notify_observed_023.outcome }}
       - name: "⚙️ [RUN] Start private local object storage"
+        id: notify_observed_024
         run: |
           docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Start private local object storage"
+        if: ${{ always() && (steps.notify_observed_024.outcome == 'success' || steps.notify_observed_024.outcome == 'failure' || steps.notify_observed_024.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Start private local object storage"
+          outcome: ${{ steps.notify_observed_024.outcome }}
       - name: "⚙️ [RUN] Wait for storage and create private bucket"
+        id: notify_observed_025
         run: |
           uv run python infra/scripts/init-private-bucket.py
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Wait for storage and create private bucket"
+        if: ${{ always() && (steps.notify_observed_025.outcome == 'success' || steps.notify_observed_025.outcome == 'failure' || steps.notify_observed_025.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Wait for storage and create private bucket"
+          outcome: ${{ steps.notify_observed_025.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_026
         run: uv run alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_026.outcome == 'success' || steps.notify_observed_026.outcome == 'failure' || steps.notify_observed_026.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_026.outcome }}
       - name: "🗃️ [DATA] Verify dump and restore using isolated synthetic databases"
+        id: notify_observed_027
         run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: "🔔 [NOTIFY] 🗃️ [DATA] Verify dump and restore using isolated synthetic databases"
+        if: ${{ always() && (steps.notify_observed_027.outcome == 'success' || steps.notify_observed_027.outcome == 'failure' || steps.notify_observed_027.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃️ [DATA] Verify dump and restore using isolated synthetic databases"
+          outcome: ${{ steps.notify_observed_027.outcome }}
       - name: "🗃️ [DATA] Verify encrypted PostgreSQL and private image-content restore"
+        id: notify_observed_028
         run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: "🔔 [NOTIFY] 🗃️ [DATA] Verify encrypted PostgreSQL and private image-content restore"
+        if: ${{ always() && (steps.notify_observed_028.outcome == 'success' || steps.notify_observed_028.outcome == 'failure' || steps.notify_observed_028.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃️ [DATA] Verify encrypted PostgreSQL and private image-content restore"
+          outcome: ${{ steps.notify_observed_028.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_029
         run: uv run pytest -m integration --junitxml=reports/integration.xml
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_029.outcome == 'success' || steps.notify_observed_029.outcome == 'failure' || steps.notify_observed_029.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_029.outcome }}
       - name: "🧰 [SETUP] Configure actions/setup-node"
+        id: notify_observed_030
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure actions/setup-node"
+        if: ${{ always() && (steps.notify_observed_030.outcome == 'success' || steps.notify_observed_030.outcome == 'failure' || steps.notify_observed_030.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure actions/setup-node"
+          outcome: ${{ steps.notify_observed_030.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_031
         run: npm --prefix apps/web ci
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_031.outcome == 'success' || steps.notify_observed_031.outcome == 'failure' || steps.notify_observed_031.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_031.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_032
         run: npx --prefix apps/web playwright install --with-deps chromium
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_032.outcome == 'success' || steps.notify_observed_032.outcome == 'failure' || steps.notify_observed_032.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_032.outcome }}
       - name: "⚙️ [RUN] Browser E2E against real API and synthetic media"
+        id: notify_observed_033
         run: bash infra/scripts/run-e2e.sh
         env:
           APP_ENV: test
@@ -172,7 +601,20 @@ jobs:
           GPU_ENABLED: 'true'
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
+      - name: "🔔 [NOTIFY] ⚙️ [RUN] Browser E2E against real API and synthetic media"
+        if: ${{ always() && (steps.notify_observed_033.outcome == 'success' || steps.notify_observed_033.outcome == 'failure' || steps.notify_observed_033.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙️ [RUN] Browser E2E against real API and synthetic media"
+          outcome: ${{ steps.notify_observed_033.outcome }}
       - name: "📦 [EVIDENCE] Upload test artifacts"
+        id: notify_observed_034
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
@@ -180,7 +622,20 @@ jobs:
           path: reports/integration.xml
           if-no-files-found: ignore
           retention-days: 3
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload test artifacts"
+        if: ${{ always() && (steps.notify_observed_034.outcome == 'success' || steps.notify_observed_034.outcome == 'failure' || steps.notify_observed_034.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload test artifacts"
+          outcome: ${{ steps.notify_observed_034.outcome }}
       - name: "📦 [EVIDENCE] Upload test artifacts"
+        id: notify_observed_035
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
@@ -188,6 +643,18 @@ jobs:
           path: apps/web/playwright-report
           if-no-files-found: ignore
           retention-days: 3
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload test artifacts"
+        if: ${{ always() && (steps.notify_observed_035.outcome == 'success' || steps.notify_observed_035.outcome == 'failure' || steps.notify_observed_035.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload test artifacts"
+          outcome: ${{ steps.notify_observed_035.outcome }}
   images:
     name: "🧪 [CI] images"
     needs: locks
@@ -195,25 +662,90 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_036
         uses: actions/checkout@v4
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_036.outcome == 'success' || steps.notify_observed_036.outcome == 'failure' || steps.notify_observed_036.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_036.outcome }}
       - name: "🧰 [SETUP] Configure docker/setup-qemu-action"
+        id: notify_observed_037
         uses: docker/setup-qemu-action@v3
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure docker/setup-qemu-action"
+        if: ${{ always() && (steps.notify_observed_037.outcome == 'success' || steps.notify_observed_037.outcome == 'failure' || steps.notify_observed_037.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure docker/setup-qemu-action"
+          outcome: ${{ steps.notify_observed_037.outcome }}
       - name: "🧰 [SETUP] Configure docker/setup-buildx-action"
+        id: notify_observed_038
         uses: docker/setup-buildx-action@v3
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure docker/setup-buildx-action"
+        if: ${{ always() && (steps.notify_observed_038.outcome == 'success' || steps.notify_observed_038.outcome == 'failure' || steps.notify_observed_038.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure docker/setup-buildx-action"
+          outcome: ${{ steps.notify_observed_038.outcome }}
       - name: "🏗️ [BUILD] Configure docker/build-push-action"
+        id: notify_observed_039
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/docker/api.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Configure docker/build-push-action"
+        if: ${{ always() && (steps.notify_observed_039.outcome == 'success' || steps.notify_observed_039.outcome == 'failure' || steps.notify_observed_039.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Configure docker/build-push-action"
+          outcome: ${{ steps.notify_observed_039.outcome }}
       - name: "🏗️ [BUILD] Configure docker/build-push-action"
+        id: notify_observed_040
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/docker/web.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
+      - name: "🔔 [NOTIFY] 🏗️ [BUILD] Configure docker/build-push-action"
+        if: ${{ always() && (steps.notify_observed_040.outcome == 'success' || steps.notify_observed_040.outcome == 'failure' || steps.notify_observed_040.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗️ [BUILD] Configure docker/build-push-action"
+          outcome: ${{ steps.notify_observed_040.outcome }}
   security:
     name: "🧪 [CI] security"
     needs: locks
@@ -221,21 +753,100 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_041
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_041.outcome == 'success' || steps.notify_observed_041.outcome == 'failure' || steps.notify_observed_041.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_041.outcome }}
       - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        id: notify_observed_042
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure astral-sh/setup-uv"
+        if: ${{ always() && (steps.notify_observed_042.outcome == 'success' || steps.notify_observed_042.outcome == 'failure' || steps.notify_observed_042.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Configure astral-sh/setup-uv"
+          outcome: ${{ steps.notify_observed_042.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_043
         run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_043.outcome == 'success' || steps.notify_observed_043.outcome == 'failure' || steps.notify_observed_043.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_043.outcome }}
       - name: "▶️ [RUN] Execute command"
+        id: notify_observed_044
         run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
+      - name: "🔔 [NOTIFY] ▶️ [RUN] Execute command"
+        if: ${{ always() && (steps.notify_observed_044.outcome == 'success' || steps.notify_observed_044.outcome == 'failure' || steps.notify_observed_044.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "▶️ [RUN] Execute command"
+          outcome: ${{ steps.notify_observed_044.outcome }}
       - name: "🧰 [SETUP] Audit pinned inference dependencies without loading models"
+        id: notify_observed_045
         run: |
           uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
           uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
+      - name: "🔔 [NOTIFY] 🧰 [SETUP] Audit pinned inference dependencies without loading models"
+        if: ${{ always() && (steps.notify_observed_045.outcome == 'success' || steps.notify_observed_045.outcome == 'failure' || steps.notify_observed_045.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 [SETUP] Audit pinned inference dependencies without loading models"
+          outcome: ${{ steps.notify_observed_045.outcome }}
       - name: "🔐 [SECURITY] Scan secrets"
+        id: notify_observed_046
         uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
+
+      - name: "🔔 [NOTIFY] 🔐 [SECURITY] Scan secrets"
+        if: ${{ always() && (steps.notify_observed_046.outcome == 'success' || steps.notify_observed_046.outcome == 'failure' || steps.notify_observed_046.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 [SECURITY] Scan secrets"
+          outcome: ${{ steps.notify_observed_046.outcome }}
