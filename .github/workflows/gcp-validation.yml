@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - infra/gcp/**
+      - README.md
+      - CLOUD_RUN_SETUP.md
+      - docs/deployment/CLOUD_RUN_FROM_ZERO.md
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
@@ -14,6 +17,9 @@ on:
     branches: [main]
     paths:
       - infra/gcp/**
+      - README.md
+      - CLOUD_RUN_SETUP.md
+      - docs/deployment/CLOUD_RUN_FROM_ZERO.md
       - infra/docker/api*.Dockerfile
       - infra/docker/compose.dev.yml
       - infra/scripts/zip-patch-policy*.cjs
