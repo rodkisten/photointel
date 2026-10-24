@@ -62,12 +62,26 @@ case "$PHASE" in
       --database "${MIGRATION_DATABASE:-unselected}"
       --backup-prefix "${MIGRATION_BACKUP_PREFIX:-}"
     )
+    if [[ "${MIGRATION_MODE:-plan}" == diagnose ]]; then
+      python3 infra/gcp/diagnose_migration.py --project "$PROJECT"
+      exit 0
+    fi
+    if [[ "${MIGRATION_MODE:-plan}" == apply && -n "${GITHUB_ENV:-}" ]]; then
+      printf 'MIGRATION_STARTED_UTC=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+    fi
     python3 infra/gcp/migrate_workflow.py "${migration_args[@]}"
     if [[ "${MIGRATION_MODE:-plan}" == apply ]]; then
       summary "✅ The approved Cloud Run migration Job finished. Validate Neon schema before API deployment."
     else
       summary "🔎 Migration plan verified the deployed Job; it made NO database changes."
     fi
+    ;;
+  diagnose-migration)
+    diagnostic_args=(--project "$PROJECT")
+    if [[ -n "${MIGRATION_STARTED_UTC:-}" ]]; then
+      diagnostic_args+=(--started-after "$MIGRATION_STARTED_UTC")
+    fi
+    python3 infra/gcp/diagnose_migration.py "${diagnostic_args[@]}"
     ;;
   deploy)
     database_gate
@@ -91,7 +105,7 @@ case "$PHASE" in
     ;;
   *)
     log "::error::Unknown release phase: $PHASE"
-    log "Valid phases: gate, preflight, cache, verify, build, jobs-deploy, migrate, deploy, scheduler, cleanup"
+    log "Valid phases: gate, preflight, cache, verify, build, jobs-deploy, migrate, diagnose-migration, deploy, scheduler, cleanup"
     exit 2
     ;;
 esac
