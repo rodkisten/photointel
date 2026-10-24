@@ -160,7 +160,7 @@ class MigrationWorkflowTests(unittest.TestCase):
 
     def test_apply_with_unselected_database_fails_without_execution(self):
         with patch.object(migrate.subprocess, "run") as execute:
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Select migration_database"):
+            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Select initial-empty"):
                 migrate.apply_migration(PROJECT, "unselected", "")
             execute.assert_not_called()
 
