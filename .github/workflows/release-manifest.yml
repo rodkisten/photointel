@@ -18,9 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "📥 [SOURCE] Checkout repository"
+        id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
+      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📥 [SOURCE] Checkout repository"
+          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧪 [TEST] Generate commit-bound provenance without claiming tests ran"
+        id: notify_observed_002
         env:
           CONTAINER_DIGEST: ${{ inputs.container_digest }}
           MODAL_DEPLOYMENT_ID: ${{ inputs.modal_deployment_id }}
@@ -33,9 +47,35 @@ jobs:
             arguments+=(--modal-deployment-id "$MODAL_DEPLOYMENT_ID")
           fi
           python3 infra/scripts/release-manifest.py "${arguments[@]}"
+      - name: "🔔 [NOTIFY] 🧪 [TEST] Generate commit-bound provenance without claiming tests ran"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 [TEST] Generate commit-bound provenance without claiming tests ran"
+          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "📦 [EVIDENCE] Upload test artifacts"
+        id: notify_observed_003
         uses: actions/upload-artifact@v4
         with:
           name: release-provenance-${{ github.sha }}
           path: reports/release-manifest.json
           retention-days: 90
+
+      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload test artifacts"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 [EVIDENCE] Upload test artifacts"
+          outcome: ${{ steps.notify_observed_003.outcome }}
