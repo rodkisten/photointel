@@ -613,6 +613,8 @@ def bootstrap(runner: Runner) -> None:
         "roles/cloudscheduler.admin",
         "roles/cloudbuild.builds.editor",
         "roles/artifactregistry.reader",
+        # Allows service usage (not API enablement); bootstrap itself uses an admin.
+        "roles/serviceusage.serviceUsageConsumer",
     ):
         runner.command(
             [
