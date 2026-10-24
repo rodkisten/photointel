@@ -55,7 +55,16 @@ case "$PHASE" in
     ;;
   migrate)
     [[ -n "$SHA" ]] || { log "::error::RELEASE_SHA is required for migrations"; exit 2; }
-    python3 infra/gcp/migrate_workflow.py       --mode "${MIGRATION_MODE:-plan}"       --project "$PROJECT"       --sha "$SHA"       --database "${MIGRATION_DATABASE:-unselected}"       --initial-empty-database "${INITIAL_EMPTY_DATABASE:-false}"       --backup-prefix "${MIGRATION_BACKUP_PREFIX:-}"
+    migration_args=(
+      --mode "${MIGRATION_MODE:-plan}"
+      --project "$PROJECT"
+      --sha "$SHA"
+      --database "${MIGRATION_DATABASE:-unselected}"
+      --approved-sha "${MIGRATION_RELEASE_SHA:-}"
+      --initial-empty-database "${INITIAL_EMPTY_DATABASE:-false}"
+      --backup-prefix "${MIGRATION_BACKUP_PREFIX:-}"
+    )
+    python3 infra/gcp/migrate_workflow.py "${migration_args[@]}"
     if [[ "${MIGRATION_MODE:-plan}" == apply ]]; then
       summary "✅ The approved Cloud Run migration Job finished. Validate Neon schema before API deployment."
     else
