@@ -53,6 +53,15 @@ case "$PHASE" in
     manage jobs-deploy
     summary "✅ Five Cloud Run Jobs deployed. ⚠️ Database migration has NOT been executed."
     ;;
+  migrate)
+    [[ -n "$SHA" ]] || { log "::error::RELEASE_SHA is required for migrations"; exit 2; }
+    python3 infra/gcp/migrate_workflow.py       --mode "${MIGRATION_MODE:-plan}"       --project "$PROJECT"       --sha "$SHA"       --database "${MIGRATION_DATABASE:-unselected}"       --initial-empty-database "${INITIAL_EMPTY_DATABASE:-false}"       --backup-prefix "${MIGRATION_BACKUP_PREFIX:-}"
+    if [[ "${MIGRATION_MODE:-plan}" == apply ]]; then
+      summary "✅ The approved Cloud Run migration Job finished. Validate Neon schema before API deployment."
+    else
+      summary "🔎 Migration plan verified the deployed Job; it made NO database changes."
+    fi
+    ;;
   deploy)
     database_gate
     if manage deploy; then
@@ -75,7 +84,7 @@ case "$PHASE" in
     ;;
   *)
     log "::error::Unknown release phase: $PHASE"
-    log "Valid phases: gate, preflight, cache, verify, build, jobs-deploy, deploy, scheduler, cleanup"
+    log "Valid phases: gate, preflight, cache, verify, build, jobs-deploy, migrate, deploy, scheduler, cleanup"
     exit 2
     ;;
 esac
