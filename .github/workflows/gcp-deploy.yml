@@ -134,6 +134,63 @@ jobs:
 
           echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
 
+      - name: Skip build if commit image already exists
+        if: inputs.action == 'build'
+        id: image_cache
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
+          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
+          IMAGE="$REGION-docker.pkg.dev/$CONFIRM_PROJECT/$REPOSITORY/api"
+          LOOKUP_JSON="$RUNNER_TEMP/photointel-artifact-lookup.json"
+          LOOKUP_ERR="$RUNNER_TEMP/photointel-artifact-lookup.err"
+
+          if gcloud artifacts docker images list "$IMAGE" \
+            --project="$CONFIRM_PROJECT" --include-tags --format=json \
+            > "$LOOKUP_JSON" 2> "$LOOKUP_ERR"; then
+            python3 - "$LOOKUP_JSON" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              entries = json.load(source)
+          if not isinstance(entries, list):
+              sys.exit("::error::Artifact Registry returned a non-array image catalog")
+          sha = os.environ["RELEASE_SHA"]
+          matches = [entry for entry in entries
+                     if isinstance(entry, dict) and sha in entry.get("tags", [])]
+          if len(matches) > 1:
+              sys.exit("::error::Ambiguous release tag; refusing to skip build")
+          if matches:
+              digest = matches[0].get("version", "")
+              if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
+                  sys.exit("::error::Unexpected Artifact Registry digest format")
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  output.write("skip=true\n")
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+                  summary.write(f"Reused image for SHA {sha} with digest {digest}. No new Cloud Build was started.\n")
+              print(f"Existing image found: {digest}. Skipping paid Cloud Build.")
+          else:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                  output.write("skip=false\n")
+              print("Release image does not exist; Cloud Build will run.")
+          PY
+          else
+            if grep -Eqi 'NOT_FOUND|not found' "$LOOKUP_ERR"; then
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              echo "Image package not yet present. Cloud Build will run."
+            else
+              cat "$LOOKUP_ERR" >&2
+              echo "::error::Cannot check existing registry image; refusing an unnecessary build."
+              exit 1
+            fi
+          fi
+
       - name: Verify commit image exists before release (read-only)
         if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy'
         env:
@@ -162,6 +219,7 @@ jobs:
           '
 
       - name: Execute selected operation
+        if: inputs.action != 'build' || steps.image_cache.outputs.skip != 'true'
         env:
           OPERATION: ${{ inputs.action }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
