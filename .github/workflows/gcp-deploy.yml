@@ -73,13 +73,8 @@ jobs:
         if: inputs.action == 'all' || inputs.action == 'deploy'
         env:
           DATABASE_READY: ${{ inputs.database_ready }}
-        run: |
-          set -euo pipefail
-          if [[ "$DATABASE_READY" != "true" ]]; then
-            echo "::error::API publication requires database_ready=true. First build + jobs-deploy, then verify the separately executed Neon migration and security configuration."
-            exit 1
-          fi
-          echo "Operator confirmed the Neon migration, Secret Manager versions and Cloudflare Access readiness."
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+        run: bash infra/gcp/release.sh gate
 
       - name: "⚙️ [RUN] Prepare production vars using the shared action"
         id: config
@@ -105,49 +100,7 @@ jobs:
         if: inputs.action == 'build' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          PROJECT="$CONFIRM_PROJECT"
-          BUCKET="gs://$PROJECT-photointel-build-source"
-          BUILDER="photointel-builder@$PROJECT.iam.gserviceaccount.com"
-          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
-          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
-
-          echo 'Checking authenticated identity...'
-          gcloud auth list --filter='status:ACTIVE' --format='value(account)'
-
-          echo 'Checking Cloud Build API...'
-          API="$(gcloud services list --project="$PROJECT" --enabled \
-            --filter='config.name=cloudbuild.googleapis.com' \
-            --format='value(config.name)')"
-          if [[ "$API" != "cloudbuild.googleapis.com" ]]; then
-            echo '::error::Cloud Build API is not enabled. Run bootstrap with an authorized operator.'
-            exit 1
-          fi
-
-          echo "Checking staging bucket $BUCKET..."
-          if ! gcloud storage buckets describe "$BUCKET" --project="$PROJECT" \
-            --format='value(name,location)'; then
-            echo "::error::Staging bucket missing or inaccessible: $BUCKET. Inspect Storage IAM."
-            exit 1
-          fi
-
-          echo "Checking builder service account $BUILDER..."
-          if ! gcloud iam service-accounts describe "$BUILDER" --project="$PROJECT" \
-            --format='value(email)'; then
-            echo "::error::Builder service account missing or inaccessible. Run administrative bootstrap."
-            exit 1
-          fi
-
-          echo "Checking Docker registry $REPOSITORY in $REGION..."
-          if ! gcloud artifacts repositories describe "$REPOSITORY" \
-            --project="$PROJECT" --location="$REGION" \
-            --format='value(name,format)'; then
-            echo "::error::Artifact Registry repository missing or inaccessible in $REGION."
-            exit 1
-          fi
-
-          echo 'Read-only preflight passed. Object write, actAs and Docker push IAM are checked by the real build.'
+        run: bash infra/gcp/release.sh preflight
 
       - name: "🏗️ [BUILD] Skip build if commit image already exists"
         id: image_cache
@@ -155,66 +108,14 @@ jobs:
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
-          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
-          IMAGE="$REGION-docker.pkg.dev/$CONFIRM_PROJECT/$REPOSITORY/api"
-          LOOKUP_JSON="$RUNNER_TEMP/photointel-artifact-lookup.json"
-          LOOKUP_ERR="$RUNNER_TEMP/photointel-artifact-lookup.err"
-
-          if gcloud artifacts docker images list "$IMAGE" \
-            --project="$CONFIRM_PROJECT" --include-tags --format=json \
-            > "$LOOKUP_JSON" 2> "$LOOKUP_ERR"; then
-            python3 - "$LOOKUP_JSON" <<'PY'
-          import json
-          import os
-          import re
-          import sys
-
-          with open(sys.argv[1], encoding="utf-8") as source:
-              entries = json.load(source)
-          if not isinstance(entries, list):
-              sys.exit("::error::Artifact Registry returned a non-array image catalog")
-          sha = os.environ["RELEASE_SHA"]
-          matches = [entry for entry in entries
-                     if isinstance(entry, dict) and sha in entry.get("tags", [])]
-          if len(matches) > 1:
-              sys.exit("::error::Ambiguous release tag; refusing to skip build")
-          if matches:
-              digest = matches[0].get("version", "")
-              if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
-                  sys.exit("::error::Unexpected Artifact Registry digest format")
-              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                  output.write("skip=true\n")
-              with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-                  summary.write(f"Reused image for SHA {sha} with digest {digest}. No new Cloud Build was started.\n")
-              print(f"Existing image found: {digest}. Skipping paid Cloud Build.")
-          else:
-              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-                  output.write("skip=false\n")
-              print("Release image does not exist; Cloud Build will run.")
-          PY
-          else
-            if grep -Eqi 'NOT_FOUND|not found' "$LOOKUP_ERR"; then
-              echo "skip=false" >> "$GITHUB_OUTPUT"
-              echo "Image package not yet present. Cloud Build will run."
-            else
-              cat "$LOOKUP_ERR" >&2
-              echo "::error::Cannot check existing registry image; refusing an unnecessary build."
-              exit 1
-            fi
-          fi
+        run: bash infra/gcp/release.sh cache
 
       - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
         id: build_image
         if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py build --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Docker image for this exact commit built and verified." >> "$GITHUB_STEP_SUMMARY"
+        run: bash infra/gcp/release.sh build
 
       - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
         id: verify_image
@@ -222,67 +123,36 @@ jobs:
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          REGION="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["region"])')"
-          REPOSITORY="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["repository"])')"
-          IMAGE="$REGION-docker.pkg.dev/$CONFIRM_PROJECT/$REPOSITORY/api"
-          echo "Checking Artifact Registry image tag $RELEASE_SHA ..."
-          gcloud artifacts docker images list "$IMAGE" \
-            --project="$CONFIRM_PROJECT" --include-tags --format=json |
-          python3 -c '
-          import json, os, sys
-          try:
-              rows = json.load(sys.stdin)
-          except (ValueError, TypeError) as exc:
-              sys.exit(f"::error::Cannot read Artifact Registry images: {exc}")
-          sha = os.environ["RELEASE_SHA"]
-          matches = [row for row in rows if isinstance(row, dict)
-                     and sha in row.get("tags", [])]
-          if len(matches) != 1:
-              sys.exit(f"::error::Expected exactly one image tagged {sha}; found {len(matches)}. Run build for this commit first.")
-          print(f"Found immutable release tag {sha}; deploy may proceed.")
-          '
+        run: bash infra/gcp/release.sh verify
 
       - name: "📦 [JOBS] Publish five Cloud Run Jobs"
         id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py jobs-deploy --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Five Cloud Run Jobs deployed. ⚠️ Database migration has NOT been executed." >> "$GITHUB_STEP_SUMMARY"
+        run: bash infra/gcp/release.sh jobs-deploy
 
       - name: "🚀 [API] Publish Cloud Run service"
         id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py deploy --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Cloud Run API deployment requested. Test authentication before importing any data." >> "$GITHUB_STEP_SUMMARY"
+          DATABASE_READY: ${{ inputs.database_ready }}
+        run: bash infra/gcp/release.sh deploy
 
       - name: "⏰ [SCHEDULER] Create or update schedules (paused)"
         id: deploy_scheduler
         if: inputs.action == 'scheduler' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py scheduler --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Scheduler created/updated with all jobs paused. No automatic ingestion enabled." >> "$GITHUB_STEP_SUMMARY"
+        run: bash infra/gcp/release.sh scheduler
 
       - name: "🧹 [SCHEDULER] Pause schedules without deleting resources"
         id: pause_scheduler
         if: inputs.action == 'cleanup'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: |
-          set -euo pipefail
-          python3 infra/gcp/manage.py cleanup --apply --authorize-charges --confirm-project "$CONFIRM_PROJECT"
-          echo "✅ Scheduler paused. No database, image, bucket or service was deleted." >> "$GITHUB_STEP_SUMMARY"
+        run: bash infra/gcp/release.sh cleanup
 
       - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
         if: always() && steps.checkout.outcome == 'success'
