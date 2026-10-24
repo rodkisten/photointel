@@ -1,4 +1,4 @@
-name: Real models on CPU (manual)
+name: "🧠 [CPU] Validate real models"
 
 on:
   push:
@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   real-cpu:
+    name: "🧠 [CPU] real cpu"
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.confirm_download == true)
       || (github.event_name == 'push' && github.ref == 'refs/heads/validation/real-cpu')
@@ -62,38 +63,40 @@ jobs:
       MKL_NUM_THREADS: '2'
       UV_CACHE_DIR: /tmp/photointel-real-cpu-uv
     steps:
-      - uses: actions/checkout@v4
+      - name: "📥 [SOURCE] Checkout repository"
+        uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - uses: astral-sh/setup-uv@v6
+      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+        uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - name: Install locked base application without GPU dependencies
+      - name: "🧰 [SETUP] Install locked base application without GPU dependencies"
         run: |
           uv python install 3.12
           uv sync --frozen --no-dev
           mkdir -p reports/real-cpu
-      - name: Export frozen model dependencies without CUDA packages
+      - name: "🧰 [SETUP] Export frozen model dependencies without CUDA packages"
         run: |
           uv export --frozen --group gpu --no-dev --no-hashes --no-annotate --no-header --no-emit-project --output-file reports/real-cpu/all.requirements.txt
           uv run --no-sync python infra/scripts/real-cpu-smoke.py prepare --export reports/real-cpu/all.requirements.txt
-      - name: Install exact official CPU wheels and remaining frozen dependencies
+      - name: "🧰 [SETUP] Install exact official CPU wheels and remaining frozen dependencies"
         run: |
           uv pip install --no-deps --index-url https://download.pytorch.org/whl/cpu --requirement reports/real-cpu/cpu-wheels.requirements.txt
           uv pip install --no-deps --requirement reports/real-cpu/cpu-dependencies.requirements.txt
           uv pip check
-      - name: Cache only pinned public model snapshots
+      - name: "🧰 [SETUP] Cache only pinned public model snapshots"
         uses: actions/cache@v4
         with:
           path: /tmp/photointel-real-cpu-models
           key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
-      - name: Apply migrations to isolated PostgreSQL
+      - name: "🗃️ [DATA] Apply migrations to isolated PostgreSQL"
         run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
-      - name: Ingest one procedural fixture with inference disabled
+      - name: "⚙️ [RUN] Ingest one procedural fixture with inference disabled"
         env:
           GPU_ENABLED: 'false'
         run: uv run --no-sync python -m photointel.cli seed --synthetic-assets 1 > reports/real-cpu/seed.json
-      - name: Execute JoyTag and SigLIP 2 on CPU and verify committed results
+      - name: "🧪 [TEST] Execute JoyTag and SigLIP 2 on CPU and verify committed results"
         run: uv run --no-sync python infra/scripts/real-cpu-smoke.py run
-      - name: Upload measured report and exact dependency selections
+      - name: "📦 [EVIDENCE] Upload measured report and exact dependency selections"
         if: always()
         uses: actions/upload-artifact@v4
         with:
