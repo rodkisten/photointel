@@ -51,8 +51,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_build_is_reused_and_verified_before_jobs(self) -> None:
         self.assertIn("steps.image_cache.outputs.skip != 'true'", self.stage("build_image"))
-        self.assertIn("python3 infra/gcp/manage.py build --apply", self.stage("build_image"))
-        self.assertIn("gcloud artifacts docker images list", self.stage("verify_image"))
+        self.assertIn("run: bash infra/gcp/release.sh build", self.stage("build_image"))
+        self.assertIn("run: bash infra/gcp/release.sh verify", self.stage("verify_image"))
         self.assertLess(self.stages["build_image"], self.stages["verify_image"])
         self.assertLess(self.stages["verify_image"], self.stages["deploy_jobs"])
 
@@ -60,11 +60,34 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("        default: false", self.workflow)
         self.assertIn("inputs.database_ready", self.stage("database_gate"))
         self.assertIn("DATABASE_READY", self.stage("database_gate"))
-        self.assertIn("exit 1", self.stage("database_gate"))
+        self.assertIn("run: bash infra/gcp/release.sh gate", self.stage("database_gate"))
+        guard = (ROOT / "infra/gcp/release.sh").read_text(encoding="utf-8")
+        self.assertIn("DATABASE_READY", guard)
+        self.assertIn("return 1", guard)
         self.assertIn("inputs.action == 'deploy'", self.stage("database_gate"))
         self.assertIn("inputs.action == 'all'", self.stage("database_gate"))
         self.assertNotIn("manage.py migrate", self.workflow, "No automatic database migrations")
         self.assertLess(self.stages["database_gate"], self.stages["build_image"])
+
+    def test_workflow_has_no_embedded_bash_or_python_scripts(self) -> None:
+        self.assertNotIn("run: |", self.workflow)
+        self.assertNotIn("python3 -c", self.workflow)
+        self.assertNotIn("python3 - <<", self.workflow)
+        self.assertNotIn("gcloud artifacts docker images list", self.workflow)
+        for stage, command in {
+            "database_gate": "gate",
+            "preflight": "preflight",
+            "image_cache": "cache",
+            "verify_image": "verify",
+            "build_image": "build",
+            "deploy_jobs": "jobs-deploy",
+            "deploy_api": "deploy",
+            "deploy_scheduler": "scheduler",
+            "pause_scheduler": "cleanup",
+        }.items():
+            self.assertIn(f"run: bash infra/gcp/release.sh {command}", self.stage(stage))
+        self.assertTrue((ROOT / "infra/gcp/release.sh").is_file())
+        self.assertTrue((ROOT / "infra/gcp/release_image.py").is_file())
 
     def test_each_operation_is_separate_and_cleanup_is_always_invoked(self) -> None:
         commands = {
@@ -74,7 +97,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             "pause_scheduler": "cleanup",
         }
         for stage, operation in commands.items():
-            self.assertIn(f"python3 infra/gcp/manage.py {operation} --apply", self.stage(stage))
+            self.assertIn(f"run: bash infra/gcp/release.sh {operation}", self.stage(stage))
         self.assertIn("if: always() && steps.checkout.outcome == 'success'", self.workflow)
         self.assertIn("uses: ./.github/actions/gcp-config", self.workflow)
 
