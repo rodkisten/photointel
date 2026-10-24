@@ -69,6 +69,7 @@ jobs:
           persist-credentials: false
 
       - name: "🛡️ [GATE] Confirm database and Access readiness before publishing API"
+        id: database_gate
         if: inputs.action == 'all' || inputs.action == 'deploy'
         env:
           DATABASE_READY: ${{ inputs.database_ready }}
@@ -100,6 +101,7 @@ jobs:
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
       - name: "🏗️ [BUILD] Diagnose build prerequisites (read-only)"
+        id: preflight
         if: inputs.action == 'build' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -205,6 +207,7 @@ jobs:
           fi
 
       - name: "🏗️ [BUILD] Compile, publish and verify Docker image"
+        id: build_image
         if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -214,6 +217,7 @@ jobs:
           echo "✅ Docker image for this exact commit built and verified." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "🏗️ [BUILD] Verify commit image exists before release (read-only)"
+        id: verify_image
         if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -241,6 +245,7 @@ jobs:
           '
 
       - name: "📦 [JOBS] Publish five Cloud Run Jobs"
+        id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -250,6 +255,7 @@ jobs:
           echo "✅ Five Cloud Run Jobs deployed. ⚠️ Database migration has NOT been executed." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "🚀 [API] Publish Cloud Run service"
+        id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -259,6 +265,7 @@ jobs:
           echo "✅ Cloud Run API deployment requested. Test authentication before importing any data." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "⏰ [SCHEDULER] Create or update schedules (paused)"
+        id: deploy_scheduler
         if: inputs.action == 'scheduler' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -268,6 +275,7 @@ jobs:
           echo "✅ Scheduler created/updated with all jobs paused. No automatic ingestion enabled." >> "$GITHUB_STEP_SUMMARY"
 
       - name: "🧹 [SCHEDULER] Pause schedules without deleting resources"
+        id: pause_scheduler
         if: inputs.action == 'cleanup'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
