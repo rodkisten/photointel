@@ -30,6 +30,10 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_COLOR: "1"       # Works for Node.js (Chalk), Python, and many modern CLIs
+  CLICOLOR_FORCE: "1"    # Works for many C/C++ tools and Unix utilities
+
 concurrency:
   group: photointel-gcp-production
   cancel-in-progress: false
