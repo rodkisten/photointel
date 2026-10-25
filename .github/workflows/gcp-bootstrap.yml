@@ -115,6 +115,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧱 Provisionar"
+          step-index: "9"
           label: "🧱 Setup"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -144,6 +145,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧱 Provisionar"
+          step-index: "9"
           label: "🧱 Setup"
           outcome: ${{ steps.notify_observed_005.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
