@@ -1,4 +1,4 @@
-name: "🧪 [CI] Validate application"
+name: "🧪 CI"
 on:
   push:
     branches: [main]
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   locks:
-    name: "🧪 [CI] locks"
+    name: "🧪 locks"
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
@@ -70,7 +70,7 @@ jobs:
           step: "Validação"
           outcome: ${{ steps.check.outcome }}
   python:
-    name: "🧪 [CI] python"
+    name: "🧪 python"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
@@ -203,7 +203,7 @@ jobs:
           step: "📦 Testes"
           outcome: ${{ steps.notify_observed_009.outcome }}
   frontend:
-    name: "🧪 [CI] frontend"
+    name: "🧪 frontend"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
@@ -330,7 +330,7 @@ jobs:
           step: "▶ ️  Execute command"
           outcome: ${{ steps.notify_observed_017.outcome }}
   integration:
-    name: "🧪 [CI] integration"
+    name: "🧪 integration"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
@@ -656,7 +656,7 @@ jobs:
           step: "📦 Testes"
           outcome: ${{ steps.notify_observed_035.outcome }}
   images:
-    name: "🧪 [CI] images"
+    name: "🧪 images"
     needs: locks
     if: needs.locks.outputs.ready == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -747,7 +747,7 @@ jobs:
           step: "🏗 Build"
           outcome: ${{ steps.notify_observed_040.outcome }}
   security:
-    name: "🧪 [CI] security"
+    name: "🧪 security"
     needs: locks
     if: needs.locks.outputs.ready == 'true'
     runs-on: ubuntu-latest
