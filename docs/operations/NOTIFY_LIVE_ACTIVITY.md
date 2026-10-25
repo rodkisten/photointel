@@ -2,13 +2,19 @@
 
 Esta integração usa a API do [Notify!](https://getnotifyapp.com/apidocs/), **sem** um serviço adicional e **sem** publicar credenciais no repositório.
 
-## ✅ Notificações compactas
+## ✅ Apenas execuções estratégicas
 
-Nos 13 workflows, labels e títulos foram abreviados. Os steps que terminam com sucesso **não geram push individual**. Falhas e cancelamentos produzem mensagens curtas, agrupadas por execução. Nos dois workflows GCP (Deploy e Bootstrap), há **um único push final** com `Concluído` ou `Falhou`.
+Notify! está ativo somente nos workflows **GCP Deploy**, **Setup GCP**, **Pages** e **ZIP Patch**. CI, testes, smoke, validações, WebKit, SSH e geração de manifesto não produzem notificações.
 
-A Live Activity exibe `PhotoIntel · Deploy` ou `PhotoIntel · Setup`, progresso e etapa compacta. Atualizações silenciosas da atividade não se tornam alertas individuais. Após encerrar, a atividade fica visível por cerca de 60 segundos.
+Deploy e Setup GCP criam uma **Live Activity por execução**, atualizada nas fases de interesse. O conteúdo usa **etapas concluídas**, como `2/4` e uma barra segmentada para fluxos com mais de uma fase, **sem `endsIn` ou relógio regressivo**. Cada atividade tem exatamente **um botão contextual**, substituído durante o avanço:
 
-Se os Repository secrets do Notify! não estiverem presentes, a integração é desativada sem quebrar o CI.
+- **Ver workflow:** enquanto a execução inicia.
+- **Ver step:** abre o job e, quando disponível, diretamente o step atual do GitHub Actions. O identificador do job é consultado com `github.token` e `actions:read`, com fallback para o índice conhecido do step e depois para o job/workflow, sem inventar IDs.
+- **Logs GCP:** quando um step de API, Cloud Run Jobs ou Build falha, abre o painel pertinente do Google Cloud. Falhas do Alembic/Neon permanecem no GitHub, pois migrations rodam diretamente no runner e não têm logs de Cloud Run.
+
+Os updates de fase são silenciosos. Falhas ou cancelamentos de fases importantes geram push curto; sucesso intermediário não gera push. O fim de deploy/setup envia **um único push de sucesso** (ou mantém a notificação de falha da fase) e encerra a Live Activity com 60 segundos de permanência.
+
+Pages e ZIP Patch enviam somente avisos das etapas críticas que falharem e o resultado bem-sucedido final; não criam Live Activities. `Notify!` é sempre `best-effort`: indisponibilidade de rede não muda o status dos jobs.
 
 ## 🔐 Configuração única em GitHub Actions Secrets
 
@@ -21,7 +27,7 @@ Abra **[Settings → Secrets and variables → Actions](https://github.com/rodki
 | `NOTIFY_DEVICE_ID` | ID do seu iPhone exibido pelo Notify! (ex.: prefixo `IO` em instalações recentes) |
 | `NOTIFY_TOKEN` | **Novo** token do dispositivo, gerado pelo Notify! após a rotação |
 
-**Por que no repositório, não só no Environment `production`?** Os workflows CI, WebKit, ZIP e outros não têm acesso ao Environment de produção, por decisão de segurança. Repository secrets são injetados somente nas execuções autorizadas pelo GitHub e são omitidos para PRs de forks não confiáveis. Não altere as permissões desses workflows só para permitir notificações.
+**Por que no repositório, não só no Environment `production`?** O workflow ZIP não exige o Environment de produção, por decisão de segurança. Repository secrets são injetados somente nas execuções autorizadas pelo GitHub e são omitidos para PRs de forks não confiáveis. Não altere as permissões desses workflows só para permitir notificações.
 
 Os dois valores são secretos. **Não** crie `vars.NOTIFY_TOKEN`, não preencha com valores reais em YAML nem faça `echo` dos tokens nos logs. Os workflows usam somente expressões:
 
@@ -39,45 +45,20 @@ Sem esses secrets, o integrador apenas informa "Notify! disabled" e os workflows
 - [`.github/actions/notify/action.yml`](../../.github/actions/notify/action.yml): composite action local; interface `start`, `step` e `end`.
 - [`infra/gcp/tests/test_notify.py`](../../infra/gcp/tests/test_notify.py): testes com HTTP simulado e verificação da cobertura dos workflows.
 
-### Etapas da Live Activity
+### Como o contador funciona
 
-1. `start`: inicia no iPhone após checkout com `new=1`, cria **uma Live Activity própria por run**, recebe seu `activityId` e oferece um link para a execução no GitHub.
-2. `step`: após cada step real, envia um push e, se o workflow for GCP, também atualiza o **mesmo `activityId`**. A barra vai de 0 até aproximadamente 95% durante os steps.
-3. `end`: executa com `always()`, encerra pelo `activityId` usando `DELETE` e deixa o estado final visível por 90 segundos. Só coloca 100% se o job teve sucesso. Uma falha não é registrada como conclusão bem-sucedida.
+O seletor `action` define a quantidade real de fases estratégicas. Em `all` são quatro: **Build → Jobs → API → Agenda**; nas ações individuais há uma única fase. Em Setup GCP há a fase **Setup**. Os eventos `running` atualizam o botão para o step que vai começar; eventos `success` aumentam a contagem somente depois da conclusão. Etapas ignoradas não contam. Falhas preservam o último contador válido.
 
-A etapa final é best-effort; se o runner for interrompido à força, não há garantia de execução de seu cleanup. A própria Live Activity do iOS expira conforme os limites do Notify!/Apple.
+A API Notify! aceita `steps` (de 2 a 20), `step` (concluídas), `trailing` (`2/4`) e `button: {title, url, open: true}`. O campo `endsIn` não é enviado ao iniciar nem atualizar, e é limpo ao finalizar. Consulte [a documentação oficial](https://getnotifyapp.com/apidocs/).
 
-### Notificações de cada step
-
-Cada step operacional recebe um ID estável e um step observador:
-
-```yaml
-- name: "🔔 [NOTIFY] 🏗️ [BUILD] Compilar imagem"
-  if: ${{ always() && (steps.build_image.outcome == 'success' || steps.build_image.outcome == 'failure' || steps.build_image.outcome == 'cancelled') }}
-  continue-on-error: true
-  uses: ./.github/actions/notify
-  with:
-    action: step
-    device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-    token: ${{ secrets.NOTIFY_TOKEN }}
-    workflow: ${{ github.workflow }}
-    job: ${{ github.job }}
-    step: "🏗️ [BUILD] Compilar imagem"
-    outcome: ${{ steps.build_image.outcome }}
-```
-
-`continue-on-error: true` somado às exceções capturadas no Python significa que **uma falha de rede do Notify! não mascara nem provoca falha no deploy/CI**. Os steps originais mantêm suas condições/saídas e a execução continua ou interrompe conforme o comportamento original.
-
-## ⚠️ Volume de notificações
-
-A nova política é silenciosa para steps de sucesso: só falhas, cancelamentos e conclusão de deploy/bootstrap geram push. Um workflow CI pesado pode enviar muitas notificações durante um run; o agrupamento por run melhora a organização, mas **não silencia o som nem elimina a quantidade de pushes**. Se for demais, remova temporariamente os secrets ou configure a política de notificações do Notify!/iOS. Não use o token antigo para teste.
+**Segurança dos links:** `github.token` é usado apenas na chamada privada ao GitHub para descobrir o job; **não** aparece na URL do botão. O dispositivo precisa estar autenticado no GitHub para abrir a página privada. Um botão por atividade, nunca múltiplos botões empilhados.
 
 ## 🧪 Testar com segurança
 
 1. Configure os dois repository secrets.
-2. Execute um workflow manual leve (por exemplo, `🧾 Release Manifest`) ou `GCP Bootstrap` em modo `plan` (sem mutação no Google Cloud).
-3. No GCP, confira a Live Activity e o push final. Nos outros workflows, apenas falhas e cancelamentos notificam.
-4. Consulte os logs de cada `🔔 [NOTIFY]`. Se o serviço falhar, você verá um `::warning::` **sem URL autenticada**.
+2. Execute `Setup GCP` em modo `plan` (sem mutação) ou um deploy de Pages (sem mutação no Google Cloud).
+3. No GCP, confira a Live Activity sem cronômetro, o contador e o botão Ver step; Pages/ZIP alertam apenas sobre falhas importantes e sucesso final.
+4. Consulte os logs de cada step `📱` ou `🔔`. Se o serviço falhar, você verá um `::warning::` **sem URL autenticada**.
 
 Uma Live Activity aparece apenas em iPhone/iPad com o Notify! configurado, permissões de notificações e Live Activities habilitadas. A API não transforma um browser ou Mac em dispositivo de Live Activity.
 
