@@ -21,18 +21,6 @@ jobs:
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧪 Testes"
         id: notify_observed_002
         env:
@@ -47,18 +35,6 @@ jobs:
             arguments+=(--modal-deployment-id "$MODAL_DEPLOYMENT_ID")
           fi
           python3 infra/scripts/release-manifest.py "${arguments[@]}"
-      - name: "🔔 [NOTIFY] 🧪 Testes"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Testes"
-          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "📦 Testes"
         id: notify_observed_003
         uses: actions/upload-artifact@v4
@@ -67,15 +43,3 @@ jobs:
           path: reports/release-manifest.json
           retention-days: 90
 
-      - name: "🔔 [NOTIFY] 📦 Testes"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📦 Testes"
-          outcome: ${{ steps.notify_observed_003.outcome }}
