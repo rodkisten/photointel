@@ -1,4 +1,4 @@
-name: "📦 [ZIP] Apply patch via pull request"
+name: "📦 ZIP Patch"
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   apply-zip:
-    name: "📦 [ZIP] Apply ZIP file by file"
+    name: "📦 Apply"
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
