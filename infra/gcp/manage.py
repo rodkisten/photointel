@@ -680,6 +680,16 @@ def bootstrap(runner: Runner) -> None:
         )
 
 
+    runner.command(
+        [
+            "iam", "service-accounts", "add-iam-policy-binding",
+            identity(config, "migrate"),
+            "--member", deployer,
+            "--role", "roles/iam.serviceAccountTokenCreator",
+        ]
+    )
+
+
 def deploy_jobs(runner: Runner, directory: Path) -> None:
     config = runner.config
     for mode in MODES:
