@@ -150,6 +150,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Pré-check"
+          step-index: "8"
           label: "🏗 Build"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -176,6 +177,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Pré-check"
+          step-index: "8"
           label: "🏗 Build"
           outcome: ${{ steps.preflight.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -203,6 +205,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Cache"
+          step-index: "10"
           label: "🏗 Build"
           outcome: ${{ steps.image_cache.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -229,6 +232,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Build"
+          step-index: "12"
           label: "🏗 Build"
           outcome: ${{ steps.build_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -256,6 +260,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
+          step-index: "14"
           label: "🏗 Build"
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -275,6 +280,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
+          step-index: "14"
           label: "🏗 Imagem"
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -294,6 +300,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "📦 Jobs"
+          step-index: "18"
           label: "📦 Jobs"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -320,6 +327,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "📦 Jobs"
+          step-index: "18"
           label: "📦 Jobs"
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -339,6 +347,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🗃 Neon"
+          step-index: "21"
           label: "🗃 Neon"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -369,6 +378,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🗃 Neon"
+          step-index: "21"
           label: "🗃 Neon"
           outcome: ${{ steps.migrate_database.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -388,6 +398,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 API"
+          step-index: "24"
           label: "🚀 API"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -415,6 +426,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 API"
+          step-index: "24"
           label: "🚀 API"
           outcome: ${{ steps.deploy_api.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -434,6 +446,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "⏰ Agenda"
+          step-index: "27"
           label: "⏰ Agenda"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -460,6 +473,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "⏰ Agenda"
+          step-index: "27"
           label: "⏰ Agenda"
           outcome: ${{ steps.deploy_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -479,6 +493,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧹 Código"
+          step-index: "30"
           label: "🧹 Limpeza"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -505,6 +520,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧹 Código"
+          step-index: "30"
           label: "🧹 Limpeza"
           outcome: ${{ steps.pause_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
