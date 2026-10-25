@@ -11,49 +11,13 @@ jobs:
       - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - name: "🔔 [NOTIFY] 🧰 Config"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Config"
-          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "▶ ️  Execute command"
         id: notify_observed_003
         run: npm --prefix apps/web ci
-      - name: "🔔 [NOTIFY] ▶ ️  Execute command"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "▶ ️  Execute command"
-          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "▶ ️  Execute command"
         id: notify_observed_004
         run: npm --prefix apps/web run build
@@ -75,18 +39,6 @@ jobs:
       - name: "▶ ️  Execute command"
         id: notify_observed_005
         run: cp infra/cloudflare/pages-headers apps/web/dist/_headers
-      - name: "🔔 [NOTIFY] ▶ ️  Execute command"
-        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "▶ ️  Execute command"
-          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "▶ ️  Execute command"
         id: notify_observed_006
         run: npx --yes wrangler@4 pages deploy apps/web/dist --project-name "$PAGES_PROJECT"
@@ -107,3 +59,17 @@ jobs:
           job: ${{ github.job }}
           step: "▶ ️  Execute command"
           outcome: ${{ steps.notify_observed_006.outcome }}
+
+      - name: "🔔 Resultado"
+        if: ${{ always() && steps.notify_observed_001.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: end
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          outcome: ${{ job.status }}
+          completed: "1"
+          total: "1"
