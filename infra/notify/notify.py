@@ -181,7 +181,8 @@ def gcp_failure_url(step: str, project: str, region: str) -> str:
     if "api" in normalized or "cloud run" in normalized:
         return f"{base}/run/detail/{region}/photointel-api/logs?project={project}"
     if "jobs" in normalized or "worker" in normalized:
-        return f"{base}/run/jobs?project={project}"
+        query = f'resource.type="cloud_run_job" AND resource.labels.location="{region}"'
+        return f"{base}/logs/query;query={urllib.parse.quote(query, safe='')}?project={project}"
     if "build" in normalized:
         return f"{base}/cloud-build/builds?project={project}"
     return ""
