@@ -18,6 +18,7 @@ SPEC = importlib.util.spec_from_file_location(
 )
 assert SPEC and SPEC.loader
 migrate = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = migrate
 SPEC.loader.exec_module(migrate)
 
 PROJECT = "photointel"
@@ -69,17 +70,22 @@ class MigrationWorkflowTests(unittest.TestCase):
                         if "capture_output" in proc.call_args.kwargs else True)
 
     def test_migration_url_validation_enforces_direct_neon_and_tls(self) -> None:
+        import types
+
         class MockURL:
             drivername = "postgresql+psycopg"
             host = "ep-test-pooler.us-east-1.aws.neon.tech"
             query = {"sslmode": "verify-full"}
 
-        # It must fail before any SQL is executed when a pooler is selected.
-        with patch.dict(sys.modules, {}):
-            with patch("photointel.db_connection.database_connection_options",
-                       return_value=(MockURL(), {})):
-                with self.assertRaises(migrate.MigrationError):
-                    migrate.connection_profile("postgresql://test:pass@ep-test-pooler/db")
+        fake_package = types.ModuleType("photointel")
+        fake_db = types.ModuleType("photointel.db_connection")
+        fake_db.database_connection_options = lambda *args, **kwargs: (MockURL(), {})
+        with patch.dict(sys.modules, {
+            "photointel": fake_package,
+            "photointel.db_connection": fake_db,
+        }):
+            with self.assertRaises(migrate.MigrationError):
+                migrate.connection_profile("postgresql://test:pass@ep-test-pooler/db")
 
     def test_empty_profile_refuses_existing_tables_and_revisions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
