@@ -121,7 +121,7 @@ def run_context() -> tuple[str, str, str]:
     return repo, run, f"https://github.com/{repo}/actions/runs/{run}"
 
 
-def github_step_link(step_name: str, job_key: str) -> str:
+def github_step_link(step_name: str, job_key: str, step_index: str = "") -> str:
     """Link to the actual private GitHub Actions job/step, never guess job IDs."""
     repo, run, fallback = run_context()
     token = os.environ.get("GITHUB_API_TOKEN", "")
@@ -163,6 +163,8 @@ def github_step_link(step_name: str, job_key: str) -> str:
         ]
         if len(candidates) == 1:
             return f"{url}#step:{candidates[0]['number']}:1"
+        if re.fullmatch(r"[1-9][0-9]{0,2}", step_index):
+            return f"{url}#step:{int(step_index)}:1"
         return url
     except (urllib.error.URLError, OSError, ValueError, KeyError, TypeError, TimeoutError):
         return fallback
@@ -239,7 +241,9 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
             return
         label = short_step(getattr(args, "label", "") or args.step)
         failed = outcome in {"failure", "cancelled"}
-        link = github_step_link(args.step, args.job)
+        link = github_step_link(
+            args.step, args.job, getattr(args, "step_index", "")
+        )
         button_title = "Ver step"
         if failed:
             gcp_url = gcp_failure_url(
@@ -305,6 +309,7 @@ def main() -> int:
     parser.add_argument("--activity-id", default="")
     parser.add_argument("--progress", default="0")
     parser.add_argument("--label", default="")
+    parser.add_argument("--step-index", default="")
     parser.add_argument("--completed", default="0")
     parser.add_argument("--total", default="1")
     parser.add_argument("--project", default="")
