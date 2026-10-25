@@ -1,4 +1,4 @@
-name: "🏗️ [ARCH] Validate image architectures"
+name: "🏗️ Architectures"
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-run:
-    name: "🏗️ [ARCH] ${{ matrix.component }} / linux/${{ matrix.architecture }}"
+    name: "🏗️ ${{ matrix.component }} / ${{ matrix.architecture }}"
     runs-on: ubuntu-latest
     timeout-minutes: 50
     defaults:
