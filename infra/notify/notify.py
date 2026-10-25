@@ -74,7 +74,7 @@ def append_output(value: str) -> None:
 def short_workflow(name: str) -> str:
     """Small title for Lock Screen, Dynamic Island and grouped pushes."""
     label = name.casefold()
-    if "bootstrap" in label and "gcp" in label:
+    if ("bootstrap" in label or "setup" in label) and "gcp" in label:
         return "PhotoIntel · Setup"
     if "deploy" in label or "release" in label:
         return "PhotoIntel · Deploy"
