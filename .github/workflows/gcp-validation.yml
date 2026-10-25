@@ -49,34 +49,10 @@ jobs:
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-python@v5
         with: {python-version: '3.12'}
-      - name: "🔔 [NOTIFY] 🧰 Config"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Config"
-          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🔐 Código"
         id: notify_observed_003
         run: |
@@ -84,18 +60,6 @@ jobs:
           python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
           python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
           python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
-      - name: "🔔 [NOTIFY] 🔐 Código"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🔐 Código"
-          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧩 Limpeza"
         id: notify_observed_004
         run: |
@@ -115,18 +79,6 @@ jobs:
               assert "if: always()" in source
               assert "environment: production" in source
           PY
-      - name: "🔔 [NOTIFY] 🧩 Limpeza"
-        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧩 Limpeza"
-          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧪 Bootstrap"
         id: notify_observed_005
         run: |
@@ -134,50 +86,14 @@ jobs:
           bash -n infra/gcp/release.sh
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
-      - name: "🔔 [NOTIFY] 🧪 Bootstrap"
-        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Bootstrap"
-          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧪 Testes"
         id: notify_observed_006
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-      - name: "🔔 [NOTIFY] 🧪 Testes"
-        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Testes"
-          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "🧩 Código"
         id: notify_observed_007
         run: node --test infra/scripts/zip-patch-policy.test.cjs
       # Successful push/PR validation is already visible in the Actions log.
       # Only keep the generated plans when useful for manual review or failures.
-      - name: "🔔 [NOTIFY] 🧩 Código"
-        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧩 Código"
-          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "📦 Testes"
         id: notify_observed_008
         uses: actions/upload-artifact@v4
@@ -188,15 +104,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
 
-      - name: "🔔 [NOTIFY] 📦 Testes"
-        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📦 Testes"
-          outcome: ${{ steps.notify_observed_008.outcome }}
