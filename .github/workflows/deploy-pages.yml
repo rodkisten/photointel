@@ -1,10 +1,10 @@
-name: "🌐 [PAGES] Deploy frontend manually"
+name: "🌐 Pages"
 on:
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
   deploy:
-    name: "🌐 [PAGES] deploy"
+    name: "🌐 Deploy"
     runs-on: ubuntu-latest
     environment: production
     steps:
