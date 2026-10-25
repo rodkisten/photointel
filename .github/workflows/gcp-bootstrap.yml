@@ -1,4 +1,4 @@
-name: "🧱 [GCP BOOTSTRAP] Provision Google Cloud"
+name: "🧱 Setup GCP"
 on:
   workflow_dispatch:
     inputs:
@@ -29,7 +29,7 @@ concurrency:
 jobs:
   bootstrap:
     if: github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
-    name: "🧱 [GCP BOOTSTRAP] ${{ inputs.mode }} · ${{ inputs.confirm_project }}"
+    name: "🧱 ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 45
