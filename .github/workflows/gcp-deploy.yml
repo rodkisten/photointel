@@ -117,6 +117,26 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh gate
 
+      - name: "📱 ! 🛡 Validação DB"
+        if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🛡 Validação DB"
+          step-index: "3"
+          label: "🛡 Validação DB"
+          outcome: ${{ steps.database_gate.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "⚙ Config"
         id: config
         uses: ./.github/actions/gcp-config
@@ -126,6 +146,26 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
+      - name: "📱 ! ⚙ Config"
+        if: ${{ always() && (steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙ Config"
+          step-index: "5"
+          label: "⚙ Config"
+          outcome: ${{ steps.config.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🔐 Login"
         id: notify_observed_001
         uses: google-github-actions/auth@v2
@@ -133,11 +173,51 @@ jobs:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
+      - name: "📱 ! 🔐 Login"
+        if: ${{ always() && (steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 Login"
+          step-index: "7"
+          label: "🔐 Login"
+          outcome: ${{ steps.notify_observed_001.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_002
         uses: google-github-actions/setup-gcloud@v2
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
+      - name: "📱 ! 🧰 Gcloud"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 Gcloud"
+          step-index: "9"
+          label: "🧰 Gcloud"
+          outcome: ${{ steps.notify_observed_002.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "📱 ▶ Build"
         if: ${{ inputs.action == 'all' || inputs.action == 'build' }}
         continue-on-error: true
@@ -150,7 +230,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Pré-check"
-          step-index: "8"
+          step-index: "12"
           label: "🏗 Build"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -177,7 +257,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Pré-check"
-          step-index: "8"
+          step-index: "12"
           label: "🏗 Build"
           outcome: ${{ steps.preflight.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -197,7 +277,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Cache"
-          step-index: "11"
+          step-index: "15"
           label: "🏗 Cache"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -225,7 +305,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Cache"
-          step-index: "11"
+          step-index: "15"
           label: "🏗 Build"
           outcome: ${{ steps.image_cache.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -245,7 +325,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Build"
-          step-index: "14"
+          step-index: "18"
           label: "🏗 Build"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -272,7 +352,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Build"
-          step-index: "14"
+          step-index: "18"
           label: "🏗 Build"
           outcome: ${{ steps.build_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -292,7 +372,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
-          step-index: "17"
+          step-index: "21"
           label: "🏗 Imagem"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -320,7 +400,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
-          step-index: "17"
+          step-index: "21"
           label: "🏗 Build"
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -340,7 +420,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
-          step-index: "17"
+          step-index: "21"
           label: "🏗 Imagem"
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -360,7 +440,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "📦 Jobs"
-          step-index: "21"
+          step-index: "25"
           label: "📦 Jobs"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -387,7 +467,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "📦 Jobs"
-          step-index: "21"
+          step-index: "25"
           label: "📦 Jobs"
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -407,7 +487,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🗃 Neon"
-          step-index: "24"
+          step-index: "28"
           label: "🗃 Neon"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -438,7 +518,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🗃 Neon"
-          step-index: "24"
+          step-index: "28"
           label: "🗃 Neon"
           outcome: ${{ steps.migrate_database.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -458,7 +538,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 API"
-          step-index: "27"
+          step-index: "31"
           label: "🚀 API"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -486,7 +566,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 API"
-          step-index: "27"
+          step-index: "31"
           label: "🚀 API"
           outcome: ${{ steps.deploy_api.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -506,7 +586,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "⏰ Agenda"
-          step-index: "30"
+          step-index: "34"
           label: "⏰ Agenda"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -533,7 +613,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "⏰ Agenda"
-          step-index: "30"
+          step-index: "34"
           label: "⏰ Agenda"
           outcome: ${{ steps.deploy_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -553,7 +633,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧹 Código"
-          step-index: "33"
+          step-index: "37"
           label: "🧹 Limpeza"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -580,7 +660,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧹 Código"
-          step-index: "33"
+          step-index: "37"
           label: "🧹 Limpeza"
           outcome: ${{ steps.pause_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
