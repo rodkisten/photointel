@@ -28,13 +28,13 @@ Selecione `action=all` para executar **num único job e com a mesma tag de commi
 
 **Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` opcional, `apply` com uma escolha de segurança; SHA automático) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
 
-### 🔎 Diagnóstico automático de falhas de migração
+### 🗃️ Neon migrations direto no runner
 
-O mesmo dropdown aceita `action=migrate` + `migration_mode=diagnose`, **sem autorização de cobrança e sem executar SQL**. Ele examina a execução recente do Cloud Run Job, status/exit codes das tasks, logs de contêiner filtrados pelo ID da execução e assinaturas de erro, mantendo credenciais fora dos logs do GitHub. Quando `migrate apply` falha, o step `🔎 [TROUBLESHOOT]` roda automaticamente com `always()` e escreve um resumo no `GITHUB_STEP_SUMMARY`, preservando o resultado de falha original. A integração Notify! também cobre esse step. Para ler o Cloud Logging, reexecute uma vez o `GCP Bootstrap apply` administrativo que concede `roles/logging.viewer` ao Deployer e habilita a API Logging. Veja o [guia de troubleshooting](../deployment/CLOUD_RUN_FROM_ZERO.md).
+`action=migrate` executa Alembic no **GitHub Actions**, conectando ao **Neon PostgreSQL direto**. Não há Cloud Run Job de migração. `plan` e `diagnose` leem revisões/tabelas com psycopg e `alembic current -v`; `apply` exige o tipo de banco (`initial-empty` comprovadamente vazio ou `existing-with-backup` com recibo de restauração validado) e executa `alembic upgrade head`. O deployer autentica com WIF e impersona a conta `photointel-migrate` para ler somente o secret de migração do Secret Manager. Execute `GCP Bootstrap → apply` uma vez para conceder `roles/iam.serviceAccountTokenCreator` especificamente nessa conta. Erros seguros e a revisão do Alembic ficam no GitHub Job Summary; não é preciso Cloud Logging. `migrate` não é incluído no modo `all`.
 
-### 🗃️ Migração protegida no dropdown
+### 📱 Notificações discretas
 
-A opção `migrate` infere do próprio Cloud Run o SHA do Job instalado, a região, a identidade e os comandos. `plan` é somente leitura e opcional; `apply` exige `authorize_charges` e a escolha `migration_database=initial-empty` (declaração explícita de banco vazio) ou `existing-with-backup` (recibo válido de backup e restauração de banco/objetos). O CLI descobre automaticamente o backup quando há um único recibo privado, recusando ambiguidade e verificando SHA256 e prazo de 24h. Não é mais necessário colar SHA nem marcar um segundo checkbox para banco vazio. Veja o [guia operacional](../deployment/CLOUD_RUN_FROM_ZERO.md).
+Labels dos workflows e steps foram abreviadas. Steps bem-sucedidos só atualizam a Live Activity, **sem push individual**. Falhas geram push compacto; os workflows de deploy e bootstrap enviam ainda **um push final** de conclusão. O resultado permanece na tela por pouco tempo; Notify! indisponível não reprova CI/deploy.
 
 ## 🔑 Escopo de Environment, vars e secrets
 
@@ -95,7 +95,7 @@ Limpeza de `config.local.json` no runner **não apaga** imagens do Artifact Regi
 
 ## 📱 Notificações Notify!
 
-Todos os 13 workflows receberam um observador local por step operacional concluído, que envia um push agrupado por execução sem modificar o resultado do job. Os workflows GCP Deploy e GCP Bootstrap também iniciam, atualizam e encerram uma Live Activity por execução, usando seu próprio `activityId`. Os demais enviam apenas notificações de steps. A integração é desativada automaticamente quando faltam os Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`, e não exige um Environment `production` nos testes. Veja [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md). 
+Os 13 workflows têm observadores por step, mas só **erros e cancelamentos** geram push imediato; sucessos não enviam push individual. Os workflows GCP Deploy e GCP Bootstrap também iniciam, atualizam e encerram uma Live Activity por execução, usando seu próprio `activityId`. Os demais enviam apenas notificações de steps. A integração é desativada automaticamente quando faltam os Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`, e não exige um Environment `production` nos testes. Veja [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md). 
 
 ## 🎨 Labels e emojis
 
