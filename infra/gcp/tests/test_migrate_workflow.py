@@ -107,13 +107,28 @@ class MigrationWorkflowTests(unittest.TestCase):
             with (
                 patch.object(migrate, "validate", return_value=config),
                 patch.object(migrate, "job_spec", return_value=SHA) as lookup,
+                patch.object(migrate, "verify_logging_access") as logging_probe,
                 patch.object(migrate, "apply_migration") as apply,
             ):
                 args = ["--mode", "apply", "--project", PROJECT, "--sha", SHA,
                         "--database", "initial-empty", "--config", str(location)]
                 self.assertEqual(migrate.main(args), 0)
                 self.assertEqual(lookup.call_count, 2)
+                logging_probe.assert_called_once_with(PROJECT)
                 apply.assert_called_once_with(PROJECT, "initial-empty", "")
+
+    def test_apply_refuses_unobservable_cloud_logging(self):
+        with patch.object(migrate.subprocess, "run") as run:
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Cloud Logging is inaccessible"):
+                migrate.verify_logging_access(PROJECT)
+            args = run.call_args.args[0]
+            self.assertEqual(args[:3], ["gcloud", "logging", "read"])
+            self.assertIn("--limit=1", args)
+            self.assertTrue(run.call_args.kwargs["capture_output"])
+        with patch.object(migrate.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            migrate.verify_logging_access(PROJECT)
 
     def test_initial_empty_selection_is_sufficient_attestation(self):
         with patch.object(migrate.subprocess, "run") as execute:
