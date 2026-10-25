@@ -69,6 +69,22 @@ class MigrationWorkflowTests(unittest.TestCase):
         self.assertTrue(proc.call_args.kwargs["capture_output"] is False
                         if "capture_output" in proc.call_args.kwargs else True)
 
+    def test_missing_iam_role_has_specific_safe_diagnostic(self) -> None:
+        class Denied:
+            returncode = 1
+            stdout = b""
+            stderr = b"PERMISSION_DENIED iam.serviceAccounts.getAccessToken secret-private"
+
+        with patch.object(migrate.subprocess, "run", return_value=Denied()):
+            with self.assertRaises(migrate.MigrationError) as error:
+                migrate.gcloud(
+                    ["secrets", "versions", "access", "1", "--secret", "photointel-migration-database-url"],
+                    project=PROJECT, impersonate=True,
+                )
+        self.assertIn("NEON_IAM", str(error.exception))
+        self.assertIn("Setup GCP", str(error.exception))
+        self.assertNotIn("secret-private", str(error.exception))
+
     def test_migration_url_validation_enforces_direct_neon_and_tls(self) -> None:
         import types
 
