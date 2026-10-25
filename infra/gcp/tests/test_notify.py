@@ -122,38 +122,125 @@ class NotifyOfflineTests(unittest.TestCase):
                         self.assertEqual(notify.main(), 0)
                     self.assertNotIn("secretTOP123456", stdout.getvalue())
 
-    def test_all_workflows_notify_after_each_original_step(self):
-        total = 0
+    def test_only_strategic_workflows_send_notify(self):
+        strategic = {"gcp-deploy.yml", "gcp-bootstrap.yml", "deploy-pages.yml", "zip.yml"}
         for name in WORKFLOWS:
-            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
-            # Notification helper steps have their own names and must not recursively notify.
-            notifications = re.findall(r'^      - name: "🔔 \[NOTIFY\] ', text, re.M)
-            original_count = len([
-                line for line in text.splitlines()
-                if re.match(r"^      - (?:name:|id:|uses:|run:)", line)
-                and not line.startswith('      - name: "🔔 [NOTIFY]')
-                and not line.startswith('      - name: "📱 Live')
-            ])
-            total += original_count
-            self.assertEqual(len(notifications), original_count, name)
-            self.assertIn("secrets.NOTIFY_DEVICE_ID", text, name)
-            self.assertIn("secrets.NOTIFY_TOKEN", text, name)
-            self.assertIn("continue-on-error: true", text, name)
-            self.assertIn("uses: ./.github/actions/notify", text, name)
-        self.assertGreaterEqual(total, 190, "Unexpected loss of observed workflow steps")
+            source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            self.assertEqual("uses: ./.github/actions/notify" in source, name in strategic, name)
+        for name in ("gcp-deploy.yml", "gcp-bootstrap.yml"):
+            source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+            self.assertIn("action: start", source)
+            self.assertIn("action: end", source)
+            self.assertIn("github-token: ${{ github.token }}", source)
+            self.assertIn("step-index:", source)
+            self.assertNotIn("endsIn:", source)
+            self.assertNotIn("🔔 [NOTIFY]", source)
 
-    def test_gcp_only_live_activity_lifecycle(self):
-        for name in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
-            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
-            self.assertIn("id: notify_live_start", text)
-            self.assertIn("steps.notify_live_start.outputs.activity_id", text)
-            self.assertIn("action: start", text)
-            self.assertIn("action: end", text)
-            self.assertIn("job.status", text)
-        for name in set(WORKFLOWS) - {"gcp-bootstrap.yml", "gcp-deploy.yml"}:
-            text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
-            self.assertNotIn("action: start", text)
-            self.assertNotIn("action: end", text)
+    def test_segmented_stages_and_open_button_without_countdown(self):
+        import argparse
+
+        args = argparse.Namespace(action="start", workflow="🚀 Deploy", job="deploy",
+                                  step="", outcome="", activity_id="", progress="",
+                                  total="4", completed="0")
+        with (
+            patch.object(notify, "send", return_value={"success": True, "activityId": "LA7Q2ZKM"}) as sent,
+            patch.dict(os.environ, {"GITHUB_REPOSITORY": "rodkisten/photointel",
+                                    "GITHUB_RUN_ID": "123456"}),
+            patch.object(notify, "append_output"),
+        ):
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+        payload = sent.call_args.args[3]
+        self.assertEqual((payload["steps"], payload["step"]), (4, 0))
+        self.assertEqual(payload["trailing"], "0/4")
+        self.assertNotIn("endsIn", payload)
+        self.assertTrue(payload["button"]["open"])
+
+    def test_in_progress_phase_opens_exact_step(self):
+        import argparse
+
+        args = argparse.Namespace(action="step", workflow="🚀 Deploy", job="deploy",
+                                  step="🚀 API", label="🚀 API", step_index="15",
+                                  outcome="running", activity_id="LA7Q2ZKM",
+                                  total="4", completed="2",
+                                  project="photointel", region="us-central1")
+        with (
+            patch.object(notify, "send", return_value={"success": True}) as sent,
+            patch.object(notify, "github_step_link",
+                return_value="https://github.com/rodkisten/photointel/actions/runs/123/job/9#step:15:1"),
+        ):
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+        self.assertEqual(sent.call_count, 1)
+        payload = sent.call_args.args[3]
+        self.assertEqual(payload["step"], 2)
+        self.assertEqual(payload["trailing"], "2/4")
+        self.assertEqual(payload["button"]["title"], "Ver step")
+        self.assertIn("#step:15:1", payload["button"]["url"])
+        self.assertNotIn("endsIn", payload)
+
+    def test_job_api_matches_step_or_uses_step_index_when_pending(self):
+        import io
+
+        job = {"id": 987654, "name": "🚀 deploy",
+               "steps": [{"name": "📦 Jobs", "number": 12}]}
+        class Response:
+            def __enter__(self):
+                return io.BytesIO(json.dumps({"jobs": [job]}).encode())
+            def __exit__(self, *_args):
+                return False
+
+        with (
+            patch.dict(os.environ, {
+                "GITHUB_REPOSITORY": "rodkisten/photointel",
+                "GITHUB_RUN_ID": "123", "GITHUB_API_TOKEN": "GITHUB_PRIVATE_FAKE",
+            }),
+            patch.object(notify.urllib.request, "urlopen", return_value=Response()) as call,
+        ):
+            found = notify.github_step_link("📦 Jobs", "deploy", "17")
+            pending = notify.github_step_link("🗃 Neon", "deploy", "17")
+            self.assertEqual(found, "https://github.com/rodkisten/photointel/actions/runs/123/job/987654#step:12:1")
+            self.assertEqual(pending, "https://github.com/rodkisten/photointel/actions/runs/123/job/987654#step:17:1")
+            request = call.call_args.args[0]
+            self.assertIn("GITHUB_PRIVATE_FAKE", request.get_header("Authorization"))
+            self.assertNotIn("GITHUB_PRIVATE_FAKE", request.full_url)
+
+    def test_gcp_error_button_only_for_cloud_phases(self):
+        import argparse
+
+        def failure(step):
+            return argparse.Namespace(
+                action="step", workflow="🚀 Deploy", job="deploy", step=step,
+                label=step, step_index="12", outcome="failure",
+                activity_id="LA7Q2ZKM", total="4", completed="1",
+                project="photointel", region="us-central1",
+            )
+
+        with (
+            patch.object(notify, "send", return_value={"success": True}) as sent,
+            patch.object(notify, "github_step_link",
+                return_value="https://github.com/rodkisten/photointel/actions/runs/123"),
+        ):
+            notify.handle(failure("🚀 API"), "IOFAKE1234567", "fakeTOKEN123456")
+            payload = sent.call_args_list[-1].args[3]
+            self.assertEqual(payload["button"]["title"], "Logs GCP")
+            self.assertIn("photointel-api/logs", payload["button"]["url"])
+            sent.reset_mock()
+            notify.handle(failure("🗃 Neon"), "IOFAKE1234567", "fakeTOKEN123456")
+            payload = sent.call_args_list[-1].args[3]
+            self.assertEqual(payload["button"]["title"], "Ver step")
+
+    def test_failure_end_preserves_previous_completed_stages(self):
+        import argparse
+
+        args = argparse.Namespace(action="end", workflow="🚀 Deploy", job="deploy",
+                                  outcome="failure", activity_id="LA7Q2ZKM",
+                                  total="4", completed="0")
+        with patch.object(notify, "send", return_value={"success": True}) as sent:
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+        payload = sent.call_args.args[3]
+        self.assertEqual(payload["status"], "failed")
+        self.assertNotIn("steps", payload)
+        self.assertEqual(payload["endsIn"], None)
+        self.assertEqual(payload["keepFor"], 60)
 
 
 if __name__ == "__main__":
