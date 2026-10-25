@@ -93,6 +93,9 @@ change storage buckets add-iam-policy-binding "$BUCKET" "--member=$DEPLOYER" --r
 for role in api jobs migrate scheduler builder; do
   change iam service-accounts add-iam-policy-binding "photointel-$role@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
 done
+# The WIF deployer may obtain a short-lived migration identity token, but it
+# does NOT receive project-wide or direct Secret Manager reader permissions.
+change iam service-accounts add-iam-policy-binding "photointel-migrate@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountTokenCreator --condition=None --format=none
 log "Completed: no resources deleted and no secret values created."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "${#KEYS[@]}" >> "$GITHUB_STEP_SUMMARY"
