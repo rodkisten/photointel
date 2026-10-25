@@ -1,4 +1,4 @@
-name: "🖥️ [SSH] Development runner and Make"
+name: "🖥️ SSH"
 
 on:
   workflow_dispatch:
@@ -53,7 +53,7 @@ concurrency:
 
 jobs:
   development:
-    name: "🖥️ [SSH] Development session"
+    name: "🖥️ Session"
     runs-on: ubuntu-24.04
     # Longest interactive session is 180 min; reserve time for setup and push.
     timeout-minutes: 240
