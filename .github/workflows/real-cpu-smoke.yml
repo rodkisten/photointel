@@ -1,4 +1,4 @@
-name: "🧠 [CPU] Validate real models"
+name: "🧠 CPU Models"
 
 on:
   push:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   real-cpu:
-    name: "🧠 [CPU] real cpu"
+    name: "🧠 Smoke"
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.confirm_download == true)
       || (github.event_name == 'push' && github.ref == 'refs/heads/validation/real-cpu')
