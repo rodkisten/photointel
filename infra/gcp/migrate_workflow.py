@@ -97,6 +97,30 @@ def job_spec(image_prefix: str, project: str, region: str) -> str:
     return deployed_sha
 
 
+def verify_logging_access(project: str) -> None:
+    """Refuse apply when container failures would be invisible to CI."""
+    try:
+        probe = subprocess.run(
+            [
+                "gcloud", "logging", "read",
+                'resource.type="cloud_run_job" AND resource.labels.job_name="photointel-migrate"',
+                "--limit=1", "--format=json", "--project", project, "--quiet",
+            ],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MigrationWorkflowError(
+            "Could not verify Cloud Logging access. Run GCP Bootstrap apply and retry."
+        ) from None
+    if probe.returncode != 0:
+        raise MigrationWorkflowError(
+            "Cloud Logging is inaccessible to photointel-deployer. "
+            "Run GCP Bootstrap → apply first to enable logging.googleapis.com "
+            "and grant roles/logging.viewer; then run migrate → diagnose "
+            "before any new migrate apply."
+        )
+    print("✅ Cloud Logging readable: migration failures can be diagnosed.", flush=True)
+
 def migration_command(project: str, *, initial_empty: bool, backup: Path | None = None) -> list[str]:
     result = [
         sys.executable, str(ROOT / "infra/gcp/manage.py"), "migrate",
@@ -234,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
             raise MigrationWorkflowError(
                 "Apply requires initial-empty or existing-with-backup"
             )
+        verify_logging_access(args.project)
         # Compare again immediately before the run, not against an operator-copied SHA.
         if (
             job_spec(
