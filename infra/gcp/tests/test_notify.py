@@ -228,6 +228,12 @@ class NotifyOfflineTests(unittest.TestCase):
             payload = sent.call_args_list[-1].args[3]
             self.assertEqual(payload["button"]["title"], "Ver step")
 
+    def test_job_failure_links_to_filtered_cloud_logging(self):
+        url = notify.gcp_failure_url("📦 Jobs", "photointel", "us-central1")
+        self.assertIn("/logs/query;query=", url)
+        self.assertIn("cloud_run_job", urllib.parse.unquote(url))
+        self.assertNotIn("token=", url)
+
     def test_failure_end_preserves_previous_completed_stages(self):
         import argparse
 
