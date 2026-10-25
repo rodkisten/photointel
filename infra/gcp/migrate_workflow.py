@@ -69,10 +69,27 @@ def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes
         raise MigrationError("Google Cloud credential retrieval unavailable") from None
     if result.returncode:
         if impersonate:
+            # Categorize provider errors without logging stderr, which may
+            # include credentials or request details.
+            details = result.stderr.decode("utf-8", errors="replace").casefold()
+            if (
+                "getaccesstoken" in details
+                or "iam.serviceaccounts" in details
+                or "impersonat" in details
+            ):
+                raise MigrationError(
+                    "NEON_IAM: deployer cannot impersonate photointel-migrate. "
+                    "Run Setup GCP → apply once to grant Token Creator on that "
+                    "service account. Then retry migrate → plan."
+                )
+            if "secretmanager" in details or "secret" in details:
+                raise MigrationError(
+                    "NEON_SECRET: the pinned migration secret version is unavailable "
+                    "to photointel-migrate. Verify Secret Manager version and IAM."
+                )
             raise MigrationError(
-                "Cannot impersonate photointel-migrate or access pinned migration secret. "
-                "Run GCP Bootstrap → apply to grant Token Creator on that account; "
-                "check the Secret Manager version and IAM."
+                "NEON_CREDENTIALS: impersonation or pinned secret access failed. "
+                "Run Setup GCP → apply and verify the migration secret version."
             )
         raise MigrationError("Private backup retrieval failed; verify IAM and GCS prefix")
     return result.stdout
