@@ -67,152 +67,44 @@ jobs:
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "🧰 Config"
         id: notify_observed_002
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - name: "🔔 [NOTIFY] 🧰 Config"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Config"
-          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "🧰 Setup"
         id: notify_observed_003
         run: |
           uv python install 3.12
           uv sync --frozen --no-dev
           mkdir -p reports/real-cpu
-      - name: "🔔 [NOTIFY] 🧰 Setup"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Setup"
-          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧰 Setup"
         id: notify_observed_004
         run: |
           uv export --frozen --group gpu --no-dev --no-hashes --no-annotate --no-header --no-emit-project --output-file reports/real-cpu/all.requirements.txt
           uv run --no-sync python infra/scripts/real-cpu-smoke.py prepare --export reports/real-cpu/all.requirements.txt
-      - name: "🔔 [NOTIFY] 🧰 Setup"
-        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Setup"
-          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧰 Setup"
         id: notify_observed_005
         run: |
           uv pip install --no-deps --index-url https://download.pytorch.org/whl/cpu --requirement reports/real-cpu/cpu-wheels.requirements.txt
           uv pip install --no-deps --requirement reports/real-cpu/cpu-dependencies.requirements.txt
           uv pip check
-      - name: "🔔 [NOTIFY] 🧰 Setup"
-        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Setup"
-          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧰 Setup"
         id: notify_observed_006
         uses: actions/cache@v4
         with:
           path: /tmp/photointel-real-cpu-models
           key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
-      - name: "🔔 [NOTIFY] 🧰 Setup"
-        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Setup"
-          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "🗃 Neon"
         id: notify_observed_007
         run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
-      - name: "🔔 [NOTIFY] 🗃 Neon"
-        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🗃 Neon"
-          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "⚙ ️  Ingest one procedural fi"
         id: notify_observed_008
         env:
           GPU_ENABLED: 'false'
         run: uv run --no-sync python -m photointel.cli seed --synthetic-assets 1 > reports/real-cpu/seed.json
-      - name: "🔔 [NOTIFY] ⚙ ️  Ingest one procedural fi"
-        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ ️  Ingest one procedural fi"
-          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "🧪 Testes"
         id: notify_observed_009
         run: uv run --no-sync python infra/scripts/real-cpu-smoke.py run
-      - name: "🔔 [NOTIFY] 🧪 Testes"
-        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Testes"
-          outcome: ${{ steps.notify_observed_009.outcome }}
       - name: "📦 Artefatos"
         id: notify_observed_010
         if: always()
@@ -223,15 +115,3 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: "🔔 [NOTIFY] 📦 Artefatos"
-        if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📦 Artefatos"
-          outcome: ${{ steps.notify_observed_010.outcome }}
