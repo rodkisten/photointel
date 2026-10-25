@@ -63,11 +63,11 @@ jobs:
       MKL_NUM_THREADS: '2'
       UV_CACHE_DIR: /tmp/photointel-real-cpu-uv
     steps:
-      - name: "📥 [SOURCE] Checkout repository"
+      - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+      - name: "🔔 [NOTIFY] 📥 Código"
         if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -77,13 +77,13 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "📥 [SOURCE] Checkout repository"
+          step: "📥 Código"
           outcome: ${{ steps.notify_observed_001.outcome }}
-      - name: "🧰 [SETUP] Configure astral-sh/setup-uv"
+      - name: "🧰 Config"
         id: notify_observed_002
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Configure astral-sh/setup-uv"
+      - name: "🔔 [NOTIFY] 🧰 Config"
         if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -93,15 +93,15 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Configure astral-sh/setup-uv"
+          step: "🧰 Config"
           outcome: ${{ steps.notify_observed_002.outcome }}
-      - name: "🧰 [SETUP] Install locked base application without GPU dependencies"
+      - name: "🧰 Setup"
         id: notify_observed_003
         run: |
           uv python install 3.12
           uv sync --frozen --no-dev
           mkdir -p reports/real-cpu
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Install locked base application without GPU dependencies"
+      - name: "🔔 [NOTIFY] 🧰 Setup"
         if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -111,14 +111,14 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Install locked base application without GPU dependencies"
+          step: "🧰 Setup"
           outcome: ${{ steps.notify_observed_003.outcome }}
-      - name: "🧰 [SETUP] Export frozen model dependencies without CUDA packages"
+      - name: "🧰 Setup"
         id: notify_observed_004
         run: |
           uv export --frozen --group gpu --no-dev --no-hashes --no-annotate --no-header --no-emit-project --output-file reports/real-cpu/all.requirements.txt
           uv run --no-sync python infra/scripts/real-cpu-smoke.py prepare --export reports/real-cpu/all.requirements.txt
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Export frozen model dependencies without CUDA packages"
+      - name: "🔔 [NOTIFY] 🧰 Setup"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -128,15 +128,15 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Export frozen model dependencies without CUDA packages"
+          step: "🧰 Setup"
           outcome: ${{ steps.notify_observed_004.outcome }}
-      - name: "🧰 [SETUP] Install exact official CPU wheels and remaining frozen dependencies"
+      - name: "🧰 Setup"
         id: notify_observed_005
         run: |
           uv pip install --no-deps --index-url https://download.pytorch.org/whl/cpu --requirement reports/real-cpu/cpu-wheels.requirements.txt
           uv pip install --no-deps --requirement reports/real-cpu/cpu-dependencies.requirements.txt
           uv pip check
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Install exact official CPU wheels and remaining frozen dependencies"
+      - name: "🔔 [NOTIFY] 🧰 Setup"
         if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -146,15 +146,15 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Install exact official CPU wheels and remaining frozen dependencies"
+          step: "🧰 Setup"
           outcome: ${{ steps.notify_observed_005.outcome }}
-      - name: "🧰 [SETUP] Cache only pinned public model snapshots"
+      - name: "🧰 Setup"
         id: notify_observed_006
         uses: actions/cache@v4
         with:
           path: /tmp/photointel-real-cpu-models
           key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Cache only pinned public model snapshots"
+      - name: "🔔 [NOTIFY] 🧰 Setup"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -164,12 +164,12 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Cache only pinned public model snapshots"
+          step: "🧰 Setup"
           outcome: ${{ steps.notify_observed_006.outcome }}
-      - name: "🗃️ [DATA] Apply migrations to isolated PostgreSQL"
+      - name: "🗃 Neon"
         id: notify_observed_007
         run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
-      - name: "🔔 [NOTIFY] 🗃️ [DATA] Apply migrations to isolated PostgreSQL"
+      - name: "🔔 [NOTIFY] 🗃 Neon"
         if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -179,14 +179,14 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🗃️ [DATA] Apply migrations to isolated PostgreSQL"
+          step: "🗃 Neon"
           outcome: ${{ steps.notify_observed_007.outcome }}
-      - name: "⚙️ [RUN] Ingest one procedural fixture with inference disabled"
+      - name: "⚙ ️  Ingest one procedural fi"
         id: notify_observed_008
         env:
           GPU_ENABLED: 'false'
         run: uv run --no-sync python -m photointel.cli seed --synthetic-assets 1 > reports/real-cpu/seed.json
-      - name: "🔔 [NOTIFY] ⚙️ [RUN] Ingest one procedural fixture with inference disabled"
+      - name: "🔔 [NOTIFY] ⚙ ️  Ingest one procedural fi"
         if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -196,12 +196,12 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "⚙️ [RUN] Ingest one procedural fixture with inference disabled"
+          step: "⚙ ️  Ingest one procedural fi"
           outcome: ${{ steps.notify_observed_008.outcome }}
-      - name: "🧪 [TEST] Execute JoyTag and SigLIP 2 on CPU and verify committed results"
+      - name: "🧪 Testes"
         id: notify_observed_009
         run: uv run --no-sync python infra/scripts/real-cpu-smoke.py run
-      - name: "🔔 [NOTIFY] 🧪 [TEST] Execute JoyTag and SigLIP 2 on CPU and verify committed results"
+      - name: "🔔 [NOTIFY] 🧪 Testes"
         if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -211,9 +211,9 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧪 [TEST] Execute JoyTag and SigLIP 2 on CPU and verify committed results"
+          step: "🧪 Testes"
           outcome: ${{ steps.notify_observed_009.outcome }}
-      - name: "📦 [EVIDENCE] Upload measured report and exact dependency selections"
+      - name: "📦 Artefatos"
         id: notify_observed_010
         if: always()
         uses: actions/upload-artifact@v4
@@ -223,7 +223,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: "🔔 [NOTIFY] 📦 [EVIDENCE] Upload measured report and exact dependency selections"
+      - name: "🔔 [NOTIFY] 📦 Artefatos"
         if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -233,5 +233,5 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "📦 [EVIDENCE] Upload measured report and exact dependency selections"
+          step: "📦 Artefatos"
           outcome: ${{ steps.notify_observed_010.outcome }}
