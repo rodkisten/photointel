@@ -77,7 +77,7 @@ Use o [workflow independente de bootstrap](https://github.com/rodkisten/photoint
 
 ## 📱 Notify! Live Activities e notificações por step
 
-Os 13 workflows enviam alertas compactos de falha e cancelamento, sem push de sucesso a cada step. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone, atualizada e finalizada conforme as fases avançam. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
+Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, validações e testes não geram alertas. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone com **fases concluídas (ex.: 2/4), sem cronômetro**, e um botão que abre o step do GitHub ou os logs GCP quando aplicável. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
 
 ## 🧭 GitHub Actions: workflows, ambientes e segredos
 
