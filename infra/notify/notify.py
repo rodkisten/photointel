@@ -237,7 +237,7 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
         outcome = args.outcome.lower().strip()
         if outcome not in {"running", "success", "failure", "cancelled"}:
             return
-        label = short_step(args.step)
+        label = short_step(getattr(args, "label", "") or args.step)
         failed = outcome in {"failure", "cancelled"}
         link = github_step_link(args.step, args.job)
         button_title = "Ver step"
@@ -282,15 +282,15 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
                 print("::warning::Push final indisponível; Live Activity será encerrada.")
         if not args.activity_id or not ACTIVITY_PATTERN.fullmatch(args.activity_id):
             return
-        done = total if success else completed
         payload = {
             "status": "done" if success else "failed",
-            "body": f"{message} · {done}/{total}",
-            "trailing": f"{done}/{total}",
+            "body": f"{message} · {total}/{total}" if success else message,
             "endsIn": None,
             "keepFor": 60,
-            **steps_visual(total, done),
         }
+        # Preserve the last real completed-step count on failures.
+        if success:
+            payload.update({"trailing": f"{total}/{total}", **steps_visual(total, total)})
         send("live-activity", args.activity_id, token, payload, method="DELETE")
         print("📱 Live Activity finalizada.")
 
@@ -304,6 +304,7 @@ def main() -> int:
     parser.add_argument("--outcome", default="")
     parser.add_argument("--activity-id", default="")
     parser.add_argument("--progress", default="0")
+    parser.add_argument("--label", default="")
     parser.add_argument("--completed", default="0")
     parser.add_argument("--total", default="1")
     parser.add_argument("--project", default="")
