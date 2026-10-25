@@ -1,4 +1,4 @@
-name: "🧰 [BOOTSTRAP] Resolve locks and validate"
+name: "🧰 Bootstrap Check"
 on:
   workflow_dispatch:
   push:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
-    name: "🧰 [BOOTSTRAP] validate"
+    name: "🧰 Check"
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
