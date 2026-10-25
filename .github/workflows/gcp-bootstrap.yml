@@ -69,6 +69,26 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
+      - name: "📱 ! ⚙ Config"
+        if: ${{ always() && (steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙ Config"
+          step-index: "3"
+          label: "⚙ Config"
+          outcome: ${{ steps.config.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧪 Bootstrap"
         id: notify_observed_001
         run: bash -n infra/gcp/bootstrap.sh
@@ -86,6 +106,26 @@ jobs:
           test "$BOOTSTRAP_ACCOUNT" = "photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" || { echo "::error::Dedicated bootstrap account is not configured"; exit 1; }
           test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
 
+      - name: "📱 ! 🧪 Login"
+        if: ${{ always() && (steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 Login"
+          step-index: "6"
+          label: "🧪 Login"
+          outcome: ${{ steps.notify_observed_002.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🔐 Login"
         id: notify_observed_003
         if: inputs.mode == 'apply'
@@ -95,6 +135,26 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
 
+      - name: "📱 ! 🔐 Login"
+        if: ${{ always() && (steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 Login"
+          step-index: "8"
+          label: "🔐 Login"
+          outcome: ${{ steps.notify_observed_003.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_004
         if: inputs.mode == 'apply'
@@ -103,6 +163,26 @@ jobs:
           project_id: ${{ inputs.confirm_project }}
           version: '>= 500.0.0'
 
+      - name: "📱 ! 🧰 Gcloud"
+        if: ${{ always() && (steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 Gcloud"
+          step-index: "10"
+          label: "🧰 Gcloud"
+          outcome: ${{ steps.notify_observed_004.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "📱 ▶ Setup"
         if: ${{ always() && steps.notify_observed_004.outcome != 'failure' && steps.checkout.outcome == 'success' }}
         continue-on-error: true
@@ -115,7 +195,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧱 Provisionar"
-          step-index: "9"
+          step-index: "13"
           label: "🧱 Setup"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
@@ -145,7 +225,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧱 Provisionar"
-          step-index: "9"
+          step-index: "13"
           label: "🧱 Setup"
           outcome: ${{ steps.notify_observed_005.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
