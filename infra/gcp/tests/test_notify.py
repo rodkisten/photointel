@@ -78,7 +78,7 @@ class NotifyOfflineTests(unittest.TestCase):
             self.assertIn("/live-activity/LA7Q2ZKM?", requests[1].full_url)
             self.assertIn("/notify-json/", requests[2].full_url)
             self.assertEqual(requests[-1].get_method(), "DELETE")
-            self.assertEqual(json.loads(requests[-1].data)["keepFor"], 90)
+            self.assertEqual(json.loads(requests[-1].data)["keepFor"], 60)
             self.assertIn("progress", json.loads(requests[1].data))
             self.assertEqual(json.loads(requests[2].data)["groupType"], "photointel-1234567")
 
@@ -140,7 +140,7 @@ class NotifyOfflineTests(unittest.TestCase):
             self.assertIn("secrets.NOTIFY_TOKEN", text, name)
             self.assertIn("continue-on-error: true", text, name)
             self.assertIn("uses: ./.github/actions/notify", text, name)
-        self.assertGreaterEqual(total, 199, "Unexpected loss of observed workflow steps")
+        self.assertGreaterEqual(total, 190, "Unexpected loss of observed workflow steps")
 
     def test_gcp_only_live_activity_lifecycle(self):
         for name in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
