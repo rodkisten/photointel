@@ -40,13 +40,13 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: "📥 [SOURCE] Checkout repository"
+      - name: "📥 Código"
         id: checkout
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: "📱 [LIVE] Start deployment activity on iPhone"
+      - name: "📱 Live · Início"
         id: notify_live_start
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         continue-on-error: true
@@ -57,7 +57,7 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-      - name: "🔔 [NOTIFY] 📥 [SOURCE] Checkout repository"
+      - name: "🔔 [NOTIFY] 📥 Código"
         if: ${{ always() && (steps.checkout.outcome == 'success' || steps.checkout.outcome == 'failure' || steps.checkout.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -67,11 +67,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "📥 [SOURCE] Checkout repository"
+          step: "📥 Código"
           outcome: ${{ steps.checkout.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "11"
-      - name: "⚙️ [RUN] Prepare Environment vars using the shared action"
+      - name: "⚙ Config"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -80,7 +80,7 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: "🔔 [NOTIFY] ⚙️ [RUN] Prepare Environment vars using the shared action"
+      - name: "🔔 [NOTIFY] ⚙ Config"
         if: ${{ always() && (steps.config.outcome == 'success' || steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -90,15 +90,15 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "⚙️ [RUN] Prepare Environment vars using the shared action"
+          step: "⚙ Config"
           outcome: ${{ steps.config.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "23"
-      - name: "🧪 [TEST] Check administrative bootstrap shell"
+      - name: "🧪 Bootstrap"
         id: notify_observed_001
         run: bash -n infra/gcp/bootstrap.sh
 
-      - name: "🔔 [NOTIFY] 🧪 [TEST] Check administrative bootstrap shell"
+      - name: "🔔 [NOTIFY] 🧪 Bootstrap"
         if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -108,11 +108,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧪 [TEST] Check administrative bootstrap shell"
+          step: "🧪 Bootstrap"
           outcome: ${{ steps.notify_observed_001.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "35"
-      - name: "🧪 [TEST] Validate dedicated bootstrap identity"
+      - name: "🧪 Login"
         id: notify_observed_002
         if: inputs.mode == 'apply'
         env:
@@ -125,7 +125,7 @@ jobs:
           test "$BOOTSTRAP_ACCOUNT" = "photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" || { echo "::error::Dedicated bootstrap account is not configured"; exit 1; }
           test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
 
-      - name: "🔔 [NOTIFY] 🧪 [TEST] Validate dedicated bootstrap identity"
+      - name: "🔔 [NOTIFY] 🧪 Login"
         if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -135,11 +135,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧪 [TEST] Validate dedicated bootstrap identity"
+          step: "🧪 Login"
           outcome: ${{ steps.notify_observed_002.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "47"
-      - name: "🔐 [AUTH] Authenticate as bootstrap administrator (WIF, no JSON key)"
+      - name: "🔐 Login"
         id: notify_observed_003
         if: inputs.mode == 'apply'
         uses: google-github-actions/auth@v3
@@ -148,7 +148,7 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
 
-      - name: "🔔 [NOTIFY] 🔐 [AUTH] Authenticate as bootstrap administrator (WIF, no JSON key)"
+      - name: "🔔 [NOTIFY] 🔐 Login"
         if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -158,11 +158,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🔐 [AUTH] Authenticate as bootstrap administrator (WIF, no JSON key)"
+          step: "🔐 Login"
           outcome: ${{ steps.notify_observed_003.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "59"
-      - name: "🧰 [SETUP] Set up Google Cloud CLI"
+      - name: "🧰 Gcloud"
         id: notify_observed_004
         if: inputs.mode == 'apply'
         uses: google-github-actions/setup-gcloud@v3
@@ -170,7 +170,7 @@ jobs:
           project_id: ${{ inputs.confirm_project }}
           version: '>= 500.0.0'
 
-      - name: "🔔 [NOTIFY] 🧰 [SETUP] Set up Google Cloud CLI"
+      - name: "🔔 [NOTIFY] 🧰 Gcloud"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -180,11 +180,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 [SETUP] Set up Google Cloud CLI"
+          step: "🧰 Gcloud"
           outcome: ${{ steps.notify_observed_004.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "71"
-      - name: "⚙️ [RUN] Plan or reconcile Google Cloud resources"
+      - name: "⚙ Código"
         id: notify_observed_005
         env:
           BOOTSTRAP_MODE: ${{ inputs.mode }}
@@ -194,7 +194,7 @@ jobs:
           set -euo pipefail
           bash infra/gcp/bootstrap.sh
 
-      - name: "🔔 [NOTIFY] ⚙️ [RUN] Plan or reconcile Google Cloud resources"
+      - name: "🔔 [NOTIFY] ⚙ Código"
         if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -204,18 +204,18 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "⚙️ [RUN] Plan or reconcile Google Cloud resources"
+          step: "⚙ Código"
           outcome: ${{ steps.notify_observed_005.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "83"
-      - name: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+      - name: "🧹 API"
         id: notify_observed_006
         if: always() && steps.checkout.outcome == 'success'
         uses: ./.github/actions/gcp-config
         with:
           mode: cleanup
 
-      - name: "🔔 [NOTIFY] 🧹 [CLEANUP] Remove local deployment metadata (always)"
+      - name: "🔔 [NOTIFY] 🧹 API"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -225,11 +225,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧹 [CLEANUP] Remove local deployment metadata (always)"
+          step: "🧹 API"
           outcome: ${{ steps.notify_observed_006.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "95"
-      - name: "📱 [LIVE] End deployment activity on iPhone"
+      - name: "📱 Live · Fim"
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         continue-on-error: true
         uses: ./.github/actions/notify
