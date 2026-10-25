@@ -1,10 +1,10 @@
-"""Offline guardrail tests for the manual migration GitHub Actions adapter."""
+"""Offline direct-to-Neon migration safety tests. No real network or SQL."""
 
 from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
+import os
 import sys
 import tempfile
 import unittest
@@ -21,163 +21,178 @@ migrate = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(migrate)
 
 PROJECT = "photointel"
-SHA = "a" * 40
-IMAGE = f"us-central1-docker.pkg.dev/{PROJECT}/{PROJECT}/api:{SHA}"
 PREFIX = f"gs://{PROJECT}-photointel-build-source/migration-backups/snapshot-2026"
-
-
-def fake_job(image: str = IMAGE, *, retries: int = 0, sa: str | None = None):
-    return {
-        "kind": "Job",
-        "spec": {
-            "template": {
-                "spec": {
-                    "template": {
-                        "spec": {
-                            "containers": [{
-                                "image": image,
-                                "args": ["-m", "photointel.services.task_runner", "migrate"],
-                            }],
-                            "serviceAccountName": sa or f"photointel-migrate@{PROJECT}.iam.gserviceaccount.com",
-                            "maxRetries": retries,
-                        }
-                    }
-                }
-            }
-        },
-    }
+CONFIG = {
+    "project_id": PROJECT,
+    "secrets": {
+        "MIGRATION_DATABASE_URL": {
+            "name": "photointel-migration-database-url",
+            "version": "1",
+        }
+    },
+}
 
 
 class MigrationWorkflowTests(unittest.TestCase):
-    def test_only_private_project_backup_objects_allowed(self):
-        self.assertEqual(migrate.check_backup_prefix(PREFIX, PROJECT), PREFIX)
-        for bad in (
-            "https://example.com/manifest.enc",
-            "gs://another-bucket/migration-backups/backup1",
-            f"gs://{PROJECT}-photointel-build-source/source/backup",
-            f"gs://{PROJECT}-photointel-build-source/migration-backups/../other",
-            f"gs://{PROJECT}-photointel-build-source/migration-backups/a/b",
-            "",
-        ):
-            with self.subTest(bad=bad):
-                with self.assertRaises(migrate.MigrationWorkflowError):
-                    migrate.check_backup_prefix(bad, PROJECT)
+    def test_secret_uses_only_impersonated_migration_identity(self) -> None:
+        url = "postgresql://user:secret@db.invalid/photos?sslmode=require&channel_binding=require"
+        with patch.object(migrate, "gcloud", return_value=url.encode()) as gcloud:
+            result = migrate.migration_secret(CONFIG)
+        self.assertEqual(result, url)
+        self.assertTrue(gcloud.call_args.kwargs["impersonate"])
+        self.assertEqual(gcloud.call_args.kwargs["project"], PROJECT)
+        self.assertEqual(
+            gcloud.call_args.args[0],
+            ["secrets", "versions", "access", "1", "--secret", "photointel-migration-database-url"],
+        )
 
-    def test_job_rejects_old_image_wrong_identity_retry_or_command(self):
-        with patch.object(migrate, "run_gcloud", return_value=json.dumps(fake_job())):
-            self.assertEqual(
-                migrate.job_spec(IMAGE.rsplit(":", 1)[0], PROJECT, "us-central1"),
-                SHA,
-            )
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "repository image"):
-                migrate.job_spec("us-central1-docker.pkg.dev/other/project/api", PROJECT, "us-central1")
-        for payload in (
-            fake_job(retries=1),
-            fake_job(sa="someone-else@example.com"),
-            {**fake_job(), "spec": {}},
-        ):
-            with patch.object(migrate, "run_gcloud", return_value=json.dumps(payload)):
-                with self.assertRaises(migrate.MigrationWorkflowError):
-                    migrate.job_spec(IMAGE.rsplit(":", 1)[0], PROJECT, "us-central1")
+    def test_gcloud_impersonation_never_exposes_secret_in_logs(self) -> None:
+        class Fake:
+            returncode = 1
+            stdout = b"secret-data"
+            stderr = b"password=ultra-private"
 
-    def test_plan_does_not_execute_migration(self):
-        config = {
-            "project_id": PROJECT, "region": "us-central1",
-            "release_git_sha": SHA, "image": IMAGE,
-        }
+        with patch.object(migrate.subprocess, "run", return_value=Fake()) as proc:
+            with self.assertRaises(migrate.MigrationError) as error:
+                migrate.gcloud(
+                    ["secrets", "versions", "access", "1", "--secret", "photointel-migration-database-url"],
+                    project=PROJECT,
+                    impersonate=True,
+                )
+        self.assertNotIn("ultra-private", str(error.exception))
+        self.assertNotIn("secret-data", str(error.exception))
+        self.assertIn(
+            "--impersonate-service-account=photointel-migrate@photointel.iam.gserviceaccount.com",
+            proc.call_args.args[0],
+        )
+        self.assertTrue(proc.call_args.kwargs["capture_output"] is False
+                        if "capture_output" in proc.call_args.kwargs else True)
+
+    def test_migration_url_validation_enforces_direct_neon_and_tls(self) -> None:
+        class MockURL:
+            drivername = "postgresql+psycopg"
+            host = "ep-test-pooler.us-east-1.aws.neon.tech"
+            query = {"sslmode": "verify-full"}
+
+        # It must fail before any SQL is executed when a pooler is selected.
+        with patch.dict(sys.modules, {}):
+            with patch("photointel.db_connection.database_connection_options",
+                       return_value=(MockURL(), {})):
+                with self.assertRaises(migrate.MigrationError):
+                    migrate.connection_profile("postgresql://test:pass@ep-test-pooler/db")
+
+    def test_empty_profile_refuses_existing_tables_and_revisions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            location = Path(directory) / "config.json"
-            location.write_text(json.dumps(config), encoding="utf-8")
+            config = Path(directory) / "config.json"
+            config.write_text(json.dumps(CONFIG), encoding="utf-8")
             with (
-                patch.object(migrate, "validate", return_value=config),
-                patch.object(migrate, "job_spec", return_value=SHA),
-                patch.object(migrate, "apply_migration", side_effect=AssertionError("apply prohibited")),
+                patch.object(migrate, "validate", return_value=CONFIG),
+                patch.object(migrate, "migration_secret", return_value="NEVER_LOG_ME"),
+                patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
+                patch.object(migrate, "inspect_database", return_value=migrate.Status("0004_filename_search_tokens", 8)),
+                patch.object(migrate, "run_alembic") as alembic,
             ):
-                self.assertEqual(migrate.main([
-                    "--mode", "plan", "--project", PROJECT, "--sha", SHA,
-                    "--config", str(location),
-                ]), 0)
+                code = migrate.main([
+                    "--mode", "apply", "--project", PROJECT,
+                    "--database", "initial-empty", "--config", str(config)
+                ])
+                self.assertEqual(code, 1)
+                alembic.assert_not_called()
 
-    def test_apply_infers_sha_from_deployed_job(self):
-        config = {"project_id": PROJECT, "region": "us-central1",
-                  "release_git_sha": SHA, "image": IMAGE}
+    def test_apply_requires_safety_choice(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            location = Path(directory) / "config.json"
-            location.write_text(json.dumps(config), encoding="utf-8")
+            config = Path(directory) / "config.json"
+            config.write_text(json.dumps(CONFIG), encoding="utf-8")
             with (
-                patch.object(migrate, "validate", return_value=config),
-                patch.object(migrate, "job_spec", return_value=SHA) as lookup,
-                patch.object(migrate, "verify_logging_access") as logging_probe,
-                patch.object(migrate, "apply_migration") as apply,
+                patch.object(migrate, "validate", return_value=CONFIG),
+                patch.object(migrate, "migration_secret", return_value="HIDDEN"),
+                patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
+                patch.object(migrate, "inspect_database", return_value=migrate.Status("base", 0)),
+                patch.object(migrate, "run_alembic") as alembic,
             ):
-                args = ["--mode", "apply", "--project", PROJECT, "--sha", SHA,
-                        "--database", "initial-empty", "--config", str(location)]
-                self.assertEqual(migrate.main(args), 0)
-                self.assertEqual(lookup.call_count, 2)
-                logging_probe.assert_called_once_with(PROJECT)
-                apply.assert_called_once_with(PROJECT, "initial-empty", "")
+                result = migrate.main([
+                    "--mode", "apply", "--project", PROJECT, "--config", str(config),
+                ])
+                self.assertEqual(result, 1)
+                alembic.assert_not_called()
 
-    def test_apply_refuses_unobservable_cloud_logging(self):
-        with patch.object(migrate.subprocess, "run") as run:
-            run.return_value.returncode = 1
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Cloud Logging is inaccessible"):
-                migrate.verify_logging_access(PROJECT)
-            args = run.call_args.args[0]
-            self.assertEqual(args[:3], ["gcloud", "logging", "read"])
-            self.assertIn("--limit=1", args)
-            self.assertTrue(run.call_args.kwargs["capture_output"])
-        with patch.object(migrate.subprocess, "run") as run:
-            run.return_value.returncode = 0
-            migrate.verify_logging_access(PROJECT)
+    def test_empty_apply_runs_alembic_once_and_checks_after(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.json"
+            config.write_text(json.dumps(CONFIG), encoding="utf-8")
+            with (
+                patch.object(migrate, "validate", return_value=CONFIG),
+                patch.object(migrate, "migration_secret", return_value="HIDDEN"),
+                patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
+                patch.object(migrate, "inspect_database", side_effect=[
+                    migrate.Status("base", 0), migrate.Status("0007_model_preprocessing_namespace", 7),
+                ]) as inspect,
+                patch.object(migrate, "run_alembic") as alembic,
+            ):
+                result = migrate.main([
+                    "--mode", "apply", "--project", PROJECT,
+                    "--database", "initial-empty", "--config", str(config),
+                ])
+                self.assertEqual(result, 0)
+                alembic.assert_called_once_with("apply", "HIDDEN")
+                self.assertEqual(inspect.call_count, 2)
 
-    def test_initial_empty_selection_is_sufficient_attestation(self):
-        with patch.object(migrate.subprocess, "run") as execute:
-            with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.apply_migration(PROJECT, "initial-empty", PREFIX)
-            execute.assert_not_called()
-            migrate.apply_migration(PROJECT, "initial-empty", "")
-            command = execute.call_args.args[0]
-            self.assertIn("--initial-empty-database", command)
-            self.assertNotIn("--backup-directory", command)
+    def test_plan_and_diagnose_never_run_upgrade(self) -> None:
+        for mode in ("plan", "diagnose"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                config = Path(directory) / "config.json"
+                config.write_text(json.dumps(CONFIG), encoding="utf-8")
+                with (
+                    patch.object(migrate, "validate", return_value=CONFIG),
+                    patch.object(migrate, "migration_secret", return_value="HIDDEN"),
+                    patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
+                    patch.object(migrate, "inspect_database", return_value=migrate.Status("base", 0)),
+                    patch.object(migrate, "run_alembic") as alembic,
+                ):
+                    self.assertEqual(migrate.main([
+                        "--mode", mode, "--project", PROJECT, "--config", str(config),
+                    ]), 0)
+                    alembic.assert_called_once_with(mode, "HIDDEN")
 
-    def test_existing_database_downloads_and_validates_receipt(self):
+    def test_backup_path_and_receipt_checked_before_upgrade(self) -> None:
+        self.assertEqual(migrate.backup_prefix(PREFIX, PROJECT), PREFIX)
+        for invalid in (
+            "", "../other", "https://example.com/",
+            f"gs://{PROJECT}-photointel-build-source/migration-backups/../foo",
+        ):
+            with self.assertRaises(migrate.MigrationError):
+                migrate.backup_prefix(invalid, PROJECT)
         with (
-            patch.object(migrate, "run_gcloud") as cloud,
+            patch.object(migrate, "resolve_backup", return_value=PREFIX),
+            patch.object(migrate.subprocess, "run") as download,
             patch.object(migrate, "verify_backup_receipt") as verify,
-            patch.object(migrate.subprocess, "run") as execute,
         ):
-            def simulated_download(args, project, *, capture=False):
-                self.assertEqual(project, PROJECT)
-                Path(args[-1]).write_bytes(b"synthetic ciphertext")
-                return ""
-            cloud.side_effect = simulated_download
-            migrate.apply_migration(PROJECT, "existing-with-backup", PREFIX)
-            self.assertEqual(cloud.call_count, 3)
-            verify.assert_called_once()
-            command = execute.call_args.args[0]
-            self.assertIn("--backup-directory", command)
-            self.assertIn("--backup-receipt", command)
+            download.return_value.returncode = 0
+            # Mock must create the files that would be downloaded.
+            def make_files(command, **kwargs):
+                Path(command[4]).write_bytes(b"mock metadata")
+                class Result:
+                    returncode = 0
+                return Result()
+            download.side_effect = make_files
+            with tempfile.TemporaryDirectory() as directory:
+                migrate.validate_backup(PROJECT, "", Path(directory))
+            self.assertEqual(verify.call_count, 1)
 
-    def test_backup_discovery_requires_exactly_one_candidate(self):
-        with patch.object(migrate, "run_gcloud") as cloud:
-            cloud.return_value = PREFIX + "/restore-verification.json\n"
-            self.assertEqual(migrate.discover_unambiguous_backup(PROJECT), PREFIX)
-            cloud.return_value = ""
-            with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.discover_unambiguous_backup(PROJECT)
-            cloud.return_value = (
-                PREFIX + "/restore-verification.json\n"
-                + PREFIX.replace("snapshot-2026", "snapshot-2025")
-                + "/restore-verification.json\n"
-            )
-            with self.assertRaises(migrate.MigrationWorkflowError):
-                migrate.discover_unambiguous_backup(PROJECT)
-
-    def test_apply_with_unselected_database_fails_without_execution(self):
-        with patch.object(migrate.subprocess, "run") as execute:
-            with self.assertRaisesRegex(migrate.MigrationWorkflowError, "Select initial-empty"):
-                migrate.apply_migration(PROJECT, "unselected", "")
-            execute.assert_not_called()
+    def test_alembic_error_does_not_print_connection_url(self) -> None:
+        class Fail:
+            returncode = 1
+            stdout = ""
+            stderr = "OperationalError: password authentication failed for postgres://user:secretpass@host/db"
+        with (
+            patch.object(migrate.subprocess, "run", return_value=Fail()),
+            patch("builtins.print") as output,
+        ):
+            with self.assertRaises(migrate.MigrationError):
+                migrate.run_alembic("apply", "postgres://user:secretpass@host/db")
+        printed = "\n".join(str(call) for call in output.call_args_list)
+        self.assertNotIn("secretpass", printed)
+        self.assertIn("NEON_AUTH", printed)
 
 
 if __name__ == "__main__":
