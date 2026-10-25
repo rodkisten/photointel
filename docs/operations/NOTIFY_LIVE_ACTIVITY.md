@@ -2,18 +2,13 @@
 
 Esta integração usa a API do [Notify!](https://getnotifyapp.com/apidocs/), **sem** um serviço adicional e **sem** publicar credenciais no repositório.
 
-## ✅ O que está implementado
+## ✅ Notificações compactas
 
-| Workflow | Live Activity no iPhone | Push por step operacional |
-|---|---|---|
-| [🧱 GCP Bootstrap](../../.github/workflows/gcp-bootstrap.yml) | ✅ Começa após checkout, atualiza a cada step e encerra com status final | ✅ |
-| [🚀 GCP Deploy](../../.github/workflows/gcp-deploy.yml) | ✅ Começa após checkout, atualiza build/jobs/API/scheduler e encerra | ✅ |
-| [🧪 CI](../../.github/workflows/ci.yml) | Não | ✅ |
-| Os outros dez workflows especializados | Não | ✅ |
+Nos 13 workflows, labels e títulos foram abreviados. Os steps que terminam com sucesso **não geram push individual**. Falhas e cancelamentos produzem mensagens curtas, agrupadas por execução. Nos dois workflows GCP (Deploy e Bootstrap), há **um único push final** com `Concluído` ou `Falhou`.
 
-**Total:** 13 workflows, **197 steps operacionais** instrumentados. Steps pulados não geram push. Cada conclusão de step executado envia sucesso, falha ou cancelamento. Os próprios steps de notificação não são notificados (evita loop infinito). Jobs inteiros ignorados não geram alerta.
+A Live Activity exibe `PhotoIntel · Deploy` ou `PhotoIntel · Setup`, progresso e etapa compacta. Atualizações silenciosas da atividade não se tornam alertas individuais. Após encerrar, a atividade fica visível por cerca de 60 segundos.
 
-Notificações de todos os jobs de um run compartilham o `groupType` por ID da execução do GitHub para ficarem agrupadas no app, em vez de espalhar alertas sem relação.
+Se os Repository secrets do Notify! não estiverem presentes, a integração é desativada sem quebrar o CI.
 
 ## 🔐 Configuração única em GitHub Actions Secrets
 
@@ -75,13 +70,13 @@ Cada step operacional recebe um ID estável e um step observador:
 
 ## ⚠️ Volume de notificações
 
-Este recurso envia **um push por step que realmente executar**, exatamente como solicitado. Um workflow CI pesado pode enviar muitas notificações durante um run; o agrupamento por run melhora a organização, mas **não silencia o som nem elimina a quantidade de pushes**. Se for demais, remova temporariamente os secrets ou configure a política de notificações do Notify!/iOS. Não use o token antigo para teste.
+A nova política é silenciosa para steps de sucesso: só falhas, cancelamentos e conclusão de deploy/bootstrap geram push. Um workflow CI pesado pode enviar muitas notificações durante um run; o agrupamento por run melhora a organização, mas **não silencia o som nem elimina a quantidade de pushes**. Se for demais, remova temporariamente os secrets ou configure a política de notificações do Notify!/iOS. Não use o token antigo para teste.
 
 ## 🧪 Testar com segurança
 
 1. Configure os dois repository secrets.
 2. Execute um workflow manual leve (por exemplo, `🧾 Release Manifest`) ou `GCP Bootstrap` em modo `plan` (sem mutação no Google Cloud).
-3. Verifique a notificação em cada step concluído; no modo GCP, confira também a Live Activity iniciar, atualizar e desaparecer após o término.
+3. No GCP, confira a Live Activity e o push final. Nos outros workflows, apenas falhas e cancelamentos notificam.
 4. Consulte os logs de cada `🔔 [NOTIFY]`. Se o serviço falhar, você verá um `::warning::` **sem URL autenticada**.
 
 Uma Live Activity aparece apenas em iPhone/iPad com o Notify! configurado, permissões de notificações e Live Activities habilitadas. A API não transforma um browser ou Mac em dispositivo de Live Activity.
