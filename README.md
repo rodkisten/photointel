@@ -77,7 +77,7 @@ Use o [workflow independente de bootstrap](https://github.com/rodkisten/photoint
 
 ## 📱 Notify! Live Activities e notificações por step
 
-Todos os 13 workflows incluem notificações por step executado, agrupadas por ID da execução. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone, atualizada e finalizada conforme as fases avançam. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
+Os 13 workflows enviam alertas compactos de falha e cancelamento, sem push de sucesso a cada step. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone, atualizada e finalizada conforme as fases avançam. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
 
 ## 🧭 GitHub Actions: workflows, ambientes e segredos
 
@@ -87,7 +87,7 @@ A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS
 
 No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), o dropdown `action` permite escolher `build`, `jobs-deploy`, **`migrate`** (`plan`/`apply`), `deploy`, `scheduler`, `cleanup` ou **`all`**. O modo `all` executa em sequência, com o **mesmo SHA**, `build` (reutiliza a imagem existente, se houver) → verificação → Jobs → API → agendamentos pausados. Uma falha interrompe os steps seguintes; o cleanup da configuração local ocorre no final.
 
-**Atenção na primeira instalação:** `all` **não** migra o banco. `database_ready` começa desmarcado e deve ser confirmado apenas depois de migrar e validar Neon, secrets e Cloudflare Access. Na primeira instalação, use `jobs-deploy` → **`migrate` (`plan` opcional; `apply` com uma única escolha de segurança)** → `deploy`. O CLI identifica o SHA instalado e, se houver um único backup privado, seu prefixo; migrações nunca fazem parte de `all`. [Detalhes do fluxo e de cada opção](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
+**Atenção na primeira instalação:** `all` **não** migra o banco. `database_ready` começa desmarcado e deve ser confirmado apenas depois de migrar e validar Neon, secrets e Cloudflare Access. Na primeira instalação, use `jobs-deploy` → **`migrate` (`plan` opcional; `apply` com uma única escolha de segurança)** → `deploy`. A migração roda Alembic diretamente no GitHub Actions contra o Neon (sem Cloud Run Job). A identidade migradora obtém a versão fixa do Secret Manager e o CLI consulta o estado do banco antes de qualquer alteração; migrações nunca fazem parte de `all`. [Detalhes do fluxo e de cada opção](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Google Cloud Run: do zero ao deploy
 
@@ -100,7 +100,7 @@ No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/g
 3. Rodar **`bootstrap` como operador administrativo no Cloud Shell**; ele cria o repositório Docker, bucket, seis service accounts e políticas IAM. Não manter papéis administrativos na identidade CI.
 4. Preencher os secrets com prompts ocultos, configurar o pool `github-actions` / provider `photo-intelligence` e conceder WIF **somente** ao repo `rodkisten/photointel`, `main` e ambiente `production`.
 5. No GitHub `Settings → Environments → production → Environment variables`, definir a variável multiline **`GCP_CONFIG_ENV`**. O workflow `gcp-deploy.yml` usa `vars.GCP_CONFIG_ENV`, **não** `GCP_CONFIG_JSON`.
-6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração pela opção **`migrate`** no mesmo workflow, em `plan` e depois `apply`, condicionada à confirmação de banco vazio ou backup/restauração verificados. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
+6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
 7. Testar autenticação e rotas privadas, revisar custos e só então liberar imports, iCloud, GPU e agendamentos conforme os gates de segurança.
 
 Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
