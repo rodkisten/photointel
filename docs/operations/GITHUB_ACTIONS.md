@@ -32,9 +32,11 @@ Selecione `action=all` para executar **num único job e com a mesma tag de commi
 
 `action=migrate` executa Alembic no **GitHub Actions**, conectando ao **Neon PostgreSQL direto**. Não há Cloud Run Job de migração. `plan` e `diagnose` leem revisões/tabelas com psycopg e `alembic current -v`; `apply` exige o tipo de banco (`initial-empty` comprovadamente vazio ou `existing-with-backup` com recibo de restauração validado) e executa `alembic upgrade head`. O deployer autentica com WIF e impersona a conta `photointel-migrate` para ler somente o secret de migração do Secret Manager. Execute `GCP Bootstrap → apply` uma vez para conceder `roles/iam.serviceAccountTokenCreator` especificamente nessa conta. Erros seguros e a revisão do Alembic ficam no GitHub Job Summary; não é preciso Cloud Logging. `migrate` não é incluído no modo `all`.
 
-### 📱 Notificações discretas
+### 📱 Notify! somente para operações importantes
 
-Labels dos workflows e steps foram abreviadas. Steps bem-sucedidos só atualizam a Live Activity, **sem push individual**. Falhas geram push compacto; os workflows de deploy e bootstrap enviam ainda **um push final** de conclusão. O resultado permanece na tela por pouco tempo; Notify! indisponível não reprova CI/deploy.
+A integração Notify! foi mantida somente em **GCP Deploy**, **Setup GCP**, **Pages** e **ZIP Patch**. CI, smoke tests, validações, WebKit, SSH e manifesto estão silenciosos. Em Deploy/Setup, a Live Activity mostra uma barra de fases e o contador de concluídas, como `2/4`, **sem tempo regressivo**. Seu botão contextual abre o **step atual no GitHub**; erros em Cloud Build, Jobs ou API passam a oferecer **Logs GCP**. Cada etapa de sucesso atualiza a atividade sem criar push, enquanto falhas estratégicas e o sucesso final geram alertas curtos.
+
+O GitHub token usado para obter o identificador numérico do job tem permissão `actions: read` só nesses workflows e nunca é colocado no botão. Ver [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md).
 
 ## 🔑 Escopo de Environment, vars e secrets
 
@@ -93,9 +95,10 @@ jobs:
 
 Limpeza de `config.local.json` no runner **não apaga** imagens do Artifact Registry, tarballs do bucket GCS ou ZIPs/artifacts de Actions. Consulte [retenção de artifacts](../deployment/ARTIFACT_RETENTION.md). Na validação GCP, o upload do artifact de planos é **desativado por padrão** e pode ser habilitado manualmente com `upload_evidence=true`. Isso reduz falhas decorrentes do limite atual de armazenamento de artifacts do GitHub.
 
-## 📱 Notificações Notify!
+## 📱 Notify!
 
-Os 13 workflows têm observadores por step, mas só **erros e cancelamentos** geram push imediato; sucessos não enviam push individual. Os workflows GCP Deploy e GCP Bootstrap também iniciam, atualizam e encerram uma Live Activity por execução, usando seu próprio `activityId`. Os demais enviam apenas notificações de steps. A integração é desativada automaticamente quando faltam os Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`, e não exige um Environment `production` nos testes. Veja [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md). 
+Somente os fluxos estratégicos de **Deploy GCP, Setup GCP, Pages e ZIP Patch** utilizam Notify!. A Live Activity dos dois fluxos GCP mostra fases concluídas, link para o step e, em falha de recurso GCP, link para seus logs; nunca exibe cronômetro. Consulte [o guia](NOTIFY_LIVE_ACTIVITY.md).
+
 
 ## 🎨 Labels e emojis
 
