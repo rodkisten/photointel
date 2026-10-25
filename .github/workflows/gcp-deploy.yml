@@ -1,10 +1,10 @@
-name: "🚀 [GCP] Controlled release"
+name: "🚀 Deploy"
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Run a single stage or all in sequence; migration remains manual'
+        description: 'Select a stage or run the release'
         type: choice
         default: all
         options:
@@ -18,7 +18,7 @@ on:
         required: true
 
       migration_mode:
-        description: 'For migrate: plan, apply, or diagnose a previous run (read-only)'
+        description: 'Neon: inspect, apply migrations, or diagnose connection'
         type: choice
         options:
           - plan
@@ -74,7 +74,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: "🚀 [GCP] ${{ inputs.action }} · ${{ inputs.confirm_project }}"
+    name: "🚀 ${{ inputs.action }}"
     if: github.ref == 'refs/heads/main' && (inputs.authorize_charges == true || (inputs.action == 'migrate' && (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose')))
     runs-on: ubuntu-latest
     environment: production
@@ -291,14 +291,14 @@ jobs:
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "61"
-      - name: "📦 [JOBS] Publish five Cloud Run Jobs"
+      - name: "📦 Jobs"
         id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh jobs-deploy
 
-      - name: "🔔 [NOTIFY] 📦 [JOBS] Publish five Cloud Run Jobs"
+      - name: "🔔 Jobs"
         if: ${{ always() && (steps.deploy_jobs.outcome == 'success' || steps.deploy_jobs.outcome == 'failure' || steps.deploy_jobs.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -308,11 +308,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "📦 [JOBS] Publish five Cloud Run Jobs"
+          step: "📦 Jobs"
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "67"
-      - name: "🗃️ [MIGRATE] Plan or execute protected Neon migration"
+      - name: "🗃️ Neon"
         id: migrate_database
         if: inputs.action == 'migrate'
         env:
@@ -323,30 +323,7 @@ jobs:
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
         run: bash infra/gcp/release.sh migrate
 
-      - name: "🔎 [TROUBLESHOOT] Inspect failed migration execution and container logs"
-        id: migrate_diagnostics
-        if: ${{ always() && inputs.action == 'migrate' && inputs.migration_mode == 'apply' && steps.migrate_database.outcome == 'failure' }}
-        continue-on-error: true
-        env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: bash infra/gcp/release.sh diagnose-migration
-
-      - name: "🔔 [NOTIFY] 🔎 [TROUBLESHOOT] Migration diagnostics"
-        if: ${{ always() && (steps.migrate_diagnostics.outcome == 'success' || steps.migrate_diagnostics.outcome == 'failure' || steps.migrate_diagnostics.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🔎 [TROUBLESHOOT] Migration diagnostics"
-          outcome: ${{ steps.migrate_diagnostics.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "73"
-
-      - name: "🔔 [NOTIFY] 🗃️ [MIGRATE] Plan or execute protected Neon migration"
+      - name: "🔔 Neon"
         if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -356,7 +333,7 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🗃️ [MIGRATE] Plan or execute protected Neon migration"
+          step: "🗃️ Neon"
           outcome: ${{ steps.migrate_database.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           progress: "71"
