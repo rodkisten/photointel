@@ -269,7 +269,7 @@ jobs:
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ! Imagem"
-        if: ${{ always() && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
+        if: ${{ always() && inputs.action != 'all' && inputs.action != 'build' && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
