@@ -338,8 +338,8 @@ O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/
 | Seleção | Operações executadas | Observação |
 |---|---|---|
 | `build` | Verifica prerequisitos → reutiliza imagem do SHA, ou compila/publica | Não cria recursos Cloud Run de runtime |
-| `jobs-deploy` | Confere imagem do SHA → publica 5 Jobs | Não executa migração |
-| **`migrate`** | Inspeciona o Job e detecta SHA; `apply` escolhe banco vazio ou backup verificado | Não faz parte de `all` |
+| `jobs-deploy` | Confere imagem do SHA → publica 4 Jobs de processamento | Não executa migração |
+| **`migrate`** | Alembic no GitHub → Neon; `plan`, `diagnose` e `apply` | Não faz parte de `all` |
 | `deploy` | Confirma `database_ready` → confere imagem → publica API | A migração deve estar concluída |
 | `scheduler` | Cria/atualiza 3 cron jobs **pausados** | Não dispara processamento |
 | `cleanup` | Pausa cron jobs | Não deleta imagens, dados ou services |
@@ -351,27 +351,24 @@ O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita um
 
 **Como acionar:** `Run workflow` → branch `main` → action `all` (ou etapa isolada) → `confirm_project=photointel` → `authorize_charges=true` após revisão → para `all`/`deploy`, marque `database_ready` somente se verificado. A execução publica um resumo por etapa e remove arquivos temporários do runner ao final.
 
-## 🔎 Troubleshooting de migrações diretamente no GitHub Actions
+## 🗃️ Neon migrations diretamente no GitHub Actions
 
-O modo **`migrate → diagnose`** é **somente leitura**, não executa migrations e não exige `authorize_charges`. Serve inclusive para investigar o último Job que já falhou. Ele procura a execução mais recente do `photointel-migrate` na região configurada, consulta status, exit code das tasks e registros de Cloud Logging filtrados pelo **ID exato da execução**. Apresenta no próprio GitHub Actions um resumo Markdown com link para o Cloud Run, sinais conhecidos (`DATABASE_AUTH`, `DATABASE_TLS`, `DATABASE_PERMISSION`, `SCHEMA_CONFLICT`, `ALEMBIC_REVISION`, entre outros) e trechos de traceback permitidos após filtragem de valores sensíveis. **Os logs completos ficam no Cloud Console** porque podem incluir secrets.
+**Arquitetura:** `GitHub Actions → Alembic (Python isolado) → Neon PostgreSQL`. Não há execução, deploy nem logs de migração no Cloud Run. A API e os Jobs de processamento continuam no Cloud Run; o recurso legado `photointel-migrate`, se existente, não é apagado automaticamente, mas não é mais usado.
 
-Se `migrate → apply` falhar, o workflow executa automaticamente o step **`🔎 [TROUBLESHOOT] Inspect failed migration execution and container logs`**, mesmo depois de o step de migração falhar. Ele utiliza o horário de início registrado pelo runner para vincular com a execução recente, não escolhe arbitrariamente outra execução concorrente, e **não dispara uma segunda migration**. O step de diagnóstico não mascara a falha original e também envia uma notificação Notify!.
+O [GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece `action=migrate` com `migration_mode=plan`, `diagnose` ou `apply`:
 
-Para a leitura no CI funcionar, a identidade `photointel-deployer` precisa de `roles/logging.viewer` e a API `logging.googleapis.com` habilitada. Essas duas declarações foram acrescentadas ao `infra/gcp/bootstrap.sh`; após atualizar `main`, execute **GCP Bootstrap → apply** uma vez para reconciliar IAM e APIs. Se não conseguir fazer isso imediatamente, o `migrate → diagnose` ainda mostra o status acessível por Cloud Run e um aviso de permissão faltante. Também é possível consultar [as execuções no Cloud Console](https://console.cloud.google.com/run/jobs?project=photointel) com a sua conta pessoal autorizada.
+- `plan` / `diagnose`: conecta ao endpoint **direto** do Neon, mostra a revisão Alembic atual, a quantidade de tabelas de aplicação e executa somente `alembic current -v`. Não altera o banco e não exige `authorize_charges`.
+- `apply`: exige `authorize_charges=true` e `migration_database=initial-empty` ou `existing-with-backup`. Executa `alembic upgrade head` no runner GitHub e mostra as transições de revisão e dicas de troubleshooting no próprio Action. **O modo `all` continua sem migrations.**
 
-Evite repetir um `apply` após uma falha sem verificar antes o histórico de execuções e se o Alembic aplicou parte das migrations. O comando de diagnóstico é seguro para repetir quantas vezes forem necessárias.
+**Credenciais protegidas:** o runner autentica com WIF como `photointel-deployer`, impersona temporariamente **somente** `photointel-migrate` e lê a versão fixa de `MIGRATION_DATABASE_URL` do Secret Manager em memória. A identidade migradora é a única que tem acesso ao secret; o deployer não precisa ganhar acesso direto a todos os segredos. O URL nunca é registrado em logs ou artefatos. O script usa a política TLS verificada com psycopg/SCRAM channel binding e recusa endpoints `-pooler`. O ambiente virtual instala apenas Alembic, SQLAlchemy, psycopg, asyncpg e python-dotenv, com versões fixas do lockfile. Os arquivos temporários são eliminados no encerramento.
 
-## 🗃️ Migrar o Neon usando valores detectados automaticamente
+**Configuração inicial obrigatória:** execute [GCP Bootstrap → apply](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml) **uma vez** depois de atualizar a `main`. Isso aplica `roles/iam.serviceAccountTokenCreator` ao deployer **apenas sobre a conta `photointel-migrate`**; mantém `roles/secretmanager.secretAccessor` somente na conta de migração. Sem esse passo, o CLI falha antes de ler o Neon, com instrução clara sobre o IAM.
 
-No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), selecione `action=migrate` e `migration_mode=plan` ou `apply`. O próprio CLI lê `GCP_CONFIG_ENV`, descobre o projeto, região, identidade, **SHA da imagem realmente instalada no Job** e garante que o Job é `photointel-migrate`, tem retry desativado e usa o comando permitido. **Não precisa copiar nenhum SHA nem executar o plan antes de aplicar.** O `plan` é recomendado para inspecionar, mas opcional.
+**Primeira implantação:** no perfil `initial-empty`, o CLI consulta o Neon antes de qualquer alteração e recusa prosseguir se encontrar tabelas de aplicação ou revisão Alembic diferente de `base`. Não marque essa opção para um banco existente ou parcialmente migrado. No perfil `existing-with-backup`, exige `backup.json`, `manifest.enc` e `restore-verification.json`, associados a uma restauração testada e recente (até 24h); encontra o prefixo privado GCS automaticamente apenas quando é único. O recebimento desses metadados **não cria nem testa um backup**.
 
-Para `apply`, resta somente **uma escolha de segurança**: `migration_database=initial-empty` declara que você verificou um banco realmente vazio, ou `migration_database=existing-with-backup` exige evidência criptográfica e recibo recente de uma restauração de banco e objetos realizada com sucesso. A escolha `initial-empty` já é a declaração, sem checkbox adicional. O CLI **não consegue provar remotamente que o Neon está vazio usando apenas os metadados do Cloud Run**, portanto não tenta deduzir esse fato. `authorize_charges=true` continua necessário apenas para executar ações que podem gerar custo.
+**Troubleshooting:** `migrate → diagnose` lê o estado do banco diretamente, sem depender de `roles/logging.viewer` ou logs do Cloud Run. A saída do Alembic exibe transições de revisão; mensagens de erro são classificadas e filtradas para não revelar URLs, senhas ou SQL sensível. Em falhas, examine o **Job Summary** do GitHub, antes de repetir `apply` em um banco possivelmente alterado.
 
-No modo `existing-with-backup`, deixe **`migration_backup_prefix` vazio** quando houver um único recibo armazenado em `gs://photointel-photointel-build-source/migration-backups/*/restore-verification.json`. O sistema encontra automaticamente o prefixo, baixa `backup.json`, `manifest.enc` e `restore-verification.json`, valida o SHA256, identidade do backup, restauração de objetos e banco e data de verificação (últimas 24 horas). Se nenhum ou vários recibos estiverem presentes, ele recusa a ambiguidade e pede o prefixo específico. Isso evita escolher backup incorreto pelo nome do arquivo. Os três arquivos devem corresponder a um **backup completo e recuperável**, não apenas um recibo.
-
-**O que permanece protegido:** `all` nunca executa migração; `migrate plan` é somente leitura; `migrate apply` verifica o Job novamente antes de executar, exige `--wait`, uma das duas declarações de segurança e nunca lê valores de Secret Manager no runner. Backup de produção não é gerado automaticamente pelo fato de haver uma migração. Em erro ou timeout, consulte o histórico de execuções do Cloud Run antes de tentar novamente.
-
-Os scripts permanecem fora do YAML: [`migrate_workflow.py`](../../infra/gcp/migrate_workflow.py), [`release.sh`](../../infra/gcp/release.sh) e [`manage.py`](../../infra/gcp/manage.py). Notify! e a Live Activity continuam acompanhando o step.
+Scripts: [`migrate_workflow.py`](../../infra/gcp/migrate_workflow.py), [`migration-requirements.txt`](../../infra/gcp/migration-requirements.txt), [`release.sh`](../../infra/gcp/release.sh). Execute a migração somente com `action=migrate`.
 
 ## 9. Build → Jobs → migração → API → Scheduler
 
@@ -379,7 +376,7 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
 
 1. Execute **`build`**. Ele gera o manifesto de release e a imagem `us-central1-docker.pkg.dev/photointel/photointel/api:COMMIT_SHA_COMPLETO`; upload GCS → Docker → push Artifact Registry → verificação tag/digest. **Build não publica a API.**
 2. Confira o status **SUCCESS** e o digest/tag no [Artifact Registry](https://console.cloud.google.com/artifacts?project=photointel). O builder usa `infra/gcp/cloudbuild.yaml` com logs em Cloud Logging; `gcloud builds submit` pode não transmitir esses logs ao terminal. Consulte a página do build.
-3. Execute **`jobs-deploy`**. Publica os cinco Jobs Run, incluindo `photointel-migrate`, com a imagem tagueada pelo SHA deste workflow; concede invocações restritas.
+3. Execute **`jobs-deploy`**. Publica os quatro Jobs Run de processamento, com a imagem tagueada pelo SHA; migrações são executadas no GitHub Actions.
 4. **Migração é uma ação individual do mesmo workflow**, mas nunca executada no modo `all`. Use `migrate` → `plan` para inspecionar opcionalmente o Job, depois `migrate` → `apply` com a escolha de banco vazio ou backup e recibo de restauração. O SHA é detectado automaticamente. Veja a seção **Executar `migrate` pelo mesmo GitHub Actions** acima. O Cloud Shell permanece uma alternativa avançada:
 
    Para banco realmente vazio:
