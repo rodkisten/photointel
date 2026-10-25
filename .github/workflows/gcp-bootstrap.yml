@@ -36,6 +36,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: read
     defaults:
       run:
         shell: bash
@@ -53,24 +54,12 @@ jobs:
         uses: ./.github/actions/notify
         with:
           action: start
+          total: "1"
+          github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.checkout.outcome == 'success' || steps.checkout.outcome == 'failure' || steps.checkout.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.checkout.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "11"
       - name: "⚙ Config"
         id: config
         uses: ./.github/actions/gcp-config
@@ -80,38 +69,10 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: "🔔 [NOTIFY] ⚙ Config"
-        if: ${{ always() && (steps.config.outcome == 'success' || steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Config"
-          outcome: ${{ steps.config.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "23"
       - name: "🧪 Bootstrap"
         id: notify_observed_001
         run: bash -n infra/gcp/bootstrap.sh
 
-      - name: "🔔 [NOTIFY] 🧪 Bootstrap"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Bootstrap"
-          outcome: ${{ steps.notify_observed_001.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "35"
       - name: "🧪 Login"
         id: notify_observed_002
         if: inputs.mode == 'apply'
@@ -125,20 +86,6 @@ jobs:
           test "$BOOTSTRAP_ACCOUNT" = "photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" || { echo "::error::Dedicated bootstrap account is not configured"; exit 1; }
           test "$WIF" = "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap" || { echo "::error::Bootstrap provider must be separate from deploy provider"; exit 1; }
 
-      - name: "🔔 [NOTIFY] 🧪 Login"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Login"
-          outcome: ${{ steps.notify_observed_002.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "47"
       - name: "🔐 Login"
         id: notify_observed_003
         if: inputs.mode == 'apply'
@@ -148,20 +95,6 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
 
-      - name: "🔔 [NOTIFY] 🔐 Login"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🔐 Login"
-          outcome: ${{ steps.notify_observed_003.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "59"
       - name: "🧰 Gcloud"
         id: notify_observed_004
         if: inputs.mode == 'apply'
@@ -170,21 +103,26 @@ jobs:
           project_id: ${{ inputs.confirm_project }}
           version: '>= 500.0.0'
 
-      - name: "🔔 [NOTIFY] 🧰 Gcloud"
-        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
+      - name: "📱 ▶ Setup"
+        if: ${{ always() && steps.notify_observed_004.outcome != 'failure' && steps.checkout.outcome == 'success' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 Gcloud"
-          outcome: ${{ steps.notify_observed_004.outcome }}
+          step: "🧱 Provisionar"
+          label: "🧱 Setup"
+          outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "71"
-      - name: "⚙ Código"
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "🧱 Provisionar"
         id: notify_observed_005
         env:
           BOOTSTRAP_MODE: ${{ inputs.mode }}
@@ -194,7 +132,7 @@ jobs:
           set -euo pipefail
           bash infra/gcp/bootstrap.sh
 
-      - name: "🔔 [NOTIFY] ⚙ Código"
+      - name: "📱 ✓ Setup"
         if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -202,12 +140,17 @@ jobs:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "⚙ Código"
+          step: "🧱 Provisionar"
+          label: "🧱 Setup"
           outcome: ${{ steps.notify_observed_005.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "83"
+          completed: "1"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧹 API"
         id: notify_observed_006
         if: always() && steps.checkout.outcome == 'success'
@@ -215,26 +158,14 @@ jobs:
         with:
           mode: cleanup
 
-      - name: "🔔 [NOTIFY] 🧹 API"
-        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧹 API"
-          outcome: ${{ steps.notify_observed_006.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "95"
       - name: "📱 Live · Fim"
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: end
+          total: "1"
+          github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
