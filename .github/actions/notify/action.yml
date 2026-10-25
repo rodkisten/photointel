@@ -29,6 +29,9 @@ inputs:
     description: "Legacy percentage fallback"
     required: false
     default: "0"
+  label:
+    description: "Short human-friendly stage label (step is the exact GitHub step name)"
+    required: false
   completed:
     description: "Number of strategic phases completed"
     default: "0"
@@ -69,7 +72,8 @@ runs:
         WORKFLOW_LABEL: ${{ inputs.workflow }}
         JOB_LABEL: ${{ inputs.job }}
         STEP_LABEL: ${{ inputs.step }}
+        PHASE_LABEL: ${{ inputs.label }}
         STEP_OUTCOME: ${{ inputs.outcome }}
         LIVE_ID: ${{ inputs.activity-id }}
         LIVE_PROGRESS: ${{ inputs.progress }}
-      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS" --completed "$NOTIFY_COMPLETED" --total "$NOTIFY_TOTAL" --project "$NOTIFY_PROJECT" --region "$NOTIFY_REGION"
+      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --label "$PHASE_LABEL" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS" --completed "$NOTIFY_COMPLETED" --total "$NOTIFY_TOTAL" --project "$NOTIFY_PROJECT" --region "$NOTIFY_REGION"
