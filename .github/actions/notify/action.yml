@@ -1,8 +1,8 @@
-name: "🔔 "
-description: "Send one best-effort Notify! push after a workflow step; optionally start, update or end an iOS Live Activity."
+name: "📱 Notify"
+description: "Track strategic stages, add deep links, update iPhone Live Activity and send minimal alerts."
 inputs:
   action:
-    description: "start, step or end"
+    description: "start, step or end; step supports running, success, failure"
     required: true
   device-id:
     description: "Repository secret NOTIFY_DEVICE_ID"
@@ -26,9 +26,27 @@ inputs:
     description: "Unique activityId from start; never a device id"
     required: false
   progress:
-    description: "Current Live Activity progress percentage"
+    description: "Legacy percentage fallback"
     required: false
     default: "0"
+  completed:
+    description: "Number of strategic phases completed"
+    default: "0"
+    required: false
+  total:
+    description: "Total strategic phases for this invocation"
+    default: "1"
+    required: false
+  github-token:
+    description: "GITHUB_TOKEN with actions:read, for exact private step links"
+    required: false
+  project:
+    description: "GCP project for relevant error logs"
+    required: false
+  region:
+    description: "GCP region for relevant error logs"
+    default: "us-central1"
+    required: false
 outputs:
   activity_id:
     description: "New unique Live Activity ID, empty if Notify! unavailable"
@@ -36,12 +54,17 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: "🔔 "
+    - name: "📱 Atualizar atividade"
       id: send
       shell: bash
       env:
         NOTIFY_DEVICE_ID: ${{ inputs.device-id }}
         NOTIFY_TOKEN: ${{ inputs.token }}
+        GITHUB_API_TOKEN: ${{ inputs.github-token }}
+        NOTIFY_COMPLETED: ${{ inputs.completed }}
+        NOTIFY_TOTAL: ${{ inputs.total }}
+        NOTIFY_PROJECT: ${{ inputs.project }}
+        NOTIFY_REGION: ${{ inputs.region }}
         ACTION: ${{ inputs.action }}
         WORKFLOW_LABEL: ${{ inputs.workflow }}
         JOB_LABEL: ${{ inputs.job }}
@@ -49,4 +72,4 @@ runs:
         STEP_OUTCOME: ${{ inputs.outcome }}
         LIVE_ID: ${{ inputs.activity-id }}
         LIVE_PROGRESS: ${{ inputs.progress }}
-      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS"
+      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS" --completed "$NOTIFY_COMPLETED" --total "$NOTIFY_TOTAL" --project "$NOTIFY_PROJECT" --region "$NOTIFY_REGION"
