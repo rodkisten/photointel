@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
-"""Safe GitHub Actions entrypoint for a manually approved Cloud Run migration.
+"""Execute Alembic directly on Neon from a WIF-authenticated GitHub runner.
 
-Plan mode only describes the installed migrate Job and prints a local command.
-Apply mode requires an explicit empty-database attestation OR a matching,
-recent restore receipt downloaded from the project-private GCS staging bucket.
-This never reads database credentials or runs SQL on the Actions runner.
+- No Cloud Run Job, revision pin, image build or broad deployer secret access.
+- MIGRATION_DATABASE_URL is fetched from Secret Manager using the isolated
+  photointel-migrate identity impersonated by photointel-deployer.
+- Read-only plan/diagnose check the database schema and current Alembic revision.
+- Apply is opt-in and verifies a genuinely empty database or a restore receipt.
+- Raw connection URLs, secrets, SQL and unfiltered exceptions are never printed.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -22,201 +26,253 @@ from manage import ConfigurationError, validate, verify_backup_receipt
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
-SHA_RE = re.compile(r"[a-f0-9]{40}")
-BACKUP_SEGMENT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+SECRET_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
+SECRET_VERSION = re.compile(r"[1-9][0-9]*")
+ALEMBIC_FILE = ROOT / "infra/migrations/alembic.ini"
+HINTS = (
+    ("password authentication failed", "NEON_AUTH", "Check the pinned migration secret in Secret Manager."),
+    ("channel_binding", "NEON_CHANNEL_BINDING", "Use psycopg with SCRAM channel binding; inspect the Neon URL."),
+    ("certificate", "NEON_TLS", "Check the endpoint host, CA trust and TLS verification."),
+    ("permission denied", "NEON_PERMISSION", "Check migration role privileges on the direct Neon database."),
+    ("connection timed out", "NEON_TIMEOUT", "Check direct Neon endpoint reachability from GitHub Actions."),
+    ("could not translate host name", "NEON_DNS", "Check Neon hostname and DNS."),
+    ("duplicate table", "SCHEMA_CONFLICT", "Inspect existing objects and Alembic version before retrying."),
+    ("duplicate column", "SCHEMA_CONFLICT", "Inspect existing columns and Alembic history."),
+    ("can't locate revision", "ALEMBIC_REVISION", "Review the database revision against the repo migration history."),
+    ("multiple head", "ALEMBIC_HEADS", "Resolve Alembic branches before applying."),
+)
 
 
-class MigrationWorkflowError(ValueError):
-    """Unsafe or incomplete migration inputs."""
+class MigrationError(ValueError):
+    """Safe error with no credential-bearing provider content."""
 
 
-def check_backup_prefix(prefix: str, project: str) -> str:
-    """Allow only an encrypted backup bundle in the project's private staging bucket."""
-    required = f"gs://{project}-photointel-build-source/migration-backups/"
-    if not prefix.startswith(required):
-        raise MigrationWorkflowError(
-            "Existing database requires a private gs://PROJECT-photointel-build-source/"
-            "migration-backups/NAME prefix"
+@dataclass(frozen=True)
+class Status:
+    revision: str
+    user_tables: int
+
+
+def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes:
+    command = ["gcloud", *args, "--project", project, "--quiet"]
+    if impersonate:
+        command.append(
+            f"--impersonate-service-account=photointel-migrate@{project}.iam.gserviceaccount.com"
         )
-    suffix = prefix[len(required) :]
-    if not BACKUP_SEGMENT_RE.fullmatch(suffix):
-        raise MigrationWorkflowError("Backup name must be one safe path segment")
+    try:
+        result = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=False, timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MigrationError("Google Cloud credential retrieval unavailable") from None
+    if result.returncode:
+        if impersonate:
+            raise MigrationError(
+                "Cannot impersonate photointel-migrate or access pinned migration secret. "
+                "Run GCP Bootstrap → apply to grant Token Creator on that account; "
+                "check the Secret Manager version and IAM."
+            )
+        raise MigrationError("Private backup retrieval failed; verify IAM and GCS prefix")
+    return result.stdout
+
+
+def migration_secret(config: dict[str, Any]) -> str:
+    secret = config["secrets"]["MIGRATION_DATABASE_URL"]
+    name = str(secret["name"])
+    version = str(secret["version"])
+    if not SECRET_NAME.fullmatch(name) or not SECRET_VERSION.fullmatch(version):
+        raise MigrationError("Migration secret name or version is invalid")
+    raw = gcloud(
+        ["secrets", "versions", "access", version, "--secret", name],
+        project=config["project_id"],
+        impersonate=True,
+    )
+    try:
+        url = raw.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        raise MigrationError("Migration secret is not a UTF-8 PostgreSQL URL") from None
+    if not url or "\n" in url or "\r" in url:
+        raise MigrationError("Migration secret URL is missing or contains newlines")
+    return url
+
+
+def connection_profile(url: str) -> tuple[str, dict[str, Any]]:
+    # Exact same TLS and channel-binding policy used by the API/Alembic runtime.
+    from photointel.db_connection import database_connection_options
+
+    @dataclass
+    class Options:
+        database_url: str = url
+        migration_database_url: str = url
+        database_pool_mode: str = "direct"
+        database_require_tls: bool = True
+        database_tls_ca_file: Path | None = None
+        database_pool_size: int = 1
+        database_max_overflow: int = 0
+        database_pool_timeout_seconds: int = 15
+
+    try:
+        resolved, args = database_connection_options(Options(), migration=True)
+    except (ValueError, TypeError):
+        raise MigrationError("Migration secret must use a supported TLS PostgreSQL URL") from None
+    if "-pooler." in (resolved.host or ""):
+        raise MigrationError("Migration secret must use Neon's DIRECT endpoint, not the pooler")
+    if resolved.drivername != "postgresql+psycopg":
+        # Use psycopg3 for consistent SCRAM/SNI handling. It supports asyncpg URLs
+        # after removing driver metadata; SQLAlchemy validates query options above.
+        resolved = resolved.set(drivername="postgresql+psycopg")
+        query = dict(resolved.query)
+        query["sslmode"] = "verify-full"
+        query.setdefault("sslrootcert", "system")
+        resolved = resolved.set(query=query)
+        args = {"connect_timeout": 15}
+    if resolved.query.get("sslmode") != "verify-full":
+        raise MigrationError("Migration connection must verify TLS and hostname")
+    conninfo = resolved.set(drivername="postgresql").render_as_string(hide_password=False)
+    return conninfo, args
+
+
+def inspect_database(conninfo: str, args: dict[str, Any]) -> Status:
+    import psycopg
+
+    try:
+        with psycopg.connect(conninfo, **args) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) FROM information_schema.tables "
+                    "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+                    "AND table_name <> 'alembic_version'"
+                )
+                tables = int(cur.fetchone()[0])
+                cur.execute("SELECT to_regclass('public.alembic_version')")
+                exists = cur.fetchone()[0]
+                revision = "base"
+                if exists:
+                    cur.execute("SELECT version_num FROM public.alembic_version")
+                    revisions = [str(row[0]) for row in cur.fetchall()]
+                    revision = ",".join(revisions) if revisions else "base"
+                conn.rollback()
+    except Exception as exc:
+        raise MigrationError(
+            "Cannot inspect Neon directly (" + classify_error(str(exc))[0] + "). "
+            + classify_error(str(exc))[1]
+        ) from None
+    if not re.fullmatch(r"[a-zA-Z0-9_,.-]{1,160}", revision):
+        raise MigrationError("Alembic revision contains unexpected metadata")
+    return Status(revision=revision, user_tables=tables)
+
+
+def classify_error(text: str) -> tuple[str, str]:
+    lowered = text.casefold()
+    for marker, code, hint in HINTS:
+        if marker in lowered:
+            return code, hint
+    return "MIGRATION_ERROR", "Review sanitized Alembic traceback and database revision."
+
+
+def backup_prefix(prefix: str, project: str) -> str:
+    root = f"gs://{project}-photointel-build-source/migration-backups/"
+    if not prefix.startswith(root) or not SEGMENT.fullmatch(prefix[len(root):]):
+        raise MigrationError("Backup must be in the project's private migration-backups/NAME prefix")
     return prefix
 
 
-def run_gcloud(args: list[str], project: str, *, capture: bool = False) -> str:
-    result = subprocess.run(
-        ["gcloud", *args, "--project", project, "--quiet"],
-        check=True,
-        capture_output=capture,
-        text=True,
-        timeout=600,
-    )
-    return result.stdout if capture else ""
-
-
-def job_spec(image_prefix: str, project: str, region: str) -> str:
-    payload = json.loads(
-        run_gcloud(
-            [
-                "run", "jobs", "describe", "photointel-migrate",
-                "--region", region, "--format=json",
-            ],
-            project,
-            capture=True,
-        )
-    )
-    try:
-        # gcloud Run v1 and v2 responses use different nested template forms.
-        if payload.get("kind") == "Job":
-            spec = payload["spec"]["template"]["spec"]
-            container_spec = spec["template"]["spec"]
-        else:
-            spec = payload["template"]
-            container_spec = spec["template"]
-        container = container_spec["containers"][0]
-        current_image = container["image"]
-        retries = container_spec.get("maxRetries", spec.get("maxRetries"))
-        service_account = container_spec.get("serviceAccountName") or container_spec.get("serviceAccount")
-        args = container["args"]
-    except (KeyError, IndexError, TypeError, AttributeError) as exc:
-        raise MigrationWorkflowError("Cannot inspect the deployed migration Job") from exc
-    if not isinstance(current_image, str) or not current_image.startswith(image_prefix + ":"):
-        raise MigrationWorkflowError(
-            "Migration Job must use the configured Artifact Registry repository image"
-        )
-    deployed_sha = current_image[len(image_prefix) + 1 :]
-    if not SHA_RE.fullmatch(deployed_sha):
-        raise MigrationWorkflowError("Migration Job must use an immutable full Git SHA tag")
-    if str(retries) != "0":
-        raise MigrationWorkflowError("Migration Job must have maxRetries=0")
-    if service_account != f"photointel-migrate@{project}.iam.gserviceaccount.com":
-        raise MigrationWorkflowError("Migration Job uses an unexpected service account")
-    if len(args) < 3 or args[:3] != ["-m", "photointel.services.task_runner", "migrate"]:
-        raise MigrationWorkflowError("Migration Job command does not match the approved runner")
-    return deployed_sha
-
-
-def verify_logging_access(project: str) -> None:
-    """Refuse apply when container failures would be invisible to CI."""
-    try:
-        probe = subprocess.run(
-            [
-                "gcloud", "logging", "read",
-                'resource.type="cloud_run_job" AND resource.labels.job_name="photointel-migrate"',
-                "--limit=1", "--format=json", "--project", project, "--quiet",
-            ],
-            capture_output=True, text=True, timeout=30, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MigrationWorkflowError(
-            "Could not verify Cloud Logging access. Run GCP Bootstrap apply and retry."
-        ) from None
-    if probe.returncode != 0:
-        raise MigrationWorkflowError(
-            "Cloud Logging is inaccessible to photointel-deployer. "
-            "Run GCP Bootstrap → apply first to enable logging.googleapis.com "
-            "and grant roles/logging.viewer; then run migrate → diagnose "
-            "before any new migrate apply."
-        )
-    print("✅ Cloud Logging readable: migration failures can be diagnosed.", flush=True)
-
-def migration_command(project: str, *, initial_empty: bool, backup: Path | None = None) -> list[str]:
-    result = [
-        sys.executable, str(ROOT / "infra/gcp/manage.py"), "migrate",
-        "--apply", "--authorize-charges", "--confirm-project", project,
-    ]
-    if initial_empty:
-        result.append("--initial-empty-database")
-    else:
-        assert backup is not None
-        result += [
-            "--backup-directory", str(backup),
-            "--backup-receipt", str(backup / "restore-verification.json"),
-        ]
-    return result
-
-
-def discover_unambiguous_backup(project: str) -> str:
-    """Select one private recovery receipt, never guess among multiple backups."""
+def resolve_backup(project: str, prefix: str) -> str:
+    if prefix:
+        return backup_prefix(prefix, project)
     root = f"gs://{project}-photointel-build-source/migration-backups/"
     try:
-        listing = run_gcloud(
+        listing = gcloud(
             ["storage", "ls", root + "*/restore-verification.json"],
-            project, capture=True,
-        )
-    except subprocess.CalledProcessError:
-        raise MigrationWorkflowError(
-            "Could not discover private backup receipts. Supply an explicit backup prefix."
-        ) from None
-    candidates = {
-        line.strip().rsplit("/", 1)[0]
-        for line in listing.splitlines()
-        if line.strip().startswith(root)
-        and line.strip().endswith("/restore-verification.json")
+            project=project,
+        ).decode("utf-8")
+    except (MigrationError, UnicodeDecodeError):
+        raise MigrationError("No readable private backup receipts; supply a verified prefix") from None
+    options = {
+        line.strip().rsplit("/", 1)[0] for line in listing.splitlines()
+        if line.strip().startswith(root) and line.strip().endswith("/restore-verification.json")
     }
-    candidates = {check_backup_prefix(candidate, project) for candidate in candidates}
-    if len(candidates) != 1:
-        raise MigrationWorkflowError(
-            f"Expected one private backup receipt, found {len(candidates)}. "
-            "Supply an exact backup prefix if ambiguous."
+    options = {backup_prefix(candidate, project) for candidate in options}
+    if len(options) != 1:
+        raise MigrationError(
+            f"Found {len(options)} backup receipts; exactly one is required for auto-selection"
         )
-    print(
-        "🔎 One private backup receipt discovered; validating encrypted manifest.",
-        flush=True,
+    return next(iter(options))
+
+
+def validate_backup(project: str, prefix: str, work: Path) -> None:
+    source = resolve_backup(project, prefix)
+    work.chmod(0o700)
+    for name in ("backup.json", "manifest.enc", "restore-verification.json"):
+        # Use --destination flag? gcloud storage cp supports source and target as args.
+        command = [
+            "gcloud", "storage", "cp", f"{source}/{name}", str(work / name),
+            "--project", project, "--quiet",
+        ]
+        result = subprocess.run(
+            command, capture_output=True, check=False, timeout=180,
+        )
+        if result.returncode:
+            raise MigrationError("Required private backup metadata could not be downloaded")
+        (work / name).chmod(0o600)
+    verify_backup_receipt(work, work / "restore-verification.json")
+    print("✅ Verified backup receipt, encrypted manifest and restore evidence.", flush=True)
+
+
+def run_alembic(mode: str, url: str) -> None:
+    environment = os.environ.copy()
+    # No application / cloud credentials are passed to Alembic beyond what
+    # the runner already has; only the pinned direct migration URL is needed.
+    environment.update({
+        "MIGRATION_DATABASE_URL": url,
+        "DATABASE_URL": url,
+        "APP_ENV": "production",
+        "DATABASE_REQUIRE_TLS": "true",
+        "DATABASE_POOL_MODE": "direct",
+        "PYTHONPATH": str(ROOT / "apps/api/src"),
+        "PYTHONUNBUFFERED": "1",
+    })
+    command = [
+        sys.executable, "-m", "alembic", "-c", str(ALEMBIC_FILE),
+        *(["upgrade", "head"] if mode == "apply" else ["current", "-v"]),
+    ]
+    print("🗃️ Alembic: " + ("upgrade head" if mode == "apply" else "current"), flush=True)
+    result = subprocess.run(
+        command, cwd=ROOT, env=environment,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, errors="replace", timeout=2700, check=False,
     )
-    return next(iter(candidates))
+    # Never forward SQL logs or tracebacks raw; URLs and passwords may be present.
+    # Print only known revision transitions, with allowlisted syntax.
+    for line in (result.stdout + "\n" + result.stderr).splitlines():
+        matched = re.search(
+            r"(?:Running upgrade|Running downgrade)\s+"
+            r"([a-zA-Z0-9_<>,.\- ]{1,130})",
+            line,
+        )
+        if matched:
+            print("  ↳ " + matched.group(0)[:145], flush=True)
+    if result.returncode:
+        code, hint = classify_error(result.stderr + "\n" + result.stdout)
+        print(f"::error title=Neon {code}::{hint}", flush=True)
+        raise MigrationError(f"Alembic exited with code {result.returncode}; {code}. {hint}")
+    print("✅ Alembic completed successfully.", flush=True)
 
 
-
-def apply_migration(
-    project: str,
-    profile: str,
-    prefix: str,
-) -> None:
-    if profile == "initial-empty":
-        if prefix:
-            raise MigrationWorkflowError("Initial-empty mode cannot reference a backup")
-        print(
-            "🛡️ initial-empty selected: Neon must already be verified empty.",
-            flush=True,
-        )
-        subprocess.run(
-            migration_command(project, initial_empty=True), check=True, timeout=3600
-        )
-        return
-    if profile != "existing-with-backup":
-        raise MigrationWorkflowError(
-            "Select initial-empty or existing-with-backup for apply"
-        )
-    prefix = (
-        check_backup_prefix(prefix, project)
-        if prefix
-        else discover_unambiguous_backup(project)
-    )
-    # Download only ciphertext + small verification metadata. Temporary files
-    # disappear even when receipt verification or the Cloud Run Job fails.
-    with tempfile.TemporaryDirectory(prefix="photointel-migration-") as directory:
-        dest = Path(directory)
-        dest.chmod(0o700)
-        for name in ("backup.json", "manifest.enc", "restore-verification.json"):
-            run_gcloud(
-                ["storage", "cp", f"{prefix}/{name}", str(dest / name)],
-                project,
-            )
-            (dest / name).chmod(0o600)
-        verify_backup_receipt(dest, dest / "restore-verification.json")
-        subprocess.run(
-            migration_command(project, initial_empty=False, backup=dest),
-            check=True, timeout=3600,
-        )
+def summary(text: str) -> None:
+    print(text, flush=True)
+    dest = os.environ.get("GITHUB_STEP_SUMMARY")
+    if dest:
+        with Path(dest).open("a", encoding="utf-8") as output:
+            output.write(text + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("plan", "apply"), required=True)
+    parser.add_argument("--mode", choices=("plan", "apply", "diagnose"), required=True)
     parser.add_argument("--project", required=True)
-    parser.add_argument("--sha", required=True)
     parser.add_argument(
         "--database",
         choices=("unselected", "initial-empty", "existing-with-backup"),
@@ -224,71 +280,57 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--backup-prefix", default="")
     parser.add_argument("--config", type=Path, default=CONFIG)
-    args = parser.parse_args(argv)
+    opts = parser.parse_args(argv)
     try:
-        if not SHA_RE.fullmatch(args.sha):
-            raise MigrationWorkflowError("A full Git release SHA is required")
         config = validate(
-            json.loads(args.config.read_text(encoding="utf-8")), production=True
+            json.loads(opts.config.read_text(encoding="utf-8")), production=True
         )
-        if config["project_id"] != args.project or config.get("release_git_sha") != args.sha:
-            raise MigrationWorkflowError("Project and release SHA must match production config")
-        print("🔎 Inspecting deployed Cloud Run migration Job (read-only).", flush=True)
-        deployed_sha = job_spec(
-            config["image"].rsplit(":", 1)[0], args.project, config["region"]
+        if config["project_id"] != opts.project:
+            raise MigrationError("Project mismatch; refusing to read another secret")
+        secret = config["secrets"]["MIGRATION_DATABASE_URL"]
+        summary(
+            "### 🗃️ Neon migrations\n"
+            f"- Mode: **{opts.mode}** | Project: **{opts.project}**\n"
+            f"- Secret version: **{secret['name']}:{secret['version']}**"
         )
-        print(f"✅ Migration Job is deployed from release SHA {deployed_sha}.", flush=True)
-        if args.mode == "plan":
-            if args.backup_prefix:
-                check_backup_prefix(args.backup_prefix, args.project)
-            if args.database == "existing-with-backup" and not args.backup_prefix:
-                print("🔎 Apply will discover a single private backup receipt automatically.")
-            print(
-                "🧾 PLAN ONLY. No database changes. "
-                "Apply executes photointel-migrate once, with --wait, after backup guards."
-            )
-            print(
-                "🛡️ The plan does not verify database emptiness, run SQL, "
-                "or certify the restore receipt. The CLI automatically uses the installed Job SHA "
-                "for apply."
-            )
+        url = migration_secret(config)
+        conninfo, args = connection_profile(url)
+        before = inspect_database(conninfo, args)
+        summary(f"- Alembic before: **{before.revision}**")
+        summary(f"- Application tables in public: **{before.user_tables}**")
+        if opts.mode != "apply":
+            run_alembic(opts.mode, url)
+            summary("✅ Read-only inspection complete. No migrations executed.")
             return 0
-
-        if args.database == "unselected":
-            raise MigrationWorkflowError(
-                "Apply requires initial-empty or existing-with-backup"
-            )
-        verify_logging_access(args.project)
-        # Compare again immediately before the run, not against an operator-copied SHA.
-        if (
-            job_spec(
-                config["image"].rsplit(":", 1)[0], args.project, config["region"]
-            )
-            != deployed_sha
-        ):
-            raise MigrationWorkflowError("Deployed migration Job changed during preflight")
-        print(
-            f"🛡️ APPLY using installed Job SHA {deployed_sha}; checking evidence.",
-            flush=True,
-        )
-        apply_migration(args.project, args.database, args.backup_prefix.strip())
-
-        print("✅ Cloud Run migration Job completed successfully.", flush=True)
-        return 0
-    except (
-        MigrationWorkflowError, ConfigurationError, KeyError, ValueError,
-        OSError, json.JSONDecodeError, subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-    ) as exc:
-        # Do not print command args or secrets; GCS paths are not credentials,
-        # but avoiding subprocess repr also prevents accidental leakage.
-        if isinstance(exc, subprocess.CalledProcessError):
-            message = "Cloud command or migration Job failed; inspect Cloud Run execution logs"
-        elif isinstance(exc, subprocess.TimeoutExpired):
-            message = "Migration operation timed out; inspect Job status before retrying"
+        if opts.database == "initial-empty":
+            if before.user_tables != 0 or before.revision != "base":
+                raise MigrationError(
+                    "Database is NOT empty. Refusing initial-empty migration; "
+                    "inspect revisions and use verified recovery evidence if appropriate."
+                )
+            if opts.backup_prefix:
+                raise MigrationError("initial-empty must not supply a backup prefix")
+        elif opts.database == "existing-with-backup":
+            with tempfile.TemporaryDirectory(prefix="photointel-backup-") as directory:
+                validate_backup(opts.project, opts.backup_prefix, Path(directory))
         else:
+            raise MigrationError("Select initial-empty or existing-with-backup for apply")
+        run_alembic("apply", url)
+        after = inspect_database(conninfo, args)
+        summary(f"- Alembic after: **{after.revision}**")
+        summary("✅ Neon migration completed directly from GitHub Actions.")
+        return 0
+    except (MigrationError, ConfigurationError, KeyError, ValueError,
+            OSError, json.JSONDecodeError, subprocess.TimeoutExpired) as exc:
+        if isinstance(exc, subprocess.TimeoutExpired):
+            message = "Alembic timed out; check Neon revision before another apply"
+        elif isinstance(exc, (MigrationError, ConfigurationError)):
+            # ConfigurationError raised by trusted local validation code.
             message = str(exc)
-        print(f"::error::{message}", file=sys.stderr, flush=True)
+        else:
+            message = f"Migration prerequisites failed ({type(exc).__name__})"
+        summary(f"❌ {message}")
+        print(f"::error title=Neon migration::{message}", file=sys.stderr, flush=True)
         return 1
 
 
