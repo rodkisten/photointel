@@ -75,11 +75,38 @@ class NotifyOfflineTests(unittest.TestCase):
 
             self.assertIn("activity_id=LA7Q2ZKM", output.read_text())
             self.assertIn("new=1", requests[0].full_url)
-            self.assertIn("/live-activity/LA7Q2ZKM?", requests[2].full_url)
+            self.assertIn("/live-activity/LA7Q2ZKM?", requests[1].full_url)
+            self.assertIn("/notify-json/", requests[2].full_url)
             self.assertEqual(requests[-1].get_method(), "DELETE")
             self.assertEqual(json.loads(requests[-1].data)["keepFor"], 90)
-            self.assertIn("progress", json.loads(requests[2].data))
-            self.assertEqual(json.loads(requests[1].data)["groupType"], "photointel-1234567")
+            self.assertIn("progress", json.loads(requests[1].data))
+            self.assertEqual(json.loads(requests[2].data)["groupType"], "photointel-1234567")
+
+    def test_successful_step_is_silent_without_live_activity(self):
+        import argparse
+
+        args = argparse.Namespace(
+            action="step", workflow="🚀 Deploy", job="deploy", step="📥 Checkout repository",
+            outcome="success", activity_id="", progress="20",
+        )
+        with patch.object(notify, "send") as send:
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+            send.assert_not_called()
+
+    def test_step_failure_push_is_short(self):
+        import argparse
+
+        args = argparse.Namespace(
+            action="step", workflow="🚀 Deploy", job="deploy",
+            step="🗃️ [MIGRATE] Plan or execute protected Neon migration",
+            outcome="failure", activity_id="", progress="30",
+        )
+        with patch.object(notify, "send", return_value={"success": True}) as send:
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+            self.assertEqual(send.call_count, 1)
+            payload = send.call_args.args[3]
+            self.assertEqual(payload["title"], "PhotoIntel · Deploy")
+            self.assertLessEqual(len(payload["text"]), 35)
 
     def test_secret_missing_is_disabled_without_network(self):
         with patch.dict(os.environ, {"NOTIFY_DEVICE_ID": "", "NOTIFY_TOKEN": ""}):
@@ -105,7 +132,7 @@ class NotifyOfflineTests(unittest.TestCase):
                 line for line in text.splitlines()
                 if re.match(r"^      - (?:name:|id:|uses:|run:)", line)
                 and not line.startswith('      - name: "🔔 [NOTIFY]')
-                and not line.startswith('      - name: "📱 [LIVE]')
+                and not line.startswith('      - name: "📱 Live')
             ])
             total += original_count
             self.assertEqual(len(notifications), original_count, name)
