@@ -83,6 +83,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: read
 
     defaults:
       run:
@@ -102,24 +103,12 @@ jobs:
         uses: ./.github/actions/notify
         with:
           action: start
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-      - name: "🔔 [NOTIFY] 📥 Código"
-        if: ${{ always() && (steps.checkout.outcome == 'success' || steps.checkout.outcome == 'failure' || steps.checkout.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📥 Código"
-          outcome: ${{ steps.checkout.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "6"
       - name: "🛡 Validação DB"
         id: database_gate
         if: inputs.action == 'all' || inputs.action == 'deploy'
@@ -128,20 +117,6 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh gate
 
-      - name: "🔔 [NOTIFY] 🛡 Validação DB"
-        if: ${{ always() && (steps.database_gate.outcome == 'success' || steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🛡 Validação DB"
-          outcome: ${{ steps.database_gate.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "13"
       - name: "⚙ Config"
         id: config
         uses: ./.github/actions/gcp-config
@@ -151,20 +126,6 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: "🔔 [NOTIFY] ⚙ Config"
-        if: ${{ always() && (steps.config.outcome == 'success' || steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Config"
-          outcome: ${{ steps.config.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "20"
       - name: "🔐 Login"
         id: notify_observed_001
         uses: google-github-actions/auth@v2
@@ -172,39 +133,30 @@ jobs:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
-      - name: "🔔 [NOTIFY] 🔐 Login"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🔐 Login"
-          outcome: ${{ steps.notify_observed_001.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "27"
       - name: "🧰 Gcloud"
         id: notify_observed_002
         uses: google-github-actions/setup-gcloud@v2
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
-      - name: "🔔 [NOTIFY] 🧰 Gcloud"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
+      - name: "📱 ▶ Build"
+        if: ${{ inputs.action == 'all' || inputs.action == 'build' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "🧰 Gcloud"
-          outcome: ${{ steps.notify_observed_002.outcome }}
+          step: "🏗 Pré-check"
+          label: "🏗 Build"
+          outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "33"
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🏗 Pré-check"
         id: preflight
         if: inputs.action == 'build' || inputs.action == 'all'
@@ -212,20 +164,25 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh preflight
 
-      - name: "🔔 [NOTIFY] 🏗 Pré-check"
-        if: ${{ always() && (steps.preflight.outcome == 'success' || steps.preflight.outcome == 'failure' || steps.preflight.outcome == 'cancelled') }}
+      - name: "📱 ! Build"
+        if: ${{ always() && (steps.preflight.outcome == 'failure' || steps.preflight.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Pré-check"
+          label: "🏗 Build"
           outcome: ${{ steps.preflight.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "40"
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🏗 Cache"
         id: image_cache
         if: inputs.action == 'build' || inputs.action == 'all'
@@ -234,20 +191,25 @@ jobs:
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh cache
 
-      - name: "🔔 [NOTIFY] 🏗 Cache"
-        if: ${{ always() && (steps.image_cache.outcome == 'success' || steps.image_cache.outcome == 'failure' || steps.image_cache.outcome == 'cancelled') }}
+      - name: "📱 ! Build"
+        if: ${{ always() && (steps.image_cache.outcome == 'failure' || steps.image_cache.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Cache"
+          label: "🏗 Build"
           outcome: ${{ steps.image_cache.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "47"
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🏗 Build"
         id: build_image
         if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
@@ -255,42 +217,90 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh build
 
-      - name: "🔔 [NOTIFY] 🏗 Build"
-        if: ${{ always() && (steps.build_image.outcome == 'success' || steps.build_image.outcome == 'failure' || steps.build_image.outcome == 'cancelled') }}
+      - name: "📱 ! Build"
+        if: ${{ always() && (steps.build_image.outcome == 'failure' || steps.build_image.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Build"
+          label: "🏗 Build"
           outcome: ${{ steps.build_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "54"
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🏗 Imagem"
         id: verify_image
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
+        if: inputs.action == 'build' || inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh verify
 
-      - name: "🔔 [NOTIFY] 🏗 Imagem"
-        if: ${{ always() && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
+      - name: "📱 ✓ Build"
+        if: ${{ always() && ((inputs.action == 'all' || inputs.action == 'build') && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🏗 Imagem"
+          label: "🏗 Build"
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "61"
+          completed: "1"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ! Imagem"
+        if: ${{ always() && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🏗 Imagem"
+          label: "🏗 Imagem"
+          outcome: ${{ steps.verify_image.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ▶ Jobs"
+        if: ${{ inputs.action == 'all' || inputs.action == 'jobs-deploy' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "📦 Jobs"
+          label: "📦 Jobs"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "${{ inputs.action == 'all' && '1' || '0' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "📦 Jobs"
         id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
@@ -298,20 +308,44 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh jobs-deploy
 
-      - name: "🔔 [NOTIFY] Jobs"
-        if: ${{ always() && (steps.deploy_jobs.outcome == 'success' || steps.deploy_jobs.outcome == 'failure' || steps.deploy_jobs.outcome == 'cancelled') }}
+      - name: "📱 ✓ Jobs"
+        if: ${{ always() && ((steps.deploy_jobs.outcome == 'success' || steps.deploy_jobs.outcome == 'failure' || steps.deploy_jobs.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "📦 Jobs"
+          label: "📦 Jobs"
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "67"
+          completed: "${{ inputs.action == 'all' && '2' || '1' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ▶ Neon"
+        if: ${{ inputs.action == 'migrate' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃 Neon"
+          label: "🗃 Neon"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🗃 Neon"
         id: migrate_database
         if: inputs.action == 'migrate'
@@ -323,20 +357,44 @@ jobs:
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
         run: bash infra/gcp/release.sh migrate
 
-      - name: "🔔 [NOTIFY] Neon"
-        if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}
+      - name: "📱 ✓ Neon"
+        if: ${{ always() && ((steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🗃 Neon"
+          label: "🗃 Neon"
           outcome: ${{ steps.migrate_database.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "71"
+          completed: "1"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ▶ API"
+        if: ${{ inputs.action == 'all' || inputs.action == 'deploy' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🚀 API"
+          label: "🚀 API"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "${{ inputs.action == 'all' && '2' || '0' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🚀 API"
         id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'all'
@@ -345,20 +403,44 @@ jobs:
           DATABASE_READY: ${{ inputs.database_ready }}
         run: bash infra/gcp/release.sh deploy
 
-      - name: "🔔 [NOTIFY] 🚀 API"
-        if: ${{ always() && (steps.deploy_api.outcome == 'success' || steps.deploy_api.outcome == 'failure' || steps.deploy_api.outcome == 'cancelled') }}
+      - name: "📱 ✓ API"
+        if: ${{ always() && ((steps.deploy_api.outcome == 'success' || steps.deploy_api.outcome == 'failure' || steps.deploy_api.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 API"
+          label: "🚀 API"
           outcome: ${{ steps.deploy_api.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "74"
+          completed: "${{ inputs.action == 'all' && '3' || '1' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ▶ Agenda"
+        if: ${{ inputs.action == 'all' || inputs.action == 'scheduler' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⏰ Agenda"
+          label: "⏰ Agenda"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "${{ inputs.action == 'all' && '3' || '0' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "⏰ Agenda"
         id: deploy_scheduler
         if: inputs.action == 'scheduler' || inputs.action == 'all'
@@ -366,20 +448,44 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh scheduler
 
-      - name: "🔔 [NOTIFY] ⏰ Agenda"
-        if: ${{ always() && (steps.deploy_scheduler.outcome == 'success' || steps.deploy_scheduler.outcome == 'failure' || steps.deploy_scheduler.outcome == 'cancelled') }}
+      - name: "📱 ✓ Agenda"
+        if: ${{ always() && ((steps.deploy_scheduler.outcome == 'success' || steps.deploy_scheduler.outcome == 'failure' || steps.deploy_scheduler.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "⏰ Agenda"
+          label: "⏰ Agenda"
           outcome: ${{ steps.deploy_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "81"
+          completed: "${{ inputs.action == 'all' && '4' || '1' }}"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+      - name: "📱 ▶ Limpeza"
+        if: ${{ inputs.action == 'cleanup' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧹 Código"
+          label: "🧹 Limpeza"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧹 Código"
         id: pause_scheduler
         if: inputs.action == 'cleanup'
@@ -387,20 +493,25 @@ jobs:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh cleanup
 
-      - name: "🔔 [NOTIFY] 🧹 Código"
-        if: ${{ always() && (steps.pause_scheduler.outcome == 'success' || steps.pause_scheduler.outcome == 'failure' || steps.pause_scheduler.outcome == 'cancelled') }}
+      - name: "📱 ✓ Limpeza"
+        if: ${{ always() && ((steps.pause_scheduler.outcome == 'success' || steps.pause_scheduler.outcome == 'failure' || steps.pause_scheduler.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: step
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🧹 Código"
+          label: "🧹 Limpeza"
           outcome: ${{ steps.pause_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "88"
+          completed: "1"
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
       - name: "🧹 API"
         id: notify_observed_003
         if: always() && steps.checkout.outcome == 'success'
@@ -408,26 +519,14 @@ jobs:
         with:
           mode: cleanup
 
-      - name: "🔔 [NOTIFY] 🧹 API"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧹 API"
-          outcome: ${{ steps.notify_observed_003.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          progress: "95"
       - name: "📱 Live · Fim"
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
           action: end
+          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
