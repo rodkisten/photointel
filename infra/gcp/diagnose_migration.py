@@ -324,7 +324,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{region}/{name}?project={quote(project)}"
         )
         summary_line("### 🗃️ Cloud Run migration troubleshooting")
-        summary_line(f"- **Execution:** \`{name}\`")
+        summary_line(f"- **Execution:** `{name}`")
         summary_line(f"- [Open execution details and complete logs]({link})")
         status = execution.get("status", {}) if isinstance(execution.get("status"), dict) else {}
         for label, field in [
@@ -379,8 +379,8 @@ def main(argv: list[str] | None = None) -> int:
                 summary_line("- No safe traceback excerpt available. Open the full logs link above.")
         except PermissionError:
             summary_line(
-                "- **Logs unavailable (IAM):** deployer needs \`roles/logging.viewer\`. "
-                "Run GCP Bootstrap apply, then retry \`migrate → diagnose\`."
+                "- **Logs unavailable (IAM):** deployer needs `roles/logging.viewer`. "
+                "Run GCP Bootstrap apply, then retry `migrate → diagnose`."
             )
             print("::warning title=Cloud Logging IAM::Missing read permission; grant roles/logging.viewer to the deployer.")
         except (ValueError, RuntimeError, subprocess.TimeoutExpired):
