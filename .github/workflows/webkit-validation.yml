@@ -1,4 +1,4 @@
-name: "📱 [WEBKIT] Validate iPhone viewport"
+name: "📱 WebKit"
 
 on:
   push:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   webkit:
-    name: "📱 [WEBKIT] Browser validation"
+    name: "📱 Check"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
