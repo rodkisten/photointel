@@ -50,34 +50,10 @@ jobs:
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🔔 [NOTIFY] ⚙ Código"
-        if: ${{ always() && (steps.notify_observed_001.outcome == 'success' || steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_001.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Código"
-          outcome: ${{ steps.notify_observed_001.outcome }}
       - name: "⚙ Setup"
         id: notify_observed_002
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23', enable-cache: true}
-      - name: "🔔 [NOTIFY] ⚙ Setup"
-        if: ${{ always() && (steps.notify_observed_002.outcome == 'success' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_002.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Setup"
-          outcome: ${{ steps.notify_observed_002.outcome }}
       - name: "⚙ Setup"
         id: notify_observed_003
         uses: actions/setup-node@v4
@@ -85,18 +61,6 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: "🔔 [NOTIFY] ⚙ Setup"
-        if: ${{ always() && (steps.notify_observed_003.outcome == 'success' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Setup"
-          outcome: ${{ steps.notify_observed_003.outcome }}
       - name: "🧰 Setup"
         id: notify_observed_004
         run: |
@@ -104,33 +68,9 @@ jobs:
           uv sync --frozen --group ingest
           npm --prefix apps/web ci
           mkdir -p reports
-      - name: "🔔 [NOTIFY] 🧰 Setup"
-        if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Setup"
-          outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "⚙ Build"
         id: notify_observed_005
         uses: docker/setup-buildx-action@v3
-      - name: "🔔 [NOTIFY] ⚙ Build"
-        if: ${{ always() && (steps.notify_observed_005.outcome == 'success' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_005.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Build"
-          outcome: ${{ steps.notify_observed_005.outcome }}
       - name: "🧰 Código"
         id: notify_observed_006
         uses: docker/build-push-action@v6
@@ -142,67 +82,19 @@ jobs:
           push: false
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
-      - name: "🔔 [NOTIFY] 🧰 Código"
-        if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Código"
-          outcome: ${{ steps.notify_observed_006.outcome }}
       - name: "⚙ ️  Start private storage and"
         id: notify_observed_007
         run: |
           docker run -d --name photointel-webkit-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:webkit server /data
           uv run --no-sync python infra/scripts/init-private-bucket.py
-      - name: "🔔 [NOTIFY] ⚙ ️  Start private storage and"
-        if: ${{ always() && (steps.notify_observed_007.outcome == 'success' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_007.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ ️  Start private storage and"
-          outcome: ${{ steps.notify_observed_007.outcome }}
       - name: "⚙ Neon"
         id: notify_observed_008
         run: |
           uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
           docker exec -i "${{ job.services.postgres.id }}" psql --username=photointel --dbname=photointel --set=app_role=photointel_app --set=app_password=ci-webkit-app-only --set=database_name=photointel --set=ON_ERROR_STOP=1 < infra/oracle/provision-app-role.sql
-      - name: "🔔 [NOTIFY] ⚙ Neon"
-        if: ${{ always() && (steps.notify_observed_008.outcome == 'success' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_008.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ Neon"
-          outcome: ${{ steps.notify_observed_008.outcome }}
       - name: "🧰 Build"
         id: notify_observed_009
         run: npm exec --prefix apps/web -- playwright install --with-deps chromium webkit
-      - name: "🔔 [NOTIFY] 🧰 Build"
-        if: ${{ always() && (steps.notify_observed_009.outcome == 'success' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_009.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧰 Build"
-          outcome: ${{ steps.notify_observed_009.outcome }}
       - name: "⚙ ️  Exercise all browser proj"
         id: notify_observed_010
         run: bash infra/scripts/run-e2e.sh
@@ -212,36 +104,12 @@ jobs:
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/browser-webkit.xml
-      - name: "🔔 [NOTIFY] ⚙ ️  Exercise all browser proj"
-        if: ${{ always() && (steps.notify_observed_010.outcome == 'success' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_010.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "⚙ ️  Exercise all browser proj"
-          outcome: ${{ steps.notify_observed_010.outcome }}
       - name: "🧪 Testes"
         id: notify_observed_011
         if: failure()
         run: |
           mkdir -p reports
           docker logs photointel-webkit-minio > reports/minio-webkit.log 2>&1 || true
-      - name: "🔔 [NOTIFY] 🧪 Testes"
-        if: ${{ always() && (steps.notify_observed_011.outcome == 'success' || steps.notify_observed_011.outcome == 'failure' || steps.notify_observed_011.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Testes"
-          outcome: ${{ steps.notify_observed_011.outcome }}
       - name: "📦 Artefatos"
         id: notify_observed_012
         if: always()
@@ -254,33 +122,9 @@ jobs:
             apps/web/playwright-report/
           if-no-files-found: warn
           retention-days: 7
-      - name: "🔔 [NOTIFY] 📦 Artefatos"
-        if: ${{ always() && (steps.notify_observed_012.outcome == 'success' || steps.notify_observed_012.outcome == 'failure' || steps.notify_observed_012.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "📦 Artefatos"
-          outcome: ${{ steps.notify_observed_012.outcome }}
       - name: "🧪 Validação"
         id: notify_observed_013
         if: always()
         run: |
           printf '%s\n' 'This workflow runs Playwright WebKit on Linux with an iPhone 13 viewport and synthetic photos. It does not test Safari on an actual iPhone, PhotoKit, or PWA installation on iOS. Inference uses explicit test fixtures; no GPU provider is called.' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: "🔔 [NOTIFY] 🧪 Validação"
-        if: ${{ always() && (steps.notify_observed_013.outcome == 'success' || steps.notify_observed_013.outcome == 'failure' || steps.notify_observed_013.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🧪 Validação"
-          outcome: ${{ steps.notify_observed_013.outcome }}
