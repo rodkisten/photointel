@@ -1,4 +1,4 @@
-name: "🧾 [RELEASE] Generate provenance"
+name: "🧾 Manifest"
 on:
   workflow_dispatch:
     inputs:
@@ -14,7 +14,7 @@ permissions:
   contents: read
 jobs:
   manifest:
-    name: "🧾 [RELEASE] manifest"
+    name: "🧾 Build"
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Código"
