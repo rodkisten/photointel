@@ -1,4 +1,4 @@
-name: "🔔 [NOTIFY] GitHub step push + iOS Live Activity"
+name: "🔔 "
 description: "Send one best-effort Notify! push after a workflow step; optionally start, update or end an iOS Live Activity."
 inputs:
   action:
@@ -36,7 +36,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: "🔔 [NOTIFY] Deliver push or Live Activity event"
+    - name: "🔔 "
       id: send
       shell: bash
       env:
