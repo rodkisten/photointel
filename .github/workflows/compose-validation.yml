@@ -1,4 +1,4 @@
-name: "🐳 [COMPOSE] Validate developer stack"
+name: "🐳 Compose"
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   documented-startup:
-    name: "🐳 [COMPOSE] documented startup"
+    name: "🐳 Check"
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
