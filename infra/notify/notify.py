@@ -71,17 +71,54 @@ def append_output(value: str) -> None:
             output.write(f"activity_id={value}\n")
 
 
+def short_workflow(name: str) -> str:
+    """Small title for Lock Screen, Dynamic Island and grouped pushes."""
+    label = name.casefold()
+    if "bootstrap" in label and "gcp" in label:
+        return "PhotoIntel · Setup"
+    if "deploy" in label or "[gcp]" in label or "release" in label:
+        return "PhotoIntel · Deploy"
+    for token, pretty in (
+        ("validate", "Validação"), ("ci", "CI"), ("test", "Testes"),
+        ("pages", "Pages"), ("webkit", "WebKit"), ("zip", "ZIP"),
+        ("ssh", "SSH"), ("manifest", "Manifesto"),
+    ):
+        if token in label:
+            return f"PhotoIntel · {pretty}"
+    return "PhotoIntel · CI"
+
+
+def short_step(name: str) -> str:
+    """Compress verbose YAML step labels before sending to the iPhone."""
+    source = re.sub(r"\[[^\]]{1,32}\]", "", name)
+    source = re.sub(r"^[\W_]+", "", source, flags=re.UNICODE).strip()
+    known = (
+        ("checkout", "Código"), ("source", "Código"), ("authenticate", "Login"),
+        ("auth", "Login"), ("gcloud", "Google Cloud"), ("configure", "Config"),
+        ("prepare", "Config"), ("preflight", "Verificação"), ("prerequisites", "Verificação"),
+        ("compile", "Build"), ("build", "Build"), ("image", "Imagem"),
+        ("migration", "Neon"), ("migrate", "Neon"), ("neon", "Neon"),
+        ("scheduler", "Agenda"), ("cleanup", "Limpeza"),
+        ("publish", "Publicação"), ("deploy", "Publicação"),
+        ("test", "Testes"), ("validation", "Validação"),
+    )
+    lowered = name.casefold()
+    for key, pretty in known:
+        if key in lowered:
+            return pretty
+    return clean_label(source or name, 26)
+
+
 def handle(args: argparse.Namespace, device: str, token: str) -> None:
-    workflow = clean_label(args.workflow, 100) or "GitHub Actions"
+    workflow = short_workflow(args.workflow)
     run_id = clean_label(os.environ.get("GITHUB_RUN_ID", ""), 32)
     repository = clean_label(os.environ.get("GITHUB_REPOSITORY", ""), 100)
-    job = clean_label(args.job, 70)
     run_url = f"https://github.com/{repository}/actions/runs/{run_id}" if repository and run_id else ""
     if args.action == "start":
         payload = {
-            "title": clean_label(f"🚀 {workflow}", 120),
-            "body": "Starting · " + job,
-            "symbol": "hammer.fill" if "DEPLOY" in workflow.upper() else "gearshape.2.fill",
+            "title": workflow,
+            "body": "Iniciando…",
+            "symbol": "hammer.fill",
             "tint": "#3B82F6",
             "progress": 0,
             "status": "running",
@@ -94,42 +131,54 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
         if not isinstance(activity_id, str) or not ACTIVITY_PATTERN.fullmatch(activity_id):
             raise ValueError("Notify! did not return a valid activity ID")
         append_output(activity_id)
-        print("📱 Live Activity started (isolated per workflow run).")
+        print("📱 Live Activity started.")
         return
 
     if args.action == "step":
         outcome = args.outcome.lower().strip()
-        if outcome not in {"success", "failure", "cancelled", "skipped"}:
+        if outcome not in {"success", "failure", "cancelled"}:
             return
-        if outcome == "skipped":
-            return
-        label = clean_label(args.step, 110) or "Step"
-        icon = {"success": "✅", "failure": "❌", "cancelled": "⚠️"}[outcome]
-        body = f"{icon} {label}: {outcome} · {job}"
-        send(
-            "notify-json", device, token,
-            {"title": clean_label(workflow, 120), "text": body[:300],
-             "groupType": f"photointel-{run_id or 'actions'}"},
-        )
-        print(f"🔔 Step push: {label} → {outcome}.")
-        if args.activity_id and ACTIVITY_PATTERN.fullmatch(args.activity_id):
+        label = short_step(args.step)
+        failed = outcome in {"failure", "cancelled"}
+        live = bool(args.activity_id and ACTIVITY_PATTERN.fullmatch(args.activity_id))
+        # No push for every successful step. The Live Activity quietly updates,
+        # and failures receive an actionable push. Non-GCP CI only pushes errors.
+        if failed:
+            text = f"❌ {label} falhou" if outcome == "failure" else f"⚠️ {label} cancelado"
+            send("notify-json", device, token, {
+                "title": workflow,
+                "text": text,
+                "groupType": f"photointel-{run_id or 'actions'}",
+            })
+            print(f"🔔 {text}")
+        if live:
             send("live-activity", args.activity_id, token, {
                 "progress": activity_progress(args.progress),
-                "body": clean_label(body, 300),
-                "status": "failed" if outcome == "failure" else "running",
+                "body": ("❌ " if failed else "") + label,
+                "status": "failed" if failed else "running",
             })
         return
 
     if args.action == "end":
+        success = args.outcome.lower().strip() == "success"
+        result = "✅ Concluído" if success else "❌ Falhou"
+        # Always send a single final push, not dozens of success notifications.
+        # A failed push must not prevent us from ending the Live Activity.
+        try:
+            send("notify-json", device, token, {
+                "title": workflow,
+                "text": result,
+                "groupType": f"photointel-{run_id or 'actions'}",
+            })
+        except (OSError, urllib.error.URLError, TimeoutError, ValueError, TypeError):
+            print("::warning::Final push unavailable; continuing Live Activity cleanup.")
         if not args.activity_id or not ACTIVITY_PATTERN.fullmatch(args.activity_id):
-            print("🔕 Live Activity not started; nothing to finish.")
             return
-        success = args.outcome.lower() == "success"
         payload = {
             "status": "done" if success else "failed",
-            "body": "✅ Completed successfully" if success else "❌ Workflow failed or was cancelled",
+            "body": result,
             "endsIn": None,
-            "keepFor": 90,
+            "keepFor": 60,
         }
         if success:
             payload["progress"] = 100
