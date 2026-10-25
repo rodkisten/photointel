@@ -76,7 +76,7 @@ def short_workflow(name: str) -> str:
     label = name.casefold()
     if "bootstrap" in label and "gcp" in label:
         return "PhotoIntel · Setup"
-    if "deploy" in label or "[gcp]" in label or "release" in label:
+    if "deploy" in label or "release" in label:
         return "PhotoIntel · Deploy"
     for token, pretty in (
         ("validate", "Validação"), ("ci", "CI"), ("test", "Testes"),
@@ -162,16 +162,17 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
     if args.action == "end":
         success = args.outcome.lower().strip() == "success"
         result = "✅ Concluído" if success else "❌ Falhou"
-        # Always send a single final push, not dozens of success notifications.
-        # A failed push must not prevent us from ending the Live Activity.
-        try:
-            send("notify-json", device, token, {
-                "title": workflow,
-                "text": result,
-                "groupType": f"photointel-{run_id or 'actions'}",
-            })
-        except (OSError, urllib.error.URLError, TimeoutError, ValueError, TypeError):
-            print("::warning::Final push unavailable; continuing Live Activity cleanup.")
+        # Failure already generated a push in its observed step. Send only the
+        # successful final push to avoid duplicate alerts for the same failure.
+        if success:
+            try:
+                send("notify-json", device, token, {
+                    "title": workflow,
+                    "text": result,
+                    "groupType": f"photointel-{run_id or 'actions'}",
+                })
+            except (OSError, urllib.error.URLError, TimeoutError, ValueError, TypeError):
+                print("::warning::Final push unavailable; continuing Live Activity cleanup.")
         if not args.activity_id or not ACTIVITY_PATTERN.fullmatch(args.activity_id):
             return
         payload = {
