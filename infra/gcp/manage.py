@@ -693,6 +693,10 @@ def bootstrap(runner: Runner) -> None:
 def deploy_jobs(runner: Runner, directory: Path) -> None:
     config = runner.config
     for mode in MODES:
+        # Alembic now runs from GitHub Actions directly against Neon.
+        # Do not recreate the legacy photointel-migrate Cloud Run Job.
+        if mode == "migrate":
+            continue
         runner.command(
             [
                 "run",
@@ -703,9 +707,6 @@ def deploy_jobs(runner: Runner, directory: Path) -> None:
                 config["region"],
             ]
         )
-        # No runtime identity may invoke migration or change job overrides.
-        if mode == "migrate":
-            continue
         accounts = [identity(config, "api"), identity(config, "jobs")]
         if mode in SCHEDULED:
             accounts.append(identity(config, "scheduler"))
