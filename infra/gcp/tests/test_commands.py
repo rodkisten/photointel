@@ -140,6 +140,62 @@ class CloudRunCommandsTests(unittest.TestCase):
         self.assertEqual(plan.count("scheduler jobs pause"), 3)
         self.assertNotIn("photointel-backfill", plan)
 
+    def test_scheduler_create_and_update_use_distinct_header_flags(self) -> None:
+        class RecordingRunner:
+            apply = True
+
+            def __init__(self, config):
+                self.config = config
+                self.commands = []
+
+            def command(self, args, *, capture=False):
+                self.commands.append(args)
+                return ""
+
+        class DescribeResult:
+            def __init__(self, exists):
+                self.returncode = 0 if exists else 1
+                self.stderr = "" if exists else "NOT_FOUND"
+
+        # All existing jobs: updating must use --update-headers, never --headers.
+        updating = RecordingRunner(self.config)
+        with patch("subprocess.run", return_value=DescribeResult(True)) as describe:
+            manage.scheduler(updating)
+        self.assertEqual(describe.call_count, 3)
+        updates = [command for command in updating.commands if command[:4] == [
+            "scheduler", "jobs", "update", "http"
+        ]]
+        self.assertEqual(len(updates), 3)
+        for command in updates:
+            self.assertIn("--update-headers", command)
+            self.assertNotIn("--headers", command)
+            self.assertEqual(command[command.index("--update-headers") + 1],
+                             "Content-Type=application/json")
+            self.assertIn("--oauth-service-account-email", command)
+            self.assertIn("--message-body", command)
+        self.assertEqual(
+            len([cmd for cmd in updating.commands if cmd[:3] ==
+                 ["scheduler", "jobs", "pause"]]), 3
+        )
+
+        # All absent jobs: creation still requires --headers.
+        creating = RecordingRunner(self.config)
+        with patch("subprocess.run", return_value=DescribeResult(False)):
+            manage.scheduler(creating)
+        creates = [command for command in creating.commands if command[:4] == [
+            "scheduler", "jobs", "create", "http"
+        ]]
+        self.assertEqual(len(creates), 3)
+        for command in creates:
+            self.assertIn("--headers", command)
+            self.assertNotIn("--update-headers", command)
+            self.assertEqual(command[command.index("--headers") + 1],
+                             "Content-Type=application/json")
+        self.assertEqual(
+            len([cmd for cmd in creating.commands if cmd[:3] ==
+                 ["scheduler", "jobs", "pause"]]), 3
+        )
+
     def test_job_invocation_rights_are_named_and_exclude_migration(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
