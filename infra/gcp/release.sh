@@ -61,6 +61,8 @@ case "$PHASE" in
     trap 'rm -rf "$migration_venv"' EXIT
     python3 -m venv "$migration_venv"
     "$migration_venv/bin/python" -m pip install --quiet --disable-pip-version-check -r infra/gcp/migration-requirements.txt
+    echo "🔎 Checking isolated Python imports, verified TLS and Alembic revisions (offline)."
+    "$migration_venv/bin/python" infra/gcp/check_migration_runtime.py
     "$migration_venv/bin/python" infra/gcp/migrate_workflow.py \
       --mode "$mode" \
       --project "$PROJECT" \
