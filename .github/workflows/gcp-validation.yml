@@ -86,6 +86,8 @@ jobs:
           bash -n infra/gcp/release.sh
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
+      - name: "🗃 Neon runtime"
+        run: bash infra/gcp/tests/test_migration_runtime.sh
       - name: "🧪 Testes"
         id: notify_observed_006
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
