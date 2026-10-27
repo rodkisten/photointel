@@ -25,6 +25,14 @@ from typing import Any
 from manage import ConfigurationError, validate, verify_backup_receipt
 
 ROOT = Path(__file__).resolve().parents[2]
+# This script is run by its file path inside an isolated venv. Python adds
+# infra/gcp to sys.path, not the application src-layout package directory.
+# Resolve the application DB connection policy locally without installing
+# the API or importing unrelated cloud/ML runtime dependencies.
+APP_SRC = ROOT / "apps/api/src"
+if not (APP_SRC / "photointel/db_connection.py").is_file():
+    raise RuntimeError("PhotoIntel source tree is incomplete: apps/api/src/photointel/db_connection.py")
+sys.path.insert(0, str(APP_SRC))
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 SECRET_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
