@@ -740,7 +740,8 @@ def scheduler(runner: Runner) -> None:
             f"https://run.googleapis.com/v2/projects/{config['project_id']}/"
             f"locations/{config['region']}/jobs/{name}:run"
         )
-        # create/update have identical operational flags; paused until live gates pass.
+        # Create and update have different header flags. Always keep jobs paused
+        # after reconciliation; the scheduler must never start ingestion by itself.
         command = "create"
         if runner.apply:
             result = subprocess.run(
@@ -781,7 +782,7 @@ def scheduler(runner: Runner) -> None:
                 uri,
                 "--http-method",
                 "POST",
-                "--headers",
+                "--headers" if command == "create" else "--update-headers",
                 "Content-Type=application/json",
                 "--message-body",
                 "{}",
