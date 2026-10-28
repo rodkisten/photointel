@@ -24,6 +24,10 @@ REQUIRED_WIF = (
     "GCP_WORKLOAD_IDENTITY_PROVIDER",
     "GCP_DEPLOY_SERVICE_ACCOUNT",
 )
+OPTIONAL_BOOTSTRAP_WIF = (
+    "GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER",
+    "GCP_BOOTSTRAP_SERVICE_ACCOUNT",
+)
 PROVIDER_PATTERN = re.compile(
     r"projects/[0-9]+/locations/global/workloadIdentityPools/"
     r"[A-Za-z0-9_-]+/providers/[A-Za-z0-9_-]+"
@@ -71,7 +75,7 @@ def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str)
 def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     config: dict[str, Any] = {}
     for key, raw_value in entries.items():
-        if key in REQUIRED_WIF:
+        if key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF:
             continue  # WIF authentication metadata is not application configuration
         segments = key.split("__")
         if not all(ENV_PART_PATTERN.fullmatch(item) for item in segments):
@@ -142,7 +146,24 @@ def wif_metadata(entries: dict[str, str]) -> tuple[str, str]:
         fail("Invalid GCP_WORKLOAD_IDENTITY_PROVIDER resource name")
     if not SA_PATTERN.fullmatch(service_account):
         fail("Invalid GCP_DEPLOY_SERVICE_ACCOUNT email")
+    admin_provider = entries.get("GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER", "")
+    admin_account = entries.get("GCP_BOOTSTRAP_SERVICE_ACCOUNT", "")
+    if bool(admin_provider) != bool(admin_account):
+        fail("Bootstrap WIF provider and service account must be configured together")
+    if admin_provider and (
+        not PROVIDER_PATTERN.fullmatch(admin_provider)
+        or not SA_PATTERN.fullmatch(admin_account)
+        or (admin_provider, admin_account) == (provider, service_account)
+    ):
+        fail("Invalid or insufficiently separated bootstrap WIF identity")
     return provider, service_account
+
+
+def bootstrap_wif() -> tuple[str, str] | None:
+    config, entries = read_input()
+    provider = entries.get("GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER", "")
+    account = entries.get("GCP_BOOTSTRAP_SERVICE_ACCOUNT", "")
+    return (provider, account) if provider and account else None
 
 
 def write_outputs(provider: str, service_account: str) -> None:
@@ -152,6 +173,11 @@ def write_outputs(provider: str, service_account: str) -> None:
     with open(output_path, "a", encoding="utf-8") as output:
         output.write(f"workload_identity_provider={provider}\n")
         output.write(f"service_account={service_account}\n")
+        # Bootstrap uses a distinct privileged identity from the same input.
+        entries = bootstrap_wif()
+        if entries is not None:
+            output.write(f"bootstrap_workload_identity_provider={entries[0]}\n")
+            output.write(f"bootstrap_service_account={entries[1]}\n")
 
 
 def redact_string(value: str) -> str:
@@ -213,7 +239,7 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
             fail("Invalid GCP_CONFIG_ENV JSON")
         if not isinstance(payload, dict):
             fail("GCP_CONFIG_ENV JSON must be an object")
-        entries = {key: payload.pop(key, "") for key in REQUIRED_WIF}
+        entries = {key: payload.pop(key, "") for key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF}
         if any(not isinstance(item, str) for item in entries.values()):
             fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
         return payload, entries
