@@ -54,6 +54,12 @@ concurrency:
 jobs:
   development:
     name: "🖥️ Session"
+    # Interactive SSH has access to production WIF; restrict to trusted main.
+    if: inputs.command != 'ssh' || github.ref == 'refs/heads/main'
+    environment: ${{ inputs.command == 'ssh' && 'production' || 'development' }}
+    permissions:
+      contents: write
+      id-token: write
     runs-on: ubuntu-24.04
     # Longest interactive session is 180 min; reserve time for setup and push.
     timeout-minutes: 240
@@ -71,12 +77,32 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: "⚙ GCP Config"
+        id: config
+        if: ${{ inputs.command == 'ssh' }}
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+
+      - name: "🔐 GCP Login"
+        if: ${{ inputs.command == 'ssh' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+
+      - name: "🧰 Gcloud"
+        if: ${{ inputs.command == 'ssh' }}
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: "⚙ Env"
         id: ssh_env
         if: ${{ inputs.command == 'ssh' }}
         env:
-          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          CONFIRM_PROJECT: photointel
         run: python3 infra/scripts/prepare_workflow_env.py ssh
 
       - name: "🧰 Setup"
@@ -159,8 +185,8 @@ jobs:
         if: ${{ inputs.command == 'ssh' }}
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          oauth-client-id: ${{ steps.ssh_env.outputs.ts_client_id }}
+          oauth-secret: ${{ steps.ssh_env.outputs.ts_oauth_secret }}
           tags: tag:ci
 
       - name: "🔐 Login"
@@ -199,4 +225,9 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: bash scripts/commit-session.sh
 
+      - name: "🧹 GCP Config"
+        if: ${{ always() && steps.checkout.outcome == 'success' && inputs.command == 'ssh' }}
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
 
