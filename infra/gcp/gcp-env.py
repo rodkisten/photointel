@@ -14,15 +14,18 @@ import re
 from io import StringIO
 from typing import Any
 
-from dotenv import dotenv_values
 
-from manage import REQUIRED_SECRETS, SECRET_FIELDS
+from manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "infra/gcp/config.local.json"
 REQUIRED_WIF = (
     "GCP_WORKLOAD_IDENTITY_PROVIDER",
     "GCP_DEPLOY_SERVICE_ACCOUNT",
+)
+OPTIONAL_BOOTSTRAP_WIF = (
+    "GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER",
+    "GCP_BOOTSTRAP_SERVICE_ACCOUNT",
 )
 PROVIDER_PATTERN = re.compile(
     r"projects/[0-9]+/locations/global/workloadIdentityPools/"
@@ -41,6 +44,8 @@ def fail(message: str) -> None:
 
 
 def checked_dotenv() -> dict[str, str]:
+    from dotenv import dotenv_values  # Installed by the composite action for legacy input.
+
     raw = os.environ.get("GCP_CONFIG_ENV", "")
     if not raw.strip():
         fail("GCP_CONFIG_ENV is missing or empty; configure a production Environment secret")
@@ -71,20 +76,20 @@ def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str)
 def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     config: dict[str, Any] = {}
     for key, raw_value in entries.items():
-        if key in REQUIRED_WIF:
+        if key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF:
             continue  # WIF authentication metadata is not application configuration
         segments = key.split("__")
         if not all(ENV_PART_PATTERN.fullmatch(item) for item in segments):
             fail(f"Invalid .env key: {key}")
         root = segments[0].lower()
-        if root == "secrets":
+        if root in {"secrets", "workflow_secrets"}:
             if (
                 len(segments) != 3
                 or not re.fullmatch(r"[A-Z][A-Z0-9_]*", segments[1])
                 or segments[2].upper() not in {"NAME", "VERSION"}
             ):
-                fail(f"Expected SECRETS__UPPERCASE_KEY__NAME/VERSION: {key}")
-            path = ["secrets", segments[1], segments[2].lower()]
+                fail(f"Expected {root.upper()}__UPPERCASE_KEY__NAME/VERSION: {key}")
+            path = [root, segments[1], segments[2].lower()]
         elif root == "extra_environment" and len(segments) == 2:
             path = ["extra_environment", segments[1]]
         else:
@@ -112,7 +117,10 @@ def validate_references(config: dict[str, Any]) -> None:
     if unknown:
         fail("Unknown Secret Manager reference keys: " + ", ".join(sorted(unknown)))
 
-    for key, ref in sorted(references.items()):
+    workflow_refs = config.get("workflow_secrets", {})
+    if not isinstance(workflow_refs, dict) or set(workflow_refs) - WORKFLOW_SECRET_FIELDS:
+        fail("Unknown workflow Secret Manager reference key")
+    for key, ref in sorted({**references, **workflow_refs}.items()):
         if not isinstance(ref, dict) or set(ref.keys()) != {"name", "version"}:
             fail(f"Invalid Secret Manager reference for {key}: expected NAME and VERSION")
         name = ref["name"]
@@ -139,7 +147,24 @@ def wif_metadata(entries: dict[str, str]) -> tuple[str, str]:
         fail("Invalid GCP_WORKLOAD_IDENTITY_PROVIDER resource name")
     if not SA_PATTERN.fullmatch(service_account):
         fail("Invalid GCP_DEPLOY_SERVICE_ACCOUNT email")
+    admin_provider = entries.get("GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER", "")
+    admin_account = entries.get("GCP_BOOTSTRAP_SERVICE_ACCOUNT", "")
+    if bool(admin_provider) != bool(admin_account):
+        fail("Bootstrap WIF provider and service account must be configured together")
+    if admin_provider and (
+        not PROVIDER_PATTERN.fullmatch(admin_provider)
+        or not SA_PATTERN.fullmatch(admin_account)
+        or (admin_provider, admin_account) == (provider, service_account)
+    ):
+        fail("Invalid or insufficiently separated bootstrap WIF identity")
     return provider, service_account
+
+
+def bootstrap_wif() -> tuple[str, str] | None:
+    config, entries = read_input()
+    provider = entries.get("GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER", "")
+    account = entries.get("GCP_BOOTSTRAP_SERVICE_ACCOUNT", "")
+    return (provider, account) if provider and account else None
 
 
 def write_outputs(provider: str, service_account: str) -> None:
@@ -149,6 +174,11 @@ def write_outputs(provider: str, service_account: str) -> None:
     with open(output_path, "a", encoding="utf-8") as output:
         output.write(f"workload_identity_provider={provider}\n")
         output.write(f"service_account={service_account}\n")
+        # Bootstrap uses a distinct privileged identity from the same input.
+        entries = bootstrap_wif()
+        if entries is not None:
+            output.write(f"bootstrap_workload_identity_provider={entries[0]}\n")
+            output.write(f"bootstrap_service_account={entries[1]}\n")
 
 
 def redact_string(value: str) -> str:
@@ -199,9 +229,27 @@ def print_redacted_summary(config: dict[str, Any], provider: str, service_accoun
     print("=== END REDACTED CONFIGURATION PREVIEW ===")
 
 
-def main() -> None:
+def read_input() -> tuple[dict[str, Any], dict[str, str]]:
+    raw = os.environ.get("GCP_CONFIG_ENV", "").strip()
+    if not raw:
+        fail("GCP_CONFIG_ENV is missing; configure one production Environment variable")
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            fail("Invalid GCP_CONFIG_ENV JSON")
+        if not isinstance(payload, dict):
+            fail("GCP_CONFIG_ENV JSON must be an object")
+        entries = {key: payload.pop(key, "") for key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF}
+        if any(not isinstance(item, str) for item in entries.values()):
+            fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
+        return payload, entries
     entries = checked_dotenv()
-    config = decode_config(entries)
+    return decode_config(entries), entries
+
+
+def main() -> None:
+    config, entries = read_input()
     validate_references(config)
     provider, service_account = wif_metadata(entries)
 

@@ -7,7 +7,9 @@
   "api_origin": "https://photos.example.com",
   "access_team_domain": "replace-team.cloudflareaccess.com",
   "access_audience": "REPLACE_ACCESS_AUDIENCE",
-  "access_allowed_emails": ["replace@example.com"],
+  "access_allowed_emails": [
+    "replace@example.com"
+  ],
   "storage_endpoint": "https://REPLACE_ACCOUNT.r2.cloudflarestorage.com",
   "storage_bucket": "photointel-private",
   "enable_icloud": false,
@@ -29,13 +31,58 @@
   "database_profile": "limited",
   "database_catalog_limit": 1000,
   "secrets": {
-    "DATABASE_URL": {"name": "photointel-database-url", "version": "1"},
-    "MIGRATION_DATABASE_URL": {"name": "photointel-migration-database-url", "version": "1"},
-    "STORAGE_ACCESS_KEY": {"name": "photointel-r2-access-key", "version": "1"},
-    "STORAGE_SECRET_KEY": {"name": "photointel-r2-secret-key", "version": "1"},
-    "BRIDGE_TOKEN_PEPPER": {"name": "photointel-bridge-pepper", "version": "1"},
-    "BRIDGE_ENROLLMENT_SECRET": {"name": "photointel-bridge-enrollment", "version": "1"},
-    "ICLOUD_SESSION_KEY": {"name": "photointel-session-aead-key", "version": "1"}
+    "DATABASE_URL": {
+      "name": "photointel-database-url",
+      "version": "1"
+    },
+    "MIGRATION_DATABASE_URL": {
+      "name": "photointel-migration-database-url",
+      "version": "1"
+    },
+    "STORAGE_ACCESS_KEY": {
+      "name": "photointel-r2-access-key",
+      "version": "1"
+    },
+    "STORAGE_SECRET_KEY": {
+      "name": "photointel-r2-secret-key",
+      "version": "1"
+    },
+    "BRIDGE_TOKEN_PEPPER": {
+      "name": "photointel-bridge-pepper",
+      "version": "1"
+    },
+    "BRIDGE_ENROLLMENT_SECRET": {
+      "name": "photointel-bridge-enrollment",
+      "version": "1"
+    },
+    "ICLOUD_SESSION_KEY": {
+      "name": "photointel-session-aead-key",
+      "version": "1"
+    }
   },
-  "extra_environment": {}
+  "extra_environment": {},
+  "workflows": {
+    "pages": {
+      "project": "photointel",
+      "api_base_url": "https://photos.example.com"
+    }
+  },
+  "workflow_secrets": {
+    "CLOUDFLARE_API_TOKEN": {
+      "name": "photointel-pages-token",
+      "version": "1"
+    },
+    "CLOUDFLARE_ACCOUNT_ID": {
+      "name": "photointel-cloudflare-account",
+      "version": "1"
+    },
+    "TS_OAUTH_CLIENT_ID": {
+      "name": "photointel-tailscale-client",
+      "version": "1"
+    },
+    "TS_OAUTH_SECRET": {
+      "name": "photointel-tailscale-secret",
+      "version": "1"
+    }
+  }
 }

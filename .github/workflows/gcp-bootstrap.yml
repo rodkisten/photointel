@@ -97,8 +97,8 @@ jobs:
         id: notify_observed_002
         if: inputs.mode == 'apply'
         env:
-          WIF: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
-          BOOTSTRAP_ACCOUNT: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
+          WIF: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
+          BOOTSTRAP_ACCOUNT: ${{ steps.config.outputs.bootstrap_service_account }}
           PROJECT: ${{ inputs.confirm_project }}
         run: |
           set -euo pipefail
@@ -132,8 +132,8 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           project_id: ${{ inputs.confirm_project }}
-          workload_identity_provider: ${{ vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.bootstrap_service_account }}
 
       - name: "📱 ! 🔐 Login"
         if: ${{ always() && (steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_003.outcome == 'cancelled') }}
