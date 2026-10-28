@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[2]
 APP_SRC = ROOT / "apps/api/src"
@@ -24,7 +25,7 @@ try:
     from alembic.script import ScriptDirectory
     from sqlalchemy import __version__ as sqlalchemy_version
     from photointel.db_connection import database_connection_options
-    from migrate_workflow import connection_profile
+    from migrate_workflow import connection_profile, migration_tls_url, trusted_ca_bundle
 except (ImportError, ModuleNotFoundError) as exc:
     # ImportError itself may reference env paths; module name only is enough.
     name = getattr(exc, "name", None) or "unknown"
@@ -35,7 +36,10 @@ try:
         "postgresql://test:test@ep-example.us-east-1.aws.neon.tech/photointel"
         "?sslmode=require&channel_binding=require"
     )
+    test = migration_tls_url(test)
+    bundle = trusted_ca_bundle()
     conninfo, params = connection_profile(test)
+    assert str(bundle) in unquote(conninfo)
     assert conninfo.startswith("postgresql://")
     assert "sslmode=verify-full" in conninfo or "sslmode=verify-full" in conninfo.replace("%2D", "-")
     assert "channel_binding=require" in conninfo
@@ -52,4 +56,4 @@ except (ValueError, AssertionError, OSError, RuntimeError) as exc:
 
 print(f"✅ Migration runtime ready: Python {sys.version_info.major}.{sys.version_info.minor}; "
       f"SQLAlchemy {sqlalchemy_version}; Alembic revision {heads[0]}. "
-      "Neon was not contacted.")
+      "CA bundle verified locally; Neon was not contacted.")
