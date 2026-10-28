@@ -38,6 +38,12 @@ SECRET_FIELDS = {
     "MODAL_PROXY_KEY",
     "MODAL_PROXY_SECRET",
 }
+WORKFLOW_SECRET_FIELDS = {
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "TS_OAUTH_CLIENT_ID",
+    "TS_OAUTH_SECRET",
+}
 API_SECRETS = SECRET_FIELDS - {"MIGRATION_DATABASE_URL", "ICLOUD_SESSION_KEY"}
 REQUIRED_SECRETS = SECRET_FIELDS - {
     "MODAL_TOKEN",
@@ -182,6 +188,35 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
             raise ConfigurationError(
                 "Pin a numeric secret version; latest is not reproducible"
             )
+    workflow_refs = config.get("workflow_secrets", {})
+    if not isinstance(workflow_refs, dict) or set(workflow_refs) - WORKFLOW_SECRET_FIELDS:
+        raise ConfigurationError("Invalid workflow secret references")
+    for reference in workflow_refs.values():
+        if (
+            not isinstance(reference, dict)
+            or set(reference) != {"name", "version"}
+            or not isinstance(reference["name"], str)
+            or not re.fullmatch(r"[a-z][a-z0-9-]{0,254}", reference["name"])
+            or not isinstance(reference["version"], str)
+            or not re.fullmatch(r"[1-9][0-9]{0,9}", reference["version"])
+        ):
+            raise ConfigurationError("Invalid workflow secret version or name")
+    workflows = config.get("workflows", {})
+    if not isinstance(workflows, dict) or set(workflows) - {"pages"}:
+        raise ConfigurationError("Invalid workflows configuration")
+    pages = workflows.get("pages", {})
+    if (
+        not isinstance(pages, dict)
+        or set(pages) - {"project", "api_base_url"}
+        or any(not isinstance(value, str) for value in pages.values())
+    ):
+        raise ConfigurationError("Invalid Pages workflow configuration")
+    if "project" in pages and not re.fullmatch(
+        r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", pages["project"]
+    ):
+        raise ConfigurationError("Invalid Cloudflare Pages project")
+    if pages.get("api_base_url"):
+        https_origin(pages["api_base_url"])
     extra = config.get("extra_environment", {})
     if not isinstance(extra, dict) or any(
         not re.fullmatch(r"[A-Z][A-Z0-9_]{0,99}", key)
@@ -552,7 +587,9 @@ def bootstrap(runner: Runner) -> None:
                 f"PhotoIntel {role}",
             ],
         )
-    for reference in config["secrets"].values():
+    for reference in list(config["secrets"].values()) + list(
+        config.get("workflow_secrets", {}).values()
+    ):
         runner.ensure(
             ["secrets", "describe", reference["name"]],
             ["secrets", "create", reference["name"], "--replication-policy", "automatic"],
@@ -579,6 +616,15 @@ def bootstrap(runner: Runner) -> None:
                     "roles/secretmanager.secretAccessor",
                 ]
             )
+    # Workflow credentials belong only to GitHub's WIF deploy identity.
+    # API/worker/migration containers must never receive these references.
+    deployer = f"serviceAccount:{identity(config, 'deployer')}"
+    for reference in config.get("workflow_secrets", {}).values():
+        runner.command([
+            "secrets", "add-iam-policy-binding", reference["name"],
+            "--member", deployer,
+            "--role", "roles/secretmanager.secretAccessor",
+        ])
     source_bucket = f"{config['project_id']}-photointel-build-source"
     runner.ensure(
         ["storage", "buckets", "describe", "gs://" + source_bucket],
