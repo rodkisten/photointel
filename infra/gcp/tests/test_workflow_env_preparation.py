@@ -83,7 +83,8 @@ class WorkflowEnvTests(unittest.TestCase):
         class Success:
             returncode = 0
         cfg = example_config()
-        with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True), (
+        with (
+            patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True),
             patch.object(loader, "secret_value",
                 side_effect=["cf-token", "a" * 32]),
             patch.object(loader.subprocess, "run", return_value=Success()) as proc,
@@ -100,10 +101,11 @@ class WorkflowEnvTests(unittest.TestCase):
             outputs = Path(tmp) / "output"
             envfile = Path(tmp) / "env"
             envfile.touch()
-            with patch.dict(os.environ, {
-                "GITHUB_OUTPUT": str(outputs),
-                "GITHUB_ENV": str(envfile),
-            }, clear=True), (
+            with (
+                patch.dict(os.environ, {
+                    "GITHUB_OUTPUT": str(outputs),
+                    "GITHUB_ENV": str(envfile),
+                }, clear=True),
                 patch.object(loader, "secret_value", side_effect=[
                     "client-do-not-log", "oauth-do-not-log"
                 ]),
