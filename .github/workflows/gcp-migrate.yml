@@ -97,7 +97,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
 
-      - name: "⚙ Config"
+      - name: "⚙ Env"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -106,7 +106,7 @@ jobs:
           confirm-project: ${{ inputs.confirm_project }}
           release-sha: ${{ github.sha }}
 
-      - name: "📱 ! ⚙ Config"
+      - name: "📱 ! ⚙ Env"
         if: ${{ always() && (steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -117,9 +117,9 @@ jobs:
           github-token: ${{ github.token }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "⚙ Config"
+          step: "⚙ Env"
           step-index: "4"
-          label: "⚙ Config"
+          label: "⚙ Env"
           outcome: ${{ steps.config.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
