@@ -14,7 +14,6 @@ import re
 from io import StringIO
 from typing import Any
 
-from dotenv import dotenv_values
 
 from manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
 
@@ -45,6 +44,8 @@ def fail(message: str) -> None:
 
 
 def checked_dotenv() -> dict[str, str]:
+    from dotenv import dotenv_values  # Installed by the composite action for legacy input.
+
     raw = os.environ.get("GCP_CONFIG_ENV", "")
     if not raw.strip():
         fail("GCP_CONFIG_ENV is missing or empty; configure a production Environment secret")
