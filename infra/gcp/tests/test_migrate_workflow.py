@@ -37,15 +37,63 @@ CONFIG = {
 class MigrationWorkflowTests(unittest.TestCase):
     def test_secret_uses_only_impersonated_migration_identity(self) -> None:
         url = "postgresql://user:secret@db.invalid/photos?sslmode=require&channel_binding=require"
-        with patch.object(migrate, "gcloud", return_value=url.encode()) as gcloud:
+        with (
+            patch.object(migrate, "gcloud", return_value=url.encode()) as gcloud,
+            patch.object(
+                migrate, "trusted_ca_bundle", return_value=Path("/trusted/certifi.pem")
+            ),
+        ):
             result = migrate.migration_secret(CONFIG)
-        self.assertEqual(result, url)
+        self.assertIn("sslrootcert=%2Ftrusted%2Fcertifi.pem", result)
+        self.assertIn("channel_binding=require", result)
+        self.assertIn("sslmode=require", result)
         self.assertTrue(gcloud.call_args.kwargs["impersonate"])
         self.assertEqual(gcloud.call_args.kwargs["project"], PROJECT)
         self.assertEqual(
             gcloud.call_args.args[0],
             ["secrets", "versions", "access", "1", "--secret", "photointel-migration-database-url"],
         )
+
+    def test_tls_url_replaces_system_ca_for_inspection_and_alembic(self) -> None:
+        url = (
+            "postgresql://user:verysecret@ep-test.neon.tech/db?"
+            "sslmode=require&channel_binding=require&sslrootcert=system"
+        )
+        with patch.object(
+            migrate, "trusted_ca_bundle", return_value=Path("/trusted/ca.pem")
+        ):
+            adjusted = migrate.migration_tls_url(url)
+        self.assertIn("sslrootcert=%2Ftrusted%2Fca.pem", adjusted)
+        self.assertNotIn("sslrootcert=system", adjusted)
+        self.assertIn("channel_binding=require", adjusted)
+        self.assertIn("verysecret", adjusted)
+        self.assertEqual(
+            migrate.classify_error("SSL error: certificate verify failed")[0],
+            "NEON_CA",
+        )
+
+    def test_explicit_custom_ca_is_not_overwritten(self) -> None:
+        raw = (
+            "postgresql://user:p@ep-test.neon.tech/db?"
+            "sslmode=verify-full&channel_binding=require"
+            "&sslrootcert=%2Fsecrets%2Fcustom-ca.pem"
+        )
+        with patch.object(
+            migrate, "trusted_ca_bundle", side_effect=AssertionError("not needed")
+        ):
+            adjusted = migrate.migration_tls_url(raw)
+        self.assertIn("sslrootcert=%2Fsecrets%2Fcustom-ca.pem", adjusted)
+
+    def test_trusted_ca_unavailable_fails_without_downgrading_tls(self) -> None:
+        from unittest.mock import patch
+
+        with patch.dict(sys.modules, {"certifi": None}):
+            with self.assertRaisesRegex(
+                migrate.MigrationError, "Missing certifi CA bundle"
+            ):
+                migrate.migration_tls_url(
+                    "postgresql://u:p@ep-test.neon.tech/db?sslmode=require"
+                )
 
     def test_gcloud_impersonation_never_exposes_secret_in_logs(self) -> None:
         class Fake:
