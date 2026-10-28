@@ -41,6 +41,7 @@ class ConfigEnvTests(unittest.TestCase):
         self.assertEqual(app.wif_metadata(entries), (DEPLOY_WIF, DEPLOY_SA))
         self.assertEqual(entries["GCP_BOOTSTRAP_SERVICE_ACCOUNT"], ADMIN_SA)
 
+    @unittest.skipUnless(importlib.util.find_spec('dotenv'), 'dotenv is optional for JSON-only CI')
     def test_legacy_dotenv_accepts_workflow_secrets_and_json_nested(self):
         lines = [
             f"GCP_WORKLOAD_IDENTITY_PROVIDER={DEPLOY_WIF}",
