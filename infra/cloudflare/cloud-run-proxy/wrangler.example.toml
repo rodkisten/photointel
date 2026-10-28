@@ -6,10 +6,10 @@ preview_urls = false
 
 # Replace with the actual deployed Service URL and your same-site Pages hostname.
 [vars]
-CLOUD_RUN_ORIGIN = "https://photointel-api-SERVICE_HASH-REGION.a.run.app"
-FRONTEND_ORIGIN = "https://fotos.example.com"
+CLOUD_RUN_ORIGIN = "https://photointel-api.run.app"
+FRONTEND_ORIGIN = "https://photos.migos.club"
 
 # Attach a custom domain in your own Cloudflare zone; protect it with Access.
 [[routes]]
-pattern = "api.example.com"
+pattern = "api.photos.migos.club"
 custom_domain = true
