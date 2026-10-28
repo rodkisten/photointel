@@ -1,0 +1,254 @@
+name: "🗃️ Migrate Neon"
+run-name: "🗃️ Neon · ${{ inputs.migration_mode }} · ${{ inputs.confirm_project }}"
+
+# Same migration implementation and safeguards as the migrate stage of Deploy.
+# This workflow never runs from a push or from the Deploy "all" stage.
+on:
+  workflow_dispatch:
+    inputs:
+      migration_mode:
+        description: 'Neon: inspect, apply migrations, or diagnose connection'
+        type: choice
+        options:
+          - plan
+          - apply
+          - diagnose
+        default: plan
+        required: true
+
+      migration_database:
+        description: 'For apply: initial-empty only if the target database is confirmed empty'
+        type: choice
+        options:
+          - unselected
+          - initial-empty
+          - existing-with-backup
+        default: unselected
+        required: true
+
+      migration_backup_prefix:
+        description: 'Optional private backup prefix; auto-resolved only when uniquely identifiable'
+        type: string
+        default: ''
+        required: false
+
+      authorize_charges:
+        description: 'For apply: I authorize the database migration and applicable cloud charges'
+        type: boolean
+        default: false
+        required: true
+
+      confirm_project:
+        description: 'Exact Google Cloud project ID configured in production environment'
+        type: string
+        default: photointel
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_COLOR: "1"
+  CLICOLOR_FORCE: "1"
+
+# Serialize against bootstrap and deploy, so migration never races with a release.
+concurrency:
+  group: photointel-gcp-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: "🗃️ Neon · ${{ inputs.migration_mode }}"
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose' ||
+       (inputs.migration_mode == 'apply' && inputs.authorize_charges == true))
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 90
+
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: "📥 Código"
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "📱 Live · Início"
+        id: notify_live_start
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: start
+          total: "1"
+          github-token: ${{ github.token }}
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+
+      - name: "⚙ Config"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: ${{ inputs.confirm_project }}
+          release-sha: ${{ github.sha }}
+
+      - name: "📱 ! ⚙ Config"
+        if: ${{ always() && (steps.config.outcome == 'failure' || steps.config.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "⚙ Config"
+          step-index: "4"
+          label: "⚙ Config"
+          outcome: ${{ steps.config.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+
+      - name: "🔐 Login"
+        id: cloud_auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+
+      - name: "📱 ! 🔐 Login"
+        if: ${{ always() && (steps.cloud_auth.outcome == 'failure' || steps.cloud_auth.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🔐 Login"
+          step-index: "6"
+          label: "🔐 Login"
+          outcome: ${{ steps.cloud_auth.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+
+      - name: "🧰 Gcloud"
+        id: setup_gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: "📱 ! 🧰 Gcloud"
+        if: ${{ always() && (steps.setup_gcloud.outcome == 'failure' || steps.setup_gcloud.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧰 Gcloud"
+          step-index: "8"
+          label: "🧰 Gcloud"
+          outcome: ${{ steps.setup_gcloud.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+
+      - name: "📱 ▶ Neon"
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃 Neon"
+          step-index: "11"
+          label: "🗃 Neon"
+          outcome: running
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+
+      - name: "🗃 Neon"
+        id: migrate_database
+        env:
+          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          RELEASE_SHA: ${{ github.sha }}
+          MIGRATION_MODE: ${{ inputs.migration_mode }}
+          MIGRATION_DATABASE: ${{ inputs.migration_database }}
+          MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
+        run: bash infra/gcp/release.sh migrate
+
+      - name: "📱 ✓ Neon"
+        if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🗃 Neon"
+          step-index: "11"
+          label: "🗃 Neon"
+          outcome: ${{ steps.migrate_database.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "1"
+          total: "1"
+          project: ${{ inputs.confirm_project }}
+          region: "us-central1"
+
+      - name: "🧹 API"
+        id: cleanup
+        if: always() && steps.checkout.outcome == 'success'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
+
+      - name: "📱 Live · Fim"
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: end
+          total: "1"
+          github-token: ${{ github.token }}
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          outcome: ${{ job.status }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
