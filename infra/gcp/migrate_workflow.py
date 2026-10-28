@@ -142,8 +142,12 @@ def migration_tls_url(url: str) -> str:
         if not query.get("sslrootcert") or query["sslrootcert"] == "system":
             query["sslrootcert"] = str(trusted_ca_bundle())
         return urlunsplit(parsed._replace(query=urlencode(query)))
-    except (ValueError, OSError) as exc:
-        raise MigrationError("Invalid migration TLS profile; inspect the URL without logging it") from None
+    except MigrationError:
+        raise
+    except (ValueError, OSError):
+        raise MigrationError(
+            "Invalid migration TLS URL encoding; check the secret format without logging it"
+        ) from None
 
 
 def migration_secret(config: dict[str, Any]) -> str:
