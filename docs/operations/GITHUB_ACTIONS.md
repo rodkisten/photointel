@@ -42,15 +42,25 @@ O GitHub token usado para obter o identificador numérico do job tem permissão 
 
 | Chave / origem | Consumidores | Onde configurar |
 |---|---|---|
-| `vars.GCP_CONFIG_ENV` (dotenv multiline com nomes de secrets, IDs, limites e origens **não secretas**) | `gcp-deploy` e `gcp-bootstrap` | GitHub **Environment `production`**, em Settings → Environments |
+| `vars.GCP_CONFIG_ENV` (dotenv multiline com nomes de secrets, IDs, limites e origens **não secretas**) | `gcp-deploy`, `gcp-bootstrap` e `gcp-migrate` | GitHub **Environment `production`**, em Settings → Environments |
 | `vars.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER` / `vars.GCP_BOOTSTRAP_SERVICE_ACCOUNT` | `gcp-bootstrap` | Environment `production`; WIF e conta administrativos **separados** |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` / `GCP_DEPLOY_SERVICE_ACCOUNT` | `gcp-deploy` | **Dentro** de `GCP_CONFIG_ENV`, extraídos pela action reutilizável |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` / `GCP_DEPLOY_SERVICE_ACCOUNT` | `gcp-deploy` e `gcp-migrate` | **Dentro** de `GCP_CONFIG_ENV`, extraídos pela action reutilizável |
 | `vars.VITE_API_BASE_URL` / `vars.PAGES_PROJECT` | `deploy-pages` | Environment `production` |
 | `secrets.CLOUDFLARE_API_TOKEN` / `secrets.CLOUDFLARE_ACCOUNT_ID` | `deploy-pages` | **Environment secrets** de `production` |
 | `secrets.TS_OAUTH_CLIENT_ID` / `secrets.TS_OAUTH_SECRET` | `ssh` | **Repository Actions secrets** existentes |
 | `GITHUB_TOKEN` / `github.token` | `ci` / `zip` | Token efêmero fornecido pelo próprio GitHub, não é var configurável |
 
 **CI, Compose, WebKit, CPU real e outros testes isolados usam variáveis sintéticas** do próprio workflow. Não faz sentido conectá-los a `vars.GCP_CONFIG_ENV` ou ao Environment `production`. Para qualquer valor sensível, use `secrets.*`, nunca `vars.*` ou texto em arquivo versionado.
+
+## ⚙ Env: carregamento antes de executar scripts
+
+Os workflows de produção **🚀 Deploy**, **🧱 Setup GCP** e **🗃️ Migrate Neon** exibem o step `⚙ Env`, reutilizando `.github/actions/gcp-config` para interpretar `vars.GCP_CONFIG_ENV`, validar referências a segredos, gerar configuração privada e limpar os arquivos efêmeros no fim. Identidades continuam isoladas: bootstrap não usa o service account do deployer.
+
+**🌐 Pages** também executa `⚙ Env`, agora antes de `npm ci`: `infra/scripts/prepare_workflow_env.py pages` valida `vars.VITE_API_BASE_URL` (origem HTTPS ou vazio para same-origin), `vars.PAGES_PROJECT`, o SHA e a presença das credenciais Cloudflare. Somente valores públicos são exportados para `GITHUB_ENV`; `secrets.CLOUDFLARE_API_TOKEN` e `secrets.CLOUDFLARE_ACCOUNT_ID` permanecem restritos à etapa do Wrangler. O script não imprime os valores.
+
+**🖥️ SSH**, apenas quando `command=ssh`, verifica em `⚙ Env` se os dois segredos Tailscale estão definidos antes da preparação longa da sessão, sem escrever credenciais em arquivos, `GITHUB_ENV` ou logs.
+
+**Testes isolados**, CI, Compose, WebKit, artefatos/manifesto e importação ZIP continuam recebendo somente entradas efêmeras e sintéticas. Não carregam `production`, nem os secrets da aplicação, em PRs não confiáveis. Configure os valores no GitHub Settings → Environments → production (ou Repository secrets para Tailscale).
 
 ## ♻️ Action reutilizável de configuração GCP
 

@@ -70,9 +70,10 @@ jobs:
           assert "inputs.mode == 'cleanup'" in action
           assert "GCP_CONFIG_ENV:" in action
           assert "rm -f infra/gcp/config.local.json" in action
-          for workflow in ("gcp-bootstrap.yml", "gcp-deploy.yml"):
+          for workflow in ("gcp-bootstrap.yml", "gcp-deploy.yml", "gcp-migrate.yml"):
               source = (Path(".github/workflows") / workflow).read_text()
               assert source.count("uses: ./.github/actions/gcp-config") == 2
+              assert 'name: "⚙ Env"' in source
               expected = "config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}"
               assert expected in source
               assert "mode: cleanup" in source

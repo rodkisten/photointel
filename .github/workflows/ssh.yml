@@ -71,6 +71,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: "⚙ Env"
+        id: ssh_env
+        if: ${{ inputs.command == 'ssh' }}
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+        run: python3 infra/scripts/prepare_workflow_env.py ssh
+
       - name: "🧰 Setup"
         id: notify_observed_001
         uses: actions/setup-python@v7
@@ -145,18 +153,6 @@ jobs:
         env:
           MAKE_TARGET: ${{ inputs.command }}
         run: make "$MAKE_TARGET"
-
-      - name: "🔐 Login"
-        id: notify_observed_009
-        if: ${{ inputs.command == 'ssh' }}
-        env:
-          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
-        run: |
-          if [[ -z "$TS_OAUTH_CLIENT_ID" || -z "$TS_OAUTH_SECRET" ]]; then
-            echo '::error::Create TS_OAUTH_CLIENT_ID and TS_OAUTH_SECRET under repository Actions secrets.'
-            exit 1
-          fi
 
       - name: "🔐 Login"
         id: notify_observed_010

@@ -11,6 +11,15 @@ jobs:
       - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
+      - name: "⚙ Env"
+        id: pages_env
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: python3 infra/scripts/prepare_workflow_env.py pages
+
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-node@v4
@@ -21,9 +30,6 @@ jobs:
       - name: "▶ ️  Execute command"
         id: notify_observed_004
         run: npm --prefix apps/web run build
-        env:
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
-          VITE_RELEASE_ID: ${{ github.sha }}
       - name: "🔔 [NOTIFY] ▶ ️  Execute command"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
@@ -45,7 +51,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PAGES_PROJECT: ${{ vars.PAGES_PROJECT }}
 
       - name: "🔔 [NOTIFY] ▶ ️  Execute command"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
