@@ -16,7 +16,7 @@ from typing import Any
 
 from dotenv import dotenv_values
 
-from manage import REQUIRED_SECRETS, SECRET_FIELDS
+from manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "infra/gcp/config.local.json"
@@ -77,14 +77,14 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
         if not all(ENV_PART_PATTERN.fullmatch(item) for item in segments):
             fail(f"Invalid .env key: {key}")
         root = segments[0].lower()
-        if root == "secrets":
+        if root in {"secrets", "workflow_secrets"}:
             if (
                 len(segments) != 3
                 or not re.fullmatch(r"[A-Z][A-Z0-9_]*", segments[1])
                 or segments[2].upper() not in {"NAME", "VERSION"}
             ):
-                fail(f"Expected SECRETS__UPPERCASE_KEY__NAME/VERSION: {key}")
-            path = ["secrets", segments[1], segments[2].lower()]
+                fail(f"Expected {root.upper()}__UPPERCASE_KEY__NAME/VERSION: {key}")
+            path = [root, segments[1], segments[2].lower()]
         elif root == "extra_environment" and len(segments) == 2:
             path = ["extra_environment", segments[1]]
         else:
@@ -112,7 +112,10 @@ def validate_references(config: dict[str, Any]) -> None:
     if unknown:
         fail("Unknown Secret Manager reference keys: " + ", ".join(sorted(unknown)))
 
-    for key, ref in sorted(references.items()):
+    workflow_refs = config.get("workflow_secrets", {})
+    if not isinstance(workflow_refs, dict) or set(workflow_refs) - WORKFLOW_SECRET_FIELDS:
+        fail("Unknown workflow Secret Manager reference key")
+    for key, ref in sorted({**references, **workflow_refs}.items()):
         if not isinstance(ref, dict) or set(ref.keys()) != {"name", "version"}:
             fail(f"Invalid Secret Manager reference for {key}: expected NAME and VERSION")
         name = ref["name"]
@@ -199,9 +202,27 @@ def print_redacted_summary(config: dict[str, Any], provider: str, service_accoun
     print("=== END REDACTED CONFIGURATION PREVIEW ===")
 
 
-def main() -> None:
+def read_input() -> tuple[dict[str, Any], dict[str, str]]:
+    raw = os.environ.get("GCP_CONFIG_ENV", "").strip()
+    if not raw:
+        fail("GCP_CONFIG_ENV is missing; configure one production Environment variable")
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            fail("Invalid GCP_CONFIG_ENV JSON")
+        if not isinstance(payload, dict):
+            fail("GCP_CONFIG_ENV JSON must be an object")
+        entries = {key: payload.pop(key, "") for key in REQUIRED_WIF}
+        if any(not isinstance(item, str) for item in entries.values()):
+            fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
+        return payload, entries
     entries = checked_dotenv()
-    config = decode_config(entries)
+    return decode_config(entries), entries
+
+
+def main() -> None:
+    config, entries = read_input()
     validate_references(config)
     provider, service_account = wif_metadata(entries)
 
