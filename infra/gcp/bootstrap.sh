@@ -50,6 +50,69 @@ for key in "${KEYS[@]}"; do
   [[ "$name" =~ ^[a-z][a-z0-9-]{0,254}$ ]] || exit 2
   SECRET_NAMES["$key"]="$name"
 done
+# Workflow-only credentials are never granted to API/worker/Neon identities.
+declare -A WORKFLOW_NAMES
+while IFS=
+if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
+if [[ "$MODE" == plan ]]; then
+  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + ${#WORKFLOW_NAMES[@]})) secret containers, staging bucket, and IAM."
+  exit 0
+fi
+enabled="$(gcp services list --enabled --format='value(config.name)')"
+missing=()
+for api in "${APIS[@]}"; do if ! grep -Fxq "$api" <<< "$enabled"; then missing+=("$api"); fi; done
+if (("${#missing[@]}" > 0)); then change services enable "${missing[@]}"; else log "APIs already enabled"; fi
+ensure "Docker repository $REPO" artifacts repositories describe "$REPO" "--location=$REGION" @@CREATE@@ artifacts repositories create "$REPO" "--location=$REGION" --repository-format=docker "--description=Private PhotoIntel images"
+format="$(gcp artifacts repositories describe "$REPO" "--location=$REGION" --format='value(format)')"
+[[ "$format" == DOCKER ]] || { echo "::error::Repository is not Docker: $format" >&2; exit 1; }
+for role in api jobs migrate scheduler builder deployer; do
+  id="photointel-$role"; email="$id@$PROJECT.iam.gserviceaccount.com"
+  ensure "Service account $email" iam service-accounts describe "$email" @@CREATE@@ iam service-accounts create "$id" "--display-name=PhotoIntel $role"
+done
+for key in "${KEYS[@]}"; do
+  name="${SECRET_NAMES[$key]}"
+  ensure "Secret container $name" secrets describe "$name" @@CREATE@@ secrets create "$name" --replication-policy=automatic
+done
+for key in "${!WORKFLOW_NAMES[@]}"; do
+  ensure "Workflow secret container ${WORKFLOW_NAMES[$key]}" secrets describe "${WORKFLOW_NAMES[$key]}" @@CREATE@@ secrets create "${WORKFLOW_NAMES[$key]}" --replication-policy=automatic
+done
+ensure "Staging bucket $BUCKET" storage buckets describe "$BUCKET" @@CREATE@@ storage buckets create "$BUCKET" "--location=$REGION" --uniform-bucket-level-access --public-access-prevention
+log "Staging bucket location: $(gcp storage buckets describe "$BUCKET" --format='value(location)'); no relocation"
+for key in "${KEYS[@]}"; do
+  name="${SECRET_NAMES[$key]}"
+  for role in api jobs migrate; do
+    case "$role:$key" in
+      api:MIGRATION_DATABASE_URL|api:ICLOUD_SESSION_KEY|jobs:MIGRATION_DATABASE_URL) continue ;;
+      migrate:*) if [[ "$key" != DATABASE_URL && "$key" != MIGRATION_DATABASE_URL ]]; then continue; fi ;;
+    esac
+    change secrets add-iam-policy-binding "$name" "--member=serviceAccount:photointel-$role@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+  done
+done
+for key in "${!WORKFLOW_NAMES[@]}"; do
+  change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+done
+change storage buckets add-iam-policy-binding "$BUCKET" "--member=$BUILDER" --role=roles/storage.objectViewer --condition=None --format=none
+change artifacts repositories add-iam-policy-binding "$REPO" "--location=$REGION" "--member=$BUILDER" --role=roles/artifactregistry.writer --condition=None --format=none
+change projects add-iam-policy-binding "$PROJECT" "--member=$BUILDER" --role=roles/logging.logWriter --condition=None --format=none
+for role in roles/run.admin roles/cloudscheduler.admin roles/cloudbuild.builds.editor roles/artifactregistry.reader roles/logging.viewer roles/serviceusage.serviceUsageConsumer; do
+  change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
+done
+change storage buckets add-iam-policy-binding "$BUCKET" "--member=$DEPLOYER" --role=roles/storage.objectAdmin --condition=None --format=none
+for role in api jobs migrate scheduler builder; do
+  change iam service-accounts add-iam-policy-binding "photointel-$role@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
+done
+# The WIF deployer may obtain a short-lived migration identity token, but it
+# does NOT receive project-wide or direct Secret Manager reader permissions.
+change iam service-accounts add-iam-policy-binding "photointel-migrate@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountTokenCreator --condition=None --format=none
+log "Completed: no resources deleted and no secret values created."
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + ${#WORKFLOW_NAMES[@]}))" >> "$GITHUB_STEP_SUMMARY"
+fi
+\t' read -r key name; do
+  [[ -z "$key" ]] && continue
+  [[ "$name" =~ ^[a-z][a-z0-9-]{0,254}$ ]] || exit 2
+  WORKFLOW_NAMES["$key"]="$name"
+done < <(jq -r '.workflow_secrets // {} | to_entries[] | [.key, .value.name] | @tsv' "$CONFIG")
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
