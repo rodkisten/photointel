@@ -5,7 +5,7 @@ inputs:
     description: "prepare or cleanup"
     required: true
   config-env:
-    description: "Non-secret multiline configuration from vars.GCP_CONFIG_ENV in the selected GitHub Environment"
+    description: "Non-secret JSON or dotenv configuration from vars.GCP_CONFIG_ENV in the selected GitHub Environment"
     required: false
   confirm-project:
     description: "Exact project ID approved by the caller"
@@ -20,6 +20,12 @@ outputs:
   service_account:
     description: "Service account from the validated configuration (deployment identity)"
     value: ${{ steps.prepare.outputs.service_account }}
+  bootstrap_workload_identity_provider:
+    description: "Separate administrative Workload Identity provider from GCP_CONFIG_ENV"
+    value: ${{ steps.prepare.outputs.bootstrap_workload_identity_provider }}
+  bootstrap_service_account:
+    description: "Separate administrative service account from GCP_CONFIG_ENV"
+    value: ${{ steps.prepare.outputs.bootstrap_service_account }}
 runs:
   using: composite
   steps:
