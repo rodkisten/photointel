@@ -21,6 +21,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from manage import ConfigurationError, validate, verify_backup_receipt
 
@@ -41,6 +42,11 @@ ALEMBIC_FILE = ROOT / "infra/migrations/alembic.ini"
 HINTS = (
     ("password authentication failed", "NEON_AUTH", "Check the pinned migration secret in Secret Manager."),
     ("channel_binding", "NEON_CHANNEL_BINDING", "Use psycopg with SCRAM channel binding; inspect the Neon URL."),
+    ("certificate verify failed", "NEON_CA", "Server certificate could not be verified. Check the CA bundle and Neon hostname."),
+    ("root certificate file", "NEON_CA_FILE", "The PostgreSQL CA file is unavailable to libpq."),
+    ("hostname mismatch", "NEON_HOSTNAME", "The Neon hostname does not match the server certificate."),
+    ("does not match the server certificate", "NEON_HOSTNAME", "The Neon hostname does not match the server certificate."),
+    ("ssl error", "NEON_TLS", "Inspect the CA bundle, Neon hostname and TLS handshake."),
     ("certificate", "NEON_TLS", "Check the endpoint host, CA trust and TLS verification."),
     ("permission denied", "NEON_PERMISSION", "Check migration role privileges on the direct Neon database."),
     ("connection timed out", "NEON_TIMEOUT", "Check direct Neon endpoint reachability from GitHub Actions."),
@@ -103,6 +109,43 @@ def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes
     return result.stdout
 
 
+
+def trusted_ca_bundle() -> Path:
+    """A concrete, current CA bundle for both libpq and Alembic.
+
+    The bundled libpq in psycopg_binary does not necessarily resolve the same
+    OpenSSL trust paths as Python, so sslrootcert=system can fail on a runner
+    even when Python HTTPS certificate validation succeeds.
+    """
+    try:
+        import certifi
+
+        candidate = Path(certifi.where())
+    except ImportError:
+        raise MigrationError(
+            "Missing certifi CA bundle in the isolated migration environment"
+        ) from None
+    if not candidate.is_file() or candidate.stat().st_size < 1000:
+        raise MigrationError("Trusted CA bundle is missing or empty")
+    return candidate
+
+
+def migration_tls_url(url: str) -> str:
+    """Replace only the default libpq trust-store selector, never weaken TLS."""
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme not in {"postgresql", "postgres", "postgresql+psycopg", "postgresql+asyncpg"}:
+            raise MigrationError("Migration secret must be a PostgreSQL URL")
+        query_items = parse_qsl(parsed.query, keep_blank_values=True)
+        query = dict(query_items)
+        # Explicit custom CA settings are intentionally preserved.
+        if not query.get("sslrootcert") or query["sslrootcert"] == "system":
+            query["sslrootcert"] = str(trusted_ca_bundle())
+        return urlunsplit(parsed._replace(query=urlencode(query)))
+    except (ValueError, OSError) as exc:
+        raise MigrationError("Invalid migration TLS profile; inspect the URL without logging it") from None
+
+
 def migration_secret(config: dict[str, Any]) -> str:
     secret = config["secrets"]["MIGRATION_DATABASE_URL"]
     name = str(secret["name"])
@@ -120,7 +163,7 @@ def migration_secret(config: dict[str, Any]) -> str:
         raise MigrationError("Migration secret is not a UTF-8 PostgreSQL URL") from None
     if not url or "\n" in url or "\r" in url:
         raise MigrationError("Migration secret URL is missing or contains newlines")
-    return url
+    return migration_tls_url(url)
 
 
 def connection_profile(url: str) -> tuple[str, dict[str, Any]]:
