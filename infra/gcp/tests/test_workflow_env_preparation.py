@@ -99,7 +99,8 @@ class WorkflowEnvTests(unittest.TestCase):
                      "container-architectures.yml", "gcp-validation.yml",
                      "real-cpu-smoke.yml", "webkit-validation.yml"):
             source = (ROOT / ".github/workflows" / name).read_text()
-            self.assertNotIn("vars.GCP_CONFIG_ENV", source)
+            self.assertNotIn("uses: ./.github/actions/gcp-config", source)
+            self.assertNotIn("environment: production", source)
 
 
 if __name__ == "__main__":
