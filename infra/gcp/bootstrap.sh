@@ -51,11 +51,12 @@ for key in "${KEYS[@]}"; do
   SECRET_NAMES["$key"]="$name"
 done
 # Workflow-only credentials are never granted to API/worker/Neon identities.
+WORKFLOW_COUNT="$(jq -r '(.workflow_secrets // {}) | length' "$CONFIG")"
 declare -A WORKFLOW_NAMES
 while IFS=
 if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
-  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + ${#WORKFLOW_NAMES[@]})) secret containers, staging bucket, and IAM."
+  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, and IAM."
   exit 0
 fi
 enabled="$(gcp services list --enabled --format='value(config.name)')"
@@ -106,7 +107,7 @@ done
 change iam service-accounts add-iam-policy-binding "photointel-migrate@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountTokenCreator --condition=None --format=none
 log "Completed: no resources deleted and no secret values created."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-  printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + ${#WORKFLOW_NAMES[@]}))" >> "$GITHUB_STEP_SUMMARY"
+  printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + WORKFLOW_COUNT))" >> "$GITHUB_STEP_SUMMARY"
 fi
 \t' read -r key name; do
   [[ -z "$key" ]] && continue
