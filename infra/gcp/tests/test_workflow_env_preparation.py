@@ -79,6 +79,47 @@ class WorkflowEnvTests(unittest.TestCase):
         self.assertIn("photointel", cmd)
         self.assertTrue(run.call_args.kwargs["stderr"] == subprocess.PIPE)
 
+    def test_secret_manager_errors_are_actionable_and_never_show_raw_stderr(self):
+        cases = (
+            (b"ERROR: (gcloud) PERMISSION_DENIED password=VERY_PRIVATE",
+             "roles/secretmanager.secretAccessor"),
+            (b"NOT_FOUND: secret missing password=VERY_PRIVATE",
+             "Secret or version not found"),
+            (b"FAILED_PRECONDITION: version is DISABLED password=VERY_PRIVATE",
+             "Secret version unavailable"),
+            (b"unknown error password=VERY_PRIVATE",
+             "Cannot access"),
+        )
+        for stderr, expected in cases:
+            with self.subTest(expected=expected):
+                text = loader.explain_secret_access_failure(
+                    "CLOUDFLARE_API_TOKEN", "photointel-pages-token", "1", stderr
+                )
+                self.assertIn(expected, text)
+                self.assertIn("photointel-pages-token, version 1", text)
+                self.assertNotIn("VERY_PRIVATE", text)
+
+    def test_pages_preflight_checks_secrets_before_writing_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            envfile = Path(tmp) / "env"
+            envfile.touch()
+            with (
+                patch.dict(os.environ, {
+                    "GITHUB_ENV": str(envfile), "GITHUB_SHA": "a" * 40,
+                }, clear=True),
+                patch.object(loader, "read_config", return_value=example_config()),
+                patch.object(loader, "secret_value", side_effect=loader.WorkflowEnvironmentError(
+                    "Secret or version not found"
+                )) as secret,
+                patch("sys.argv", ["prepare_workflow_env.py", "pages"]),
+                contextlib.redirect_stderr(io.StringIO()) as err,
+            ):
+                status = loader.main()
+            self.assertEqual(status, 1)
+            self.assertEqual(secret.call_count, 1)
+            self.assertIn("Secret or version not found", err.getvalue())
+            self.assertEqual(envfile.read_text(), "")
+
     def test_pages_deploy_scopes_secrets_to_subprocess(self):
         class Success:
             returncode = 0
