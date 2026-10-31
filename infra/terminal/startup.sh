@@ -118,15 +118,32 @@ echo 'terminal-startup: docker image pull starting'
 docker --config /run/terminal/docker pull "$image"
 echo 'terminal-startup: docker image pulled'
 install -d -o 1000 -g 1000 -m 0700 /var/lib/terminal/home
-# The container uses bridge networking, no privileged mode and no host Docker socket.
-docker rm -f photointel-terminal 2>/dev/null || true
-docker run -d --name photointel-terminal --restart unless-stopped \
-  --log-opt max-size=5m --log-opt max-file=2 \
-  -e "CLOUDSDK_CORE_PROJECT=$project" \
-  -e "CLOUDSDK_COMPUTE_REGION=$(jq -er .region <<< "$cfg")" \
-  -v /var/lib/terminal/home:/home/rod \
-  "$image"
-echo 'terminal-startup: docker container started'
+# Preserve changes to the container's writable layer across normal VM starts.
+# A new immutable image digest requires replacement; personal files are mounted
+# from the persistent VM boot disk, and baseline tools live in the Dockerfile.
+if docker container inspect photointel-terminal >/dev/null 2>&1; then
+  current_image="$(docker inspect --format '{{.Config.Image}}' photointel-terminal)"
+  if [[ "$current_image" != "$image" ]]; then
+    echo 'terminal-startup: image changed; replacing container (home preserved)'
+    docker rm -f photointel-terminal >/dev/null
+  fi
+fi
+if docker container inspect photointel-terminal >/dev/null 2>&1; then
+  docker update --restart unless-stopped photointel-terminal >/dev/null
+  if [[ "$(docker inspect --format '{{.State.Running}}' photointel-terminal)" != true ]]; then
+    docker start photointel-terminal >/dev/null
+  fi
+  echo 'terminal-startup: existing docker container reused'
+else
+  # The container uses bridge networking, no privileged mode and no host Docker socket.
+  docker run -d --name photointel-terminal --restart unless-stopped \
+    --log-opt max-size=5m --log-opt max-file=2 \
+    -e "CLOUDSDK_CORE_PROJECT=$project" \
+    -e "CLOUDSDK_COMPUTE_REGION=$(jq -er .region <<< "$cfg")" \
+    -v /var/lib/terminal/home:/home/rod \
+    "$image"
+  echo 'terminal-startup: docker container started'
+fi
 cat > /usr/local/bin/terminal-shell <<'SHELL'
 #!/bin/bash
 set -e

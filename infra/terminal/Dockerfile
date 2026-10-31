@@ -4,9 +4,19 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
     bash bash-completion ca-certificates curl wget jq gawk sed coreutils findutils \
     grep less nano vim-tiny git openssh-client openssh-server rsync tmux htop \
     ripgrep fzf unzip zip tar gzip xz-utils dnsutils iproute2 iputils-ping \
-    netcat-openbsd procps lsof file make python3 python3-venv python3-pip sudo \
+    netcat-openbsd procps lsof file make python3 python3-venv python3-pip sudo zsh \
     postgresql-client sqlite3 tini \
     && rm -rf /var/lib/apt/lists/*
+# The Cloud SDK base image puts gcloud outside the ordinary login-shell PATH.
+# Tailscale SSH starts `bash -l`, which resets PATH; expose the existing CLI in
+# /usr/local/bin so interactive shells and the iCloud installer both find it.
+RUN set -eux; \
+    cli="$(readlink -f "$(command -v gcloud)")"; \
+    test -x "$cli"; \
+    ln -sf "$cli" /usr/local/bin/gcloud; \
+    printf '%s\n' 'export PATH="/usr/local/bin:/usr/lib/google-cloud-sdk/bin:$PATH"' > /etc/profile.d/photointel-gcloud.sh; \
+    bash -lc 'command -v gcloud && gcloud version'; \
+    zsh -lc 'command -v gcloud'
 # The official Cloud SDK image already contains UID 1000. Keep that UID for
 # the persistent volume, reusing the account instead of creating a duplicate.
 RUN set -eux; \
