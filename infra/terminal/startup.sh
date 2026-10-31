@@ -1,6 +1,6 @@
 #!/bin/bash
 # Metadata contains only non-secret settings and Secret Manager references.
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 # Log only the failing stage and exit status to serial console. Never log
 # OAuth secrets, instance metadata contents, Docker credentials or JWTs.
@@ -27,6 +27,7 @@ Unit=terminal-deadline.service
 [Install]
 WantedBy=timers.target
 UNIT
+chmod 0644 /etc/systemd/system/terminal-deadline.service /etc/systemd/system/terminal-deadline.timer
 systemctl daemon-reload
 systemctl enable --now terminal-deadline.timer
 terminal_stage=apt
@@ -75,25 +76,32 @@ install -d -m 0700 /run/terminal
 trap 'rm -f /run/terminal/*' EXIT
 access_token="$(meta instance/service-accounts/default/token | jq -er .access_token)"
 secret() {
-  local name version
+  local name version response
   name="$(jq -er --arg key "$1" '.oauth[$key].name' <<< "$cfg")"
   version="$(jq -er --arg key "$1" '.oauth[$key].version' <<< "$cfg")"
-  curl -fsS --retry 5 -H "Authorization: Bearer $access_token" \
-    "https://secretmanager.googleapis.com/v1/projects/$project/secrets/$name/versions/$version:access" \
-    | jq -er .payload.data | base64 -d
+  if ! response="$(curl -fsS --retry 5 -H "Authorization: Bearer $access_token" \
+    "https://secretmanager.googleapis.com/v1/projects/$project/secrets/$name/versions/$version:access")"; then
+    # These are configuration references, not the secret values.
+    echo "terminal-startup: FAILED stage=tailscale-auth secret=$1 version=$version" >&2
+    return 1
+  fi
+  jq -er .payload.data <<< "$response" | base64 -d
 }
 if ! tailscale status --json | jq -e '.BackendState == "Running"' >/dev/null; then
   secret TS_OAUTH_CLIENT_ID > /run/terminal/client
   secret TS_OAUTH_SECRET > /run/terminal/secret
+  echo 'terminal-startup: oauth credentials read'
   curl -fsS --retry 5 -X POST https://api.tailscale.com/api/v2/oauth/token \
     --data-urlencode client_id@/run/terminal/client --data-urlencode client_secret@/run/terminal/secret \
     --data grant_type=client_credentials > /run/terminal/oauth
+  echo 'terminal-startup: oauth token received'
   jq -er '.access_token | "Authorization: Bearer " + .' /run/terminal/oauth > /run/terminal/header
   jq -n --arg tag "$(jq -er .tag <<< "$cfg")" \
     '{capabilities:{devices:{create:{reusable:false,ephemeral:false,preauthorized:true,tags:[$tag]}}},expirySeconds:600}' > /run/terminal/request
   curl -fsS --retry 5 -X POST -H @/run/terminal/header -H 'Content-Type: application/json' \
     --data-binary @/run/terminal/request https://api.tailscale.com/api/v2/tailnet/-/keys \
     | jq -er .key > /run/terminal/key
+  echo 'terminal-startup: tailscale auth key issued'
   tailscale up --auth-key=file:/run/terminal/key --ssh --accept-dns=false \
     --hostname="$(jq -er .name <<< "$cfg")" --advertise-tags="$(jq -er .tag <<< "$cfg")"
 else
@@ -105,6 +113,7 @@ image="$(jq -er .image <<< "$cfg")"
 registry="${image%%/*}"
 printf '%s' "$access_token" | docker --config /run/terminal/docker login -u oauth2accesstoken --password-stdin "https://$registry"
 docker --config /run/terminal/docker pull "$image"
+echo 'terminal-startup: docker image pulled'
 install -d -o 1000 -g 1000 -m 0700 /var/lib/terminal/home
 # The container uses bridge networking, no privileged mode and no host Docker socket.
 docker rm -f photointel-terminal 2>/dev/null || true
@@ -114,6 +123,7 @@ docker run -d --name photointel-terminal --restart unless-stopped \
   -e "CLOUDSDK_COMPUTE_REGION=$(jq -er .region <<< "$cfg")" \
   -v /var/lib/terminal/home:/home/rod \
   "$image"
+echo 'terminal-startup: docker container started'
 cat > /usr/local/bin/terminal-shell <<'SHELL'
 #!/bin/bash
 set -e
