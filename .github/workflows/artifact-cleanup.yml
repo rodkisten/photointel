@@ -1,0 +1,98 @@
+name: "🧹 Artifact Cleanup"
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/artifact-cleanup.yml']
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: photointel-artifact-cleanup
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: github.repository == 'rodkisten/photointel' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: "🧹 Keep three useful artifacts and remove the rest"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            if (owner !== 'rodkisten' || repo !== 'photointel' || context.ref !== 'refs/heads/main') {
+              throw new Error('Cleanup is restricted to rodksiten/photointel main');
+            }
+            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner, repo, per_page: 100,
+            });
+            const runs = new Map();
+            for (const artifact of artifacts) {
+              const id = artifact.workflow_run?.id;
+              if (!id) throw new Error('Artifact has no originating run; refusing ambiguous cleanup');
+              if (!runs.has(id)) {
+                const {data} = await github.rest.actions.getWorkflowRun({owner, repo, run_id: id});
+                runs.set(id, data);
+              }
+            }
+            const rank = artifact => {
+              const run = runs.get(artifact.workflow_run.id);
+              if (run.status !== 'completed') return 0;
+              if (run.conclusion === 'success' && /release.*provenance|release.*manifest/i.test(artifact.name)) return 1;
+              if (run.conclusion === 'success') return 2;
+              return 3;
+            };
+            const candidates = artifacts.filter(a => !a.expired).sort((a,b) =>
+              rank(a) - rank(b) || Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id);
+            const kept = [];
+            const names = new Set();
+            for (const artifact of candidates) {
+              if (kept.length === 3) break;
+              if (!names.has(artifact.name)) {
+                kept.push(artifact);
+                names.add(artifact.name);
+              }
+            }
+            for (const artifact of candidates) {
+              if (kept.length === 3) break;
+              if (!kept.some(x => x.id === artifact.id)) kept.push(artifact);
+            }
+            const keepIds = new Set(kept.map(a => a.id));
+            const targets = artifacts.filter(a => !keepIds.has(a.id)).sort((a,b) =>
+              Date.parse(a.created_at) - Date.parse(b.created_at));
+            core.info(JSON.stringify({
+              action: 'cleanup-plan', total: artifacts.length,
+              keep: kept.map(a => ({id:a.id,name:a.name,run:a.workflow_run.id,bytes:a.size_in_bytes})),
+              deleteCount: targets.length,
+            }));
+            let deleted = 0, bytes = 0;
+            const failures = [];
+            for (const artifact of targets) {
+              try {
+                await github.rest.actions.deleteArtifact({owner, repo, artifact_id: artifact.id});
+                deleted++;
+                bytes += artifact.size_in_bytes;
+                core.info('Deleted ' + artifact.id + ' ' + artifact.name);
+              } catch (error) {
+                if (error.status === 404) continue; // Already expired/deleted elsewhere.
+                failures.push({id:artifact.id,status:error.status ?? 'unknown'});
+              }
+            }
+            const remaining = await github.paginate(github.rest.actions.listArtifactsForRepo, {
+              owner, repo, per_page: 100,
+            });
+            const result = {
+              initialCount:artifacts.length, deletedCount:deleted, deletedBytes:bytes,
+              remainingCount:remaining.length,
+              kept:remaining.map(a => ({id:a.id,name:a.name,run:a.workflow_run?.id,bytes:a.size_in_bytes})),
+              failures,
+            };
+            core.info('CLEANUP_RESULT=' + JSON.stringify(result));
+            await core.summary.addHeading('Artifact cleanup')
+              .addRaw('Deleted: ' + deleted + '; removed size: ' + (bytes / 1024 / 1024).toFixed(2) + ' MiB.\n\n')
+              .addTable([['Kept artifact','ID','Run'], ...result.kept.map(a => [a.name,String(a.id),String(a.run)])])
+              .addRaw('\nGitHub storage accounting can take 6–12 hours to refresh.\n')
+              .write();
+            if (failures.length) throw new Error('Some artifact deletions failed; see cleanup result.');
+            if (remaining.length > 3) throw new Error('More than 3 artifacts remain, possibly due to concurrent uploads; inspect summary.');
