@@ -24,6 +24,9 @@ jobs:
           docker build -t photointel-terminal-test infra/terminal
           docker run --rm --entrypoint bash photointel-terminal-test -ec '
             test "$(id -un)" = rod
+            test "$(id -u)" = 1000
+            test "$(id -g)" = 1000
+            test -w /home/rod
             for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; do
               command -v "$tool"
             done
