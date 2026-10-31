@@ -8,10 +8,16 @@ preview_urls = false
 # GitHub deploy-worker.yml generates a combined Worker+ASSETS config dynamically,
 # resolves the real Cloud Run URL and keeps both existing and frontend domains.
 [vars]
-CLOUD_RUN_ORIGIN = "https://photointel-api.run.app"
+CLOUD_RUN_ORIGIN = "https://photointel.run.app"
 FRONTEND_ORIGIN = "https://photos.migos.club"
 
 # Attach a custom domain in your own Cloudflare zone; protect it with Access.
 [[routes]]
 pattern = "api.photos.migos.club"
 custom_domain = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
+persist = true
+# ...
