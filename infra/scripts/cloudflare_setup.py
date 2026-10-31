@@ -236,6 +236,14 @@ def adopt_bridge(config, api, apps, hosts):
     return existing
 
 
+def frontend_app_name(apps, hosts):
+    named = [a for a in apps if a.get('name') == 'photointel']
+    if any(not domains(a).issubset(set(hosts)) for a in named):
+        print('Preserve existing photointel app on other domains; manage frontend as photointel-web.')
+        return 'photointel-web'
+    return 'photointel'
+
+
 def inspect(config, api):
     spec = desired(config)
     apps = api.pages(api.base + '/access/apps')
@@ -269,7 +277,7 @@ def inspect(config, api):
                              for p in policies]}, sort_keys=True), flush=True)
             raise SetupError('A path-specific Access app overlaps PhotoIntel. Inventory its policies before consolidation: ' + str(nested))
     # Fail on conflicting apps before creating any resource.
-    select_app(apps, 'photointel', hosts, config.get('access_audience'))
+    select_app(apps, frontend_app_name(apps, hosts), hosts, config.get('access_audience'))
     return spec, apps, idps, hosts
 
 
@@ -319,7 +327,7 @@ def sync_config(config, api=None, require=False):
     api = api or client(config)
     apps = api.pages(api.base + '/access/apps')
     host = desired(config)['host']
-    managed = [a for a in apps if a.get('name') == 'photointel' and host in domains(a)]
+    managed = [a for a in apps if a.get('name') in ('photointel', 'photointel-web') and host in domains(a)]
     if not managed:
         if require:
             raise SetupError('Managed Access app missing: run Cloudflare Setup apply first')
@@ -381,7 +389,7 @@ def reconcile(config, api, apply=False):
                          {'name': 'PhotoIntel email PIN', 'type': 'onetimepin', 'config': {}})]
     elif not otp:
         print('PLAN create One-time PIN login provider')
-    app = reconcile_app(api, apps, 'photointel', hosts, config.get('access_audience'),
+    app = reconcile_app(api, apps, frontend_app_name(apps, hosts), hosts, config.get('access_audience'),
                         [policy(spec['emails'])], apply, [p['id'] for p in otp])
     bridge_reconcile(config, api, apps, hosts, apply)
     r2_reconcile(api, spec['bucket'], apply)
