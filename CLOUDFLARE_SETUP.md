@@ -107,28 +107,29 @@ inventariar fotos reais. Rotacione/revogue as duas credenciais separadamente.
 Essa configuração depende da conta Access e permanece não verificada até um
 teste real contra sua borda; testes unitários não comprovam a política remota.
 
-## Worker único: React SPA + relay Cloud Run
+## Worker único de produção: React SPA + API Cloud Run
 
-O projeto usa **um só Worker `photointel-api-relay`**, cujos arquivos-fonte estão em `infra/cloudflare/cloud-run-proxy/worker.mjs`. O deploy manual `.github/workflows/deploy-worker.yml` publica, em uma operação, o Worker e os assets estáticos do build `apps/web/dist`.
+O Worker **`photointel`** já está publicado no domínio `photos.migos.club` (confirmado pelo workflow GitHub Actions de 31/10/2026). O workflow **🌐 Worker · Front + API** atualiza esse Worker, fazendo deploy de código de proxy e assets React na mesma publicação. Não precisa criar outro Worker nem Pages.
 
-O roteamento em `photos.migos.club` funciona assim: arquivos estáticos e rotas React são resolvidos pelo binding `ASSETS`; qualquer `/v1/*` é tratado pelo mesmo script Worker, que encaminha ao serviço `photointel-api` no Google Cloud Run. `VITE_API_BASE_URL` é vazio, portanto a SPA chama a API pela **mesma origem**. O Worker original `api.photos.migos.club` é preservado como domínio adicional para compatibilidade, mas não exibe o frontend.
+O script reaproveitado está em `infra/cloudflare/cloud-run-proxy/worker.mjs`, mas o nome do Worker publicado continua **`photointel`**. Ele serve as rotas React usando `env.ASSETS.fetch` e encaminha `/v1/*` ao `photointel-api` no GCP Cloud Run, com origem fixa descoberta via `gcloud run services describe`.
 
 ```dotenv
 FRONTEND_ORIGIN=https://photos.migos.club
 API_ORIGIN=https://photos.migos.club
 
-# Omitir ambas as linhas abaixo também funciona:
-WORKFLOWS__WORKER__NAME=photointel-api-relay
+WORKFLOWS__WORKER__NAME=photointel
 WORKFLOWS__WORKER__DOMAIN=photos.migos.club
 ```
 
-Não use `WORKFLOWS__WORKER__API_BASE_URL`: essa variável era da arquitetura separada e agora é ignorada. Não configure um segundo Worker de frontend nem um Pages Project. O workflow faz a descoberta da origem do Cloud Run com `gcloud run services describe photointel-api` usando GCP WIF, evitando endereços `run.app` de exemplo.
+As duas chaves `WORKFLOWS__WORKER__*` são opcionais; caso existam, precisam corresponder ao Worker e domínio reais. Não use `WORKFLOWS__WORKER__API_BASE_URL`: essa chave legada não é mais utilizada. No build React, `VITE_API_BASE_URL` é vazio, portanto a API funciona em `https://photos.migos.club/v1/*` sem CORS cross-origin.
 
-A configuração temporária do Wrangler combina `main=./worker.mjs`, `assets.binding=ASSETS`, `assets.run_worker_first=true` e `assets.not_found_handling=single-page-application`. Worker-first em todas as rotas é intencional: garante que o mesmo Worker não entregue acidentalmente HTML estático no hostname legado da API e que `/v1/*` nunca seja confundido com uma rota da SPA. Tem custo de invocação também para assets; pode ser otimizado depois de validar a migração.
+O Worker antigo **`photointel-api-relay`**, associado ao hostname `api.photos.migos.club`, continua intacto para preservar integrações que ainda usem a API antiga. Depois de confirmar que o endpoint same-origin funciona, você pode planejar sua remoção, mas **não exclua esse Worker antes dos testes**.
 
-**Access, domínio e credenciais:** é obrigatório proteger `photos.migos.club` por Access e garantir que o JWT emitido seja aceito pela API (a audiência `ACCESS_AUDIENCE` do Cloud Run deve corresponder à aplicação). Preserve a política da API legada durante a migração. O Wrangler registra o domínio customizado e pode falhar se já houver um CNAME incompatível. Não remova registros/políticas existentes até validar o novo domínio. Token de deploy e Account ID ficam no Google Secret Manager, referenciados em `GCP_CONFIG_ENV`, não em GitHub Secrets.
+O worker unificado usa `assets.binding=ASSETS`, `assets.not_found_handling=single-page-application` e `assets.run_worker_first=true` para impedir que requisições API sejam servidas como HTML. Como cada arquivo estático também invoca o código Worker, há mais invocações que no modo asset-first; essa escolha prioriza a segurança da migração.
 
-Após a publicação, teste autenticação, `/v1/*` (incluindo falhas 401/403), navegação React em `/library` e `/settings`, exclusão de credenciais, mídia privada e iPhone Safari.
+**Cloudflare Access:** configure `photos.migos.club` para emitir um JWT cuja audience corresponda a `ACCESS_AUDIENCE`, e mantenha a proteção de `api.photos.migos.club` enquanto ele for utilizado. No Cloud Run, o backend continua verificando assinatura, issuer, audience, expiração e allowlist. Um token Cloudflare para deploy precisa permissão Workers Scripts e custom domain. O token e Account ID permanecem no Google Secret Manager.
+
+Teste `/`, `/library`, `/settings`, `/v1/*`, autenticação, 401/403, mídias privadas e Safari antes de desativar o relay legado.
 
 ## Produção v1.1: Cloud Run com origem alcançável
 
