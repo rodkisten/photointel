@@ -63,7 +63,7 @@
   "extra_environment": {},
   "workflows": {
     "worker": {
-      "name": "photointel-api-relay",
+      "name": "photointel",
       "domain": "photos.example.com"
     }
   },
