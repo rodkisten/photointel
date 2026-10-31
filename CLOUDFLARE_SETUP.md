@@ -1,5 +1,10 @@
 # Cloudflare: Workers, Tunnel, Access e R2
 
+**Configuração automatizada recomendada:** execute o workflow **☁️ Cloudflare Setup**
+(`plan` → `apply`). Ele usa Wrangler + API oficial, resolve o AUD automaticamente
+e reutiliza GCP_CONFIG_ENV. Veja [o guia do fluxo único](docs/deployment/CLOUDFLARE_AUTOMATION.md).
+As instruções manuais abaixo permanecem como referência para diagnóstico e VPS.
+
 São quatro configurações independentes. O aplicativo não cria infraestrutura
 numa conta sem credenciais/autorizações reais. A implantação manual do frontend
 está em `.github/workflows/deploy-worker.yml`; o workflow usa environment
@@ -197,3 +202,4 @@ Execute [aceitação física](docs/operations/iphone-acceptance.md) com Safari e
 PWA reais, cookies expirados, login, rede móvel e mídia sem autorização. Os
 testes locais verificam o código de autenticação e relay; não comprovam a
 política criada na conta Cloudflare nem o comportamento de cookies no iPhone.
+

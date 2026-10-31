@@ -317,6 +317,11 @@ def main() -> int:
             append_public_env(public)
             print("✅ Unified frontend/API Worker config and Secret Manager access verified.")
         elif opts.target == "worker-deploy":
+            from cloudflare_setup import SetupError, sync_config
+            try:
+                config = sync_config(config)
+            except SetupError as exc:
+                raise WorkflowEnvironmentError(str(exc)) from None
             worker_deploy(config)
         else:
             ssh_environment(config)
@@ -329,5 +334,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 

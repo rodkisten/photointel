@@ -1,0 +1,86 @@
+name: "☁️ Cloudflare Setup"
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cloudflare-setup.yml']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Plan or configure Access, private R2, API audiences, Worker and domains"
+        type: choice
+        options: [plan, apply]
+        default: plan
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: photointel-cloudflare-production
+  cancel-in-progress: false
+jobs:
+  setup:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CONFIRM_PROJECT: photointel
+      SETUP_MODE: ${{ inputs.mode || 'plan' }}
+    steps:
+      - name: "📥 Código"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "⚙ GCP Config"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - name: "🔐 GCP Login"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - name: "🧰 Gcloud"
+        uses: google-github-actions/setup-gcloud@v3
+      - name: "🧪 Test configuration reconciliation"
+        run: python3 -m unittest discover -s infra/gcp/tests -p test_cloudflare_setup.py -v
+      - name: "🔎 Access, paths, private R2 and API audience"
+        run: python3 infra/scripts/cloudflare_setup.py "$SETUP_MODE"
+      - name: "⚙ Worker environment"
+        if: env.SETUP_MODE == 'apply'
+        run: python3 infra/scripts/prepare_workflow_env.py worker
+      - name: "🧰 Node"
+        if: env.SETUP_MODE == 'apply'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: "📦 Frontend dependencies"
+        if: env.SETUP_MODE == 'apply'
+        run: npm --prefix apps/web ci
+      - name: "🏗 Frontend"
+        if: env.SETUP_MODE == 'apply'
+        run: npm --prefix apps/web run build
+      - name: "🧪 Worker and authentication"
+        if: env.SETUP_MODE == 'apply'
+        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+      - name: "🚀 Worker, static assets, custom domain and quiet logs"
+        if: env.SETUP_MODE == 'apply'
+        run: |
+          cp infra/cloudflare/worker-headers apps/web/dist/_headers
+          python3 infra/scripts/prepare_workflow_env.py worker-deploy
+      - name: "🔎 Verify anonymous navigation goes to Access login"
+        if: env.SETUP_MODE == 'apply'
+        run: python3 infra/scripts/cloudflare_setup.py verify
+      - name: "🧹 Private local configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
