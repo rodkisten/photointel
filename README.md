@@ -195,3 +195,12 @@ Arquivos `reports/` são evidência apenas quando produzidos por uma execução
 real. A presença de um workflow, configuração ou teste não significa implantação,
 benchmark ou integração Apple/Modal concluída. Nunca publique fotos, cookies,
 credenciais ou relatórios com metadados pessoais em um repositório público.
+
+## 📱 Terminal GCP persistente por SSH
+
+O workflow [📱 GCP Terminal](.github/workflows/gcp-terminal.yml) provisiona uma VM
+`e2-micro` com container de ferramentas CLI e Tailscale SSH, reutilizando
+`GCP_CONFIG_ENV`, WIF e referências OAuth existentes. Oferece `plan`, `provision`,
+`start`, `stop` e `status`, com desligamento nativo após 120 minutos e home
+persistente. Veja [configuração, custos e uso no iPhone](docs/deployment/GCP_TERMINAL.md).
+

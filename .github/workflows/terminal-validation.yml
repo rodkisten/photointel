@@ -1,0 +1,34 @@
+name: "🧪 Terminal validation"
+on:
+  pull_request:
+    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml']
+  push:
+    branches: [main]
+    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "🧪 Offline lifecycle and configuration tests"
+        run: |
+          bash -n infra/terminal/startup.sh
+          python3 -m unittest discover -s infra/terminal -p 'test_*.py' -v
+      - name: "🐳 Build and verify CLI tools without production credentials"
+        run: |
+          docker build -t photointel-terminal-test infra/terminal
+          docker run --rm --entrypoint bash photointel-terminal-test -ec '
+            test "$(id -un)" = rod
+            test "$(id -u)" = 1000
+            test "$(id -g)" = 1000
+            test -w /home/rod
+            for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; do
+              command -v "$tool"
+            done
+            gcloud version
+          '
