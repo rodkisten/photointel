@@ -19,7 +19,7 @@ export function Status({ value }: { value: unknown }) {
 }
 export function ErrorState({ error, retry }: { error: Error; retry?: () => void }) {
   return <div className="error-state" role="alert"><AlertCircle size={20} />
-    <div><strong>Não foi possível concluir</strong><p>{error}</p> <p>{error.message}</p>
+    <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p> <p>{error.message}</p>
       {error instanceof ApiError && <small>{error.code}
         {error.correlationId && ` · ID ${error.correlationId}`}</small>}</div>
     {retry && <Button variant="outline" onClick={retry}><RefreshCw size={15} />
