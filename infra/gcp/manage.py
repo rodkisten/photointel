@@ -675,6 +675,23 @@ def bootstrap(runner: Runner) -> None:
             "roles/artifactregistry.writer",
         ]
     )
+    # GCP Terminal's explicit build action uses the separate bootstrap WIF SA.
+    # It must read image metadata/digests and create the immutable :ready tag
+    # after Docker push. Grant only on the production Artifact Registry repository.
+    runner.command(
+        [
+            "artifacts",
+            "repositories",
+            "add-iam-policy-binding",
+            repository,
+            "--location",
+            region,
+            "--member",
+            f"serviceAccount:photointel-bootstrap@{config['project_id']}.iam.gserviceaccount.com",
+            "--role",
+            "roles/artifactregistry.writer",
+        ]
+    )
     runner.command(
         [
             "projects",

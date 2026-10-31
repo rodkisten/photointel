@@ -55,6 +55,16 @@ for attempt in 1 2; do
   grep -q 'secrets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
   grep -q 'storage buckets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
   grep -q 'artifacts repositories add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
+  # The terminal's build action authenticates as bootstrap, not deployer.
+  # The permission must be scoped to the Docker repository, never the project.
+  grep -F 'artifacts repositories add-iam-policy-binding photointel --location=us-central1' "$GCLOUD_TRACE" |
+    grep -F -- '--member=serviceAccount:photointel-bootstrap@replace-project-id.iam.gserviceaccount.com' |
+    grep -F -- '--role=roles/artifactregistry.writer' |
+    grep -qF -- '--condition=None'
+  if grep -F 'projects add-iam-policy-binding' "$GCLOUD_TRACE" |
+    grep -Fq -- '--member=serviceAccount:photointel-bootstrap@replace-project-id.iam.gserviceaccount.com --role=roles/artifactregistry.writer'; then
+    echo "ERROR: bootstrap Artifact Registry writer role was project-wide" >&2; exit 1
+  fi
   grep -q 'iam service-accounts add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
 done
 : > "$GCLOUD_TRACE"

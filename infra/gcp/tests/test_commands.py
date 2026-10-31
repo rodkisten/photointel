@@ -75,6 +75,20 @@ class CloudRunCommandsTests(unittest.TestCase):
         self.assertIn("logging.googleapis.com", manage.SERVICES)
         self.assertIn("photointel-builder@", plan)
 
+    def test_bootstrap_grants_terminal_builder_repo_scoped_writer_only(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            manage.bootstrap(manage.Runner(self.config, apply=False))
+        commands = [
+            line for line in output.getvalue().splitlines()
+            if "photointel-bootstrap@" in line
+            and "roles/artifactregistry.writer" in line
+        ]
+        self.assertEqual(len(commands), 1)
+        self.assertIn("artifacts repositories add-iam-policy-binding", commands[0])
+        self.assertIn("--location", commands[0])
+        self.assertNotIn("projects add-iam-policy-binding", commands[0])
+
     def test_api_scales_to_zero_request_billing_no_worker(self) -> None:
         document = manage.service(self.config)
         template = document["spec"]["template"]

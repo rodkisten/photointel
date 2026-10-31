@@ -82,6 +82,12 @@ class Gcloud:
             hint = ''
             if args[:2] == ('compute', 'firewall-rules') and denied:
                 hint = ' Run Setup GCP apply: bootstrap needs roles/compute.securityAdmin.'
+            if args[:2] == ('artifacts', 'docker') and denied:
+                hint = (
+                    ' Run Setup GCP apply to grant photointel-bootstrap '
+                    'roles/artifactregistry.writer on the photointel repository '
+                    '(needed to describe image digests and assign the ready tag).'
+                )
             raise RuntimeError('gcloud failed: ' + ' '.join(args[:4]) + ': ' + reason +
                                (' (' + ', '.join(details) + ')' if details else '') + hint)
         return json.loads(result.stdout) if result.stdout.strip() else {}
