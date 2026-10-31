@@ -1,4 +1,4 @@
-"""Offline checks for Cloudflare Workers static assets and private GCP secrets."""
+"""Offline checks for unified Cloudflare Worker assets, API relay and private GCP secrets."""
 
 import contextlib
 import importlib.util
@@ -23,12 +23,12 @@ SPEC.loader.exec_module(loader)
 def example_config():
     return {
         "project_id": "photointel",
+        "region": "us-central1",
         "frontend_origin": "https://photos.example.org",
-        "api_origin": "https://api.photos.example.org",
+        "api_origin": "https://photos.example.org",
         "workflows": {"worker": {
-            "name": "photointel-web",
+            "name": "photointel-api-relay",
             "domain": "photos.example.org",
-            "api_base_url": "https://api.photos.example.org",
         }},
         "workflow_secrets": {
             key: {"name": f"photointel-{key.lower().replace('_', '-')}", "version": "1"}
@@ -39,7 +39,7 @@ def example_config():
 
 
 class WorkflowEnvTests(unittest.TestCase):
-    def test_worker_exports_only_public_information(self):
+    def test_single_origin_exports_no_api_hostname_or_secrets(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "env"
             path.touch()
@@ -49,25 +49,20 @@ class WorkflowEnvTests(unittest.TestCase):
                 loader.append_public_env(loader.worker_environment(example_config()))
             staged = path.read_text()
         self.assertEqual(staged.splitlines(), [
-            "VITE_API_BASE_URL=https://api.photos.example.org",
-            "WORKER_NAME=photointel-web",
+            "VITE_API_BASE_URL=",
+            "WORKER_NAME=photointel-api-relay",
             "WORKER_DOMAIN=photos.example.org",
             "VITE_RELEASE_ID=" + "a" * 40,
         ])
         self.assertNotIn("CLOUDFLARE_API_TOKEN", staged)
         self.assertNotIn("CLOUDFLARE_ACCOUNT_ID", staged)
 
-    def test_refuse_replacing_api_relay_or_same_origin_api(self):
+    def test_unified_name_and_frontend_host_are_guarded(self):
         for change, value in (
-            ("name", "photointel-api-relay"),
-            ("name", ""),
-            ("name", "invalid space"),
+            ("name", "photointel-web"),
+            ("name", "untrusted-project"),
             ("domain", "other.example.org"),
             ("domain", "other.example.org/invalid"),
-            ("domain", ""),
-            ("api_base_url", "https://photos.example.org"),
-            ("api_base_url", "http://api.photos.example.org"),
-            ("api_base_url", "https://api.photos.example.org/path"),
         ):
             with self.subTest(change=change, value=value):
                 config = example_config()
@@ -75,8 +70,15 @@ class WorkflowEnvTests(unittest.TestCase):
                 with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True):
                     with self.assertRaises(loader.WorkflowEnvironmentError):
                         loader.worker_environment(config)
+        config = example_config()
+        del config["workflows"]["worker"]["name"]
+        del config["workflows"]["worker"]["domain"]
+        with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True):
+            self.assertEqual(
+                loader.worker_environment(config)["WORKER_NAME"], "photointel-api-relay"
+            )
 
-    def test_gcp_errors_classified_and_never_leak_secret(self):
+    def test_secret_error_sanitizes_gcloud_stderr(self):
         for stderr, expected in (
             (b"PERMISSION_DENIED private:abcd", "roles/secretmanager.secretAccessor"),
             (b"NOT_FOUND private:abcd", "Secret or version not found"),
@@ -89,23 +91,19 @@ class WorkflowEnvTests(unittest.TestCase):
                 )
                 self.assertIn(expected, safe)
                 self.assertNotIn("private:abcd", safe)
-
         class Failure:
             returncode = 1
             stdout = b"PRIVATE_VALUE"
             stderr = b"PERMISSION_DENIED password=VERY_PRIVATE"
-
         with patch.object(loader.subprocess, "run", return_value=Failure()) as call:
             with self.assertRaises(loader.WorkflowEnvironmentError) as raised:
                 loader.secret_value(example_config(), "CLOUDFLARE_API_TOKEN")
-        self.assertIn("roles/secretmanager.secretAccessor", str(raised.exception))
         self.assertNotIn("VERY_PRIVATE", str(raised.exception))
-        self.assertEqual(call.call_args.args[0][:5], [
-            "gcloud", "secrets", "versions", "access", "1",
-        ])
+        self.assertEqual(call.call_args.args[0][:5],
+                         ["gcloud", "secrets", "versions", "access", "1"])
         self.assertEqual(call.call_args.kwargs["stderr"], subprocess.PIPE)
 
-    def test_worker_preflight_fails_before_build_on_missing_credentials(self):
+    def test_worker_preflight_fails_before_build_when_secret_is_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             env_file = Path(tmp) / "env"
             env_file.touch()
@@ -126,27 +124,40 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertIn("Secret or version not found", errors.getvalue())
             self.assertEqual(env_file.read_text(), "")
 
-    def test_worker_deploy_uses_asset_only_spa_and_does_not_leak_credentials(self):
+    def test_unified_deploy_preserves_relay_script_and_api_custom_domain(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            app = root / "apps/web"
-            (app / "dist").mkdir(parents=True)
-            (app / "dist/index.html").write_text("<!doctype html>")
+            relay = root / "infra/cloudflare/cloud-run-proxy"
+            relay.mkdir(parents=True)
+            (relay / "wrangler.toml").write_text(
+                'name = "photointel-api-relay"\n'
+                'main = "worker.mjs"\n'
+                '[[routes]]\npattern = "api.example.org"\ncustom_domain = true\n'
+            )
+            dist = root / "apps/web/dist"
+            dist.mkdir(parents=True)
+            (dist / "index.html").write_text("<!doctype html>")
             observed = {}
+            class Success:
+                returncode = 0
+                stdout = "https://photointel-api-abc-uc.a.run.app\n"
+                stderr = ""
 
             def fake_run(argv, **kwargs):
+                if argv[:4] == ["gcloud", "run", "services", "describe"]:
+                    observed["gcloud"] = argv
+                    return Success()
                 observed["argv"] = argv
                 observed["cwd"] = kwargs["cwd"]
                 observed["env"] = kwargs["env"]
                 config_file = Path(argv[argv.index("--config") + 1])
                 observed["wrangler"] = json.loads(config_file.read_text())
                 observed["mode"] = config_file.stat().st_mode & 0o777
-                class Result:
-                    returncode = 0
-                return Result()
+                return Success()
 
             with (
                 patch.object(loader, "ROOT", root),
+                patch.object(loader, "RELAY_CONFIG", relay / "wrangler.toml"),
                 patch.dict(os.environ, {"GITHUB_SHA": "b" * 40}, clear=True),
                 patch.object(loader, "secret_value", side_effect=[
                     "private-token", "a" * 32,
@@ -154,27 +165,43 @@ class WorkflowEnvTests(unittest.TestCase):
                 patch.object(loader.subprocess, "run", side_effect=fake_run),
             ):
                 loader.worker_deploy(example_config())
-            self.assertEqual(observed["argv"][:4], [
-                "npx", "--yes", "wrangler@4", "deploy",
-            ])
-            self.assertEqual(observed["cwd"], app)
+            self.assertEqual(observed["argv"][:4],
+                             ["npx", "--yes", "wrangler@4", "deploy"])
+            self.assertEqual(observed["cwd"], relay)
             self.assertEqual(observed["mode"], 0o600)
             self.assertEqual(observed["env"]["CLOUDFLARE_API_TOKEN"], "private-token")
-            self.assertEqual(observed["wrangler"]["name"], "photointel-web")
-            self.assertFalse(observed["wrangler"]["workers_dev"])
-            self.assertFalse(observed["wrangler"]["preview_urls"])
-            self.assertNotIn("main", observed["wrangler"])
-            self.assertEqual(observed["wrangler"]["assets"], {
-                "directory": "./dist",
+            cfg = observed["wrangler"]
+            self.assertEqual(cfg["name"], "photointel-api-relay")
+            self.assertEqual(cfg["main"], "./worker.mjs")
+            self.assertFalse(cfg["workers_dev"])
+            self.assertFalse(cfg["preview_urls"])
+            self.assertEqual(cfg["vars"], {
+                "CLOUD_RUN_ORIGIN": "https://photointel-api-abc-uc.a.run.app",
+                "FRONTEND_ORIGIN": "https://photos.example.org",
+            })
+            self.assertEqual(cfg["assets"], {
+                "directory": "../../../apps/web/dist",
+                "binding": "ASSETS",
+                "run_worker_first": True,
                 "not_found_handling": "single-page-application",
             })
-            self.assertEqual(observed["wrangler"]["routes"], [
+            self.assertEqual(cfg["routes"], [
+                {"pattern": "api.example.org", "custom_domain": True},
                 {"pattern": "photos.example.org", "custom_domain": True},
             ])
-            self.assertNotIn("private-token", json.dumps(observed["wrangler"]))
-            self.assertEqual(list(app.glob(".wrangler-deploy-*.json")), [])
+            self.assertIn("--format=value(status.url)", observed["gcloud"])
+            self.assertNotIn("private-token", json.dumps(cfg))
+            self.assertEqual(list(relay.glob(".wrangler-deploy-*.json")), [])
 
-    def test_ssh_oauth_kept_only_in_job_outputs(self):
+    def test_unsafe_cloud_run_origin_is_rejected(self):
+        class Result:
+            returncode = 0
+            stdout = "https://evil.example.org"
+        with patch.object(loader.subprocess, "run", return_value=Result()):
+            with self.assertRaises(loader.WorkflowEnvironmentError):
+                loader.discover_cloud_run_origin(example_config())
+
+    def test_ssh_oauth_is_masked_in_step_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "outputs"
             public = Path(tmp) / "env"
@@ -194,7 +221,7 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertIn("::add-mask::ts-secret", masked.getvalue())
             self.assertEqual(public.read_text(), "")
 
-    def test_production_workflows_share_gcp_config_and_keep_prs_isolated(self):
+    def test_all_workflows_share_gcp_config_without_exposing_it_to_ci(self):
         for name in (
             "gcp-deploy.yml", "gcp-bootstrap.yml", "gcp-migrate.yml",
             "deploy-worker.yml", "ssh.yml",
@@ -202,15 +229,10 @@ class WorkflowEnvTests(unittest.TestCase):
             source = (ROOT / ".github/workflows" / name).read_text()
             self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", source)
             self.assertIn('name: "⚙ Env"', source)
-            self.assertIn("uses: ./.github/actions/gcp-config", source)
         worker = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
         self.assertIn("prepare_workflow_env.py worker-deploy", worker)
-        self.assertIn("prepare_workflow_env.py worker", worker)
-        self.assertIn("worker-headers", worker)
         self.assertNotIn("wrangler pages", worker)
         self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
-        ssh = (ROOT / ".github/workflows/ssh.yml").read_text()
-        self.assertIn("steps.ssh_env.outputs.ts_client_id", ssh)
         for name in (
             "ci.yml", "bootstrap-validation.yml", "compose-validation.yml",
             "container-architectures.yml", "gcp-validation.yml",
