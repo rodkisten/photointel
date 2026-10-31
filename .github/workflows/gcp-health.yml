@@ -43,22 +43,35 @@ jobs:
       - name: "🧰 Gcloud"
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: "🔧 Configure verified PostgreSQL CA bundle"
+      - name: "🔍 Runtime PostgreSQL connection"
         run: |
           python3 - <<'PY'
-          import json,subprocess
-          def call(args):
-              r=subprocess.run(['gcloud',*args,'--project','photointel','--quiet'],capture_output=True,text=True)
-              if r.returncode: raise RuntimeError('Cloud Run TLS configuration update failed')
-              return r.stdout
-          value='DATABASE_TLS_CA_FILE=/etc/ssl/certs/ca-certificates.crt'
-          call(['run','services','update','photointel-api','--region','us-central1','--update-env-vars',value])
-          print('API TLS CA bundle configured.')
-          for j in json.loads(call(['run','jobs','list','--region','us-central1','--format=json'])):
-              name=j.get('metadata',{}).get('name','').rsplit('/',1)[-1]
-              if name.startswith('photointel-') and name!='photointel-diagnose-db':
-                  call(['run','jobs','update',name,'--region','us-central1','--update-env-vars',value])
-                  print('Job TLS configuration updated:',name)
+          import json,subprocess,tempfile,os
+          def call(args,check=True):
+              return subprocess.run(['gcloud',*args,'--project','photointel','--quiet'],capture_output=True,text=True,check=check)
+          svc=json.loads(call(['run','services','describe','photointel-api','--region','us-central1','--format=json']).stdout)
+          runtime=svc['spec']['template']['spec']
+          container=runtime['containers'][0]
+          container={k:container[k] for k in ('image','env') if k in container}
+          container.update(command=['python'],args=['-c',"import asyncio,json\nfrom photointel.database import SessionLocal,engine\nfrom photointel.routers.readiness import setup_status\nasync def run():\n    try:\n        async with SessionLocal() as session:\n            result=await setup_status(session)\n        print(json.dumps({'event':'runtime_db_probe','setup_status':'passed','checks':[{k:item[k] for k in ('id','state')} for item in result['checks']]}),flush=True)\n    except Exception as e:\n        print(json.dumps({'event':'runtime_db_probe','setup_status':'failed','exception_type':type(e).__name__}),flush=True)\n        raise SystemExit(1)\n    finally: await engine.dispose()\nasyncio.run(run())\n"],resources={'limits':{'cpu':'1','memory':'512Mi'}})
+          doc={'apiVersion':'run.googleapis.com/v1','kind':'Job','metadata':{'name':'photointel-diagnose-db'},'spec':{'template':{'spec':{'taskCount':1,'parallelism':1,'template':{'spec':{'containers':[container],'serviceAccountName':runtime['serviceAccountName'],'maxRetries':0,'timeoutSeconds':'90'}}}}}}
+          fd,path=tempfile.mkstemp(suffix='.json')
+          try:
+              with os.fdopen(fd,'w') as f: json.dump(doc,f)
+              result=call(['run','jobs','replace',path,'--region','us-central1'],False)
+              if result.returncode: raise RuntimeError('Diagnostic job configuration rejected')
+              result=call(['run','jobs','execute','photointel-diagnose-db','--region','us-central1','--wait'],False)
+              print('Diagnostic job execution completed:',result.returncode==0)
+              entries=json.loads(call(['logging','read','resource.type="cloud_run_job" AND resource.labels.job_name="photointel-diagnose-db"','--freshness=10m','--limit=30','--format=json']).stdout)
+              for e in entries:
+                  p=e.get('jsonPayload',{})
+                  if not p:
+                      try:p=json.loads(e.get('textPayload','{}'))
+                      except ValueError:continue
+                  if p.get('event')=='runtime_db_probe': print(json.dumps(p))
+          finally:
+              os.unlink(path)
+              call(['run','jobs','delete','photointel-diagnose-db','--region','us-central1'],False)
           PY
 
       - name: "🩺 Cloud Run status + HTTP health"
