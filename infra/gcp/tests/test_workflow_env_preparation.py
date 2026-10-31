@@ -27,7 +27,7 @@ def example_config():
         "frontend_origin": "https://photos.example.org",
         "api_origin": "https://photos.example.org",
         "workflows": {"worker": {
-            "name": "photointel-api-relay",
+            "name": "photointel",
             "domain": "photos.example.org",
         }},
         "workflow_secrets": {
@@ -50,7 +50,7 @@ class WorkflowEnvTests(unittest.TestCase):
             staged = path.read_text()
         self.assertEqual(staged.splitlines(), [
             "VITE_API_BASE_URL=",
-            "WORKER_NAME=photointel-api-relay",
+            "WORKER_NAME=photointel",
             "WORKER_DOMAIN=photos.example.org",
             "VITE_RELEASE_ID=" + "a" * 40,
         ])
@@ -59,7 +59,7 @@ class WorkflowEnvTests(unittest.TestCase):
 
     def test_unified_name_and_frontend_host_are_guarded(self):
         for change, value in (
-            ("name", "photointel-web"),
+            ("name", "photointel-api-relay"),
             ("name", "untrusted-project"),
             ("domain", "other.example.org"),
             ("domain", "other.example.org/invalid"),
@@ -75,7 +75,7 @@ class WorkflowEnvTests(unittest.TestCase):
         del config["workflows"]["worker"]["domain"]
         with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True):
             self.assertEqual(
-                loader.worker_environment(config)["WORKER_NAME"], "photointel-api-relay"
+                loader.worker_environment(config)["WORKER_NAME"], "photointel"
             )
 
     def test_secret_error_sanitizes_gcloud_stderr(self):
@@ -124,16 +124,12 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertIn("Secret or version not found", errors.getvalue())
             self.assertEqual(env_file.read_text(), "")
 
-    def test_unified_deploy_preserves_relay_script_and_api_custom_domain(self):
+    def test_unified_deploy_reuses_live_frontend_worker_and_does_not_move_api_domain(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             relay = root / "infra/cloudflare/cloud-run-proxy"
             relay.mkdir(parents=True)
-            (relay / "wrangler.toml").write_text(
-                'name = "photointel-api-relay"\n'
-                'main = "worker.mjs"\n'
-                '[[routes]]\npattern = "api.example.org"\ncustom_domain = true\n'
-            )
+            (relay / "worker.mjs").write_text("export default { fetch() {} };")
             dist = root / "apps/web/dist"
             dist.mkdir(parents=True)
             (dist / "index.html").write_text("<!doctype html>")
@@ -157,7 +153,7 @@ class WorkflowEnvTests(unittest.TestCase):
 
             with (
                 patch.object(loader, "ROOT", root),
-                patch.object(loader, "RELAY_CONFIG", relay / "wrangler.toml"),
+                patch.object(loader, "RELAY_SCRIPT", relay / "worker.mjs"),
                 patch.dict(os.environ, {"GITHUB_SHA": "b" * 40}, clear=True),
                 patch.object(loader, "secret_value", side_effect=[
                     "private-token", "a" * 32,
@@ -171,7 +167,7 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertEqual(observed["mode"], 0o600)
             self.assertEqual(observed["env"]["CLOUDFLARE_API_TOKEN"], "private-token")
             cfg = observed["wrangler"]
-            self.assertEqual(cfg["name"], "photointel-api-relay")
+            self.assertEqual(cfg["name"], "photointel")
             self.assertEqual(cfg["main"], "./worker.mjs")
             self.assertFalse(cfg["workers_dev"])
             self.assertFalse(cfg["preview_urls"])
@@ -186,7 +182,6 @@ class WorkflowEnvTests(unittest.TestCase):
                 "not_found_handling": "single-page-application",
             })
             self.assertEqual(cfg["routes"], [
-                {"pattern": "api.example.org", "custom_domain": True},
                 {"pattern": "photos.example.org", "custom_domain": True},
             ])
             self.assertIn("--format=value(status.url)", observed["gcloud"])
