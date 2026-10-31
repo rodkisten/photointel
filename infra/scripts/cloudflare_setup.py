@@ -223,9 +223,15 @@ def adopt_bridge(config, api, apps, hosts):
         tokens = api.pages(api.base + '/access/service_tokens')
         selected = [t for t in tokens if t.get('id') in service_ids or t.get('client_id') in service_ids]
         if len(selected) != len(service_ids) or any(not t.get('client_id') for t in selected):
-            raise SetupError('Existing Bridge service tokens could not be resolved: ' + json.dumps({'policy_token_count': len(service_ids), 'account_token_count': len(tokens), 'matched_count': len(selected), 'policy_id_lengths': sorted(len(str(x)) for x in service_ids), 'token_fields': sorted({k for t in tokens for k in t if k in ('id', 'client_id', 'name')})}))
-        extra['ACCESS_BRIDGE_SERVICE_TOKENS'] = json.dumps(sorted(t['client_id'] for t in selected))
-        print('Adopt existing Bridge: reuse app ID, audience and ' + str(len(selected)) + ' service token(s); no credential rotation.')
+            # An orphaned selector grants no working token access. Preserve the
+            # exact selectors rather than rotate credentials or widen the rule.
+            config['_bridge_existing_rules'] = [
+                {'service_token': {'token_id': tid}} for tid in sorted(service_ids)]
+            print('Bridge warning: an existing Service Auth token is absent from the account; '
+                  'preserving exact selectors, no new credentials or broader grants.')
+        else:
+            extra['ACCESS_BRIDGE_SERVICE_TOKENS'] = json.dumps(sorted(t['client_id'] for t in selected))
+            print('Adopt existing Bridge: reuse app ID, audience and ' + str(len(selected)) + ' service token(s); no credential rotation.')
     extra['ACCESS_BRIDGE_AUDIENCE'] = existing.get('aud', '')
     return existing
 
@@ -290,7 +296,7 @@ def bridge_reconcile(config, api, apps, hosts, apply):
     extra = config.get('extra_environment', {})
     raw = extra.get('ACCESS_BRIDGE_SERVICE_TOKENS', '[]')
     ids = json.loads(raw) if isinstance(raw, str) else raw
-    if not ids:
+    if not ids and not config.get('_bridge_existing_rules'):
         print('Bridge Service Auth: disabled (no configured device service-token IDs); all paths remain protected by human Access.')
         return None
     if not isinstance(ids, list) or any(not isinstance(x, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,255}', x) for x in ids):
@@ -299,7 +305,7 @@ def bridge_reconcile(config, api, apps, hosts, apply):
     selected = [t for t in tokens if t.get('client_id') in ids]
     if len(selected) != len(set(ids)):
         raise SetupError('Configured Bridge service token not found; credentials are never rotated or invented during setup')
-    rules = [{'service_token': {'token_id': t['id']}} for t in selected]
+    rules = config.get('_bridge_existing_rules') if not ids else [{'service_token': {'token_id': t['id']}} for t in selected]
     bridge_hosts = [h + '/v1/bridge/*' for h in hosts]
     human_policy = policy(desired(config)['emails'])
     human_policy['precedence'] = 2
@@ -338,7 +344,7 @@ def sync_config(config, api=None, require=False):
 
 def save_config(config):
     path = ROOT / 'infra/gcp/config.local.json'
-    path.write_text(json.dumps(config, indent=2) + '\n')
+    path.write_text(json.dumps({k: v for k, v in config.items() if not k.startswith('_')}, indent=2) + '\n')
     path.chmod(0o600)
 
 
