@@ -190,10 +190,13 @@ def main() -> int:
         uv = uv_command()
         installer_environment = dict(os.environ, UV_CONCURRENT_BUILDS="1",
                                      UV_CONCURRENT_DOWNLOADS="2",
-                                     UV_CONCURRENT_INSTALLS="1", UV_COMPILE_BYTECODE="0")
+                                     UV_CONCURRENT_INSTALLS="1")
+        # UV_COMPILE_BYTECODE acts like --compile-bytecode, even when it is
+        # present with the value "0". Avoid conflicting positive/negative
+        # flags: uv already disables compilation by default.
+        installer_environment.pop("UV_COMPILE_BYTECODE", None)
         subprocess.run(
-            [uv, "sync", "--frozen", "--no-dev", "--group", "ingest",
-             "--no-compile-bytecode"],
+            [uv, "sync", "--frozen", "--no-dev", "--group", "ingest"],
             cwd=ROOT, env=installer_environment, check=True,
         )
         runtime = runtime_environment(arguments.project, arguments.region)
