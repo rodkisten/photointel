@@ -425,14 +425,22 @@ def verify(config):
     found = []
     for path in ('/', '/library', '/v1/info'):
         try:
-            with opener.open('https://' + host + path, timeout=30) as response:
+            with opener.open(urllib.request.Request('https://' + host + path, headers={'User-Agent': 'Mozilla/5.0 PhotoIntel-Access-Verification', 'Accept': 'text/html'}), timeout=30) as response:
                 status, location = response.status, response.headers.get('Location', '')
+                response_headers = response.headers
+                response_body = response.read(8192).decode('utf-8', errors='replace')
         except urllib.error.HTTPError as exc:
             status, location = exc.code, exc.headers.get('Location', '')
+            response_headers = exc.headers
+            response_body = exc.read(8192).decode('utf-8', errors='replace')
             exc.close()
         login_host = urllib.parse.urlsplit(location).hostname
         expected = status in (302, 303, 307, 308) and login_host == config['access_team_domain']
-        found.append({'path': path, 'status': status, 'login_redirect': expected})
+        found.append({'path': path, 'status': status, 'login_redirect': expected,
+                      'challenge': response_headers.get('cf-mitigated') == 'challenge',
+                      'server': response_headers.get('Server', ''),
+                      'access_denied_page': 'cloudflareaccess.com' in response_body.lower(),
+                      'network_policy_page': 'network' in response_body.lower() and 'policy' in response_body.lower()})
     print('ACCESS_VERIFICATION=' + json.dumps(found))
     if not all(item['login_redirect'] for item in found):
         raise SetupError('Anonymous requests did not all redirect to Access. Check WAF, policies or propagation; no authenticated session was claimed.')
