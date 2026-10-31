@@ -2,6 +2,7 @@
 import argparse
 import ast
 import asyncio
+import io
 import json
 import subprocess
 import sys
@@ -131,6 +132,27 @@ class LauncherTests(unittest.TestCase):
                      {"name": "not-needed", "key": "1"}}}]
         return {"spec": {"template": {"spec": {"template": {"spec":
                 {"containers": [{"env": entries}]}}}}}}
+
+    def test_sdk_checksum_failure_never_extracts_or_executes_archive(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module.shutil, "which", return_value=None), patch.object(
+                self.module.platform, "system", return_value="Linux"), patch.object(
+                self.module.platform, "machine", return_value="x86_64"), patch.object(
+                self.module.Path, "home", return_value=Path(temporary)), patch.object(
+                self.module.urllib.request, "urlopen", return_value=io.BytesIO(b"INVALID")), patch.object(
+                self.module.tarfile, "open") as extract, patch.object(
+                self.module.subprocess, "run") as execute:
+            with self.assertRaisesRegex(self.module.SetupError, "Checksum"):
+                self.module.ensure_gcloud()
+        extract.assert_not_called()
+        execute.assert_not_called()
+
+    def test_noninteractive_service_account_does_not_start_google_login(self):
+        with patch.object(self.module, "gcloud", return_value="runtime@project.iam.gserviceaccount.com"), patch.object(
+                self.module.subprocess, "run") as run:
+            with self.assertRaises(self.module.SetupError):
+                self.module.ensure_user_login("photointel", interactive=False)
+        run.assert_not_called()
 
     def test_only_required_secret_references_are_resolved(self):
         calls = []

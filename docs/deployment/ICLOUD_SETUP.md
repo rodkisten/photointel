@@ -13,14 +13,19 @@ Não captura senha ou código Apple. O workflow não substitui o terminal intera
 ## Login no terminal do repositório
 
 Abra o checkout atualizado no Codespaces ou na VM. No primeiro uso, autentique
-o gcloud com sua conta administradora: a identidade mínima da VM não tem acesso
+o gcloud com sua conta administradora quando o comando solicitar: a identidade mínima da VM não tem acesso
 aos secrets do banco/R2 e não recebe permissões adicionais por causa deste fluxo.
 
 ```bash
 git pull --ff-only
-gcloud auth login --no-launch-browser
 python3 infra/scripts/icloud_terminal.py setup --account oirodolfo@icloud.com
 ```
+
+Em Linux x86_64/ARM64, o comando instala gcloud no cache do usuário se necessário,
+usando o arquivo oficial fixado na versão 591.0.0, com checksum SHA256 verificado
+e extração segura. Não exige sudo nem altera arquivos de inicialização do shell.
+Se faltar login Google ou estiver ativa a identidade mínima da VM, ele abre o
+fluxo `gcloud auth login --no-launch-browser` no próprio terminal.
 
 O comando instala as dependências travadas pelo `uv.lock`, lê as referências do
 Job `photointel-worker` e resolve somente DATABASE_URL, STORAGE_ACCESS_KEY,

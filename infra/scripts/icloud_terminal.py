@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import ssl
 import subprocess
 import sys
+import tarfile
 import tempfile
+import urllib.request
 import venv
 from pathlib import Path
 
@@ -19,6 +23,61 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_SECRETS = frozenset({"DATABASE_URL", "STORAGE_ACCESS_KEY", "STORAGE_SECRET_KEY",
                              "ICLOUD_SESSION_KEY", "BRIDGE_TOKEN_PEPPER"})
 REQUIRED = RUNTIME_SECRETS
+CLOUD_CLI = "gcloud"
+SDK_VERSION = "591.0.0"
+SDK_ARCHIVES = {
+    "x86_64": ("x86_64", "8b8c1be16284f7072359de05d31fe5ce52b6052fb295404a62a54b7d03ec4326"),
+    "aarch64": ("arm", "c134c741f7232131e2556d77991bc8eaeb70054cfad426e06c533b3586ab69e6"),
+}
+
+
+def ensure_gcloud() -> str:
+    installed = shutil.which("gcloud")
+    if installed:
+        return installed
+    if platform.system() != "Linux" or platform.machine() not in SDK_ARCHIVES:
+        raise SetupError("Instale gcloud neste sistema antes de executar o setup")
+    cache = Path.home() / ".cache" / "photointel"
+    package = cache / ("gcloud-" + SDK_VERSION)
+    binary = package / "google-cloud-sdk" / "bin" / "gcloud"
+    if binary.is_file():
+        return str(binary)
+    if package.exists():
+        raise SetupError("Instalação gcloud incompleta no cache PhotoIntel")
+    arch, expected_hash = SDK_ARCHIVES[platform.machine()]
+    url = ("https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/"
+           f"google-cloud-cli-{SDK_VERSION}-linux-{arch}.tar.gz")
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="gcloud-install-", dir=cache) as temporary:
+        directory = Path(temporary)
+        archive = directory / "sdk.tar.gz"
+        digest = hashlib.sha256()
+        size = 0
+        with urllib.request.urlopen(url, timeout=60) as source, archive.open("wb") as target:
+            while chunk := source.read(1024 * 1024):
+                size += len(chunk)
+                if size > 128 * 1024 * 1024:
+                    raise SetupError("Pacote gcloud excedeu o limite esperado")
+                digest.update(chunk)
+                target.write(chunk)
+        if digest.hexdigest() != expected_hash:
+            raise SetupError("Checksum do pacote oficial gcloud não confere")
+        with tarfile.open(archive) as sdk:
+            sdk.extractall(directory / "unpacked", filter="data")
+        (directory / "unpacked").rename(package)
+    subprocess.run([str(binary), "--version"], capture_output=True, check=True)
+    return str(binary)
+
+
+def ensure_user_login(project: str, *, interactive: bool) -> None:
+    active = gcloud(["auth", "list", "--filter=status:ACTIVE",
+                     "--format=value(account)"], project).strip()
+    if active and not active.endswith(".gserviceaccount.com"):
+        return
+    if not interactive or not sys.stdin.isatty():
+        raise SetupError("Abra o setup em um terminal para entrar na sua conta Google")
+    print("Primeiro uso: entre na sua conta Google com acesso ao projeto PhotoIntel.")
+    subprocess.run([CLOUD_CLI, "auth", "login", "--no-launch-browser"], check=True)
 
 
 class SetupError(RuntimeError):
@@ -27,13 +86,13 @@ class SetupError(RuntimeError):
 
 def gcloud(arguments: list[str], project: str) -> str:
     result = subprocess.run(
-        ["gcloud", *arguments, "--project", project, "--quiet"],
+        [CLOUD_CLI, *arguments, "--project", project, "--quiet"],
         capture_output=True, text=True, check=False,
     )
     if result.returncode:
         raise SetupError(
             "Sem acesso à configuração/secret do worker. No terminal, execute "
-            "gcloud auth login --no-launch-browser com sua conta administradora e repita."
+            f"{CLOUD_CLI} auth login --no-launch-browser e repita com sua conta administradora."
         )
     return result.stdout
 
@@ -88,6 +147,7 @@ def uv_command() -> str:
 
 
 def main() -> int:
+    global CLOUD_CLI
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("prepare", "setup", "verify", "status", "test"))
     parser.add_argument("--account")
@@ -103,9 +163,9 @@ def main() -> int:
         parser.error("Informe um e-mail Apple válido")
     if arguments.action == "setup" and not sys.stdin.isatty():
         parser.error("Abra um terminal SSH/Codespaces; Actions não recebe senha/2FA")
-    if not shutil.which("gcloud"):
-        parser.error("Use um terminal com gcloud instalado, como a VM PhotoIntel")
     try:
+        CLOUD_CLI = ensure_gcloud()
+        ensure_user_login(arguments.project, interactive=arguments.action == "setup")
         # Install only code first; credentials are fetched afterwards and never
         # exposed to dependency installation, command arguments or files.
         uv = uv_command()
