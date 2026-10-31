@@ -24,6 +24,9 @@ RUNTIME_SECRETS = frozenset({"DATABASE_URL", "STORAGE_ACCESS_KEY", "STORAGE_SECR
                              "ICLOUD_SESSION_KEY", "BRIDGE_TOKEN_PEPPER"})
 REQUIRED = RUNTIME_SECRETS
 CLOUD_CLI = "gcloud"
+DEPENDENCY_FILES = ("pyproject.toml", "uv.lock", "packages/icloudpd-source/pyproject.toml")
+ENVIRONMENT_MARKER = ".photointel-icloud-ready.json"
+READ_ONLY_ACTIONS = frozenset({"verify", "status", "test"})
 SDK_VERSION = "591.0.0"
 SDK_ARCHIVES = {
     "x86_64": ("x86_64", "8b8c1be16284f7072359de05d31fe5ce52b6052fb295404a62a54b7d03ec4326"),
@@ -165,6 +168,79 @@ def uv_command() -> str:
     return str(executable)
 
 
+
+def venv_python() -> Path:
+    """Return the local interpreter without calling uv, pip or the network."""
+    base = ROOT / ".venv"
+    python = base / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not (base / "pyvenv.cfg").is_file() or not python.is_file() or not os.access(python, os.X_OK):
+        raise SetupError(
+            "Ambiente virtual iCloud ausente ou inválido. Execute: "
+            "python3 infra/scripts/icloud_terminal.py prepare"
+        )
+    return python
+
+
+def dependency_fingerprint() -> str:
+    """Bind local readiness to pinned project dependencies, not credentials."""
+    digest = hashlib.sha256()
+    for name in DEPENDENCY_FILES:
+        try:
+            contents = (ROOT / name).read_bytes()
+        except OSError:
+            raise SetupError(
+                "Arquivos de dependências iCloud ausentes. Atualize o repositório "
+                "e execute: python3 infra/scripts/icloud_terminal.py prepare"
+            ) from None
+        digest.update(name.encode("utf-8") + b"\\0" + contents + b"\\0")
+    return digest.hexdigest()
+
+
+def marker_file() -> Path:
+    return ROOT / ".venv" / ENVIRONMENT_MARKER
+
+
+def mark_prepared_environment() -> None:
+    """Commit a nonsecret readiness stamp only after a successful uv sync."""
+    python = venv_python()
+    state = {
+        "format": 1,
+        "requirements_sha256": dependency_fingerprint(),
+        "interpreter": str(python.resolve()),
+    }
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=".icloud-ready-",
+            suffix=".json", dir=python.parent.parent, delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            json.dump(state, output)
+        os.replace(temporary, marker_file())
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def prepared_python() -> Path:
+    """Fail fast on an absent or stale environment; never install during reads."""
+    python = venv_python()
+    try:
+        state = json.loads(marker_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = None
+    if state != {
+        "format": 1,
+        "requirements_sha256": dependency_fingerprint(),
+        "interpreter": str(python.resolve()),
+    }:
+        raise SetupError(
+            "Dependências iCloud não preparadas ou desatualizadas. Execute uma vez: "
+            "python3 infra/scripts/icloud_terminal.py prepare"
+        )
+    return python
+
+
 def main() -> int:
     global CLOUD_CLI
     parser = argparse.ArgumentParser(description=__doc__)
@@ -183,26 +259,35 @@ def main() -> int:
     if arguments.action == "setup" and not sys.stdin.isatty():
         parser.error("Abra um terminal SSH/Codespaces; Actions não recebe senha/2FA")
     try:
-        CLOUD_CLI = ensure_gcloud()
-        ensure_user_login(arguments.project, interactive=arguments.action == "setup")
-        # Install only code first; credentials are fetched afterwards and never
-        # exposed to dependency installation, command arguments or files.
-        uv = uv_command()
-        installer_environment = dict(os.environ, UV_CONCURRENT_BUILDS="1",
-                                     UV_CONCURRENT_DOWNLOADS="2",
-                                     UV_CONCURRENT_INSTALLS="1")
-        # UV_COMPILE_BYTECODE acts like --compile-bytecode, even when it is
-        # present with the value "0". Avoid conflicting positive/negative
-        # flags: uv already disables compilation by default.
-        installer_environment.pop("UV_COMPILE_BYTECODE", None)
-        subprocess.run(
-            [uv, "sync", "--frozen", "--no-dev", "--group", "ingest"],
-            cwd=ROOT, env=installer_environment, check=True,
-        )
+        if arguments.action in ("prepare", "setup"):
+            # Prepare/install explicitly, never when checking status or existing access.
+            # The preparation step does not need Google or Apple credentials.
+            if arguments.action == "setup":
+                CLOUD_CLI = ensure_gcloud()
+                ensure_user_login(arguments.project, interactive=True)
+            uv = uv_command()
+            installer_environment = dict(os.environ, UV_CONCURRENT_BUILDS="1",
+                                         UV_CONCURRENT_DOWNLOADS="2",
+                                         UV_CONCURRENT_INSTALLS="1",
+                                         UV_PROJECT_ENVIRONMENT=str(ROOT / ".venv"))
+            # UV_COMPILE_BYTECODE=0 still enables the positive flag in uv.
+            installer_environment.pop("UV_COMPILE_BYTECODE", None)
+            # A failed/partial install must never leave a ready marker behind.
+            marker_file().unlink(missing_ok=True)
+            subprocess.run(
+                [uv, "sync", "--frozen", "--no-dev", "--group", "ingest"],
+                cwd=ROOT, env=installer_environment, check=True,
+            )
+            mark_prepared_environment()
+            if arguments.action == "prepare":
+                print("Dependências locais prontas. Nenhum login Google/Apple iniciado.")
+                return 0
+        # Diagnostics run directly under the prepared venv interpreter, bypassing
+        # both uv run and uv sync. GCP access is needed only to fetch runtime refs.
+        python = prepared_python()
+        if arguments.action in READ_ONLY_ACTIONS:
+            CLOUD_CLI = ensure_gcloud()
         runtime = runtime_environment(arguments.project, arguments.region)
-        if arguments.action == "prepare":
-            print("Dependências e referências prontas. Nenhum login Apple iniciado.")
-            return 0
         # Secret values exist only in this process and the operation child.
         child_environment = dict(os.environ, **runtime)
         with tempfile.TemporaryDirectory(prefix="photointel-icloud-report-") as temporary:
@@ -223,7 +308,7 @@ def main() -> int:
                 " print('Setup indisponível: '+type(e).__name__);sys.exit(1)\n"
             )
             result = subprocess.run(
-                [uv, "run", "--no-sync", "python", "-c", bootstrap, *operation],
+                [str(python), "-c", bootstrap, *operation],
                 cwd=ROOT, env=child_environment, check=False,
             )
             if result.returncode:
