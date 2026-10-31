@@ -23,7 +23,6 @@ RUN set -eux; \
       fi; \
     fi; \
     install -d -o 1000 -g 1000 /home/rod \
-
     && echo 'rod ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/rod \
     && chmod 0440 /etc/sudoers.d/rod
 ENV TERM=xterm-256color
