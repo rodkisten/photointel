@@ -31,20 +31,24 @@ SDK_ARCHIVES = {
 }
 
 
-def ensure_gcloud() -> str:
-    installed = shutil.which("gcloud")
-    if installed:
-        return installed
-    # The official cloud-sdk Docker image ships gcloud outside the login-shell
-    # PATH. Reuse that executable rather than downloading a second SDK.
-    known_locations = (
+def _known_sdk_binaries() -> tuple[Path, ...]:
+    """Locations used by the official Cloud SDK image and prior installs."""
+    return (
         Path("/usr/lib/google-cloud-sdk/bin/gcloud"),
         Path("/opt/google-cloud-sdk/bin/gcloud"),
         Path.home() / "google-cloud-sdk" / "bin" / "gcloud",
         Path.home() / ".cache" / "photointel" / ("gcloud-" + SDK_VERSION)
         / "google-cloud-sdk" / "bin" / "gcloud",
     )
-    for binary in known_locations:
+
+
+def ensure_gcloud() -> str:
+    installed = shutil.which("gcloud")
+    if installed:
+        return installed
+    # A login shell may reset PATH even though the official image has gcloud.
+    # Reuse a working installation before attempting any network download.
+    for binary in _known_sdk_binaries():
         if binary.is_file() and os.access(binary, os.X_OK):
             probe = subprocess.run([str(binary), "--version"], capture_output=True,
                                    check=False, timeout=20)
