@@ -35,6 +35,21 @@ def ensure_gcloud() -> str:
     installed = shutil.which("gcloud")
     if installed:
         return installed
+    # The official cloud-sdk Docker image ships gcloud outside the login-shell
+    # PATH. Reuse that executable rather than downloading a second SDK.
+    known_locations = (
+        Path("/usr/lib/google-cloud-sdk/bin/gcloud"),
+        Path("/opt/google-cloud-sdk/bin/gcloud"),
+        Path.home() / "google-cloud-sdk" / "bin" / "gcloud",
+        Path.home() / ".cache" / "photointel" / ("gcloud-" + SDK_VERSION)
+        / "google-cloud-sdk" / "bin" / "gcloud",
+    )
+    for binary in known_locations:
+        if binary.is_file() and os.access(binary, os.X_OK):
+            probe = subprocess.run([str(binary), "--version"], capture_output=True,
+                                   check=False, timeout=20)
+            if probe.returncode == 0:
+                return str(binary)
     if platform.system() != "Linux" or platform.machine() not in SDK_ARCHIVES:
         raise SetupError("Instale gcloud neste sistema antes de executar o setup")
     cache = Path.home() / ".cache" / "photointel"
@@ -46,7 +61,7 @@ def ensure_gcloud() -> str:
         raise SetupError("Instalação gcloud incompleta no cache PhotoIntel")
     arch, expected_hash = SDK_ARCHIVES[platform.machine()]
     url = ("https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/"
-           f"google-cloud-cli-{SDK_VERSION}-linux-{arch}.tar.gz")
+           f"google-cloud-cli-linux-{arch}.tar.gz")
     cache.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gcloud-install-", dir=cache) as temporary:
         directory = Path(temporary)
