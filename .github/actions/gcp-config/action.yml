@@ -42,7 +42,7 @@ runs:
       if: inputs.mode == 'prepare'
       shell: bash
       run: python3 -m pip install --disable-pip-version-check python-dotenv==1.2.4
-    - name: "🧩 [CONFIG] Validate Environment vars and render private deployment files"
+    - name: "🧩 [CONFIG] Prepare env vars and render deploy"
       id: prepare
       if: inputs.mode == 'prepare'
       shell: bash
@@ -54,7 +54,7 @@ runs:
         set -euo pipefail
         python3 infra/gcp/gcp-env.py
         python3 infra/gcp/manage.py render
-    - name: "🧹 [CLEANUP] Remove private configuration and generated manifests"
+    - name: "🧹 [CLEANUP] Remove config and generated"
       if: inputs.mode == 'cleanup'
       shell: bash
       run: |
