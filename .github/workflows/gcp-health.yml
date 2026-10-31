@@ -43,35 +43,22 @@ jobs:
       - name: "🧰 Gcloud"
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: "🔍 Runtime PostgreSQL connection"
+      - name: "🔧 Configure verified PostgreSQL CA bundle"
         run: |
           python3 - <<'PY'
-          import json,subprocess,tempfile,os
-          def call(args,check=True):
-              return subprocess.run(['gcloud',*args,'--project','photointel','--quiet'],capture_output=True,text=True,check=check)
-          svc=json.loads(call(['run','services','describe','photointel-api','--region','us-central1','--format=json']).stdout)
-          runtime=svc['spec']['template']['spec']
-          container=runtime['containers'][0]
-          container={k:container[k] for k in ('image','env') if k in container}
-          container.update(command=['python'],args=['-c',"import asyncio,json\nfrom pathlib import Path\nimport certifi\nfrom sqlalchemy.ext.asyncio import create_async_engine\nfrom sqlalchemy import text\nfrom photointel.config import get_settings\nfrom photointel.db_connection import database_connection_options,database_engine_options\nasync def run():\n    for label,ca in [('system','/etc/ssl/certs/ca-certificates.crt'),('certifi',certifi.where())]:\n        settings=get_settings().model_copy(update={'database_tls_ca_file':Path(ca)})\n        url,args=database_connection_options(settings)\n        engine=create_async_engine(url,connect_args=args,**database_engine_options(settings))\n        try:\n            async with engine.connect() as c: await c.execute(text('SELECT 1'))\n            print(json.dumps({'event':'runtime_db_probe','state':'passed','ca':label}),flush=True)\n        except Exception as e:\n            markers=['password authentication failed','certificate verify failed','self-signed','self signed','unable to get local issuer','unable to verify','certificate has expired','hostname mismatch','does not match host','channel binding','timeout']\n            print(json.dumps({'event':'runtime_db_probe','state':'failed','ca':label,'neon_host':bool(url.host and url.host.endswith('.neon.tech')),'exception_type':type(e).__name__,'signals':[m for m in markers if m in str(e).lower()]}),flush=True)\n        finally: await engine.dispose()\nasyncio.run(run())\n"],resources={'limits':{'cpu':'1','memory':'512Mi'}})
-          doc={'apiVersion':'run.googleapis.com/v1','kind':'Job','metadata':{'name':'photointel-diagnose-db'},'spec':{'template':{'spec':{'taskCount':1,'parallelism':1,'template':{'spec':{'containers':[container],'serviceAccountName':runtime['serviceAccountName'],'maxRetries':0,'timeoutSeconds':'90'}}}}}}
-          fd,path=tempfile.mkstemp(suffix='.json')
-          try:
-              with os.fdopen(fd,'w') as f: json.dump(doc,f)
-              result=call(['run','jobs','replace',path,'--region','us-central1'],False)
-              if result.returncode: raise RuntimeError('Diagnostic job configuration rejected')
-              result=call(['run','jobs','execute','photointel-diagnose-db','--region','us-central1','--wait'],False)
-              print('Diagnostic job execution completed:',result.returncode==0)
-              entries=json.loads(call(['logging','read','resource.type="cloud_run_job" AND resource.labels.job_name="photointel-diagnose-db"','--freshness=10m','--limit=30','--format=json']).stdout)
-              for e in entries:
-                  p=e.get('jsonPayload',{})
-                  if not p:
-                      try:p=json.loads(e.get('textPayload','{}'))
-                      except ValueError:continue
-                  if p.get('event')=='runtime_db_probe': print(json.dumps(p))
-          finally:
-              os.unlink(path)
-              call(['run','jobs','delete','photointel-diagnose-db','--region','us-central1'],False)
+          import json,subprocess
+          def call(args):
+              r=subprocess.run(['gcloud',*args,'--project','photointel','--quiet'],capture_output=True,text=True)
+              if r.returncode: raise RuntimeError('Cloud Run TLS configuration update failed')
+              return r.stdout
+          value='DATABASE_TLS_CA_FILE=/etc/ssl/certs/ca-certificates.crt'
+          call(['run','services','update','photointel-api','--region','us-central1','--update-env-vars',value])
+          print('API TLS CA bundle configured.')
+          for j in json.loads(call(['run','jobs','list','--region','us-central1','--format=json'])):
+              name=j.get('metadata',{}).get('name','').rsplit('/',1)[-1]
+              if name.startswith('photointel-') and name!='photointel-diagnose-db':
+                  call(['run','jobs','update',name,'--region','us-central1','--update-env-vars',value])
+                  print('Job TLS configuration updated:',name)
           PY
 
       - name: "🩺 Cloud Run status + HTTP health"
