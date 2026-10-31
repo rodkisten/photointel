@@ -53,6 +53,10 @@ Erros 401/403 nunca são interpretados como recurso ausente.
 
 ## Preservação e conflitos
 
+Se o app `photointel` já proteger outro domínio (por exemplo `migos.club`), ele
+permanece intacto e o frontend é gerenciado como `photointel-web`. O Worker continua
+chamado `photointel`; o AUD do app específico do frontend é resolvido automaticamente.
+
 O setup não apaga Workers, DNS, aplicações de terceiros, bancos, imagens,
 service tokens ou objetos R2. O Worker legado continua onde já estava. Não cria
 Tunnel para a arquitetura Cloud Run; os arquivos Oracle/VPS são alternativas.
@@ -64,9 +68,10 @@ Service Auth desativado, em vez de inventar uma credencial perdida no deploy.
 Um app Bridge existente no path exato `/v1/bridge/*` pode ser adotado mesmo com
 nome antigo, mantendo ID e AUD. As regras devem conter apenas seletores explícitos
 de Service Auth, sem Bypass nem condições que seriam perdidas. Os Client IDs são
-resolvidos dos tokens existentes; referências a tokens já removidos são preservadas
-com aviso, sem criar credenciais. Isso não restaura um dispositivo cujo token foi
-removido. A allowlist humana configurada continua sendo aplicada ao Bridge.
+resolvidos dos tokens existentes; referências a tokens já removidos fazem o setup preservar o app Bridge inteiro,
+sem alterações, e emitir um aviso. Isso não restaura um dispositivo cujo token foi
+removido nem adiciona acesso humano ao Bridge legado. O login humano do frontend
+continua sendo configurado normalmente.
 
 Uma aplicação PhotoIntel existente só pode ser adotada se todos os seus
 hostnames/paths pertencerem ao escopo esperado. Ambiguidade, apps específicas
