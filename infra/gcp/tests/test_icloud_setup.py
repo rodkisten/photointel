@@ -156,14 +156,21 @@ class LauncherTests(unittest.TestCase):
             seen.append((command, env))
             return types.SimpleNamespace(returncode=0)
 
-        with patch.object(self.module, "ensure_gcloud", return_value="/usr/local/bin/gcloud"), patch.object(
-                self.module, "ensure_user_login"), patch.object(
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module, "ROOT", Path(temporary)), patch.object(
+                self.module, "ensure_gcloud") as gcloud, patch.object(
+                self.module, "ensure_user_login") as login, patch.object(
+                self.module, "runtime_environment") as runtime, patch.object(
+                self.module, "mark_prepared_environment") as stamp, patch.object(
                 self.module, "uv_command", return_value="/usr/local/bin/uv"), patch.object(
-                self.module, "runtime_environment", return_value={}), patch.object(
                 self.module.subprocess, "run", side_effect=run), patch.dict(
                 self.module.os.environ, {"UV_COMPILE_BYTECODE": "0"}), patch.object(
                 sys, "argv", ["icloud_terminal.py", "prepare"]):
             self.assertEqual(self.module.main(), 0)
+            stamp.assert_called_once()
+            gcloud.assert_not_called()
+            login.assert_not_called()
+            runtime.assert_not_called()
 
         self.assertEqual(len(seen), 1)
         command, env = seen[0]
@@ -172,6 +179,125 @@ class LauncherTests(unittest.TestCase):
         self.assertNotIn("UV_COMPILE_BYTECODE", env)
         self.assertNotIn("--compile-bytecode", command)
         self.assertNotIn("--no-compile-bytecode", command)
+
+    def fake_local_environment(self, root):
+        """Minimal fake venv that never executes code or accesses the network."""
+        for name in self.module.DEPENDENCY_FILES:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name + "\\n", encoding="utf-8")
+        base = root / ".venv"
+        binary = base / "bin/python"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("#!/bin/sh\\n", encoding="utf-8")
+        binary.chmod(0o700)
+        (base / "pyvenv.cfg").write_text("home = /usr/bin\\n", encoding="utf-8")
+        return binary
+
+    def test_prepared_environment_marker_detects_dependency_changes(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module, "ROOT", Path(temporary)):
+            root = Path(temporary)
+            binary = self.fake_local_environment(root)
+            with self.assertRaisesRegex(self.module.SetupError, "prepare"):
+                self.module.prepared_python()
+            self.module.mark_prepared_environment()
+            self.assertEqual(self.module.prepared_python(), binary)
+            (root / "uv.lock").write_text("changed", encoding="utf-8")
+            with self.assertRaisesRegex(self.module.SetupError, "prepare"):
+                self.module.prepared_python()
+            # Re-preparing updates the fingerprint; the old marker is invalid.
+            self.module.mark_prepared_environment()
+            self.assertEqual(self.module.prepared_python(), binary)
+            binary.unlink()
+            with self.assertRaisesRegex(self.module.SetupError, "prepare"):
+                self.module.prepared_python()
+
+    def test_missing_environment_fails_before_gcloud_or_uv(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module, "ROOT", Path(temporary)), patch.object(
+                self.module, "ensure_gcloud") as gcloud, patch.object(
+                self.module, "uv_command") as uv, patch.object(
+                self.module, "runtime_environment") as runtime, patch.object(
+                sys, "argv", ["icloud_terminal.py", "verify"]):
+            self.assertEqual(self.module.main(), 1)
+        gcloud.assert_not_called()
+        uv.assert_not_called()
+        runtime.assert_not_called()
+
+    def test_read_only_actions_use_python_directly_without_uv_sync_or_login(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module, "ROOT", Path(temporary)):
+            binary = self.fake_local_environment(Path(temporary))
+            self.module.mark_prepared_environment()
+            for action in ("verify", "status", "test"):
+                with self.subTest(action=action), patch.object(
+                        self.module, "ensure_gcloud", return_value="/usr/bin/gcloud"
+                ) as gcloud, patch.object(
+                        self.module, "ensure_user_login") as login, patch.object(
+                        self.module, "uv_command") as uv, patch.object(
+                        self.module, "runtime_environment", return_value={
+                            "ICLOUD_ENABLED": "false",
+                            "ICLOUD_SESSION_KEY": "PRIVATE_VALUE"
+                        }) as runtime, patch.object(
+                        self.module.subprocess, "run",
+                        return_value=types.SimpleNamespace(returncode=0)
+                ) as execute, patch.object(
+                        sys, "argv", ["icloud_terminal.py", action]):
+                    self.assertEqual(self.module.main(), 0)
+                    command = execute.call_args.args[0]
+                    self.assertEqual(command[0], str(binary))
+                    self.assertEqual(command[1], "-c")
+                    self.assertEqual(command[3], action)
+                    self.assertNotIn("uv", command[0])
+                    self.assertEqual(execute.call_count, 1)
+                    self.assertEqual(
+                        execute.call_args.kwargs["env"]["ICLOUD_SESSION_KEY"], "PRIVATE_VALUE"
+                    )
+                    uv.assert_not_called()
+                    login.assert_not_called()
+                    gcloud.assert_called_once()
+                    runtime.assert_called_once()
+
+    def test_setup_still_syncs_before_running_the_prepared_python(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+                self.module, "ROOT", Path(temporary)):
+            binary = self.fake_local_environment(Path(temporary))
+            commands = []
+
+            def run(command, **kwargs):
+                commands.append((command, kwargs))
+                if command[0] == str(binary):
+                    path = Path(command[command.index("--result-file") + 1])
+                    path.write_text('{"session_published":true}', encoding="utf-8")
+                return types.SimpleNamespace(returncode=0)
+
+            with patch.object(
+                    self.module, "ensure_gcloud", return_value="/usr/bin/gcloud"
+            ), patch.object(
+                    self.module, "ensure_user_login"
+            ) as login, patch.object(
+                    self.module, "uv_command", return_value="/usr/bin/uv"
+            ), patch.object(
+                    self.module, "runtime_environment", return_value={}
+            ), patch.object(
+                    self.module.subprocess, "run", side_effect=run
+            ), patch.object(
+                    sys.stdin, "isatty", return_value=True
+            ), patch.object(
+                    sys, "argv", ["icloud_terminal.py", "setup",
+                                  "--account", "user@icloud.com"]):
+                self.assertEqual(self.module.main(), 0)
+            self.assertEqual(len(commands), 2)
+            self.assertEqual(commands[0][0][:2], ["/usr/bin/uv", "sync"])
+            self.assertEqual(commands[1][0][0], str(binary))
+            self.assertEqual(commands[1][0][3], "setup")
+            self.assertNotIn("UV_COMPILE_BYTECODE", commands[0][1]["env"])
+            self.assertEqual(
+                commands[0][1]["env"]["UV_PROJECT_ENVIRONMENT"], str(Path(temporary) / ".venv")
+            )
+            self.assertEqual(self.module.prepared_python(), binary)
+            login.assert_called_once()
 
     def test_noninteractive_service_account_does_not_start_google_login(self):
         with patch.object(self.module, "gcloud", return_value="runtime@project.iam.gserviceaccount.com"), patch.object(
