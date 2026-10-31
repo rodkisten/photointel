@@ -1,9 +1,5 @@
 name: "☁️ Cloudflare Setup"
-# Configure frontend Access; retain apex and orphaned Bridge applications.
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/cloudflare-setup.yml']
   workflow_dispatch:
     inputs:
       mode:
@@ -28,7 +24,7 @@ jobs:
       id-token: write
     env:
       CONFIRM_PROJECT: photointel
-      SETUP_MODE: ${{ inputs.mode || 'apply' }}
+      SETUP_MODE: ${{ inputs.mode || 'plan' }}
     steps:
       - name: "📥 Código"
         uses: actions/checkout@v4
