@@ -29,6 +29,23 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
 3. Execute **Setup GCP → apply** para provisionar containers ausentes e atribuir `roles/secretmanager.secretAccessor` no escopo desses quatro secrets ao `photointel-deployer`. Esse serviço é acessado via WIF, sem chave de service account.
 4. Rode **Pages** ou **SSH**. Pages só exporta valores públicos para `GITHUB_ENV`; Cloudflare API Token e Account ID são buscados quando o Wrangler é executado. SSH interativo usa WIF na `main` para ler Tailscale OAuth no Secret Manager, mascara os valores e não os escreve em arquivos do repositório.
 
+## Solução de problemas: Pages
+
+A etapa **⚙ Env** verifica acesso efetivo ao `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` antes de instalar dependências e compilar o frontend. Se falhar, os logs indicam uma das causas, sem revelar tokens:
+
+- **Secret ou versão inexistente:** `GCP_CONFIG_ENV` contém só a referência. O bootstrap cria o secret, mas **não cria uma versão contendo o token**. Adicione o valor atualizado com `gcloud secrets versions add` no Cloud Shell e confira a versão `WORKFLOW_SECRETS__...__VERSION`.
+- **PERMISSION_DENIED:** execute **Setup GCP → apply** com a identidade administrativa para conceder `roles/secretmanager.secretAccessor` ao `photointel-deployer` nos secrets declarados. WIF não concede automaticamente acesso a versões.
+- **Versão desativada ou destruída:** crie/ative uma versão válida e atualize a referência.
+
+Para inspecionar apenas metadados, sem expor credenciais, no Cloud Shell:
+
+```bash
+gcloud secrets describe photointel-pages-token --project=photointel
+gcloud secrets versions list photointel-pages-token --project=photointel
+```
+
+Não mantenha tokens em texto puro no próprio `GCP_CONFIG_ENV` nem os cole em comandos que fiquem no histórico do terminal.
+
 ## Exceções e fronteiras de segurança
 
 - `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN` permanecem como GitHub Secrets porque os alertas precisam poder ocorrer **antes** da autenticação GCP. O `GITHUB_TOKEN` é emitido automaticamente pelo GitHub.

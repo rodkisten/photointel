@@ -83,6 +83,38 @@ def append_public_env(values: dict[str, str]) -> None:
             output.write(f"{key}={value}\n")
 
 
+def explain_secret_access_failure(key: str, name: str, version: str, stderr: bytes) -> str:
+    """Classify gcloud errors without ever displaying raw stderr or secret payload."""
+    error = stderr.decode("utf-8", errors="replace").lower()
+    target = f"{key} ({name}, version {version})"
+    if "permission_denied" in error or "permission denied" in error or "403" in error:
+        return (
+            f"Access denied for {target}. The authenticated deployer needs "
+            "roles/secretmanager.secretAccessor on this secret. "
+            "Run Setup GCP apply after configuring workflow_secrets."
+        )
+    if "not_found" in error or "not found" in error or "404" in error:
+        return (
+            f"Secret or version not found: {target}. "
+            "Create the secret and add the exact numeric version in Google Secret Manager; "
+            "Setup GCP only creates secret containers, never their values."
+        )
+    if (
+        "failed_precondition" in error or "disabled" in error
+        or "destroyed" in error
+    ):
+        return (
+            f"Secret version unavailable: {target}. "
+            "Create/enable a valid version and update the pinned version reference."
+        )
+    if "unauthenticated" in error or "invalid_grant" in error:
+        return f"Google authentication failed while accessing {target}; check WIF."
+    return (
+        f"Cannot access {target}. Check whether the pinned version exists and is "
+        "enabled, and whether the WIF deployer has secretAccessor on this secret."
+    )
+
+
 def secret_value(config: dict, key: str) -> str:
     references = config.get("workflow_secrets") or {}
     ref = references.get(key)
@@ -107,10 +139,9 @@ def secret_value(config: dict, key: str) -> str:
     except (OSError, subprocess.TimeoutExpired):
         raise WorkflowEnvironmentError(f"Could not access GCP secret for {key}") from None
     if result.returncode:
-        # gcloud stderr may include secret context. Never echo it to Actions.
+        # gcloud stderr may contain credentials. Classify without echoing it.
         raise WorkflowEnvironmentError(
-            f"Secret Manager access denied/unavailable for {key}. "
-            "Check pinned version and the GCP bootstrap IAM policy."
+            explain_secret_access_failure(key, name, version, result.stderr)
         )
     try:
         value = result.stdout.decode("utf-8")
@@ -165,11 +196,16 @@ def main() -> int:
         config = read_config()
         if opts.target == "pages":
             public = pages_environment(config)
-            for key in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
-                if key not in config.get("workflow_secrets", {}):
-                    raise WorkflowEnvironmentError(f"Missing workflow secret reference {key}")
+            # Fail before npm install/build when credentials or IAM are missing.
+            # Reads remain private to this short-lived Python process.
+            token = secret_value(config, "CLOUDFLARE_API_TOKEN")
+            account_id = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
+            if not token.strip() or not ACCOUNT_ID.fullmatch(account_id):
+                raise WorkflowEnvironmentError(
+                    "Invalid Cloudflare token or account ID in Google Secret Manager"
+                )
             append_public_env(public)
-            print("✅ Pages public configuration prepared from GCP_CONFIG_ENV.")
+            print("✅ Pages public config and Secret Manager access verified.")
         elif opts.target == "pages-deploy":
             pages_deploy(config)
         else:
