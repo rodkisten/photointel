@@ -10,7 +10,7 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
   "GCP_DEPLOY_SERVICE_ACCOUNT": "photointel-deployer@photointel.iam.gserviceaccount.com",
   "GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER": "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap",
   "GCP_BOOTSTRAP_SERVICE_ACCOUNT": "photointel-bootstrap@photointel.iam.gserviceaccount.com",
-  "workflows": {"worker": {"name": "photointel-api-relay", "domain": "photos.migos.club"}},
+  "workflows": {"worker": {"name": "photointel", "domain": "photos.migos.club"}},
   "workflow_secrets": {
     "CLOUDFLARE_API_TOKEN": {"name": "photointel-pages-token", "version": "1"},
     "CLOUDFLARE_ACCOUNT_ID": {"name": "photointel-cloudflare-account", "version": "1"},
@@ -20,28 +20,30 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
 }
 ```
 
-**No formato dotenv legado**, configure as duas chaves abaixo dentro de `GCP_CONFIG_ENV` (ou omita-as, pois são derivadas do repositório e de `FRONTEND_ORIGIN`):
+**No formato dotenv legado**, use a configuração abaixo dentro de `GCP_CONFIG_ENV`. As duas chaves Worker são opcionais, porque o nome e domínio já podem ser deduzidos das configurações atuais:
 
 ```dotenv
-WORKFLOWS__WORKER__NAME=photointel-api-relay
+WORKFLOWS__WORKER__NAME=photointel
 WORKFLOWS__WORKER__DOMAIN=photos.migos.club
 ```
 
-### Um único Cloudflare Worker, frontend e API
+### Um Worker de produção para React e API
 
-O workflow **🌐 Worker · Web** reutiliza o Worker **`photointel-api-relay`** que já está definido no repositório. Ele publica o JavaScript do relay **junto** ao build do React. Não cria segundo Worker e não depende de Cloudflare Pages.
+Os logs do GitHub Actions confirmam que o Worker **`photointel`** já foi publicado em `photos.migos.club`. O novo workflow atualiza **esse mesmo Worker**, sem criar outro recurso.
 
-- `https://photos.migos.club/` e rotas da SPA servem React por `env.ASSETS.fetch()`.
-- `https://photos.migos.club/v1/*` encaminha ao serviço Python `photointel-api` do Cloud Run, sem colocar outra URL no navegador.
-- O domínio já configurado `api.photos.migos.club` permanece associado **ao mesmo Worker** para preservar clientes antigos. Somente as rotas `/v1/*` funcionam nesse hostname.
-- O workflow consulta a URL **real** do serviço Cloud Run com `gcloud run services describe`; não usa o endereço `run.app` de exemplo nem armazena esse valor como outra GitHub Var.
-- O frontend usa `VITE_API_BASE_URL=` (origem vazia), fazendo requests para `/v1/*` no mesmo domínio. `WORKFLOWS__WORKER__API_BASE_URL` e `WORKFLOWS__PAGES__*` legadas são ignoradas.
+- `https://photos.migos.club/` e demais rotas da SPA servem React usando `env.ASSETS.fetch()`.
+- `https://photos.migos.club/v1/*` encaminha a requisição ao `photointel-api` no Cloud Run por meio do relay no mesmo Worker.
+- O build define `VITE_API_BASE_URL=` para que o frontend consulte `/v1/*` pela mesma origem. A antiga `WORKFLOWS__WORKER__API_BASE_URL` é ignorada.
+- O workflow descobre a URL real do Cloud Run via `gcloud run services describe` usando WIF, em vez de usar `run.app` de exemplo.
+- O Worker antigo `photointel-api-relay` **não é alterado nem excluído** pela migração. O domínio `api.photos.migos.club` continua vinculado a ele para clientes antigos até confirmar que a API funciona em `photos.migos.club/v1/*`.
 
-**Cloudflare Access:** o hostname `photos.migos.club` precisa estar protegido por uma aplicação Access cuja política e audience sejam aceitas pela API, porque o relay encaminha o JWT assinado de Access para o Cloud Run. Verifique `ACCESS_AUDIENCE` e o login de usuários, inclusive chamadas `/v1/*`; a alteração de domínio, por si só, não cria nem valida políticas Access. O hostname legado da API também precisa manter a política adequada.
+**Segurança:** o hostname `photos.migos.club` precisa estar protegido por Cloudflare Access, e a audiência do JWT deve corresponder ao valor `ACCESS_AUDIENCE` validado no Cloud Run. A proteção Access do hostname antigo deve continuar enquanto ele for usado. O workflow não modifica essas políticas.
 
-**DNS e custom domain:** a publicação usa `custom_domain=true` para `photos.migos.club` e preserva `api.photos.migos.club`. A Cloudflare pode rejeitar a associação se já houver CNAME incompatível apontando para outro destino; ajuste esse registro no painel, sem apagar as regras do Access antes de conferir o novo funcionamento. O workflow permanece manual e não altera o DNS antecipadamente.
+**DNS:** o Worker de frontend já está associado ao domínio, portanto não é necessário criar outro hostname. O deploy mantém a associação atual e publica o frontend + gateway como uma única versão do Worker `photointel`. Caso o Cloudflare aponte conflito de CNAME/Custom Domain, verifique o DNS no painel, sem remover o serviço anterior de imediato.
 
-**Segredos:** mantenha o Google Secret Manager atual para `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID`; é necessária permissão de Workers Scripts e de custom domain. O script não publica os valores no GitHub. Troque tokens que tenham sido expostos em texto puro. O valor da referência `photointel-pages-token` não precisa ser renomeado se o conteúdo e os escopos forem válidos.
+**Secrets:** continuam somente referências a `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` no `GCP_CONFIG_ENV`; os valores vêm do Google Secret Manager. Se o token atual possui permissão Workers Scripts, o secret `photointel-pages-token` pode continuar com esse nome legado. Rotacione tokens expostos.
+
+**Para finalizar a consolidação:** após testar acesso, navegação da SPA, 401/403, mídia privada e `/v1/*`, será possível desativar o Worker legado `photointel-api-relay` e retirar sua rota antiga. **Não faça isso antes dos testes**, porque outras integrações podem usar `api.photos.migos.club`.
 
 ## Ativação inicial
 
