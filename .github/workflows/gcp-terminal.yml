@@ -66,9 +66,9 @@ jobs:
           python3 infra/terminal/terminal.py "$TERMINAL_ACTION" --apply --confirm-project photointel
       - name: "📋 VM boot logs + Tailscale readiness"
         if: inputs.action == 'provision' && steps.terminal_operation.outcome == 'success'
-        timeout-minutes: 5
+        timeout-minutes: 14
         run: |
-          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds 210
+          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds 720
       - name: "🧹 GCP Config"
         if: always()
         uses: ./.github/actions/gcp-config
