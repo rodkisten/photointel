@@ -1,5 +1,8 @@
 name: "🍎 iCloud Setup"
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/icloud-setup.yml']
   workflow_dispatch:
 permissions:
   contents: read
