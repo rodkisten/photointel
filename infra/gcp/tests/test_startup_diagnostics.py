@@ -42,6 +42,24 @@ class CloudRunStartupDiagnosticsTests(unittest.TestCase):
             [],
         )
 
+    def test_readiness_neon_and_r2_signals_are_separated_without_secret_leaks(self) -> None:
+        entries = [
+            {"textPayload": "readiness_neon_failed private-password=NEVER_PRINT"},
+            {"jsonPayload": {"message": "readiness_r2_failed secret_key=NEVER_PRINT"}},
+        ]
+        signals = diagnose.classify_entries(entries)
+        codes = [code for code, _ in signals]
+        self.assertIn("NEON_HEALTH_FAILED", codes)
+        self.assertIn("R2_HEALTH_FAILED", codes)
+        self.assertNotIn("NEVER_PRINT", repr(signals))
+
+    def test_only_neon_readiness_event_does_not_blame_r2(self) -> None:
+        codes = [code for code, _ in diagnose.classify_entries([
+            {"textPayload": "readiness_neon_failed"}
+        ])]
+        self.assertIn("NEON_HEALTH_FAILED", codes)
+        self.assertNotIn("R2_HEALTH_FAILED", codes)
+
     def test_read_only_logging_query(self) -> None:
         class FakeCompleted:
             returncode = 0
