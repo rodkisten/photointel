@@ -216,9 +216,9 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
         r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", worker["name"]
     ):
         raise ConfigurationError("Invalid Cloudflare Worker name")
-    if worker.get("name") and worker["name"] != "photointel-api-relay":
+    if worker.get("name") and worker["name"] != "photointel":
         raise ConfigurationError(
-            "Unified frontend/API deployment must reuse photointel-api-relay"
+            "Unified frontend/API deployment must reuse the existing photointel Worker"
         )
     if worker.get("domain") and (
         not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", worker["domain"])
