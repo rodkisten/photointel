@@ -28,6 +28,14 @@ Selecione `action=all` para executar **num único job e com a mesma tag de commi
 
 **Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` opcional, `apply` com uma escolha de segurança; SHA automático) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
 
+### 📱 Terminal: imagens Docker sem API de análise de contêineres
+
+O workflow **📱 GCP Terminal**, na ação `build`, agora usa exclusivamente o protocolo do **Docker** para verificar a imagem versionada, validar os comandos internos, publicar a tag `:ready` e obter o digest `sha256` do registry. A ação `provision` baixa `:ready` e fixa o digest, sem executar Docker build.
+
+O comando `gcloud artifacts docker images describe` não é usado porque pode exigir permissões adicionais de Container Analysis além de `roles/artifactregistry.writer`. Depois de confirmar pelos logs que **Setup GCP apply** concedeu acesso no repositório `photointel`, não aumente mais as roles como tentativa de resolver `iam.gserviceaccount.com`. O build se autentica como `photointel-bootstrap` pelo WIF existente e o Docker já comprovou conseguir fazer push nessa identidade. Uma imagem Docker com tag de fingerprint existente é reutilizada, e somente a tag `:ready` é promovida.
+
+O script imprime apenas erros classificados em caso de falha no Docker pull e não divulga o stderr de autenticação. Se a imagem não existir, o build cria a imagem; se houver 401/403 ou falha de rede, interrompe em vez de reconstruir.
+
 ### 🩺 Diagnose Cloud Run sem publicar nada
 
 O workflow manual **🩺 Diagnose Cloud Run** (`.github/workflows/gcp-health.yml`) usa apenas `vars.GCP_CONFIG_ENV` e WIF temporário, na branch `main`. Ele verifica o serviço `photointel-api` em `us-central1`, a revisão pronta, tráfego, o URL `run.app` efetivo e os endpoints públicos:
