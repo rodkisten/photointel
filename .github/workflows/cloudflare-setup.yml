@@ -1,4 +1,5 @@
 name: "☁️ Cloudflare Setup"
+# Reconcile existing Bridge policy without rotating device credentials.
 on:
   push:
     branches: [main]
