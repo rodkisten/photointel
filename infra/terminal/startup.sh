@@ -26,16 +26,41 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now terminal-deadline.timer
 export DEBIAN_FRONTEND=noninteractive
+# On the first boot this script used umask 077 for all files, including the
+# public Tailscale keyring. APT verifies repositories as the unprivileged _apt
+# user, so mode 0600 makes the correct key unreadable and produces a misleading
+# "repository is not signed" / GPG verification error. Repair any files left by
+# a previous failed boot BEFORE the first apt-get update.
+tailscale_keyring=/usr/share/keyrings/tailscale-archive-keyring.gpg
+tailscale_sources=/etc/apt/sources.list.d/tailscale.list
+for apt_public_file in "$tailscale_keyring" "$tailscale_sources"; do
+  if [[ -f "$apt_public_file" ]]; then
+    chmod 0644 "$apt_public_file"
+  fi
+done
+echo 'terminal-startup: apt source permissions checked'
 apt-get update -qq
 apt-get install -y --no-install-recommends docker.io curl jq ca-certificates gnupg
 systemctl enable --now docker
 if ! command -v tailscale >/dev/null; then
-  curl -fsSL --retry 5 https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-  curl -fsSL --retry 5 https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+  # Download both *public* files to a private staging directory, then install
+  # them atomically with explicit APT-readable permissions. The restrictive
+  # umask remains in effect for OAuth and Google Secret Manager credentials.
+  tailscale_stage="$(mktemp -d)"
+  curl -fsSL --retry 5 https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg -o "$tailscale_stage/keyring.gpg"
+  curl -fsSL --retry 5 https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list -o "$tailscale_stage/tailscale.list"
+  test -s "$tailscale_stage/keyring.gpg"
+  test -s "$tailscale_stage/tailscale.list"
+  install -d -m 0755 /usr/share/keyrings /etc/apt/sources.list.d
+  install -m 0644 "$tailscale_stage/keyring.gpg" "$tailscale_keyring"
+  install -m 0644 "$tailscale_stage/tailscale.list" "$tailscale_sources"
+  rm -rf "$tailscale_stage"
+  echo 'terminal-startup: tailscale public APT keyring and source installed'
   apt-get update -qq
-  apt-get install -y tailscale
+  apt-get install -y --no-install-recommends tailscale tailscale-archive-keyring
 fi
 systemctl enable --now tailscaled
+echo 'terminal-startup: tailscaled service enabled'
 # Keep the host's conventional SSH server off the public interface.
 mkdir -p /etc/ssh/sshd_config.d
 printf 'ListenAddress 127.0.0.1\nPasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-terminal.conf
