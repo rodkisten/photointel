@@ -80,6 +80,17 @@ class FakeAPI:
 
 
 class SetupTests(unittest.TestCase):
+    def test_apex_application_is_preserved_and_frontend_gets_its_own_audience(self):
+        api, cfg = FakeAPI(), config()
+        apex = {'id': 'apex', 'name': 'photointel', 'type': 'self_hosted',
+                'domain': 'migos.club', 'aud': 'b' * 64}
+        api.apps = [copy.deepcopy(apex)]
+        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
+            app.reconcile(cfg, api, True)
+        self.assertEqual(api.apps[0], apex)
+        self.assertEqual(api.apps[1]['name'], 'photointel-web')
+        self.assertEqual(cfg['access_audience'], 'c' * 64)
+
     def test_orphaned_bridge_selector_is_preserved_without_credential_creation(self):
         api, cfg = FakeAPI(), config()
         api.tokens = []
@@ -89,7 +100,7 @@ class SetupTests(unittest.TestCase):
             'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'orphan-id'}}]}]
         with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
             app.reconcile(cfg, api, True)
-        service = next(p for p in api.policies['bridge-old'] if p['name'] == 'photointel-bridge-service')
+        service = api.policies['bridge-old'][0]
         self.assertEqual(service['include'], [{'service_token': {'token_id': 'orphan-id'}}])
         self.assertNotIn('ACCESS_BRIDGE_SERVICE_TOKENS', cfg['extra_environment'])
         self.assertFalse(any('/service_tokens' in path for _, path, _ in api.writes))
