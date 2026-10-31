@@ -1,5 +1,8 @@
 name: "☁️ Cloudflare Setup"
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/cloudflare-setup.yml']
   workflow_dispatch:
     inputs:
       mode:
@@ -48,7 +51,7 @@ jobs:
       - name: "🧪 Test configuration reconciliation"
         run: python3 -m unittest discover -s infra/gcp/tests -p test_cloudflare_setup.py -v
       - name: "🔎 Access, paths, private R2 and API audience"
-        run: python3 infra/scripts/cloudflare_setup.py "$SETUP_MODE"
+        run: python3 infra/scripts/cloudflare_setup.py verify
       - name: "⚙ Worker environment"
         if: env.SETUP_MODE == 'apply'
         run: python3 infra/scripts/prepare_workflow_env.py worker
