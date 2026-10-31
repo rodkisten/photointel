@@ -318,6 +318,9 @@ def main():
     opts = parser.parse_args()
     raw = json.loads((ROOT / 'infra/gcp/config.local.json').read_text())
     c = configuration(raw)
+
+    print('\033[1;37;42m '+ opts.action +' \033[0m')
+    
     if opts.action in {'plan', 'config'}:
         print(json.dumps(c, indent=2))
         return
