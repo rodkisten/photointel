@@ -59,6 +59,24 @@ jobs:
                   print(json.dumps({k:p[k] for k in ('event','exception_type','correlation_id','error_code','path','status_code') if k in p}))
           PY
 
+      - name: "🔍 Runtime dependency selection"
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          d=json.loads(subprocess.run(['gcloud','run','services','describe','photointel-api','--region','us-central1','--project','photointel','--format=json'],capture_output=True,text=True,check=True).stdout)
+          for c in d.get('spec',{}).get('template',{}).get('spec',{}).get('containers',[]):
+              for e in c.get('env',[]):
+                  if e.get('name') in ('DATABASE_URL','APP_ENV','EXECUTION_PLATFORM','STORAGE_BACKEND','DATABASE_TLS_REQUIRED'):
+                      v=e.get('value','')
+                      print(json.dumps({'name':e['name'],'secret_ref':e.get('valueFrom',{}).get('secretKeyRef'),'scheme':v.split(':')[0] if e['name']=='DATABASE_URL' else v}))
+          PY
+
+      - name: "🔍 Neon connection diagnosis"
+        env:
+          CONFIRM_PROJECT: photointel
+          MIGRATION_MODE: diagnose
+        run: bash infra/gcp/release.sh migrate
+
       - name: "🩺 Cloud Run status + HTTP health"
         run: python3 infra/gcp/diagnose_api_connectivity.py --project photointel
 
