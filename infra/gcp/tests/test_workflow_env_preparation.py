@@ -1,4 +1,4 @@
-"""Offline tests for GCP-configured Pages/SSH and Secret Manager isolation."""
+"""Offline checks for Cloudflare Workers static assets and private GCP secrets."""
 
 import contextlib
 import importlib.util
@@ -23,8 +23,12 @@ SPEC.loader.exec_module(loader)
 def example_config():
     return {
         "project_id": "photointel",
-        "workflows": {"pages": {
-            "project": "photointel", "api_base_url": "https://api.photos.invalid",
+        "frontend_origin": "https://photos.example.org",
+        "api_origin": "https://api.photos.example.org",
+        "workflows": {"worker": {
+            "name": "photointel-web",
+            "domain": "photos.example.org",
+            "api_base_url": "https://api.photos.example.org",
         }},
         "workflow_secrets": {
             key: {"name": f"photointel-{key.lower().replace('_', '-')}", "version": "1"}
@@ -35,162 +39,186 @@ def example_config():
 
 
 class WorkflowEnvTests(unittest.TestCase):
-    def test_pages_public_env_never_includes_secrets(self):
+    def test_worker_exports_only_public_information(self):
         with tempfile.TemporaryDirectory() as tmp:
-            envfile = Path(tmp) / "env"
-            envfile.touch()
+            path = Path(tmp) / "env"
+            path.touch()
             with patch.dict(os.environ, {
-                "GITHUB_ENV": str(envfile),
-                "GITHUB_SHA": "a" * 40,
+                "GITHUB_ENV": str(path), "GITHUB_SHA": "a" * 40,
             }, clear=True):
-                loader.append_public_env(loader.pages_environment(example_config()))
-            staged = envfile.read_text()
+                loader.append_public_env(loader.worker_environment(example_config()))
+            staged = path.read_text()
         self.assertEqual(staged.splitlines(), [
-            "VITE_API_BASE_URL=https://api.photos.invalid",
-            "PAGES_PROJECT=photointel",
+            "VITE_API_BASE_URL=https://api.photos.example.org",
+            "WORKER_NAME=photointel-web",
+            "WORKER_DOMAIN=photos.example.org",
             "VITE_RELEASE_ID=" + "a" * 40,
         ])
         self.assertNotIn("CLOUDFLARE_API_TOKEN", staged)
+        self.assertNotIn("CLOUDFLARE_ACCOUNT_ID", staged)
 
-    def test_invalid_public_configuration_fails_before_wrangle(self):
-        for value in ("http://api.invalid", "https://u:p@api.invalid",
-                      "https://api.invalid/path", "https://api.invalid/?token=x"):
-            with self.subTest(value=value):
+    def test_refuse_replacing_api_relay_or_same_origin_api(self):
+        for change, value in (
+            ("name", "photointel-api-relay"),
+            ("name", ""),
+            ("name", "invalid space"),
+            ("domain", "other.example.org"),
+            ("domain", "other.example.org/invalid"),
+            ("domain", ""),
+            ("api_base_url", "https://photos.example.org"),
+            ("api_base_url", "http://api.photos.example.org"),
+            ("api_base_url", "https://api.photos.example.org/path"),
+        ):
+            with self.subTest(change=change, value=value):
                 config = example_config()
-                config["workflows"]["pages"]["api_base_url"] = value
+                config["workflows"]["worker"][change] = value
                 with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True):
                     with self.assertRaises(loader.WorkflowEnvironmentError):
-                        loader.pages_environment(config)
+                        loader.worker_environment(config)
 
-    def test_gcp_access_is_pinned_and_never_leaks_error_output(self):
+    def test_gcp_errors_classified_and_never_leak_secret(self):
+        for stderr, expected in (
+            (b"PERMISSION_DENIED private:abcd", "roles/secretmanager.secretAccessor"),
+            (b"NOT_FOUND private:abcd", "Secret or version not found"),
+            (b"FAILED_PRECONDITION: DISABLED private:abcd", "Secret version unavailable"),
+            (b"unknown private:abcd", "Cannot access"),
+        ):
+            with self.subTest(expected=expected):
+                safe = loader.explain_secret_access_failure(
+                    "CLOUDFLARE_API_TOKEN", "photointel-token", "1", stderr
+                )
+                self.assertIn(expected, safe)
+                self.assertNotIn("private:abcd", safe)
+
         class Failure:
             returncode = 1
-            stdout = b"SECRET_PAYLOAD"
-            stderr = b"error: password=VERY_PRIVATE"
-        config = example_config()
-        with patch.object(loader.subprocess, "run", return_value=Failure()) as run:
-            with self.assertRaises(loader.WorkflowEnvironmentError) as exc:
-                loader.secret_value(config, "CLOUDFLARE_API_TOKEN")
-        self.assertNotIn("VERY_PRIVATE", str(exc.exception))
-        self.assertNotIn("SECRET_PAYLOAD", str(exc.exception))
-        cmd = run.call_args.args[0]
-        self.assertEqual(cmd[:4], ["gcloud", "secrets", "versions", "access"])
-        self.assertEqual(cmd[4], "1")
-        self.assertIn("photointel", cmd)
-        self.assertTrue(run.call_args.kwargs["stderr"] == subprocess.PIPE)
+            stdout = b"PRIVATE_VALUE"
+            stderr = b"PERMISSION_DENIED password=VERY_PRIVATE"
 
-    def test_secret_manager_errors_are_actionable_and_never_show_raw_stderr(self):
-        cases = (
-            (b"ERROR: (gcloud) PERMISSION_DENIED password=VERY_PRIVATE",
-             "roles/secretmanager.secretAccessor"),
-            (b"NOT_FOUND: secret missing password=VERY_PRIVATE",
-             "Secret or version not found"),
-            (b"FAILED_PRECONDITION: version is DISABLED password=VERY_PRIVATE",
-             "Secret version unavailable"),
-            (b"unknown error password=VERY_PRIVATE",
-             "Cannot access"),
-        )
-        for stderr, expected in cases:
-            with self.subTest(expected=expected):
-                text = loader.explain_secret_access_failure(
-                    "CLOUDFLARE_API_TOKEN", "photointel-pages-token", "1", stderr
-                )
-                self.assertIn(expected, text)
-                self.assertIn("photointel-pages-token, version 1", text)
-                self.assertNotIn("VERY_PRIVATE", text)
+        with patch.object(loader.subprocess, "run", return_value=Failure()) as call:
+            with self.assertRaises(loader.WorkflowEnvironmentError) as raised:
+                loader.secret_value(example_config(), "CLOUDFLARE_API_TOKEN")
+        self.assertIn("roles/secretmanager.secretAccessor", str(raised.exception))
+        self.assertNotIn("VERY_PRIVATE", str(raised.exception))
+        self.assertEqual(call.call_args.args[0][:5], [
+            "gcloud", "secrets", "versions", "access", "1",
+        ])
+        self.assertEqual(call.call_args.kwargs["stderr"], subprocess.PIPE)
 
-    def test_pages_preflight_checks_secrets_before_writing_env(self):
+    def test_worker_preflight_fails_before_build_on_missing_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:
-            envfile = Path(tmp) / "env"
-            envfile.touch()
+            env_file = Path(tmp) / "env"
+            env_file.touch()
             with (
                 patch.dict(os.environ, {
-                    "GITHUB_ENV": str(envfile), "GITHUB_SHA": "a" * 40,
+                    "GITHUB_ENV": str(env_file), "GITHUB_SHA": "a" * 40,
                 }, clear=True),
                 patch.object(loader, "read_config", return_value=example_config()),
                 patch.object(loader, "secret_value", side_effect=loader.WorkflowEnvironmentError(
                     "Secret or version not found"
                 )) as secret,
-                patch("sys.argv", ["prepare_workflow_env.py", "pages"]),
-                contextlib.redirect_stderr(io.StringIO()) as err,
+                patch("sys.argv", ["prepare_workflow_env.py", "worker"]),
+                contextlib.redirect_stderr(io.StringIO()) as errors,
             ):
                 status = loader.main()
             self.assertEqual(status, 1)
             self.assertEqual(secret.call_count, 1)
-            self.assertIn("Secret or version not found", err.getvalue())
-            self.assertEqual(envfile.read_text(), "")
+            self.assertIn("Secret or version not found", errors.getvalue())
+            self.assertEqual(env_file.read_text(), "")
 
-    def test_pages_deploy_scopes_secrets_to_subprocess(self):
-        class Success:
-            returncode = 0
-        cfg = example_config()
-        with (
-            patch.dict(os.environ, {"GITHUB_SHA": "a" * 40}, clear=True),
-            patch.object(loader, "secret_value",
-                side_effect=["cf-token", "a" * 32]),
-            patch.object(loader.subprocess, "run", return_value=Success()) as proc,
-        ):
-            loader.pages_deploy(cfg)
-        args = proc.call_args.args[0]
-        child = proc.call_args.kwargs["env"]
-        self.assertEqual(args[:5], ["npx", "--yes", "wrangler@4", "pages", "deploy"])
-        self.assertEqual(child["CLOUDFLARE_API_TOKEN"], "cf-token")
-        self.assertEqual(child["CLOUDFLARE_ACCOUNT_ID"], "a" * 32)
-
-    def test_ssh_masks_step_outputs_and_never_writes_github_env(self):
+    def test_worker_deploy_uses_asset_only_spa_and_does_not_leak_credentials(self):
         with tempfile.TemporaryDirectory() as tmp:
-            outputs = Path(tmp) / "output"
-            envfile = Path(tmp) / "env"
-            envfile.touch()
+            root = Path(tmp)
+            app = root / "apps/web"
+            (app / "dist").mkdir(parents=True)
+            (app / "dist/index.html").write_text("<!doctype html>")
+            observed = {}
+
+            def fake_run(argv, **kwargs):
+                observed["argv"] = argv
+                observed["cwd"] = kwargs["cwd"]
+                observed["env"] = kwargs["env"]
+                config_file = Path(argv[argv.index("--config") + 1])
+                observed["wrangler"] = json.loads(config_file.read_text())
+                observed["mode"] = config_file.stat().st_mode & 0o777
+                class Result:
+                    returncode = 0
+                return Result()
+
+            with (
+                patch.object(loader, "ROOT", root),
+                patch.dict(os.environ, {"GITHUB_SHA": "b" * 40}, clear=True),
+                patch.object(loader, "secret_value", side_effect=[
+                    "private-token", "a" * 32,
+                ]),
+                patch.object(loader.subprocess, "run", side_effect=fake_run),
+            ):
+                loader.worker_deploy(example_config())
+            self.assertEqual(observed["argv"][:4], [
+                "npx", "--yes", "wrangler@4", "deploy",
+            ])
+            self.assertEqual(observed["cwd"], app)
+            self.assertEqual(observed["mode"], 0o600)
+            self.assertEqual(observed["env"]["CLOUDFLARE_API_TOKEN"], "private-token")
+            self.assertEqual(observed["wrangler"]["name"], "photointel-web")
+            self.assertFalse(observed["wrangler"]["workers_dev"])
+            self.assertFalse(observed["wrangler"]["preview_urls"])
+            self.assertNotIn("main", observed["wrangler"])
+            self.assertEqual(observed["wrangler"]["assets"], {
+                "directory": "./dist",
+                "not_found_handling": "single-page-application",
+            })
+            self.assertEqual(observed["wrangler"]["routes"], [
+                {"pattern": "photos.example.org", "custom_domain": True},
+            ])
+            self.assertNotIn("private-token", json.dumps(observed["wrangler"]))
+            self.assertEqual(list(app.glob(".wrangler-deploy-*.json")), [])
+
+    def test_ssh_oauth_kept_only_in_job_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "outputs"
+            public = Path(tmp) / "env"
+            public.touch()
             with (
                 patch.dict(os.environ, {
-                    "GITHUB_OUTPUT": str(outputs),
-                    "GITHUB_ENV": str(envfile),
+                    "GITHUB_OUTPUT": str(output), "GITHUB_ENV": str(public),
                 }, clear=True),
                 patch.object(loader, "secret_value", side_effect=[
-                    "client-do-not-log", "oauth-do-not-log"
+                    "ts-client", "ts-secret",
                 ]),
-                contextlib.redirect_stdout(io.StringIO()) as stream,
+                contextlib.redirect_stdout(io.StringIO()) as masked,
             ):
                 loader.ssh_environment(example_config())
-            written = outputs.read_text()
-            self.assertIn("ts_client_id=client-do-not-log", written)
-            self.assertIn("ts_oauth_secret=oauth-do-not-log", written)
-            self.assertIn("::add-mask::client-do-not-log", stream.getvalue())
-            self.assertIn("::add-mask::oauth-do-not-log", stream.getvalue())
-            self.assertEqual(envfile.read_text(), "")
+            self.assertIn("ts_client_id=ts-client", output.read_text())
+            self.assertIn("ts_oauth_secret=ts-secret", output.read_text())
+            self.assertIn("::add-mask::ts-secret", masked.getvalue())
+            self.assertEqual(public.read_text(), "")
 
-    def test_workflows_share_a_single_config_and_auth(self):
-        for name in ("gcp-deploy.yml", "gcp-bootstrap.yml", "gcp-migrate.yml",
-                     "deploy-pages.yml", "ssh.yml"):
-            text = (ROOT / ".github/workflows" / name).read_text()
-            with self.subTest(name=name):
-                self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", text)
-                self.assertIn("uses: ./.github/actions/gcp-config", text)
-                self.assertIn("environment:", text)
-                self.assertIn('name: "⚙ Env"', text)
-
-        pages = (ROOT / ".github/workflows/deploy-pages.yml").read_text()
-        self.assertIn("prepare_workflow_env.py pages-deploy", pages)
-        self.assertIn("prepare_workflow_env.py pages", pages)
-        self.assertNotIn("vars.PAGES_PROJECT", pages)
-        self.assertNotIn("vars.VITE_API_BASE_URL", pages)
-        self.assertNotIn("secrets.CLOUDFLARE_API_TOKEN", pages)
-        self.assertNotIn("secrets.CLOUDFLARE_ACCOUNT_ID", pages)
-
+    def test_production_workflows_share_gcp_config_and_keep_prs_isolated(self):
+        for name in (
+            "gcp-deploy.yml", "gcp-bootstrap.yml", "gcp-migrate.yml",
+            "deploy-worker.yml", "ssh.yml",
+        ):
+            source = (ROOT / ".github/workflows" / name).read_text()
+            self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", source)
+            self.assertIn('name: "⚙ Env"', source)
+            self.assertIn("uses: ./.github/actions/gcp-config", source)
+        worker = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
+        self.assertIn("prepare_workflow_env.py worker-deploy", worker)
+        self.assertIn("prepare_workflow_env.py worker", worker)
+        self.assertIn("worker-headers", worker)
+        self.assertNotIn("wrangler pages", worker)
+        self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
         ssh = (ROOT / ".github/workflows/ssh.yml").read_text()
         self.assertIn("steps.ssh_env.outputs.ts_client_id", ssh)
-        self.assertIn("steps.ssh_env.outputs.ts_oauth_secret", ssh)
-        self.assertNotIn("secrets.TS_OAUTH_CLIENT_ID", ssh)
-        self.assertNotIn("secrets.TS_OAUTH_SECRET", ssh)
-        self.assertIn("github.ref == 'refs/heads/main'", ssh)
-
-        for name in ("ci.yml", "bootstrap-validation.yml", "compose-validation.yml",
-                     "container-architectures.yml", "gcp-validation.yml",
-                     "real-cpu-smoke.yml", "webkit-validation.yml"):
-            text = (ROOT / ".github/workflows" / name).read_text()
-            self.assertNotIn("\n        uses: ./.github/actions/gcp-config\n", text)
-            self.assertNotIn("\n    environment: production\n", text)
+        for name in (
+            "ci.yml", "bootstrap-validation.yml", "compose-validation.yml",
+            "container-architectures.yml", "gcp-validation.yml",
+            "real-cpu-smoke.yml", "webkit-validation.yml",
+        ):
+            source = (ROOT / ".github/workflows" / name).read_text()
+            self.assertNotIn("\n        uses: ./.github/actions/gcp-config\n", source)
+            self.assertNotIn("\n    environment: production\n", source)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
-name: "🌐 Pages"
+name: "🌐 Worker · Web"
 on:
   workflow_dispatch:
 permissions: {contents: read}
 jobs:
   deploy:
-    name: "🌐 Deploy"
+    name: "🌐 Publish static assets"
     runs-on: ubuntu-latest
     environment: production
     permissions:
@@ -34,10 +34,10 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: "⚙ Env"
-        id: pages_env
+        id: worker_env
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py pages
+        run: python3 infra/scripts/prepare_workflow_env.py worker
 
       - name: "🧰 Config"
         id: notify_observed_002
@@ -63,12 +63,12 @@ jobs:
           outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "▶ ️  Execute command"
         id: notify_observed_005
-        run: cp infra/cloudflare/pages-headers apps/web/dist/_headers
+        run: cp infra/cloudflare/worker-headers apps/web/dist/_headers
       - name: "▶ ️  Execute command"
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py pages-deploy
+        run: python3 infra/scripts/prepare_workflow_env.py worker-deploy
 
       - name: "🔔 [NOTIFY] ▶ ️  Execute command"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}

@@ -48,8 +48,9 @@ class ConfigEnvTests(unittest.TestCase):
             f"GCP_DEPLOY_SERVICE_ACCOUNT={DEPLOY_SA}",
             f"GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER={BOOTSTRAP_WIF}",
             f"GCP_BOOTSTRAP_SERVICE_ACCOUNT={ADMIN_SA}",
-            "WORKFLOWS__PAGES__PROJECT=photointel",
-            "WORKFLOWS__PAGES__API_BASE_URL=https://photos.test.invalid",
+            "WORKFLOWS__WORKER__NAME=photointel-web",
+            "WORKFLOWS__WORKER__DOMAIN=photos.test.invalid",
+            "WORKFLOWS__WORKER__API_BASE_URL=https://api.photos.test.invalid",
             "WORKFLOW_SECRETS__TS_OAUTH_SECRET__NAME=photointel-tailscale-secret",
             "WORKFLOW_SECRETS__TS_OAUTH_SECRET__VERSION=1",
         ]
@@ -57,7 +58,7 @@ class ConfigEnvTests(unittest.TestCase):
             config, entries = app.read_input()
         self.assertEqual(config["workflow_secrets"]["TS_OAUTH_SECRET"]["name"],
                          "photointel-tailscale-secret")
-        self.assertEqual(config["workflows"]["pages"]["project"], "photointel")
+        self.assertEqual(config["workflows"]["worker"]["name"], "photointel-web")
         self.assertEqual(entries["GCP_BOOTSTRAP_SERVICE_ACCOUNT"], ADMIN_SA)
 
     def test_bootstrap_output_is_derived_from_same_config(self):

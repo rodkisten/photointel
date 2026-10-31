@@ -1,4 +1,4 @@
-# Copie para apps/web/public/_headers ao publicar no Pages.
+# Copie para apps/web/dist/_headers antes de publicar o Worker de frontend.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
