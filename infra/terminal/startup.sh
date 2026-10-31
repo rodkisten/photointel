@@ -2,6 +2,10 @@
 # Metadata contains only non-secret settings and Secret Manager references.
 set -euo pipefail
 umask 077
+# Log only the failing stage and exit status to serial console. Never log
+# OAuth secrets, instance metadata contents, Docker credentials or JWTs.
+terminal_stage=metadata
+trap 'result=$?; echo "terminal-startup: FAILED stage=$terminal_stage exit=$result" >&2' ERR
 meta() { curl --fail --silent --show-error --retry 5 -H 'Metadata-Flavor: Google' "http://metadata.google.internal/computeMetadata/v1/$1"; }
 cfg="$(meta instance/attributes/terminal-config)"
 project="$(meta project/project-id)"
@@ -25,6 +29,7 @@ WantedBy=timers.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now terminal-deadline.timer
+terminal_stage=apt
 export DEBIAN_FRONTEND=noninteractive
 # On the first boot this script used umask 077 for all files, including the
 # public Tailscale keyring. APT verifies repositories as the unprivileged _apt
@@ -61,6 +66,7 @@ if ! command -v tailscale >/dev/null; then
 fi
 systemctl enable --now tailscaled
 echo 'terminal-startup: tailscaled service enabled'
+terminal_stage=tailscale-auth
 # Keep the host's conventional SSH server off the public interface.
 mkdir -p /etc/ssh/sshd_config.d
 printf 'ListenAddress 127.0.0.1\nPasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-terminal.conf
@@ -93,6 +99,8 @@ if ! tailscale status --json | jq -e '.BackendState == "Running"' >/dev/null; th
 else
   tailscale set --ssh --accept-dns=false
 fi
+echo 'terminal-startup: tailscale network configured'
+terminal_stage=docker-image
 image="$(jq -er .image <<< "$cfg")"
 registry="${image%%/*}"
 printf '%s' "$access_token" | docker --config /run/terminal/docker login -u oauth2accesstoken --password-stdin "https://$registry"
@@ -120,4 +128,5 @@ chmod 0755 /usr/local/bin/terminal-shell
 if ! id rod >/dev/null 2>&1; then useradd -m -s /usr/local/bin/terminal-shell rod; fi
 usermod -aG docker -s /usr/local/bin/terminal-shell rod
 grep -qxF /usr/local/bin/terminal-shell /etc/shells || echo /usr/local/bin/terminal-shell >> /etc/shells
+terminal_stage=ready
 echo "Terminal ready: ssh rod@$(tailscale ip -4). Maximum uptime: $minutes minutes."
