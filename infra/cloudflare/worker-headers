@@ -1,0 +1,7 @@
+# Copie para apps/web/dist/_headers antes de publicar o Worker de frontend.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: same-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cache-Control: private, no-store
