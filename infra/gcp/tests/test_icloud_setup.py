@@ -148,6 +148,31 @@ class LauncherTests(unittest.TestCase):
         extract.assert_not_called()
         execute.assert_not_called()
 
+    def test_prepare_uv_sync_uses_nonconflicting_bytecode_configuration(self):
+        """Simulate the exact failure seen on the SSH terminal."""
+        seen = []
+
+        def run(command, *, cwd=None, env=None, check=False, **kwargs):
+            seen.append((command, env))
+            return types.SimpleNamespace(returncode=0)
+
+        with patch.object(self.module, "ensure_gcloud", return_value="/usr/local/bin/gcloud"), patch.object(
+                self.module, "ensure_user_login"), patch.object(
+                self.module, "uv_command", return_value="/usr/local/bin/uv"), patch.object(
+                self.module, "runtime_environment", return_value={}), patch.object(
+                self.module.subprocess, "run", side_effect=run), patch.dict(
+                self.module.os.environ, {"UV_COMPILE_BYTECODE": "0"}), patch.object(
+                sys, "argv", ["icloud_terminal.py", "prepare"]):
+            self.assertEqual(self.module.main(), 0)
+
+        self.assertEqual(len(seen), 1)
+        command, env = seen[0]
+        self.assertEqual(command[:2], ["/usr/local/bin/uv", "sync"])
+        self.assertEqual(command[2:], ["--frozen", "--no-dev", "--group", "ingest"])
+        self.assertNotIn("UV_COMPILE_BYTECODE", env)
+        self.assertNotIn("--compile-bytecode", command)
+        self.assertNotIn("--no-compile-bytecode", command)
+
     def test_noninteractive_service_account_does_not_start_google_login(self):
         with patch.object(self.module, "gcloud", return_value="runtime@project.iam.gserviceaccount.com"), patch.object(
                 self.module.subprocess, "run") as run:
