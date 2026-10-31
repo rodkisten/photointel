@@ -57,12 +57,18 @@ jobs:
         if: inputs.action != 'plan'
         uses: google-github-actions/setup-gcloud@v3
       - name: "🖥️ Terminal operation"
+        id: terminal_operation
         if: inputs.action != 'plan'
         env:
           TERMINAL_ACTION: ${{ inputs.action }}
           TERMINAL_DEPLOYER: ${{ steps.config.outputs.service_account }}
         run: |
           python3 infra/terminal/terminal.py "$TERMINAL_ACTION" --apply --confirm-project photointel
+      - name: "📋 VM boot logs + Tailscale readiness"
+        if: inputs.action == 'provision' && steps.terminal_operation.outcome == 'success'
+        timeout-minutes: 5
+        run: |
+          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds 210
       - name: "🧹 GCP Config"
         if: always()
         uses: ./.github/actions/gcp-config
