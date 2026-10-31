@@ -28,6 +28,17 @@ Selecione `action=all` para executar **num único job e com a mesma tag de commi
 
 **Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` opcional, `apply` com uma escolha de segurança; SHA automático) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
 
+### 🩺 Diagnose Cloud Run sem publicar nada
+
+O workflow manual **🩺 Diagnose Cloud Run** (`.github/workflows/gcp-health.yml`) usa apenas `vars.GCP_CONFIG_ENV` e WIF temporário, na branch `main`. Ele verifica o serviço `photointel-api` em `us-central1`, a revisão pronta, tráfego, o URL `run.app` efetivo e os endpoints públicos:
+
+- `/health/live` deve retornar **HTTP 200** quando o processo Python está aceitando HTTP.
+- `/health/ready` deve retornar **HTTP 200** quando Neon PostgreSQL e Cloudflare R2 também estão acessíveis.
+- `/health/live=200` e `/health/ready=503` significam que o servidor está rodando, mas uma dependência falhou.
+- `403` nos endpoints públicos indica revisar Cloud Run Invoker IAM / ingress; uma falha de rede sem código HTTP exige conferir o endpoint e conectividade.
+
+O workflow consulta também sinais de erros de startup nos logs, mas **não imprime log bruto, valores de secrets, cabeçalhos de requisições ou conteúdo de respostas**. Não faz deploy, migração nem altera IAM. Se a API estiver saudável e o site ainda falhar, execute separadamente o workflow **🌐 Worker · Front + API**: testes CI e deploy de Worker são duas coisas diferentes. Confirme Access JWT e o cache da PWA após a publicação.
+
 ### 🗃️ Neon migrations direto no runner
 
 `action=migrate` executa Alembic no **GitHub Actions**, conectando ao **Neon PostgreSQL direto**. Não há Cloud Run Job de migração. `plan` e `diagnose` leem revisões/tabelas com psycopg e `alembic current -v`; `apply` exige o tipo de banco (`initial-empty` comprovadamente vazio ou `existing-with-backup` com recibo de restauração validado) e executa `alembic upgrade head`. O deployer autentica com WIF e impersona a conta `photointel-migrate` para ler somente o secret de migração do Secret Manager. Execute `GCP Bootstrap → apply` uma vez para conceder `roles/iam.serviceAccountTokenCreator` especificamente nessa conta. Erros seguros e a revisão do Alembic ficam no GitHub Job Summary; não é preciso Cloud Logging. `migrate` não é incluído no modo `all`.
