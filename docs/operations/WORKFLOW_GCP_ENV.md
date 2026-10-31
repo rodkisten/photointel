@@ -10,7 +10,7 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
   "GCP_DEPLOY_SERVICE_ACCOUNT": "photointel-deployer@photointel.iam.gserviceaccount.com",
   "GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER": "projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap",
   "GCP_BOOTSTRAP_SERVICE_ACCOUNT": "photointel-bootstrap@photointel.iam.gserviceaccount.com",
-  "workflows": {"worker": {"name": "SEU-WORKER-WEB", "domain": "photos.migos.club", "api_base_url": "https://api.photos.migos.club"}},
+  "workflows": {"worker": {"name": "photointel", "domain": "photos.migos.club"}},
   "workflow_secrets": {
     "CLOUDFLARE_API_TOKEN": {"name": "photointel-pages-token", "version": "1"},
     "CLOUDFLARE_ACCOUNT_ID": {"name": "photointel-cloudflare-account", "version": "1"},
@@ -20,34 +20,39 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
 }
 ```
 
-**No formato dotenv legado**, use `WORKFLOWS__WORKER__NAME`, `WORKFLOWS__WORKER__API_BASE_URL`, e `WORKFLOW_SECRETS__CLOUDFLARE_API_TOKEN__NAME`, `WORKFLOW_SECRETS__CLOUDFLARE_API_TOKEN__VERSION`, seguindo o mesmo padrão para os outros três secrets. Também adicione as chaves `GCP_BOOTSTRAP_*` no mesmo dotenv.
-
-### Atenção: Worker da API não é o Worker do frontend
-
-O repositório possui `infra/cloudflare/cloud-run-proxy/wrangler.toml`, que define **`photointel-api-relay`** para responder em `api.photos.migos.club` e encaminhar apenas chamadas `/v1` ao Cloud Run. Esse Worker não deve receber o bundle React do frontend.
-
-Para publicar a interface, use um Worker separado que aceite Static Assets; declare explicitamente o nome **real** dele no `GCP_CONFIG_ENV`:
+**No formato dotenv legado**, use a configuração abaixo dentro de `GCP_CONFIG_ENV`. As duas chaves Worker são opcionais, porque o nome e domínio já podem ser deduzidos das configurações atuais:
 
 ```dotenv
-WORKFLOWS__WORKER__NAME=SEU_WORKER_FRONTEND_EXISTENTE
+WORKFLOWS__WORKER__NAME=photointel
 WORKFLOWS__WORKER__DOMAIN=photos.migos.club
-WORKFLOWS__WORKER__API_BASE_URL=https://api.photos.migos.club
 ```
 
-Troque `SEU_WORKER_FRONTEND_EXISTENTE` pelo nome do Worker de frontend. Ele não pode ser `photointel-api-relay`. `WORKFLOWS__WORKER__DOMAIN` deve corresponder a `FRONTEND_ORIGIN`, sem `https://`. A origem da API **não pode ser o mesmo hostname** em uma implantação de frontend Worker com assets estáticos; o Worker de API deve responder separadamente. O workflow `🌐 Worker · Web` publica via `wrangler deploy` com `assets.not_found_handling=single-page-application`, workers.dev e preview desativados, e configura o domínio customizado.
+### Um Worker de produção para React e API
 
-`WORKFLOWS__PAGES__PROJECT`, `WORKFLOWS__PAGES__API_BASE_URL` e `CLOUDFLARE_PAGES_PROJECT` são obsoletos. Entradas Pages legadas podem permanecer no dotenv durante a migração, mas o fluxo Worker não as utiliza.
+Os logs do GitHub Actions confirmam que o Worker **`photointel`** já foi publicado em `photos.migos.club`. O novo workflow atualiza **esse mesmo Worker**, sem criar outro recurso.
 
-A referência atual `photointel-pages-token` pode ser mantida apesar do nome; não é necessário criar outro secret se o token já estiver válido e tiver os escopos certos. O token Cloudflare requer escopo de edição de Workers, e permissões para configurar o domínio/rota; um token limitado somente ao Pages não é suficiente. Os valores continuam no Google Secret Manager, nunca em `GCP_CONFIG_ENV`. O mesmo GCP WIF autorizado é usado para ler o segredo temporariamente.
+- `https://photos.migos.club/` e demais rotas da SPA servem React usando `env.ASSETS.fetch()`.
+- `https://photos.migos.club/v1/*` encaminha a requisição ao `photointel-api` no Cloud Run por meio do relay no mesmo Worker.
+- O build define `VITE_API_BASE_URL=` para que o frontend consulte `/v1/*` pela mesma origem. A antiga `WORKFLOWS__WORKER__API_BASE_URL` é ignorada.
+- O workflow descobre a URL real do Cloud Run via `gcloud run services describe` usando WIF, em vez de usar `run.app` de exemplo.
+- O Worker antigo `photointel-api-relay` **não é alterado nem excluído** pela migração. O domínio `api.photos.migos.club` continua vinculado a ele para clientes antigos até confirmar que a API funciona em `photos.migos.club/v1/*`.
+
+**Segurança:** o hostname `photos.migos.club` precisa estar protegido por Cloudflare Access, e a audiência do JWT deve corresponder ao valor `ACCESS_AUDIENCE` validado no Cloud Run. A proteção Access do hostname antigo deve continuar enquanto ele for usado. O workflow não modifica essas políticas.
+
+**DNS:** o Worker de frontend já está associado ao domínio, portanto não é necessário criar outro hostname. O deploy mantém a associação atual e publica o frontend + gateway como uma única versão do Worker `photointel`. Caso o Cloudflare aponte conflito de CNAME/Custom Domain, verifique o DNS no painel, sem remover o serviço anterior de imediato.
+
+**Secrets:** continuam somente referências a `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` no `GCP_CONFIG_ENV`; os valores vêm do Google Secret Manager. Se o token atual possui permissão Workers Scripts, o secret `photointel-pages-token` pode continuar com esse nome legado. Rotacione tokens expostos.
+
+**Para finalizar a consolidação:** após testar acesso, navegação da SPA, 401/403, mídia privada e `/v1/*`, será possível desativar o Worker legado `photointel-api-relay` e retirar sua rota antiga. **Não faça isso antes dos testes**, porque outras integrações podem usar `api.photos.migos.club`.
 
 ## Ativação inicial
 
 1. Crie no Google Secret Manager os quatro secrets referenciados e adicione seus valores como versões. Não escreva os valores no JSON, em Issues, ou no repositório. O bootstrap cria contêineres ausentes, **não cria versões nem valores**.
 2. Atualize a única variável de Environment `GCP_CONFIG_ENV` com os IDs, nomes e números de versão reais. Troque todas as origens e placeholders do exemplo por sua configuração real.
 3. Execute **Setup GCP → apply** para provisionar containers ausentes e atribuir `roles/secretmanager.secretAccessor` no escopo desses quatro secrets ao `photointel-deployer`. Esse serviço é acessado via WIF, sem chave de service account.
-4. Rode **Worker Web** ou **SSH**. Worker Web só exporta valores públicos para `GITHUB_ENV`; Cloudflare API Token e Account ID são buscados quando o Wrangler é executado. SSH interativo usa WIF na `main` para ler Tailscale OAuth no Secret Manager, mascara os valores e não os escreve em arquivos do repositório.
+4. Rode **Worker Web** ou **SSH**. Worker Web exporta apenas valores públicos para `GITHUB_ENV` e busca Cloudflare API Token e Account ID no Secret Manager. O deploy junta React e relay em um único Worker. SSH interativo usa WIF na `main` para ler Tailscale OAuth no Secret Manager, mascara os valores e não os escreve em arquivos do repositório.
 
-## Solução de problemas: Pages
+## Solução de problemas: Worker único
 
 A etapa **⚙ Env** verifica acesso efetivo ao `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` antes de instalar dependências e compilar o frontend. Se falhar, os logs indicam uma das causas, sem revelar tokens:
 

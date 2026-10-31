@@ -63,9 +63,8 @@
   "extra_environment": {},
   "workflows": {
     "worker": {
-      "name": "photointel-web",
-      "domain": "photos.example.com",
-      "api_base_url": "https://api.photos.example.com"
+      "name": "photointel",
+      "domain": "photos.example.com"
     }
   },
   "workflow_secrets": {

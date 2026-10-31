@@ -22,8 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
 WORKER_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 DOMAIN = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
-RESERVED_WORKERS = {"photointel-api-relay"}
-WORKER_COMPATIBILITY_DATE = "2026-10-30"
+PRODUCTION_WORKER = "photointel"
+RELAY_SCRIPT = ROOT / "infra/cloudflare/cloud-run-proxy/worker.mjs"
+WORKER_COMPATIBILITY_DATE = "2026-10-31"
 RELEASE_SHA = re.compile(r"[a-f0-9]{40}")
 ACCOUNT_ID = re.compile(r"[A-Fa-f0-9]{32}")
 REFERENCE_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
@@ -50,57 +51,72 @@ def read_config() -> dict:
 
 
 def worker_environment(config: dict) -> dict[str, str]:
-    """Deploy web assets to an explicitly named Worker, never an API relay."""
-    workflows = config.get("workflows") or {}
-    worker = workflows.get("worker") or {}
-    name = worker.get("name", "")
-    domain = worker.get("domain", "")
-    api = worker.get("api_base_url", "")
+    """Extend the existing deployed frontend Worker with /v1 proxy handling."""
+    worker = (config.get("workflows") or {}).get("worker") or {}
+    name = worker.get("name") or PRODUCTION_WORKER
     frontend = config.get("frontend_origin", "")
-    if not isinstance(name, str) or not WORKER_NAME.fullmatch(name):
+    if not isinstance(name, str) or name != PRODUCTION_WORKER:
         raise WorkflowEnvironmentError(
-            "Configure WORKFLOWS__WORKER__NAME with your frontend Worker name"
+            "One Worker: use WORKFLOWS__WORKER__NAME=photointel "
+            "(the existing Worker at photos.migos.club), or omit this key"
         )
-    if name in RESERVED_WORKERS:
-        raise WorkflowEnvironmentError(
-            "Refusing to overwrite photointel-api-relay: it is the API Worker. "
-            "Configure the separate frontend Worker name."
-        )
-    if not isinstance(domain, str) or not DOMAIN.fullmatch(domain) or "." not in domain:
-        raise WorkflowEnvironmentError(
-            "Configure WORKFLOWS__WORKER__DOMAIN with the frontend custom domain"
-        )
-    if any(c in domain for c in ("\r", "\n", "\x00")):
-        raise WorkflowEnvironmentError("Invalid Worker custom domain")
-    if frontend != f"https://{domain}":
-        raise WorkflowEnvironmentError(
-            "Worker custom domain must match FRONTEND_ORIGIN"
-        )
-    if not isinstance(api, str):
-        raise WorkflowEnvironmentError("Invalid Worker API base URL")
-    parsed = urlsplit(api)
+    origin = urlsplit(frontend)
     if (
-        parsed.scheme != "https" or not parsed.hostname
-        or parsed.username or parsed.password or parsed.query or parsed.fragment
-        or parsed.path not in ("", "/") or parsed.port
+        origin.scheme != "https" or not origin.hostname
+        or origin.username or origin.password or origin.port
+        or origin.path not in ("", "/") or origin.query or origin.fragment
+    ):
+        raise WorkflowEnvironmentError("FRONTEND_ORIGIN must be an HTTPS origin")
+    domain = worker.get("domain") or origin.hostname
+    if (
+        not isinstance(domain, str) or not DOMAIN.fullmatch(domain)
+        or domain != origin.hostname
     ):
         raise WorkflowEnvironmentError(
-            "WORKFLOWS__WORKER__API_BASE_URL must be a standalone HTTPS API origin"
-        )
-    if parsed.hostname == domain:
-        raise WorkflowEnvironmentError(
-            "A static frontend Worker cannot also serve /v1 API routes. "
-            "Point WORKFLOWS__WORKER__API_BASE_URL to your API relay hostname."
+            "WORKFLOWS__WORKER__DOMAIN must match FRONTEND_ORIGIN, or be omitted"
         )
     sha = os.environ.get("GITHUB_SHA", "")
     if not RELEASE_SHA.fullmatch(sha):
         raise WorkflowEnvironmentError("Invalid GitHub release commit SHA")
+    # All browser fetches now hit /v1/* on the same origin.
+    # WORKFLOWS__PAGES__* and WORKFLOWS__WORKER__API_BASE_URL are legacy.
     return {
-        "VITE_API_BASE_URL": api.rstrip("/"),
+        "VITE_API_BASE_URL": "",
         "WORKER_NAME": name,
         "WORKER_DOMAIN": domain,
         "VITE_RELEASE_ID": sha,
     }
+
+
+def discover_cloud_run_origin(config: dict) -> str:
+    """Resolve the real deployed Cloud Run URL instead of a placeholder .run.app."""
+    try:
+        result = subprocess.run(
+            [
+                "gcloud", "run", "services", "describe", "photointel-api",
+                "--region", config["region"], "--project", config["project_id"],
+                "--format=value(status.url)", "--quiet",
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            timeout=45, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired, KeyError):
+        raise WorkflowEnvironmentError("Could not inspect Cloud Run photointel-api") from None
+    if result.returncode:
+        raise WorkflowEnvironmentError(
+            "Cannot describe Cloud Run photointel-api: confirm deployment "
+            "and the GCP deployer run.services.get permission"
+        )
+    origin = result.stdout.strip()
+    url = urlsplit(origin)
+    if (
+        url.scheme != "https" or not url.hostname
+        or not url.hostname.endswith(".run.app")
+        or url.username or url.password or url.port
+        or url.path not in ("", "/") or url.query or url.fragment
+    ):
+        raise WorkflowEnvironmentError("Cloud Run returned an invalid API service URL")
+    return origin.rstrip("/")
 
 
 def append_public_env(values: dict[str, str]) -> None:
@@ -189,18 +205,32 @@ def worker_deploy(config: dict) -> None:
     account = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
     if not token.strip() or not ACCOUNT_ID.fullmatch(account):
         raise WorkflowEnvironmentError("Cloudflare credentials are invalid")
-    config_dir = ROOT / "apps/web"
-    dist = config_dir / "dist"
+    config_dir = RELAY_SCRIPT.parent
+    dist = ROOT / "apps/web/dist"
     if not (dist / "index.html").is_file():
         raise WorkflowEnvironmentError("Missing frontend build: apps/web/dist/index.html")
-    # The frontend is a separate asset-only Worker; never replace the API relay.
+    if not RELAY_SCRIPT.is_file():
+        raise WorkflowEnvironmentError("Missing API relay source code")
+
+    # Update the already deployed photointel frontend Worker in place.
+    # Do NOT move api.photos.migos.club yet: the old API Worker remains live
+    # until its legacy clients and Access policies have been verified.
     wrangler = {
         "name": public["WORKER_NAME"],
+        "main": "./worker.mjs",
         "compatibility_date": WORKER_COMPATIBILITY_DATE,
         "workers_dev": False,
         "preview_urls": False,
+        "vars": {
+            "CLOUD_RUN_ORIGIN": discover_cloud_run_origin(config),
+            "FRONTEND_ORIGIN": config["frontend_origin"],
+        },
         "assets": {
-            "directory": "./dist",
+            "directory": "../../../apps/web/dist",
+            "binding": "ASSETS",
+            # Explicit Worker-first preserves API precedence and isolates assets
+            # to the frontend hostname even on the legacy api.* custom domain.
+            "run_worker_first": True,
             "not_found_handling": "single-page-application",
         },
         "routes": [
@@ -211,8 +241,6 @@ def worker_deploy(config: dict) -> None:
     env["CLOUDFLARE_API_TOKEN"] = token
     env["CLOUDFLARE_ACCOUNT_ID"] = account
     env["WRANGLER_SEND_METRICS"] = "false"
-    # Do not persist tokens to JSON, GitHub outputs or GITHUB_ENV.
-    # Keep this file private and remove it even when Wrangler fails.
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -229,7 +257,8 @@ def worker_deploy(config: dict) -> None:
         )
         if result.returncode:
             raise WorkflowEnvironmentError(
-                "Cloudflare Worker deploy failed; inspect Wrangler logs"
+                "Unified Cloudflare Worker deploy failed; inspect Wrangler logs. "
+                "An existing DNS CNAME for the frontend custom domain may need adjustment."
             )
     finally:
         if temporary is not None:
@@ -266,7 +295,7 @@ def main() -> int:
                     "Invalid Cloudflare token or account ID in Google Secret Manager"
                 )
             append_public_env(public)
-            print("✅ Worker config and Secret Manager access verified.")
+            print("✅ Unified frontend/API Worker config and Secret Manager access verified.")
         elif opts.target == "worker-deploy":
             worker_deploy(config)
         else:
