@@ -80,6 +80,20 @@ class FakeAPI:
 
 
 class SetupTests(unittest.TestCase):
+    def test_orphaned_bridge_selector_is_preserved_without_credential_creation(self):
+        api, cfg = FakeAPI(), config()
+        api.tokens = []
+        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
+                     'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
+        api.policies['bridge-old'] = [{'id': 'orphan-policy', 'name': 'device',
+            'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'orphan-id'}}]}]
+        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
+            app.reconcile(cfg, api, True)
+        service = next(p for p in api.policies['bridge-old'] if p['name'] == 'photointel-bridge-service')
+        self.assertEqual(service['include'], [{'service_token': {'token_id': 'orphan-id'}}])
+        self.assertNotIn('ACCESS_BRIDGE_SERVICE_TOKENS', cfg['extra_environment'])
+        self.assertFalse(any('/service_tokens' in path for _, path, _ in api.writes))
+
     def test_adopt_existing_bridge_and_recover_credentials_on_next_release(self):
         api, cfg = FakeAPI(), config()
         api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
