@@ -30,6 +30,21 @@ class FakeGcloud:
 
 
 class TerminalTests(unittest.TestCase):
+    def test_tailscale_apt_public_key_is_readable_and_repaired_before_update(self):
+        # Regression: umask 077 used to create the public keyring with mode
+        # 0600, so APT running as _apt could not verify the repository GPG key.
+        script = (terminal.ROOT / 'infra/terminal/startup.sh').read_text()
+        repair = script.index('chmod 0644 "$apt_public_file"')
+        first_update = script.index('apt-get update -qq')
+        self.assertLess(repair, first_update)
+        self.assertIn('install -m 0644 "$tailscale_stage/keyring.gpg" "$tailscale_keyring"', script)
+        self.assertIn('install -m 0644 "$tailscale_stage/tailscale.list" "$tailscale_sources"', script)
+        self.assertIn('test -s "$tailscale_stage/keyring.gpg"', script)
+        self.assertIn('test -s "$tailscale_stage/tailscale.list"', script)
+        self.assertIn('tailscale-archive-keyring', script)
+        self.assertIn('umask 077', script)
+        self.assertIn('source installed', script)
+
     def test_defaults_bound_costs_and_keep_existing_oauth_references(self):
         c = terminal.configuration(base())
         self.assertEqual(c['disk_gb'], 30)
