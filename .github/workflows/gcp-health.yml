@@ -1,6 +1,9 @@
 name: "🩺 Diagnose Cloud Run"
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/gcp-health.yml']
   workflow_dispatch:
 
 permissions: {contents: read}
@@ -39,6 +42,22 @@ jobs:
 
       - name: "🧰 Gcloud"
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: "🔍 Correlated API failure"
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          flt = 'resource.type="cloud_run_revision" AND resource.labels.service_name="photointel-api"'
+          r = subprocess.run(['gcloud','logging','read',flt,'--project','photointel','--freshness=1h','--limit=250','--format=json'], capture_output=True,text=True,check=True)
+          for e in json.loads(r.stdout):
+              p = e.get('jsonPayload', {})
+              if not p:
+                  try: p=json.loads(e.get('textPayload','{}'))
+                  except ValueError: continue
+              if not isinstance(p,dict): continue
+              if p.get('correlation_id') == '9cb9c931-f117-4b65-9fc1-e453781b4dbc' or p.get('level') in ('error','critical'):
+                  print(json.dumps({k:p[k] for k in ('event','exception_type','correlation_id','error_code','path','status_code') if k in p}))
+          PY
 
       - name: "🩺 Cloud Run status + HTTP health"
         run: python3 infra/gcp/diagnose_api_connectivity.py --project photointel
