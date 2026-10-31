@@ -1,8 +1,8 @@
-# Cloudflare: Pages, Tunnel, Access e R2
+# Cloudflare: Workers, Tunnel, Access e R2
 
 São quatro configurações independentes. O aplicativo não cria infraestrutura
 numa conta sem credenciais/autorizações reais. A implantação manual do frontend
-está em `.github/workflows/deploy-pages.yml`; o workflow usa environment
+está em `.github/workflows/deploy-worker.yml`; o workflow usa environment
 `production` e segredos apenas em `workflow_dispatch`.
 
 ## R2 privado
@@ -107,30 +107,29 @@ inventariar fotos reais. Rotacione/revogue as duas credenciais separadamente.
 Essa configuração depende da conta Access e permanece não verificada até um
 teste real contra sua borda; testes unitários não comprovam a política remota.
 
-## Pages/PWA
+## Workers Static Assets / PWA
 
-Crie um projeto Pages com saída `apps/web/dist`; proteja o hostname público e
-domínio customizado com Access. Confirme que nenhum hostname alternativo
-`pages.dev` permite acesso anônimo ao frontend. A proteção deve cobrir preview
-deployments quando usados com dados da conta.
+A interface React é publicada em um **Worker de frontend**, usando assets estáticos em `apps/web/dist` e roteamento SPA para navegações internas. Não é necessário criar um Cloudflare Pages Project.
 
-```bash
-npm --prefix apps/web ci
-VITE_API_BASE_URL=https://api.seudominio.com npm --prefix apps/web run build
-cp infra/cloudflare/pages-headers apps/web/dist/_headers
-npx wrangler pages deploy apps/web/dist --project-name SEU_PROJETO
+O Worker `photointel-api-relay`, definido em `infra/cloudflare/cloud-run-proxy/wrangler.toml`, é **somente** o relay `/v1` da API e não deve receber os assets React. Se ele for seu único Worker, crie outro Worker para o frontend ou desenvolva um Worker combinado explicitamente; este workflow não sobrescreve o relay.
+
+O nome e o domínio **reais** do Worker de frontend precisam estar em `vars.GCP_CONFIG_ENV`:
+
+```dotenv
+WORKFLOWS__WORKER__NAME=SEU_WORKER_WEB
+WORKFLOWS__WORKER__DOMAIN=photos.migos.club
+WORKFLOWS__WORKER__API_BASE_URL=https://api.photos.migos.club
 ```
 
-Os passos precisam de login/credencial Cloudflare real. O workflow manual usa
-`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, e vars `PAGES_PROJECT` e
-`VITE_API_BASE_URL`. Token deve limitar-se ao projeto/conta necessários.
-Não ative `pull_request_target` para executar código de PR com segredos.
+O exemplo usa `api.photos.migos.club` porque o arquivo do relay deste repositório registra esse hostname. Confirme que ele realmente responde na sua conta Cloudflare; as rotas remotas não foram verificadas.
 
-Após publicar, teste login autorizado, email não permitido, ausência de token,
-JWT com audience errada, thumbnail privado e logout. Adicione a PWA à tela de
-início somente após confirmar esses controles. Cache offline deve conter apenas
-o shell estático: fotos, respostas privadas e URLs assinadas não são dados para
-cache público.
+A origem da API deve ser **diferente** do hostname de assets. Caso contrário, um Worker estático não atenderá chamadas `/v1`. Proteja ambos os hostnames com Access, considere as regras CORS e testes de autenticação no Safari. Confira a proteção também contra URLs alternativas `workers.dev` e previews; o deploy padrão os desabilita.
+
+O workflow `🌐 Worker · Web` executa `npm ci`, build React, copia `infra/cloudflare/worker-headers` para `dist/_headers` e publica por `wrangler deploy` com `assets.not_found_handling = "single-page-application"`. A configuração Wrangler é temporária e explicitamente contém o nome e domínio configurados no GCP env.
+
+O token e account ID Cloudflare não são salvos na variável do GitHub: continuam no Google Secret Manager, referenciados em `WORKFLOW_SECRETS__CLOUDFLARE_API_TOKEN__*` e `WORKFLOW_SECRETS__CLOUDFLARE_ACCOUNT_ID__*`. É necessária permissão Cloudflare para editar Workers e configurar domínios, além de IAM Secret Manager concedida ao GCP deployer. Um token exposto deve ser revogado e substituído.
+
+Após publicar, teste login autorizado, email não permitido, ausência de token, JWT com audience errada, thumbnail privado e logout. O cache offline pode conter o shell estático, mas nunca imagens ou respostas privadas.
 
 ## Produção v1.1: Cloud Run com origem alcançável
 
@@ -155,7 +154,7 @@ outra identidade de origem compatível: um JWT Access não é um ID token Google
 ```bash
 cp infra/cloudflare/cloud-run-proxy/wrangler.example.toml \
    infra/cloudflare/cloud-run-proxy/wrangler.toml
-# No arquivo local: informar a URL run.app real, hostname API e origem Pages.
+# No arquivo local: informar a URL run.app real, hostname API e origem do frontend.
 node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 cd infra/cloudflare/cloud-run-proxy
 npx wrangler deploy --config wrangler.toml
@@ -166,7 +165,7 @@ aprovação do operador. O exemplo contém somente campos a preencher. Proteja
 `api.SEUDOMINIO` com Access **antes** de usar dados reais. Não basta criar CNAME
 para `run.app`: Host/TLS e o domínio precisam do relay ou de domain mapping
 Google validado. `workers_dev=false` e `preview_urls=false` evitam hostnames
-alternativos do relay. O projeto Pages também precisa de proteção dos previews
+alternativos do relay. O Worker do frontend também precisa de proteção dos previews
 no Access; restrinja/desative `pages.dev` quando não puder protegê-lo.
 
 No backend, acrescente a aplicação de serviço separada:
