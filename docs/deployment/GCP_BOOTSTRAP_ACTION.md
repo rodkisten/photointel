@@ -13,7 +13,7 @@ A execução #22 do bootstrap anterior falhou com `serviceusage.services.enable 
 A conta **`photointel-bootstrap@photointel.iam.gserviceaccount.com`** é exclusiva para essa operação administrativa. Ela requer poder elevado (em especial `resourcemanager.projects.setIamPolicy`, que pode escalar permissões), por isso:
 
 1. Crie a identidade e configure WIF **uma única vez com uma conta humana administradora** via Cloud Shell.
-2. Use um provider WIF separado, restrito ao repositório, à branch, ao GitHub environment e ao **caminho do workflow bootstrap**.
+2. Use um provider WIF separado, restrito ao repositório, à branch, ao GitHub environment e aos **caminhos exatos dos workflows bootstrap e terminal**.
 3. Configure [GitHub Environment `production`](https://github.com/rodkisten/photointel/settings/environments) com **required reviewers** e acesso permitido somente pela branch protegida `main`, se disponível na sua conta/plano.
 4. Autorize `apply` somente quando precisar criar/reconciliar infraestrutura. Considere **revogar o vínculo WIF do bootstrap quando não estiver usando** e restaurá-lo somente na próxima manutenção.
 
@@ -34,7 +34,7 @@ gcloud iam service-accounts describe photointel-bootstrap@photointel.iam.gservic
 **Atenção:** estes papéis podem criar recursos, alterar IAM e gerar custos. Use a conta bootstrap somente em workflow autorizado e protegido. Estes papéis são mais restritos em escopo funcional do que Owner, mas `projectIamAdmin` ainda é muito poderoso.
 
 ```bash
-for role in roles/serviceusage.serviceUsageAdmin roles/artifactregistry.admin roles/iam.serviceAccountAdmin roles/secretmanager.admin roles/storage.admin roles/resourcemanager.projectIamAdmin; do gcloud projects add-iam-policy-binding photointel --member="serviceAccount:photointel-bootstrap@photointel.iam.gserviceaccount.com" --role="$role" --quiet --format=none; done
+for role in roles/serviceusage.serviceUsageAdmin roles/artifactregistry.admin roles/iam.serviceAccountAdmin roles/iam.workloadIdentityPoolAdmin roles/secretmanager.admin roles/storage.admin roles/resourcemanager.projectIamAdmin; do gcloud projects add-iam-policy-binding photointel --member="serviceAccount:photointel-bootstrap@photointel.iam.gserviceaccount.com" --role="$role" --quiet --format=none; done
 ```
 
 ### 3. Criar pool WIF separado
@@ -47,10 +47,31 @@ gcloud iam workload-identity-pools describe github-bootstrap --location=global -
 
 ### 4. Criar provider GitHub OIDC específico para o bootstrap
 
-Este provider só aceita execução originada do arquivo `.github/workflows/gcp-bootstrap.yml` na branch `main` com Environment `production`.
+Este provider aceita somente `.github/workflows/gcp-bootstrap.yml` e `.github/workflows/gcp-terminal.yml`, na branch `main` com Environment `production`.
 
 ```bash
-gcloud iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --project=photointel --quiet >/dev/null 2>&1 || gcloud iam workload-identity-pools providers create-oidc photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --project=photointel --issuer-uri="https://token.actions.githubusercontent.com" --display-name="Photointel bootstrap only" --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" --attribute-condition="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref=='rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main'" --quiet
+gcloud iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --project=photointel --quiet >/dev/null 2>&1 || gcloud iam workload-identity-pools providers create-oidc photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --project=photointel --issuer-uri="https://token.actions.githubusercontent.com" --display-name="Photointel bootstrap only" --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" --attribute-condition="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']" --quiet
+```
+
+O bootstrap agora compara e atualiza a condição desse provider em `apply`; em
+`plan`, não consulta nem altera o GCP. Execute **Setup GCP → apply** antes de
+**GCP Terminal → provision**. Como o workflow bootstrap já é aceito pela condição
+anterior, ele consegue autenticar e liberar o terminal automaticamente.
+
+A identidade bootstrap precisa de `roles/iam.workloadIdentityPoolAdmin`, incluído
+no passo 2. Se ela já existia sem esse papel, conceda-o uma única vez com sua conta
+administradora no Cloud Shell:
+
+```bash
+gcloud projects add-iam-policy-binding photointel --member="serviceAccount:photointel-bootstrap@photointel.iam.gserviceaccount.com" --role=roles/iam.workloadIdentityPoolAdmin --condition=None --quiet --format=none
+```
+
+Se até o workflow bootstrap estiver bloqueado pela condição do provider, faça a
+correção inicial com sua conta administradora (o workflow não consegue corrigir
+uma condição que impede sua própria autenticação):
+
+```bash
+gcloud iam workload-identity-pools providers update-oidc photo-intelligence-bootstrap --project=photointel --location=global --workload-identity-pool=github-bootstrap --attribute-condition="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']" --quiet
 ```
 
 Confira a condição no Console se o provider já existia. Um `describe` bem-sucedido **não garante** que o provider antigo tenha a condição segura; não continue até validar.

@@ -63,13 +63,22 @@ done < <(jq -r '(.workflow_secrets // {}) | keys[]' "$CONFIG")
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
-  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, and IAM."
+  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
   exit 0
 fi
 enabled="$(gcp services list --enabled --format='value(config.name)')"
 missing=()
 for api in "${APIS[@]}"; do if ! grep -Fxq "$api" <<< "$enabled"; then missing+=("$api"); fi; done
 if (("${#missing[@]}" > 0)); then change services enable "${missing[@]}"; else log "APIs already enabled"; fi
+# Reconcile the existing privileged provider; leave the normal deploy provider intact.
+# Initial provider creation and permission to manage WIF remain administrator setup.
+BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']"
+current_condition="$(gcp iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --format='value(attributeCondition)')"
+if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
+  change iam workload-identity-pools providers update-oidc photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap "--attribute-condition=$BOOTSTRAP_WIF_CONDITION"
+else
+  log "Bootstrap WIF condition already reconciled"
+fi
 ensure "Docker repository $REPO" artifacts repositories describe "$REPO" "--location=$REGION" @@CREATE@@ artifacts repositories create "$REPO" "--location=$REGION" --repository-format=docker "--description=Private PhotoIntel images"
 format="$(gcp artifacts repositories describe "$REPO" "--location=$REGION" --format='value(format)')"
 [[ "$format" == DOCKER ]] || { echo "::error::Repository is not Docker: $format" >&2; exit 1; }

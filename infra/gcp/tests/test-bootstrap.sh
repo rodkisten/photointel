@@ -15,6 +15,10 @@ if [[ " $* " == *" add-iam-policy-binding "* && " $* " != *" --condition=None "*
   exit 1
 fi
 case "$*" in
+  "iam workload-identity-pools providers describe "*)
+    if [[ "${FAKE_WIF_DENIED:-false}" == true ]]; then echo 'PERMISSION_DENIED: WIF access denied' >&2; exit 1; fi
+    if [[ "${FAKE_WIF_CURRENT:-false}" == true ]]; then printf '%s\n' "$EXPECTED_WIF_CONDITION"; fi
+    exit 0 ;;
   "auth list"*) echo fake-admin@testing.invalid; exit 0 ;;
   "services list"*)
     printf '%s\n' run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
@@ -30,6 +34,7 @@ FAKE
 chmod 700 "$TMP/gcloud"
 export PATH="$TMP:$PATH" GCLOUD_TRACE="$TMP/trace"
 export GCP_CONFIG_FILE="$ROOT/infra/gcp/config.example.json" CONFIRM_PROJECT=replace-project-id
+export EXPECTED_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']"
 : > "$GCLOUD_TRACE"
 BOOTSTRAP_MODE=plan bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/plan"
 if grep -Eq '(^| )create | add-iam-policy-binding | services enable ' "$GCLOUD_TRACE"; then
@@ -41,6 +46,7 @@ for attempt in 1 2; do
   if grep -Eq 'artifacts repositories create|iam service-accounts create|secrets create|storage buckets create|services enable' "$GCLOUD_TRACE"; then
     echo "ERROR: existing resources were recreated" >&2; exit 1
   fi
+  grep -Fq -- "--attribute-condition=$EXPECTED_WIF_CONDITION" "$GCLOUD_TRACE"
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
   grep -q 'projects add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
   grep -q 'secrets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
@@ -54,5 +60,17 @@ if FAKE_PERMISSION_DENIED=true BOOTSTRAP_MODE=apply AUTHORIZE_CHARGES=true bash 
 fi
 if grep -q 'iam service-accounts create' "$GCLOUD_TRACE"; then
   echo "ERROR: attempted create after a permission denial" >&2; exit 1
+fi
+: > "$GCLOUD_TRACE"
+FAKE_WIF_CURRENT=true BOOTSTRAP_MODE=apply AUTHORIZE_CHARGES=true bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/wif-current"
+if grep -q 'providers update-oidc' "$GCLOUD_TRACE"; then
+  echo "ERROR: matching WIF condition was unnecessarily updated" >&2; exit 1
+fi
+: > "$GCLOUD_TRACE"
+if FAKE_WIF_DENIED=true BOOTSTRAP_MODE=apply AUTHORIZE_CHARGES=true bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/wif-denied" 2>&1; then
+  echo "ERROR: WIF permission denial was ignored" >&2; exit 1
+fi
+if grep -q 'providers update-oidc' "$GCLOUD_TRACE"; then
+  echo "ERROR: attempted WIF update after permission denial" >&2; exit 1
 fi
 echo "Bootstrap offline tests passed: plan, idempotence and IAM denial."
