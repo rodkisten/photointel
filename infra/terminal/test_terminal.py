@@ -61,8 +61,10 @@ class TerminalTests(unittest.TestCase):
             self.assertIn(marker, script)
         self.assertIn('next_heartbeat = time.monotonic() + 45',
                       (terminal.ROOT / 'infra/terminal/boot_logs.py').read_text())
-        self.assertIn('--timeout-seconds 720',
-                      (terminal.ROOT / '.github/workflows/gcp-terminal.yml').read_text())
+        workflow = (terminal.ROOT / '.github/workflows/gcp-terminal.yml').read_text()
+        self.assertIn("TERMINAL_LOG_TIMEOUT: ${{ inputs.action == 'logs' && '15' || '720' }}",
+                      workflow)
+        self.assertIn("options: [plan, build, provision, start, stop, status, logs]", workflow)
 
     def test_defaults_bound_costs_and_keep_existing_oauth_references(self):
         c = terminal.configuration(base())
