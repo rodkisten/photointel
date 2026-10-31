@@ -13,7 +13,6 @@ import json
 import os
 import re
 import tempfile
-import tomllib
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
 WORKER_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 DOMAIN = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
-RELAY_CONFIG = ROOT / "infra/cloudflare/cloud-run-proxy/wrangler.toml"
+PRODUCTION_WORKER = "photointel"
+RELAY_SCRIPT = ROOT / "infra/cloudflare/cloud-run-proxy/worker.mjs"
 WORKER_COMPATIBILITY_DATE = "2026-10-31"
 RELEASE_SHA = re.compile(r"[a-f0-9]{40}")
 ACCOUNT_ID = re.compile(r"[A-Fa-f0-9]{32}")
@@ -50,39 +50,15 @@ def read_config() -> dict:
     return config
 
 
-def relay_configuration() -> dict:
-    """Preserve the existing Worker name and API domain from the checked-in relay."""
-    try:
-        with RELAY_CONFIG.open("rb") as stream:
-            cfg = tomllib.load(stream)
-    except (OSError, ValueError):
-        raise WorkflowEnvironmentError("Missing or malformed API relay Wrangler config") from None
-    if cfg.get("name") != "photointel-api-relay" or cfg.get("main") != "worker.mjs":
-        raise WorkflowEnvironmentError("Unexpected existing API relay Worker identity")
-    if not isinstance(cfg.get("routes"), list):
-        raise WorkflowEnvironmentError("Missing existing API relay custom domain")
-    routes = cfg["routes"]
-    if not routes or any(
-        not isinstance(route, dict)
-        or route.get("custom_domain") is not True
-        or not isinstance(route.get("pattern"), str)
-        or not DOMAIN.fullmatch(route["pattern"])
-        for route in routes
-    ):
-        raise WorkflowEnvironmentError("Invalid existing API relay custom domain")
-    return cfg
-
-
 def worker_environment(config: dict) -> dict[str, str]:
-    """Deploy frontend + API to the already existing photointel-api-relay Worker."""
-    relay = relay_configuration()
+    """Extend the existing deployed frontend Worker with /v1 proxy handling."""
     worker = (config.get("workflows") or {}).get("worker") or {}
-    name = worker.get("name") or relay["name"]
+    name = worker.get("name") or PRODUCTION_WORKER
     frontend = config.get("frontend_origin", "")
-    if not isinstance(name, str) or name != relay["name"]:
+    if not isinstance(name, str) or name != PRODUCTION_WORKER:
         raise WorkflowEnvironmentError(
-            "One Worker only: set WORKFLOWS__WORKER__NAME=photointel-api-relay "
-            "or omit the setting"
+            "One Worker: use WORKFLOWS__WORKER__NAME=photointel "
+            "(the existing Worker at photos.migos.club), or omit this key"
         )
     origin = urlsplit(frontend)
     if (
@@ -99,15 +75,11 @@ def worker_environment(config: dict) -> dict[str, str]:
         raise WorkflowEnvironmentError(
             "WORKFLOWS__WORKER__DOMAIN must match FRONTEND_ORIGIN, or be omitted"
         )
-    if domain in {route["pattern"] for route in relay["routes"]}:
-        raise WorkflowEnvironmentError(
-            "Frontend hostname must be different from the existing API hostname"
-        )
     sha = os.environ.get("GITHUB_SHA", "")
     if not RELEASE_SHA.fullmatch(sha):
         raise WorkflowEnvironmentError("Invalid GitHub release commit SHA")
-    # The browser calls /v1/* on the same origin. No second API hostname needed.
-    # Legacy WORKFLOWS__PAGES__* and WORKFLOWS__WORKER__API_BASE_URL are ignored.
+    # All browser fetches now hit /v1/* on the same origin.
+    # WORKFLOWS__PAGES__* and WORKFLOWS__WORKER__API_BASE_URL are legacy.
     return {
         "VITE_API_BASE_URL": "",
         "WORKER_NAME": name,
@@ -233,17 +205,18 @@ def worker_deploy(config: dict) -> None:
     account = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
     if not token.strip() or not ACCOUNT_ID.fullmatch(account):
         raise WorkflowEnvironmentError("Cloudflare credentials are invalid")
-    config_dir = RELAY_CONFIG.parent
+    config_dir = RELAY_SCRIPT.parent
     dist = ROOT / "apps/web/dist"
     if not (dist / "index.html").is_file():
         raise WorkflowEnvironmentError("Missing frontend build: apps/web/dist/index.html")
+    if not RELAY_SCRIPT.is_file():
+        raise WorkflowEnvironmentError("Missing API relay source code")
 
-    # Same Worker, same API relay name and existing API custom domain.
-    relay = relay_configuration()
-    routes = list(relay["routes"])
-    routes.append({"pattern": public["WORKER_DOMAIN"], "custom_domain": True})
+    # Update the already deployed photointel frontend Worker in place.
+    # Do NOT move api.photos.migos.club yet: the old API Worker remains live
+    # until its legacy clients and Access policies have been verified.
     wrangler = {
-        "name": relay["name"],
+        "name": public["WORKER_NAME"],
         "main": "./worker.mjs",
         "compatibility_date": WORKER_COMPATIBILITY_DATE,
         "workers_dev": False,
@@ -260,7 +233,9 @@ def worker_deploy(config: dict) -> None:
             "run_worker_first": True,
             "not_found_handling": "single-page-application",
         },
-        "routes": routes,
+        "routes": [
+            {"pattern": public["WORKER_DOMAIN"], "custom_domain": True},
+        ],
     }
     env = os.environ.copy()
     env["CLOUDFLARE_API_TOKEN"] = token
