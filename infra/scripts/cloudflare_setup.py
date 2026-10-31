@@ -221,9 +221,9 @@ def adopt_bridge(config, api, apps, hosts):
         if not service_ids:
             raise SetupError('Existing Bridge app has no Service Auth policy to adopt')
         tokens = api.pages(api.base + '/access/service_tokens')
-        selected = [t for t in tokens if t.get('id') in service_ids]
+        selected = [t for t in tokens if t.get('id') in service_ids or t.get('client_id') in service_ids]
         if len(selected) != len(service_ids) or any(not t.get('client_id') for t in selected):
-            raise SetupError('Existing Bridge service tokens could not be resolved')
+            raise SetupError('Existing Bridge service tokens could not be resolved: ' + json.dumps({'policy_token_count': len(service_ids), 'account_token_count': len(tokens), 'matched_count': len(selected), 'policy_id_lengths': sorted(len(str(x)) for x in service_ids), 'token_fields': sorted({k for t in tokens for k in t if k in ('id', 'client_id', 'name')})}))
         extra['ACCESS_BRIDGE_SERVICE_TOKENS'] = json.dumps(sorted(t['client_id'] for t in selected))
         print('Adopt existing Bridge: reuse app ID, audience and ' + str(len(selected)) + ' service token(s); no credential rotation.')
     extra['ACCESS_BRIDGE_AUDIENCE'] = existing.get('aud', '')
