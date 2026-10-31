@@ -80,6 +80,33 @@ class FakeAPI:
 
 
 class SetupTests(unittest.TestCase):
+    def test_adopt_existing_bridge_and_recover_credentials_on_next_release(self):
+        api, cfg = FakeAPI(), config()
+        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
+                     'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
+        api.policies['bridge-old'] = [{'id': 'existing-policy', 'name': 'device',
+            'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'service-id'}}],
+            'exclude': [], 'require': []}]
+        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
+            app.reconcile(cfg, api, True)
+            fresh = config()
+            app.sync_config(fresh, api)
+            app.reconcile(fresh, api, True)
+        bridge = next(a for a in api.apps if a['name'] == 'photointel-bridge')
+        self.assertEqual((bridge['id'], bridge['aud']), ('bridge-old', 'd' * 64))
+        self.assertEqual(json.loads(fresh['extra_environment']['ACCESS_BRIDGE_SERVICE_TOKENS']), ['unit.access'])
+        self.assertEqual(len(api.apps), 2)
+        self.assertFalse(any('/service_tokens' in path for _, path, _ in api.writes))
+
+    def test_bridge_bypass_is_not_automatically_adopted(self):
+        api = FakeAPI()
+        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
+                     'domain': 'photos.migos.club/v1/bridge/*'}]
+        api.policies['bridge-old'] = [{'decision': 'bypass', 'include': [{'everyone': {}}]}]
+        with self.assertRaisesRegex(app.SetupError, 'refusing to broaden'):
+            app.reconcile(config(), api, True)
+        self.assertEqual(api.writes, [])
+
     def test_plan_never_writes_cloudflare_or_gcp(self):
         api = FakeAPI()
         with patch.object(app, 'save_config') as save, patch.object(app, 'sync_runtime') as runtime:
