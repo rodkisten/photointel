@@ -180,18 +180,42 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready", tags=["health"])
     async def ready() -> dict[str, str]:
+        # Do not return sensitive provider details on this unauthenticated route.
+        # Emit only a fixed component marker and exception class to Cloud Logging.
+        # Check both dependencies even if one fails, so operations can distinguish
+        # simultaneous Neon and R2 outages in a single diagnostic run.
+        failed = False
         try:
             async with SessionLocal() as session:
-                await session.execute(text("SELECT 1"))
+                await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=10)
+        except Exception as exc:
+            logger.error(
+                "readiness_neon_failed",
+                extra={"exception_type": type(exc).__name__},
+            )
+            failed = True
+        try:
             storage = get_storage()
             if isinstance(storage, S3Storage):
-                await asyncio.to_thread(storage.client.head_bucket, Bucket=storage.bucket)
+                await asyncio.wait_for(
+                    asyncio.to_thread(
+                        storage.client.head_bucket,
+                        Bucket=storage.bucket,
+                    ),
+                    timeout=12,
+                )
         except Exception as exc:
+            logger.error(
+                "readiness_r2_failed",
+                extra={"exception_type": type(exc).__name__},
+            )
+            failed = True
+        if failed:
             raise AppError(
                 ErrorCode.DATABASE_UNAVAILABLE,
                 "Dependência indisponível",
                 503,
-            ) from exc
+            )
         return {"status": "ready"}
 
     from photointel.routers.catalog import router as catalog

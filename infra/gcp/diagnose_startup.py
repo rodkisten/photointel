@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Cloud Run startup diagnostics with conservative secret-safe output."""
+"""Read-only Cloud Run startup and dependency diagnostics with safe output."""
 
 from __future__ import annotations
 
@@ -16,6 +16,20 @@ SERVICE = "photointel-api"
 
 # Emit only fixed guidance, never provider log lines or Pydantic's input_value.
 SIGNALS: tuple[tuple[str, str, str], ...] = (
+    (
+        "readiness_neon_failed",
+        "NEON_HEALTH_FAILED",
+        "The running API cannot complete SELECT 1 against Neon PostgreSQL. "
+        "Check the DATABASE_URL secret version, password, TLS, Neon project state "
+        "and Cloud Run egress. Exception messages are intentionally omitted.",
+    ),
+    (
+        "readiness_r2_failed",
+        "R2_HEALTH_FAILED",
+        "The running API cannot inspect the R2 bucket. Check storage endpoint, "
+        "bucket, S3 access key/secret version and bucket-scoped permissions. "
+        "Exception messages are intentionally omitted.",
+    ),
     (
         "channel_binding=require",
         "NEON_CHANNEL_BINDING",
@@ -139,7 +153,7 @@ def main() -> int:
               "Check logging.viewer permissions and revision logs in Cloud Console.")
         return 0
 
-    print(f"::notice::Cloud Run startup diagnostics: examined {len(entries)} recent log entries.")
+    print(f"::notice::Cloud Run startup/readiness diagnostics: examined {len(entries)} recent log entries.")
     signals = classify_entries(entries)
     if signals:
         for code, guidance in signals:
