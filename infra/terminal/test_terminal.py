@@ -109,6 +109,47 @@ class TerminalTests(unittest.TestCase):
         self.assertLess(operations.index('add-metadata'), operations.index('start'))
 
 
+    def test_bootstrap_oauth_viewer_grant_is_scoped_and_metadata_only(self):
+        c = terminal.configuration(base())
+        g = FakeGcloud()
+        terminal.provision(c, g, 'deployer')
+        viewer = [args for args in g.calls if
+                  args[:2] == ('secrets', 'add-iam-policy-binding') and
+                  '--role=roles/secretmanager.viewer' in args]
+        self.assertEqual(len(viewer), 2)
+        self.assertEqual(
+            {args[2] for args in viewer},
+            {ref['name'] for ref in c['oauth'].values()},
+        )
+        self.assertTrue(all(
+            '--member=serviceAccount:photointel-bootstrap@photointel.iam.gserviceaccount.com'
+            in args for args in viewer
+        ))
+        self.assertFalse(any(
+            args[:3] == ('secrets', 'versions', 'access') for args in g.calls
+        ))
+
+    def test_preflight_distinguishes_missing_version_and_denied_iam(self):
+        c = terminal.configuration(base())
+
+        class Missing(FakeGcloud):
+            def run(self, *args, **kwargs):
+                if args[:3] == ('secrets', 'versions', 'describe'):
+                    raise RuntimeError('gcloud failed: secrets versions describe: NOT_FOUND')
+                return super().run(*args, **kwargs)
+
+        with self.assertRaisesRegex(RuntimeError, 'version MISSING.*TS_OAUTH_CLIENT_ID'):
+            terminal.provision(c, Missing(), 'deployer')
+
+        class Denied(FakeGcloud):
+            def run(self, *args, **kwargs):
+                if args[:3] == ('secrets', 'versions', 'describe'):
+                    raise RuntimeError('gcloud failed: secrets versions describe: PERMISSION_DENIED')
+                return super().run(*args, **kwargs)
+
+        with self.assertRaisesRegex(RuntimeError, 'ACCESS DENIED.*TS_OAUTH_CLIENT_ID'):
+            terminal.provision(c, Denied(), 'deployer')
+
     def test_oauth_preflight_fails_before_vm_mutation(self):
         c = terminal.configuration(base())
 
