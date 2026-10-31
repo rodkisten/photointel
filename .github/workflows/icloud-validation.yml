@@ -47,7 +47,8 @@ jobs:
           with tempfile.TemporaryDirectory() as temporary:
               with patch.object(module.shutil, "which", return_value=None), patch.object(
                   module.Path, "home", return_value=Path(temporary)
-              ):
+              ), patch.object(module, "_known_sdk_binaries", return_value=()):
+
                   executable = module.ensure_gcloud()
               result = subprocess.run([executable, "--version"], capture_output=True, text=True, check=True)
               assert module.SDK_VERSION in result.stdout
