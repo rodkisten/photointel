@@ -1,4 +1,5 @@
 name: "☁️ Cloudflare Setup"
+# Reuse existing service policy IDs during Bridge adoption.
 on:
   push:
     branches: [main]
