@@ -1,5 +1,6 @@
 """Offline tests of cost boundaries, command authorization and VM lifecycle."""
 import unittest
+import json
 from unittest.mock import patch
 
 import terminal
@@ -89,48 +90,105 @@ class TerminalTests(unittest.TestCase):
         self.assertLess(operations.index('add-metadata'), operations.index('start'))
 
 
-    def test_ready_image_is_resolved_to_digest_without_build(self):
+    def test_ready_image_resolved_with_docker_not_metadata_api(self):
         c = terminal.configuration(base())
         digest = 'sha256:' + 'b' * 64
-        g = unittest.mock.Mock()
-        g.run.return_value = {'image_summary': {'digest': digest}}
-        with patch('subprocess.run') as process:
-            result = terminal.resolve_image(c, g)
-        self.assertTrue(result.endswith('/terminal@' + digest))
-        process.assert_not_called()
-        self.assertEqual(g.run.call_count, 1)
+        calls = []
 
-    def test_legacy_sha_image_reused_without_rebuild(self):
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[:3] == ['docker', 'image', 'inspect']:
+                return unittest.mock.Mock(returncode=0, stdout=json.dumps([
+                    terminal.image_base(c) + '@' + digest,
+                ]), stderr='')
+            return unittest.mock.Mock(returncode=0, stdout='', stderr='')
+
+        with patch('subprocess.run', side_effect=fake_run):
+            result = terminal.resolve_image(c, unittest.mock.Mock())
+        self.assertEqual(result, terminal.image_base(c) + '@' + digest)
+        self.assertIn(['docker', 'pull', c['image']], calls)
+        self.assertFalse(any(args[:2] == ['gcloud', 'artifacts'] for args in calls))
+
+    def test_build_reuses_fingerprint_image_and_publishes_ready_with_docker(self):
         c = terminal.configuration(base())
         digest = 'sha256:' + 'c' * 64
-        g = unittest.mock.Mock()
-        g.run.side_effect = [None, [{'version': 'projects/x/versions/' + digest}]]
-        with patch('subprocess.run') as process:
-            result = terminal.resolve_image(c, g)
-        self.assertTrue(result.endswith('@' + digest))
-        process.assert_not_called()
-
-    def test_no_image_does_not_trigger_implicit_build(self):
-        g = unittest.mock.Mock()
-        g.run.side_effect = [None, []]
-        with patch('subprocess.run') as process, self.assertRaisesRegex(ValueError, 'action=build'):
-            terminal.resolve_image(terminal.configuration(base()), g)
-        process.assert_not_called()
-
-    def test_build_reuses_content_tag_across_repository_commits(self):
-        raw = base()
-        first = terminal.configuration(raw)
-        raw['release_git_sha'] = 'f' * 40
-        second = terminal.configuration(raw)
         calls = []
-        for c in (first, second):
-            g = unittest.mock.Mock()
-            g.run.return_value = {'image_summary': {'digest': 'sha256:' + 'd' * 64}}
-            with patch.object(terminal.Path, 'read_bytes', return_value=b'identical Dockerfile'), patch('subprocess.run') as process:
-                terminal.build_image(c, g)
-            process.assert_not_called()
-            calls.append(g.run.call_args_list[0])
-        self.assertEqual(calls[0], calls[1])
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[:3] == ['docker', 'image', 'inspect']:
+                return unittest.mock.Mock(returncode=0, stdout=json.dumps([
+                    terminal.image_base(c) + '@' + digest,
+                ]), stderr='')
+            return unittest.mock.Mock(returncode=0, stdout='', stderr='')
+
+        with (
+            patch('subprocess.run', side_effect=fake_run),
+            patch.object(terminal.Path, 'read_bytes', return_value=b'Dockerfile fixture'),
+        ):
+            terminal.build_image(c, unittest.mock.Mock())
+        self.assertNotIn('build', [args[1] for args in calls if args[0] == 'docker'])
+        self.assertIn(['docker', 'push', c['image']], calls)
+        self.assertTrue(any(args[:2] == ['docker', 'run'] for args in calls))
+        self.assertFalse(any(args[:2] == ['gcloud', 'artifacts'] for args in calls))
+
+    def test_missing_fingerprint_image_builds_and_pins_using_docker(self):
+        c = terminal.configuration(base())
+        digest = 'sha256:' + 'd' * 64
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[:2] == ['docker', 'pull'] and not any(
+                step[:2] == ['docker', 'build'] for step in calls
+            ):
+                return unittest.mock.Mock(returncode=1, stdout='',
+                    stderr='manifest unknown: not found')
+            if args[:3] == ['docker', 'image', 'inspect']:
+                return unittest.mock.Mock(returncode=0, stdout=json.dumps([
+                    terminal.image_base(c) + '@' + digest,
+                ]), stderr='')
+            return unittest.mock.Mock(returncode=0, stdout='', stderr='')
+
+        with (
+            patch('subprocess.run', side_effect=fake_run),
+            patch.object(terminal.Path, 'read_bytes', return_value=b'Dockerfile fixture'),
+        ):
+            terminal.build_image(c, unittest.mock.Mock())
+        self.assertTrue(any(args[:2] == ['docker', 'build'] for args in calls))
+        self.assertTrue(any(args[:2] == ['docker', 'push'] for args in calls))
+
+    def test_no_ready_image_does_not_trigger_implicit_build(self):
+        def fake_run(args, **kwargs):
+            if args[:2] == ['docker', 'pull']:
+                return unittest.mock.Mock(returncode=1, stdout='',
+                    stderr='manifest unknown: not found')
+            return unittest.mock.Mock(returncode=0, stdout='', stderr='')
+        with patch('subprocess.run', side_effect=fake_run) as process:
+            with self.assertRaisesRegex(ValueError, 'action=build'):
+                terminal.resolve_image(terminal.configuration(base()), unittest.mock.Mock())
+        self.assertFalse(any(call.args[0][:2] == ['docker', 'build']
+                             for call in process.call_args_list))
+
+    def test_missing_vs_denied_manifest_fail_closed(self):
+        with patch('subprocess.run', return_value=unittest.mock.Mock(
+            returncode=1, stdout='', stderr='manifest unknown: not found'
+        )):
+            self.assertFalse(terminal.pull_image('image:missing', optional=True))
+        with patch('subprocess.run', return_value=unittest.mock.Mock(
+            returncode=1, stdout='', stderr='403 forbidden password=SECRET_VALUE'
+        )):
+            with self.assertRaisesRegex(RuntimeError, 'Docker registry denied') as caught:
+                terminal.pull_image('image:private', optional=True)
+        self.assertNotIn('SECRET_VALUE', str(caught.exception))
+
+    def test_bad_docker_digest_refused(self):
+        with patch('subprocess.run', return_value=unittest.mock.Mock(
+            returncode=0, stdout='["attacker.invalid/repo@sha256:' + 'a' * 64 + '"]',
+            stderr='',
+        )):
+            with self.assertRaisesRegex(RuntimeError, 'cannot be verified'):
+                terminal.image_digest('image:tag', 'expected.registry/repo')
 
     def test_firewall_permission_denial_is_not_missing_and_does_not_leak_output(self):
         import subprocess
@@ -140,18 +198,16 @@ class TerminalTests(unittest.TestCase):
                 terminal.Gcloud('photointel').run('compute', 'firewall-rules', 'describe', 'x', optional=True)
         self.assertNotIn('secret-token-value', str(caught.exception))
 
-    def test_registry_image_permission_failure_has_safe_fix_instructions(self):
+    def test_gcloud_metadata_denial_is_sanitized_not_misdiagnosed_as_registry_iam(self):
         import subprocess
         raw_error = 'PERMISSION_DENIED iam.gserviceaccount.com private-secret=NEVER_PRINT'
         with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 1, '', raw_error)):
-            with self.assertRaisesRegex(RuntimeError, 'roles/artifactregistry.writer') as caught:
+            with self.assertRaisesRegex(RuntimeError, 'Container Analysis') as caught:
                 terminal.Gcloud('photointel').run(
                     'artifacts', 'docker', 'images', 'describe',
                     'us-central1-docker.pkg.dev/photointel/photointel/terminal:ready',
                     optional=True,
                 )
-        self.assertIn('Run Setup GCP apply', str(caught.exception))
-        self.assertIn('photointel-bootstrap', str(caught.exception))
         self.assertNotIn('NEVER_PRINT', str(caught.exception))
 
     def test_resource_does_not_exist_is_optional(self):
