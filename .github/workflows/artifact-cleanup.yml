@@ -1,9 +1,6 @@
 name: "🧹 Artifact Cleanup"
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/artifact-cleanup.yml']
 permissions:
   contents: read
   actions: write
@@ -22,7 +19,7 @@ jobs:
           script: |
             const {owner, repo} = context.repo;
             if (owner !== 'rodkisten' || repo !== 'photointel' || context.ref !== 'refs/heads/main') {
-              throw new Error('Cleanup is restricted to rodksiten/photointel main');
+              throw new Error('Cleanup is restricted to rodkisten/photointel main');
             }
             const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
               owner, repo, per_page: 100,
