@@ -1,6 +1,8 @@
 """Offline tests of cost boundaries, command authorization and VM lifecycle."""
 import unittest
 import json
+from datetime import datetime, timezone
+import boot_logs
 from unittest.mock import patch
 
 import terminal
@@ -20,6 +22,8 @@ class FakeGcloud:
 
     def run(self, *args, **kwargs):
         self.calls.append(args)
+        if args[:3] == ('secrets', 'versions', 'describe'):
+            return {'state': 'ENABLED'}
         if args[:3] == ('compute', 'instances', 'describe'):
             return self.existing
         if args[:3] == ('compute', 'addresses', 'list'):
@@ -104,6 +108,64 @@ class TerminalTests(unittest.TestCase):
         self.assertLess(operations.index('stop'), operations.index('add-metadata'))
         self.assertLess(operations.index('add-metadata'), operations.index('start'))
 
+
+    def test_oauth_preflight_fails_before_vm_mutation(self):
+        c = terminal.configuration(base())
+
+        class Disabled(FakeGcloud):
+            def run(self, *args, **kwargs):
+                if args[:3] == ('secrets', 'versions', 'describe'):
+                    self.calls.append(args)
+                    return {'state': 'DISABLED'}
+                return super().run(*args, **kwargs)
+
+        g = Disabled()
+        with self.assertRaisesRegex(RuntimeError, 'not ENABLED'):
+            terminal.provision(c, g, 'deployer')
+        self.assertFalse(any(x[:2] == ('compute', 'instances') for x in g.calls))
+        self.assertFalse(any(x[:2] == ('services', 'enable') for x in g.calls))
+
+        class NotFound(FakeGcloud):
+            def run(self, *args, **kwargs):
+                if args[:3] == ('secrets', 'versions', 'describe'):
+                    raise RuntimeError('PROVIDER_ERROR confidential-gcp-detail')
+                return super().run(*args, **kwargs)
+
+        with self.assertRaisesRegex(RuntimeError, 'TS_OAUTH_CLIENT_ID') as caught:
+            terminal.provision(c, NotFound(), 'deployer')
+        self.assertNotIn('confidential-gcp-detail', str(caught.exception))
+
+    def test_serial_boot_events_only_show_safe_current_boot_details(self):
+        boot = datetime(2026, 10, 31, 14, 47, 25, tzinfo=timezone.utc)
+        lines = '\n'.join([
+            '2026-10-31T14:41:01Z photointel-terminal google_metadata_script_runner: Terminal ready: ssh rod@100.1.2.3. Maximum uptime: 120 minutes.',
+            '2026-10-31T14:47:42Z photointel-terminal google_metadata_script_runner: Metadata key("startup-script"), command("/bin/bash"): terminal-startup: apt source permissions checked',
+            '2026-10-31T14:47:55Z photointel-terminal google_metadata_script_runner: Metadata key("startup-script"), command("/bin/bash"): curl: (22) The requested URL returned error: 404',
+            '2026-10-31T14:47:55Z photointel-terminal google_metadata_script_runner: Metadata key("startup-script"), command("/bin/bash"): terminal-startup: FAILED stage=tailscale-auth secret=TS_OAUTH_CLIENT_ID version=1',
+            '2026-10-31T14:47:55Z photointel-terminal google_metadata_script_runner: secret-value=NEVER_PRINT',
+            '2026-10-31T14:47:56Z photointel-terminal google_metadata_script_runner: Script "startup-script" failed with error: exit status 22',
+            '2026-10-31T14:47:56Z photointel-terminal google_guest_agent: cloud logging permission denied',
+        ])
+        output = boot_logs.events(lines, boot)
+        messages = [message for _, message in output]
+        self.assertTrue(any('apt source permissions checked' in m for m in messages))
+        self.assertTrue(any('curl returned HTTP 404' in m for m in messages))
+        self.assertTrue(any('TS_OAUTH_CLIENT_ID' in m for m in messages))
+        self.assertTrue(any('Startup script exited with status 22' in m for m in messages))
+        self.assertFalse(any('100.1.2.3' in m for m in messages))
+        self.assertFalse(any('NEVER_PRINT' in m for m in messages))
+        self.assertFalse(any('cloud logging' in m for m in messages))
+
+    def test_serial_boot_logs_reports_success_without_dumping_provider_output(self):
+        boot = datetime(2026, 10, 31, 14, 47, 25, tzinfo=timezone.utc)
+        messages = '2026-10-31T14:47:59Z photointel-terminal google_metadata_script_runner: Terminal ready: ssh rod@100.10.20.30. Maximum uptime: 120 minutes.'
+        with (
+            patch('boot_logs.get_boot_time', return_value=boot),
+            patch('boot_logs.get_serial', return_value=messages),
+            patch('builtins.print') as printed,
+        ):
+            self.assertEqual(boot_logs.watch('photointel-terminal', 'us-central1-a', timeout_seconds=15), 0)
+        self.assertTrue(any('Terminal ready' in str(call) for call in printed.call_args_list))
 
     def test_ready_image_resolved_with_docker_not_metadata_api(self):
         c = terminal.configuration(base())
