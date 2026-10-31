@@ -212,6 +212,14 @@ def inspect(config, api):
         allowed_bridge = app.get('name') == 'photointel-bridge' and bridge_enabled and all(
             v in [h + '/v1/bridge/*' for h in hosts] for v in nested)
         if nested and not allowed_bridge:
+            policies = api.pages(api.base + '/access/apps/' + app['id'] + '/policies')
+            print('ACCESS_CONFLICT ' + json.dumps({
+                'name': app.get('name'), 'type': app.get('type'), 'paths': sorted(domains(app)),
+                'policies': [{'decision': p.get('decision'),
+                              'include_types': [sorted(r) for r in p.get('include', [])],
+                              'exclude_types': [sorted(r) for r in p.get('exclude', [])],
+                              'require_types': [sorted(r) for r in p.get('require', [])]}
+                             for p in policies]}, sort_keys=True), flush=True)
             raise SetupError('A path-specific Access app overlaps PhotoIntel. Inventory its policies before consolidation: ' + str(nested))
     # Fail on conflicting apps before creating any resource.
     select_app(apps, 'photointel', hosts, config.get('access_audience'))
