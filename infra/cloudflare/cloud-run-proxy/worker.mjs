@@ -1,4 +1,4 @@
-/** Fixed-origin Access relay. The API independently validates every signed JWT. */
+/** Unified React asset server + fixed-origin API relay. The API validates signed JWTs. */
 const REQUEST_HEADERS = [
   'accept', 'content-type', 'authorization', 'cf-access-jwt-assertion',
   'origin', 'if-none-match', 'if-range', 'range', 'last-event-id',
@@ -33,7 +33,27 @@ export async function handle(request, env, fetchOrigin = fetch) {
   try { config = configuration(env); }
   catch { return failure(503, 'API routing not configured'); }
   const incoming = new URL(request.url);
-  if (!incoming.pathname.startsWith('/v1/') || !METHODS.has(request.method)) {
+  // One Worker, two services: React static assets on the frontend hostname
+  // and /v1/* requests proxied to the existing Cloud Run Python API.
+  // An existing api.* custom domain may remain attached for compatibility.
+  if (!incoming.pathname.startsWith('/v1/')) {
+    if (incoming.pathname === '/v1' || incoming.pathname.startsWith('/v1')) {
+      return failure(404, 'Route unavailable');
+    }
+    if (
+      incoming.origin !== config.frontend ||
+      !['GET', 'HEAD'].includes(request.method) ||
+      !env.ASSETS || typeof env.ASSETS.fetch !== 'function'
+    ) {
+      return failure(404, 'Route unavailable');
+    }
+    try {
+      return await env.ASSETS.fetch(request);
+    } catch {
+      return failure(503, 'Frontend temporarily unavailable');
+    }
+  }
+  if (!METHODS.has(request.method)) {
     return failure(404, 'Route unavailable');
   }
   if (request.method === 'OPTIONS') {
