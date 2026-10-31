@@ -1,0 +1,54 @@
+name: "🩺 Diagnose Cloud Run"
+
+on:
+  workflow_dispatch:
+
+permissions: {contents: read}
+
+jobs:
+  diagnose:
+    name: "🩺 API + Neon + R2"
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: "📥 Código"
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "⚙ Env"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+
+      - name: "🔐 GCP Login"
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+
+      - name: "🧰 Gcloud"
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: "🩺 Cloud Run status + HTTP health"
+        run: python3 infra/gcp/diagnose_api_connectivity.py --project photointel
+
+      - name: "🔍 Startup errors (sanitized)"
+        if: ${{ always() && steps.config.outcome == 'success' }}
+        run: python3 infra/gcp/diagnose_startup.py --project photointel
+
+      - name: "🧹 Config"
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
