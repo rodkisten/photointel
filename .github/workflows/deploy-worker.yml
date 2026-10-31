@@ -1,9 +1,6 @@
 name: "🌐 Worker · Front + API"
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/deploy-worker.yml']
 permissions: {contents: read}
 jobs:
   deploy:
