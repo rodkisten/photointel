@@ -40,6 +40,7 @@ COPY --from=build --chown=10001:10001 /app /app
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    DATABASE_TLS_CA_FILE=/etc/ssl/certs/ca-certificates.crt \
     APP_ENV=production \
     AUTH_MODE=cloudflare
 USER 10001:10001
