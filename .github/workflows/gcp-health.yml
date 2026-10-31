@@ -1,6 +1,9 @@
 name: "🩺 Diagnose Cloud Run"
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/gcp-health.yml']
   workflow_dispatch:
 
 permissions: {contents: read}
@@ -39,6 +42,72 @@ jobs:
 
       - name: "🧰 Gcloud"
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: "🔍 Correlated API failure"
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          flt = 'resource.type="cloud_run_revision" AND resource.labels.service_name="photointel-api"'
+          r = subprocess.run(['gcloud','logging','read',flt,'--project','photointel','--freshness=1h','--limit=250','--format=json'], capture_output=True,text=True,check=True)
+          for e in json.loads(r.stdout):
+              p = e.get('jsonPayload', {})
+              if not p:
+                  try: p=json.loads(e.get('textPayload','{}'))
+                  except ValueError: continue
+              if not isinstance(p,dict): continue
+              if p.get('correlation_id') == '9cb9c931-f117-4b65-9fc1-e453781b4dbc' or p.get('level') in ('error','critical'):
+                  print(json.dumps({k:p[k] for k in ('event','exception_type','correlation_id','error_code','path','status_code') if k in p}))
+          PY
+
+      - name: "🔍 Runtime dependency selection"
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          d=json.loads(subprocess.run(['gcloud','run','services','describe','photointel-api','--region','us-central1','--project','photointel','--format=json'],capture_output=True,text=True,check=True).stdout)
+          for c in d.get('spec',{}).get('template',{}).get('spec',{}).get('containers',[]):
+              print(json.dumps({'runtime_image': c.get('image')}))
+              for e in c.get('env',[]):
+                  if e.get('name') in ('DATABASE_URL','APP_ENV','EXECUTION_PLATFORM','STORAGE_BACKEND','DATABASE_TLS_REQUIRED'):
+                      v=e.get('value','')
+                      print(json.dumps({'name':e['name'],'secret_ref':e.get('valueFrom',{}).get('secretKeyRef'),'scheme':v.split(':')[0] if e['name']=='DATABASE_URL' else v}))
+          PY
+
+      - name: "🔍 Neon connection diagnosis"
+        env:
+          CONFIRM_PROJECT: photointel
+          MIGRATION_MODE: diagnose
+        run: bash infra/gcp/release.sh migrate
+
+      - name: "🔍 Runtime PostgreSQL connection"
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,tempfile,os
+          def call(args,check=True):
+              return subprocess.run(['gcloud',*args,'--project','photointel','--quiet'],capture_output=True,text=True,check=check)
+          svc=json.loads(call(['run','services','describe','photointel-api','--region','us-central1','--format=json']).stdout)
+          runtime=svc['spec']['template']['spec']
+          container=runtime['containers'][0]
+          container={k:container[k] for k in ('image','env') if k in container}
+          container.update(command=['python'],args=['-c',"import asyncio,json\nfrom sqlalchemy.ext.asyncio import create_async_engine\nfrom sqlalchemy import text\nfrom photointel.config import get_settings\nfrom photointel.db_connection import database_connection_options,database_engine_options\nasync def run():\n    from pathlib import Path\n    settings=get_settings().model_copy(update={'database_tls_ca_file':Path('/etc/ssl/certs/ca-certificates.crt')})\n    print(json.dumps({'event':'runtime_db_probe','ca_file_exists':settings.database_tls_ca_file.is_file()}),flush=True)\n    url,args=database_connection_options(settings)\n    engine=create_async_engine(url,connect_args=args,**database_engine_options(settings))\n    try:\n        async with engine.connect() as c:\n            await c.execute(text('SELECT 1'))\n        print(json.dumps({'event':'runtime_db_probe','state':'passed','driver':url.drivername}),flush=True)\n    except Exception as e:\n        markers=['password authentication failed','root certificate','certificate verify failed','connection refused','timeout','channel_binding','could not translate','endpoint is disabled','permission denied']\n        print(json.dumps({'event':'runtime_db_probe','state':'failed','driver':url.drivername,'exception_type':type(e).__name__,'signals':[m for m in markers if m in str(e).lower()]}),flush=True)\n    finally: await engine.dispose()\nasyncio.run(run())\n"],resources={'limits':{'cpu':'1','memory':'512Mi'}})
+          doc={'apiVersion':'run.googleapis.com/v1','kind':'Job','metadata':{'name':'photointel-diagnose-db'},'spec':{'template':{'spec':{'taskCount':1,'parallelism':1,'template':{'spec':{'containers':[container],'serviceAccountName':runtime['serviceAccountName'],'maxRetries':0,'timeoutSeconds':'90'}}}}}}
+          fd,path=tempfile.mkstemp(suffix='.json')
+          try:
+              with os.fdopen(fd,'w') as f: json.dump(doc,f)
+              result=call(['run','jobs','replace',path,'--region','us-central1'],False)
+              if result.returncode: raise RuntimeError('Diagnostic job configuration rejected')
+              result=call(['run','jobs','execute','photointel-diagnose-db','--region','us-central1','--wait'],False)
+              print('Diagnostic job execution completed:',result.returncode==0)
+              entries=json.loads(call(['logging','read','resource.type="cloud_run_job" AND resource.labels.job_name="photointel-diagnose-db"','--freshness=10m','--limit=30','--format=json']).stdout)
+              for e in entries:
+                  p=e.get('jsonPayload',{})
+                  if not p:
+                      try:p=json.loads(e.get('textPayload','{}'))
+                      except ValueError:continue
+                  if p.get('event')=='runtime_db_probe': print(json.dumps(p))
+          finally:
+              os.unlink(path)
+              call(['run','jobs','delete','photointel-diagnose-db','--region','us-central1'],False)
+          PY
 
       - name: "🩺 Cloud Run status + HTTP health"
         run: python3 infra/gcp/diagnose_api_connectivity.py --project photointel
