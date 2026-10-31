@@ -307,6 +307,9 @@ def r2_reconcile(api, bucket, apply):
 
 def bridge_reconcile(config, api, apps, hosts, apply):
     extra = config.get('extra_environment', {})
+    if config.get('_bridge_existing_rules'):
+        print('Preserve orphaned Bridge application and policy unchanged; device access requires a valid service token.')
+        return select_app(apps, 'photointel-bridge', [h + '/v1/bridge/*' for h in hosts])
     raw = extra.get('ACCESS_BRIDGE_SERVICE_TOKENS', '[]')
     ids = json.loads(raw) if isinstance(raw, str) else raw
     if not ids and not config.get('_bridge_existing_rules'):
