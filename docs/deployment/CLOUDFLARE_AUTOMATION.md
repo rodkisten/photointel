@@ -61,6 +61,13 @@ utiliza as existentes quando essa integração está configurada. Sem Client IDs
 Bridge configurados, os paths continuam sob Access humano e o resumo mostra o
 Service Auth desativado, em vez de inventar uma credencial perdida no deploy.
 
+Um app Bridge existente no path exato `/v1/bridge/*` pode ser adotado mesmo com
+nome antigo, mantendo ID e AUD. As regras devem conter apenas seletores explícitos
+de Service Auth, sem Bypass nem condições que seriam perdidas. Os Client IDs são
+resolvidos dos tokens existentes; referências a tokens já removidos são preservadas
+com aviso, sem criar credenciais. Isso não restaura um dispositivo cujo token foi
+removido. A allowlist humana configurada continua sendo aplicada ao Bridge.
+
 Uma aplicação PhotoIntel existente só pode ser adotada se todos os seus
 hostnames/paths pertencerem ao escopo esperado. Ambiguidade, apps específicas
 que se sobreponham ou domínio R2 público customizado inesperado interrompem o
