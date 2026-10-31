@@ -1,8 +1,5 @@
 name: "☁️ Cloudflare Setup"
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/cloudflare-setup.yml']
   workflow_dispatch:
     inputs:
       mode:
