@@ -48,6 +48,9 @@ for attempt in 1 2; do
   fi
   grep -Fq -- "--attribute-condition=$EXPECTED_WIF_CONDITION" "$GCLOUD_TRACE"
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
+  for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
+    grep -F -- "--role=$role" "$GCLOUD_TRACE" | grep -q -- '--member=serviceAccount:photointel-bootstrap@'
+  done
   grep -q 'projects add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
   grep -q 'secrets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
   grep -q 'storage buckets add-iam-policy-binding .*--condition=None' "$GCLOUD_TRACE"
@@ -74,3 +77,4 @@ if grep -q 'providers update-oidc' "$GCLOUD_TRACE"; then
   echo "ERROR: attempted WIF update after permission denial" >&2; exit 1
 fi
 echo "Bootstrap offline tests passed: plan, idempotence and IAM denial."
+

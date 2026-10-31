@@ -7,7 +7,7 @@ on:
         required: true
         type: choice
         default: status
-        options: [plan, provision, start, stop, status]
+        options: [plan, build, provision, start, stop, status]
 permissions:
   contents: read
 concurrency:
@@ -39,7 +39,7 @@ jobs:
       - name: "🧪 Validate terminal configuration"
         run: python3 infra/terminal/terminal.py plan
       - name: "🛡️ Check bootstrap identity"
-        if: inputs.action == 'provision'
+        if: inputs.action == 'provision' || inputs.action == 'build'
         env:
           BOOTSTRAP_ACCOUNT: ${{ steps.config.outputs.bootstrap_service_account }}
           BOOTSTRAP_PROVIDER: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
@@ -51,29 +51,11 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           project_id: photointel
-          workload_identity_provider: ${{ inputs.action == 'provision' && steps.config.outputs.bootstrap_workload_identity_provider || steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ inputs.action == 'provision' && steps.config.outputs.bootstrap_service_account || steps.config.outputs.service_account }}
+          workload_identity_provider: ${{ (inputs.action == 'provision' || inputs.action == 'build') && steps.config.outputs.bootstrap_workload_identity_provider || steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ (inputs.action == 'provision' || inputs.action == 'build') && steps.config.outputs.bootstrap_service_account || steps.config.outputs.service_account }}
       - name: "🧰 Gcloud"
         if: inputs.action != 'plan'
         uses: google-github-actions/setup-gcloud@v3
-      - name: "🐳 Build, test and publish terminal image"
-        if: inputs.action == 'provision'
-        run: |
-          set -euo pipefail
-          config="$(python3 infra/terminal/terminal.py config)"
-          image="$(jq -er .image <<< "$config")"
-          registry="${image%%/*}"
-          gcloud auth configure-docker "$registry" --quiet
-          docker build --pull -t "$image" infra/terminal
-          docker run --rm --entrypoint bash "$image" -ec '
-            for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; do
-              command -v "$tool"
-            done
-            test "$(id -un)" = rod
-            gcloud version
-            jq -n --arg ok yes "{ok: \$ok}"
-          '
-          docker push "$image"
       - name: "🖥️ Terminal operation"
         if: inputs.action != 'plan'
         env:
@@ -86,3 +68,4 @@ jobs:
         uses: ./.github/actions/gcp-config
         with:
           mode: cleanup
+

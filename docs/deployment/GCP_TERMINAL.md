@@ -1,5 +1,28 @@
 # Terminal persistente no iPhone
 
+## Build separado das operações
+
+O dropdown agora inclui `build`. `provision`, `start`, `stop` e `status` **não
+executam Docker build**. `provision` resolve a tag `terminal:ready` para um digest
+imutável; se ainda não existir, reutiliza a imagem mais recente já publicada no
+pacote `terminal`, inclusive imagens antigas com tag de SHA do repositório.
+Assim, uma tentativa que falhou no firewall pode reutilizar a imagem já enviada.
+Se não houver nenhuma imagem, a mensagem pede `action=build` uma vez.
+
+`build` usa uma tag `cli-SHA256_DO_DOCKERFILE`, independente do SHA dos demais
+arquivos do projeto. Se essa tag existir, apenas reutiliza e atualiza `ready`;
+rebuild ocorre quando o Dockerfile muda. Para atualizar a base Linux/gcloud com
+a mesma lista de ferramentas, altere o Dockerfile (por exemplo, sua versão base)
+e rode `build`. A VM mantém o digest resolvido até um novo `provision`.
+
+Após esta atualização, rode **Setup GCP → apply** para conceder à conta bootstrap
+`roles/compute.instanceAdmin.v1`, `roles/compute.securityAdmin` e
+`roles/iam.roleAdmin`, depois **GCP Terminal → provision**. A conta runtime
+recebe um binding de Service Account User para bootstrap poder anexá-la à VM;
+nenhum desses papéis administrativos é concedido ao deployer ou ao runtime.
+Erros de acesso ao firewall agora mostram a classificação e a permissão sem
+imprimir conteúdo bruto que possa conter credenciais.
+
 A VM `photointel-terminal` executa um container Linux com gcloud, jq, gawk,
 OpenSSH cliente/servidor, Git, tmux, rsync, ripgrep, fzf, Python, psql, SQLite,
 curl, wget, editores e ferramentas de rede. O login Tailscale SSH do usuário
@@ -34,8 +57,8 @@ a zona acompanha a região existente. Tamanho da máquina é fixo em e2-micro.
 
 1. Após integrar esta mudança à `main`, abra Actions → **📱 GCP Terminal**.
 2. Execute `plan` para verificar a configuração sem acessar o Google Cloud.
-3. Execute `provision`: compila e testa a imagem no runner GitHub, publica no
-   Artifact Registry existente e cria/atualiza a VM. Essa operação usa a identidade
+3. Execute `provision`: reutiliza a imagem publicada e cria/atualiza a VM. Se não
+   existir imagem, execute `build` uma vez para compilar, testar e publicar. Essa operação usa a identidade
    bootstrap administrativa já configurada, sem elevar a identidade de deploy.
 4. No Tailscale, confirme que o OAuth client existente tem escopo `auth_keys`
    com permissão para `tag:ci` (ou a tag configurada). A conta precisa permitir
@@ -70,7 +93,7 @@ Tailscale não é alterada automaticamente pelo workflow.
 
 Depois use `start`, `stop` e `status` no mesmo workflow. Não há runner GitHub
 ocupado esperando sua sessão terminar. O workflow termina após controlar a VM.
-`provision` novamente interrompe a sessão atual para atualizar imagem/configuração.
+`provision` novamente interrompe a sessão atual para atualizar imagem/configuração, sem rebuild.
 `start` em VM já ligada não estende o prazo. Fechar o app SSH não desliga a VM.
 
 ## Desligamento, persistência e custos
@@ -108,9 +131,11 @@ SFTP pelo wrapper não é suportado; use rsync via SSH ou git para arquivos.
 A identidade bootstrap precisa conseguir habilitar APIs, administrar instâncias,
 firewall e roles IAM customizadas, criar service accounts, usá-las, alterar suas
 políticas e as dos dois secrets/Artifact Registry, além de publicar imagens.
-Essas permissões **não** são concedidas pelo código à própria identidade bootstrap;
-se faltarem, um administrador do projeto deve configurá-las conforme o bootstrap
-já existente. Nenhum papel Owner/Editor é atribuído ao terminal ou ao deployer.
+O Setup GCP reconcilia os três papéis adicionais de Compute/custom roles
+utilizando a permissão Project IAM Admin que a identidade bootstrap já possuía.
+As permissões administrativas iniciais (incluindo Project IAM Admin e gestão de
+WIF) continuam sendo configuradas por um administrador conforme o bootstrap
+existente. Nenhum papel Owner/Editor é atribuído ao terminal ou ao deployer.
 
 O provisionamento cria:
 
@@ -173,3 +198,4 @@ Referências: [Free Tier](https://docs.cloud.google.com/free/docs/free-cloud-fea
 [Tailscale Personal](https://tailscale.com/docs/account/manage-plans/free-plans-discounts),
 [OAuth](https://tailscale.com/docs/features/oauth-clients),
 [Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh).
+

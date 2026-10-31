@@ -79,6 +79,11 @@ if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
 else
   log "Bootstrap WIF condition already reconciled"
 fi
+# The privileged bootstrap provisions the terminal VM and its firewall/custom role.
+# Keep these privileges off the normal deployer and runtime identities.
+for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
+  change projects add-iam-policy-binding "$PROJECT" "--member=serviceAccount:photointel-bootstrap@$PROJECT.iam.gserviceaccount.com" "--role=$role" --condition=None --format=none
+done
 ensure "Docker repository $REPO" artifacts repositories describe "$REPO" "--location=$REGION" @@CREATE@@ artifacts repositories create "$REPO" "--location=$REGION" --repository-format=docker "--description=Private PhotoIntel images"
 format="$(gcp artifacts repositories describe "$REPO" "--location=$REGION" --format='value(format)')"
 [[ "$format" == DOCKER ]] || { echo "::error::Repository is not Docker: $format" >&2; exit 1; }
@@ -125,3 +130,4 @@ log "Completed: no resources deleted and no secret values created."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + WORKFLOW_COUNT))" >> "$GITHUB_STEP_SUMMARY"
 fi
+
