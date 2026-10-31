@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load production workflow configuration from one GCP_CONFIG_ENV-derived JSON.
+"""Prepare Cloudflare Worker frontend and SSH from a single GCP_CONFIG_ENV.
 
 The public configuration comes from infra/gcp/config.local.json. Credentials
 are always fetched on demand from Google Secret Manager using short-lived WIF.
@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
@@ -19,7 +20,10 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
-PAGES_PROJECT = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+WORKER_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+DOMAIN = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
+RESERVED_WORKERS = {"photointel-api-relay"}
+WORKER_COMPATIBILITY_DATE = "2026-10-30"
 RELEASE_SHA = re.compile(r"[a-f0-9]{40}")
 ACCOUNT_ID = re.compile(r"[A-Fa-f0-9]{32}")
 REFERENCE_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
@@ -45,29 +49,56 @@ def read_config() -> dict:
     return config
 
 
-def pages_environment(config: dict) -> dict[str, str]:
+def worker_environment(config: dict) -> dict[str, str]:
+    """Deploy web assets to an explicitly named Worker, never an API relay."""
     workflows = config.get("workflows") or {}
-    pages = workflows.get("pages") or {}
-    project = pages.get("project", "")
-    api = pages.get("api_base_url", "")
-    if not isinstance(project, str) or not PAGES_PROJECT.fullmatch(project):
-        raise WorkflowEnvironmentError("Configure WORKFLOWS__PAGES__PROJECT in GCP_CONFIG_ENV")
-    if not isinstance(api, str) or any(c in api for c in ("\r", "\n", "\x00")):
-        raise WorkflowEnvironmentError("Invalid Pages API origin")
-    if api:
-        parsed = urlsplit(api)
-        if (
-            parsed.scheme != "https" or not parsed.hostname or parsed.username or
-            parsed.password or parsed.query or parsed.fragment or
-            parsed.path not in ("", "/")
-        ):
-            raise WorkflowEnvironmentError("Pages API origin must be an HTTPS origin")
+    worker = workflows.get("worker") or {}
+    name = worker.get("name", "")
+    domain = worker.get("domain", "")
+    api = worker.get("api_base_url", "")
+    frontend = config.get("frontend_origin", "")
+    if not isinstance(name, str) or not WORKER_NAME.fullmatch(name):
+        raise WorkflowEnvironmentError(
+            "Configure WORKFLOWS__WORKER__NAME with your frontend Worker name"
+        )
+    if name in RESERVED_WORKERS:
+        raise WorkflowEnvironmentError(
+            "Refusing to overwrite photointel-api-relay: it is the API Worker. "
+            "Configure the separate frontend Worker name."
+        )
+    if not isinstance(domain, str) or not DOMAIN.fullmatch(domain) or "." not in domain:
+        raise WorkflowEnvironmentError(
+            "Configure WORKFLOWS__WORKER__DOMAIN with the frontend custom domain"
+        )
+    if any(c in domain for c in ("\r", "\n", "\x00")):
+        raise WorkflowEnvironmentError("Invalid Worker custom domain")
+    if frontend != f"https://{domain}":
+        raise WorkflowEnvironmentError(
+            "Worker custom domain must match FRONTEND_ORIGIN"
+        )
+    if not isinstance(api, str):
+        raise WorkflowEnvironmentError("Invalid Worker API base URL")
+    parsed = urlsplit(api)
+    if (
+        parsed.scheme != "https" or not parsed.hostname
+        or parsed.username or parsed.password or parsed.query or parsed.fragment
+        or parsed.path not in ("", "/") or parsed.port
+    ):
+        raise WorkflowEnvironmentError(
+            "WORKFLOWS__WORKER__API_BASE_URL must be a standalone HTTPS API origin"
+        )
+    if parsed.hostname == domain:
+        raise WorkflowEnvironmentError(
+            "A static frontend Worker cannot also serve /v1 API routes. "
+            "Point WORKFLOWS__WORKER__API_BASE_URL to your API relay hostname."
+        )
     sha = os.environ.get("GITHUB_SHA", "")
     if not RELEASE_SHA.fullmatch(sha):
         raise WorkflowEnvironmentError("Invalid GitHub release commit SHA")
     return {
         "VITE_API_BASE_URL": api.rstrip("/"),
-        "PAGES_PROJECT": project,
+        "WORKER_NAME": name,
+        "WORKER_DOMAIN": domain,
         "VITE_RELEASE_ID": sha,
     }
 
@@ -152,26 +183,57 @@ def secret_value(config: dict, key: str) -> str:
     return value
 
 
-def pages_deploy(config: dict) -> None:
-    public = pages_environment(config)
+def worker_deploy(config: dict) -> None:
+    public = worker_environment(config)
     token = secret_value(config, "CLOUDFLARE_API_TOKEN")
     account = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
     if not token.strip() or not ACCOUNT_ID.fullmatch(account):
         raise WorkflowEnvironmentError("Cloudflare credentials are invalid")
+    config_dir = ROOT / "apps/web"
+    dist = config_dir / "dist"
+    if not (dist / "index.html").is_file():
+        raise WorkflowEnvironmentError("Missing frontend build: apps/web/dist/index.html")
+    # The frontend is a separate asset-only Worker; never replace the API relay.
+    wrangler = {
+        "name": public["WORKER_NAME"],
+        "compatibility_date": WORKER_COMPATIBILITY_DATE,
+        "workers_dev": False,
+        "preview_urls": False,
+        "assets": {
+            "directory": "./dist",
+            "not_found_handling": "single-page-application",
+        },
+        "routes": [
+            {"pattern": public["WORKER_DOMAIN"], "custom_domain": True},
+        ],
+    }
     env = os.environ.copy()
     env["CLOUDFLARE_API_TOKEN"] = token
     env["CLOUDFLARE_ACCOUNT_ID"] = account
-    env["PAGES_PROJECT"] = public["PAGES_PROJECT"]
-    # Credentials exist only in the Wrangler subprocess, never GITHUB_ENV/output.
-    result = subprocess.run(
-        [
-            "npx", "--yes", "wrangler@4", "pages", "deploy",
-            "apps/web/dist", "--project-name", public["PAGES_PROJECT"],
-        ],
-        env=env, check=False,
-    )
-    if result.returncode:
-        raise WorkflowEnvironmentError("Wrangler Pages deploy failed; inspect its logs")
+    env["WRANGLER_SEND_METRICS"] = "false"
+    # Do not persist tokens to JSON, GitHub outputs or GITHUB_ENV.
+    # Keep this file private and remove it even when Wrangler fails.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix=".wrangler-deploy-",
+            suffix=".json", dir=config_dir, delete=False,
+        ) as stream:
+            temporary = Path(stream.name)
+            temporary.chmod(0o600)
+            json.dump(wrangler, stream, indent=2)
+            stream.write("\n")
+        result = subprocess.run(
+            ["npx", "--yes", "wrangler@4", "deploy", "--config", str(temporary)],
+            env=env, cwd=config_dir, check=False,
+        )
+        if result.returncode:
+            raise WorkflowEnvironmentError(
+                "Cloudflare Worker deploy failed; inspect Wrangler logs"
+            )
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def ssh_environment(config: dict) -> None:
@@ -190,14 +252,13 @@ def ssh_environment(config: dict) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=("pages", "pages-deploy", "ssh"))
+    parser.add_argument("target", choices=("worker", "worker-deploy", "ssh"))
     opts = parser.parse_args()
     try:
         config = read_config()
-        if opts.target == "pages":
-            public = pages_environment(config)
-            # Fail before npm install/build when credentials or IAM are missing.
-            # Reads remain private to this short-lived Python process.
+        if opts.target == "worker":
+            public = worker_environment(config)
+            # Check Secret Manager before npm ci/build to fail quickly.
             token = secret_value(config, "CLOUDFLARE_API_TOKEN")
             account_id = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
             if not token.strip() or not ACCOUNT_ID.fullmatch(account_id):
@@ -205,9 +266,9 @@ def main() -> int:
                     "Invalid Cloudflare token or account ID in Google Secret Manager"
                 )
             append_public_env(public)
-            print("✅ Pages public config and Secret Manager access verified.")
-        elif opts.target == "pages-deploy":
-            pages_deploy(config)
+            print("✅ Worker config and Secret Manager access verified.")
+        elif opts.target == "worker-deploy":
+            worker_deploy(config)
         else:
             ssh_environment(config)
             print("✅ SSH OAuth credentials retrieved from GCP Secret Manager.")
