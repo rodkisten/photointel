@@ -84,9 +84,9 @@ class Gcloud:
                 hint = ' Run Setup GCP apply: bootstrap needs roles/compute.securityAdmin.'
             if args[:2] == ('artifacts', 'docker') and denied:
                 hint = (
-                    ' Run Setup GCP apply to grant photointel-bootstrap '
-                    'roles/artifactregistry.writer on the photointel repository '
-                    '(needed to describe image digests and assign the ready tag).'
+                    ' Artifact Registry metadata APIs may require additional '
+                    'Container Analysis permissions; Terminal build/provision '
+                    'uses Docker operations instead.'
                 )
             raise RuntimeError('gcloud failed: ' + ' '.join(args[:4]) + ': ' + reason +
                                (' (' + ', '.join(details) + ')' if details else '') + hint)
@@ -98,53 +98,142 @@ def image_base(c):
     return c['image'].rsplit(':', 1)[0]
 
 
-def pinned_image(base, description):
-    digest = description.get('image_summary', {}).get('digest', '')
-    if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
-        raise ValueError('Artifact Registry returned an invalid image digest')
-    return base + '@' + digest
+def configure_registry(c):
+    """Use GitHub WIF's existing Docker credential helper, never static keys."""
+    registry = image_base(c).split('/', 1)[0]
+    subprocess.run(
+        ['gcloud', 'auth', 'configure-docker', registry, '--quiet'],
+        check=True,
+    )
+
+
+def pull_image(image, *, optional=False):
+    """Query the Docker registry directly instead of gcloud's analysis API.
+
+    Suppress the provider's raw stderr because WIF and registry errors may
+    include authentication context. Treat only confirmed missing manifests
+    as absent. IAM and network failures must never trigger a rebuild.
+    """
+    result = subprocess.run(
+        ['docker', 'pull', image],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode == 0:
+        return True
+    stderr = result.stderr.lower()
+    if (
+        optional
+        and any(marker in stderr for marker in (
+            'manifest unknown', 'manifest not found', 'name unknown',
+            'not_found', '404 not found', '404 page not found',
+        ))
+        and not any(marker in stderr for marker in (
+            'denied', 'unauthorized', 'unauthenticated', 'forbidden', '403',
+            'permission',
+        ))
+    ):
+        return False
+    if any(marker in stderr for marker in (
+        'unauthorized', 'unauthenticated', 'denied', 'forbidden',
+        'permission', '403', 'authentication required',
+    )):
+        raise RuntimeError(
+            'Docker registry denied image access. Check the active '
+            'GitHub WIF bootstrap identity and repository-scoped '
+            'Artifact Registry writer role, not extra metadata API roles.'
+        )
+    raise RuntimeError(
+        'Docker registry could not retrieve the image. '
+        'Check Artifact Registry availability and network; '
+        'raw provider errors are intentionally not printed.'
+    )
+
+
+def image_digest(image, base):
+    """Return an immutable ref only if Docker has verified a matching digest."""
+    result = subprocess.run(
+        ['docker', 'image', 'inspect', image,
+         '--format', '{{json .RepoDigests}}'],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError('Cannot inspect locally pulled Docker image')
+    try:
+        references = json.loads(result.stdout)
+    except (TypeError, ValueError):
+        raise RuntimeError('Docker returned an invalid digest list') from None
+    if not isinstance(references, list):
+        raise RuntimeError('Docker returned an invalid digest list')
+    matches = [
+        ref for ref in references
+        if isinstance(ref, str)
+        and re.fullmatch(re.escape(base) + r'@sha256:[a-f0-9]{64}', ref)
+    ]
+    if len(set(matches)) != 1:
+        raise RuntimeError(
+            'Docker image digest cannot be verified uniquely for this registry'
+        )
+    return matches[0]
 
 
 def resolve_image(c, g):
-    """Reuse published ready image; migrate existing SHA images without Docker builds."""
-    base = image_base(c)
-    info = g.run('artifacts', 'docker', 'images', 'describe', c['image'], optional=True)
-    if info is not None:
-        return pinned_image(base, info)
-    versions = g.run('artifacts', 'docker', 'images', 'list', base,
-                     '--include-tags', '--sort-by=~createTime', '--limit=1')
-    if not versions:
-        raise ValueError('No published terminal image. Run GCP Terminal action=build once; provision never builds Docker.')
-    digest = versions[0].get('version', '').rsplit('/', 1)[-1]
-    if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
-        raise ValueError('Artifact Registry returned an invalid existing image version')
-    print('Reusing previously published terminal image (no Docker build).')
-    return base + '@' + digest
+    """Pin the existing :ready tag via Docker; never call Container Analysis."""
+    _ = g  # Preserve the interface used by provision.
+    configure_registry(c)
+    if not pull_image(c['image'], optional=True):
+        raise ValueError(
+            'No published terminal :ready image. '
+            'Run GCP Terminal action=build once; provision never builds Docker.'
+        )
+    return image_digest(c['image'], image_base(c))
 
 
 def build_image(c, g):
-    """Explicit build command; content tag ignores unrelated repository commits."""
+    """Build only when the Dockerfile fingerprint tag is genuinely absent."""
+    _ = g  # Artifact Registry metadata APIs are not required for Docker push.
     directory = ROOT / 'infra/terminal'
     fingerprint = hashlib.sha256((directory / 'Dockerfile').read_bytes()).hexdigest()
     base = image_base(c)
-    image = base + ':cli-' + fingerprint
-    existing = g.run('artifacts', 'docker', 'images', 'describe', image, optional=True)
-    if existing is None:
-        registry = base.split('/', 1)[0]
-        subprocess.run(['gcloud', 'auth', 'configure-docker', registry, '--quiet'], check=True)
-        subprocess.run(['docker', 'build', '--pull', '-t', image, str(directory)], check=True)
-        check = ('test "$(id -un)" = rod; test "$(id -u)" = 1000; '
-                 'test "$(id -g)" = 1000; test -w /home/rod; '
-                 'for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; '
-                 'do command -v "$tool" || exit 1; done; gcloud version')
-        subprocess.run(['docker', 'run', '--rm', '--entrypoint', 'bash', image, '-ec', check], check=True)
-        subprocess.run(['docker', 'push', image], check=True)
-        existing = g.run('artifacts', 'docker', 'images', 'describe', image)
+    version_tag = base + ':cli-' + fingerprint
+    configure_registry(c)
+
+    if not pull_image(version_tag, optional=True):
+        subprocess.run(
+            ['docker', 'build', '--pull', '-t', version_tag, str(directory)],
+            check=True,
+        )
+        print('Built new content-addressed Terminal image.')
     else:
-        print('CLI Dockerfile unchanged: reusing published content-addressed image.')
-    pinned = pinned_image(base, existing)
-    g.run('artifacts', 'docker', 'tags', 'add', pinned, c['image'])
-    print('Terminal image ready: ' + pinned)
+        print('CLI Dockerfile unchanged: reusing existing registry image.')
+
+    # Validate even cached images before promoting them to the :ready tag.
+    check = ('test "$(id -un)" = rod; test "$(id -u)" = 1000; '
+             'test "$(id -g)" = 1000; test -w /home/rod; '
+             'for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; '
+             'do command -v "$tool" || exit 1; done; gcloud version')
+    subprocess.run(
+        ['docker', 'run', '--rm', '--entrypoint', 'bash',
+         version_tag, '-ec', check],
+        check=True,
+    )
+
+    # Tag locally and push through the same Docker auth path that already works.
+    # The fingerprint tag is immutable in normal operation; :ready is the
+    # explicitly designated mutable pointer for VM provisioning.
+    subprocess.run(['docker', 'tag', version_tag, c['image']], check=True)
+    subprocess.run(['docker', 'push', version_tag], check=True)
+    subprocess.run(['docker', 'push', c['image']], check=True)
+
+    # Verify the remote ready tag and pin the VM to a digest, not a mutable tag.
+    pull_image(version_tag)
+    expected = image_digest(version_tag, base)
+    pull_image(c['image'])
+    actual = image_digest(c['image'], base)
+    if actual != expected:
+        raise RuntimeError(
+            'Uploaded :ready image digest does not match the validated build'
+        )
+    print('Terminal image ready: ' + actual)
 
 
 def provision(c, g, deployer):
