@@ -140,6 +140,20 @@ class TerminalTests(unittest.TestCase):
                 terminal.Gcloud('photointel').run('compute', 'firewall-rules', 'describe', 'x', optional=True)
         self.assertNotIn('secret-token-value', str(caught.exception))
 
+    def test_registry_image_permission_failure_has_safe_fix_instructions(self):
+        import subprocess
+        raw_error = 'PERMISSION_DENIED iam.gserviceaccount.com private-secret=NEVER_PRINT'
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 1, '', raw_error)):
+            with self.assertRaisesRegex(RuntimeError, 'roles/artifactregistry.writer') as caught:
+                terminal.Gcloud('photointel').run(
+                    'artifacts', 'docker', 'images', 'describe',
+                    'us-central1-docker.pkg.dev/photointel/photointel/terminal:ready',
+                    optional=True,
+                )
+        self.assertIn('Run Setup GCP apply', str(caught.exception))
+        self.assertIn('photointel-bootstrap', str(caught.exception))
+        self.assertNotIn('NEVER_PRINT', str(caught.exception))
+
     def test_resource_does_not_exist_is_optional(self):
         import subprocess
         with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 1, '', 'resource does not exist')):
