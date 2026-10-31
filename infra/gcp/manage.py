@@ -202,21 +202,29 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
         ):
             raise ConfigurationError("Invalid workflow secret version or name")
     workflows = config.get("workflows", {})
-    if not isinstance(workflows, dict) or set(workflows) - {"pages"}:
+    # Old Pages entries remain tolerated during migration, but never deployed.
+    if not isinstance(workflows, dict) or set(workflows) - {"worker", "pages"}:
         raise ConfigurationError("Invalid workflows configuration")
-    pages = workflows.get("pages", {})
+    worker = workflows.get("worker", {})
     if (
-        not isinstance(pages, dict)
-        or set(pages) - {"project", "api_base_url"}
-        or any(not isinstance(value, str) for value in pages.values())
+        not isinstance(worker, dict)
+        or set(worker) - {"name", "domain", "api_base_url"}
+        or any(not isinstance(value, str) for value in worker.values())
     ):
-        raise ConfigurationError("Invalid Pages workflow configuration")
-    if "project" in pages and not re.fullmatch(
-        r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", pages["project"]
+        raise ConfigurationError("Invalid Worker workflow configuration")
+    if worker.get("name") and not re.fullmatch(
+        r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", worker["name"]
     ):
-        raise ConfigurationError("Invalid Cloudflare Pages project")
-    if pages.get("api_base_url"):
-        https_origin(pages["api_base_url"])
+        raise ConfigurationError("Invalid Cloudflare Worker name")
+    if worker.get("name") == "photointel-api-relay":
+        raise ConfigurationError("Frontend Worker cannot replace API relay")
+    if worker.get("domain") and (
+        not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", worker["domain"])
+        or "." not in worker["domain"]
+    ):
+        raise ConfigurationError("Invalid Worker custom domain")
+    if worker.get("api_base_url"):
+        https_origin(worker["api_base_url"])
     extra = config.get("extra_environment", {})
     if not isinstance(extra, dict) or any(
         not re.fullmatch(r"[A-Z][A-Z0-9_]{0,99}", key)
