@@ -115,6 +115,14 @@ done
 for key in "${!WORKFLOW_NAMES[@]}"; do
   change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
 done
+# The terminal bootstrap preflight checks OAuth version existence/state without
+# ever reading credential payloads. Metadata-only viewer is scoped to these
+# two secret containers and is distinct from secretAccessor.
+for key in TS_OAUTH_CLIENT_ID TS_OAUTH_SECRET; do
+  if [[ -n "${WORKFLOW_NAMES[$key]:-}" ]]; then
+    change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$BOOTSTRAP" --role=roles/secretmanager.viewer --condition=None --format=none
+  fi
+done
 change storage buckets add-iam-policy-binding "$BUCKET" "--member=$BUILDER" --role=roles/storage.objectViewer --condition=None --format=none
 change artifacts repositories add-iam-policy-binding "$REPO" "--location=$REGION" "--member=$BUILDER" --role=roles/artifactregistry.writer --condition=None --format=none
 # Docker push can succeed while image describe/tagging fails without registry read.
