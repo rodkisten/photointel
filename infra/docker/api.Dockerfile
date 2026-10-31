@@ -31,7 +31,7 @@ RUN /app/.venv/bin/python -c "from photointel.main import app; assert app.title 
 FROM python:3.12-slim-bookworm AS runtime
 RUN set -eu; \
     apt-get update; \
-    apt-get install -y --no-install-recommends libglib2.0-0 libgomp1; \
+    apt-get install -y --no-install-recommends ca-certificates libglib2.0-0 libgomp1; \
     rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 photointel && \
     useradd --uid 10001 --gid 10001 --no-create-home photointel
