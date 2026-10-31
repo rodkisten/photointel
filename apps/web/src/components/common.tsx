@@ -19,13 +19,13 @@ export function Status({ value }: { value: unknown }) {
 }
 export function ErrorState({ error, retry }: { error: Error; retry?: () => void }) {
   return <div className="error-state" role="alert"><AlertCircle size={20} />
-    <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p> <p>{error.message}</p>
+    <div><strong>Não foi possível concluir</strong><p>{error.message}</p>
       {error instanceof ApiError && <small>{error.code}
         {error.correlationId && ` · ID ${error.correlationId}`}</small>}</div>
     {retry && <Button variant="outline" onClick={retry}><RefreshCw size={15} />
       Tentar novamente</Button>}
     {error instanceof ApiError && [401, 403].includes(error.status) &&
-      <Button onClick={() => window.location.reload()}>Entrar novamente</Button>}
+      <Button onClick={() => window.location.assign('/auth/login')}>Entrar novamente</Button>}
   </div>;
 }
 export function Empty({ title, description, action }: {
@@ -72,3 +72,4 @@ export function PrivateImage({ src, alt, className, onClick, priority = false }:
     decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)}
     onClick={onClick} draggable={false} />;
 }
+

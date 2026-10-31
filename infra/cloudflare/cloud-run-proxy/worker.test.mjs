@@ -183,3 +183,26 @@ test('explicit assertion takes precedence over cookie and upstream JWT rejection
   assert.ok(!JSON.stringify(log.mock.calls).includes('SECRET'));
   assert.ok(!JSON.stringify(log.mock.calls).includes('header-jwt'));
 });
+
+
+test('login navigation targets configured Access application and ignores caller redirects', async () => {
+  const configured = { ...env, ACCESS_TEAM_DOMAIN: 'photointel.cloudflareaccess.com', ACCESS_AUDIENCE: 'a'.repeat(64) };
+  const response = await handle(new Request('https://fotos.example.com/auth/login?redirect_url=https://evil.invalid'), configured);
+  assert.equal(response.status, 302);
+  const login = new URL(response.headers.get('location'));
+  assert.equal(login.origin, 'https://photointel.cloudflareaccess.com');
+  assert.equal(login.pathname, '/cdn-cgi/access/login/fotos.example.com');
+  assert.equal(login.searchParams.get('kid'), 'a'.repeat(64));
+  assert.equal(login.searchParams.get('redirect_url'), 'https://fotos.example.com/');
+  assert.equal(response.headers.get('cache-control'), 'private, no-store');
+});
+
+test('missing login config cannot silently return SPA or redirect to an arbitrary domain', async t => {
+  t.mock.method(console, 'error', () => {});
+  for (const team of [undefined, 'evil.example.org', 'photointel.cloudflareaccess.com@evil.invalid']) {
+    const response = await handle(new Request('https://fotos.example.com/auth/login'), {
+      ...env, ACCESS_TEAM_DOMAIN: team, ACCESS_AUDIENCE: 'a'.repeat(64),
+    });
+    assert.equal(response.status, 503);
+  }
+});

@@ -24,6 +24,8 @@ def example_config():
     return {
         "project_id": "photointel",
         "region": "us-central1",
+        "access_team_domain": "photointel.cloudflareaccess.com",
+        "access_audience": "a" * 64,
         "frontend_origin": "https://photos.example.org",
         "api_origin": "https://photos.example.org",
         "workflows": {"worker": {
@@ -178,6 +180,8 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertEqual(cfg["vars"], {
                 "CLOUD_RUN_ORIGIN": "https://photointel-api-abc-uc.a.run.app",
                 "FRONTEND_ORIGIN": "https://photos.example.org",
+                "ACCESS_TEAM_DOMAIN": "photointel.cloudflareaccess.com",
+                "ACCESS_AUDIENCE": "a" * 64,
             })
             self.assertEqual(cfg["assets"], {
                 "directory": "../../../apps/web/dist",
@@ -244,4 +248,5 @@ class WorkflowEnvTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -56,6 +56,25 @@ export async function handle(request, env, fetchOrigin = fetch) {
     return failure(503, 'API routing not configured');
   }
   const incoming = new URL(request.url);
+  if (incoming.pathname === '/auth/login') {
+    if (incoming.origin !== config.frontend || request.method !== 'GET') {
+      return failure(404, 'Route unavailable');
+    }
+    if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(env.ACCESS_TEAM_DOMAIN ?? '') ||
+        !/^[A-Za-z0-9_-]{1,256}$/.test(env.ACCESS_AUDIENCE ?? '')) {
+      important('error', 'access_login_config_missing', 'authentication', 503);
+      return failure(503, 'Cloudflare Access login not configured');
+    }
+    const login = new URL('https://' + env.ACCESS_TEAM_DOMAIN);
+    login.pathname = '/cdn-cgi/access/login/' + new URL(config.frontend).hostname;
+    login.searchParams.set('kid', env.ACCESS_AUDIENCE);
+    login.searchParams.set('redirect_url', config.frontend + '/');
+    return new Response(null, { status: 302, headers: {
+      Location: login.href, 'Cache-Control': 'private, no-store',
+      'Referrer-Policy': 'no-referrer',
+    } });
+  }
+
   // One Worker, two services: React static assets on the frontend hostname
   // and /v1/* requests proxied to the existing Cloud Run Python API.
   // An existing api.* custom domain may remain attached for compatibility.
@@ -179,5 +198,6 @@ export async function handle(request, env, fetchOrigin = fetch) {
 export default {
   fetch(request, env) { return handle(request, env); },
 };
+
 
 

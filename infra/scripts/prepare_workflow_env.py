@@ -230,6 +230,8 @@ def worker_deploy(config: dict) -> None:
         "vars": {
             "CLOUD_RUN_ORIGIN": discover_cloud_run_origin(config),
             "FRONTEND_ORIGIN": config["frontend_origin"],
+            "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
+            "ACCESS_AUDIENCE": config["access_audience"],
         },
         "assets": {
             "directory": "../../../apps/web/dist",
@@ -327,4 +329,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

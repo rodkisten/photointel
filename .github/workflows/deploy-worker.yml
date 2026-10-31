@@ -1,6 +1,9 @@
 name: "🌐 Worker · Front + API"
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-worker.yml']
 permissions: {contents: read}
 jobs:
   deploy:
@@ -39,6 +42,12 @@ jobs:
         env:
           CONFIRM_PROJECT: photointel
         run: python3 infra/scripts/prepare_workflow_env.py worker
+
+      - name: "🔎 Diagnose Access domain and application audience"
+        continue-on-error: true
+        env:
+          CONFIRM_PROJECT: photointel
+        run: python3 infra/scripts/diagnose_access.py
 
       - name: "🧰 Config"
         id: notify_observed_002
@@ -106,4 +115,5 @@ jobs:
           outcome: ${{ job.status }}
           completed: "1"
           total: "1"
+
 
