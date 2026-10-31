@@ -141,7 +141,7 @@ class LauncherTests(unittest.TestCase):
                 self.module.Path, "home", return_value=Path(temporary)), patch.object(
                 self.module.urllib.request, "urlopen", return_value=io.BytesIO(b"INVALID")), patch.object(
                 self.module.tarfile, "open") as extract, patch.object(
-                self.module.os, "access", return_value=False), patch.object(
+                self.module, "_known_sdk_binaries", return_value=()), patch.object(
                 self.module.subprocess, "run") as execute:
             with self.assertRaisesRegex(self.module.SetupError, "Checksum"):
                 self.module.ensure_gcloud()
