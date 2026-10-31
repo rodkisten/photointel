@@ -1,6 +1,12 @@
 name: "🧰 Bootstrap Check"
 on:
   workflow_dispatch:
+    inputs:
+      upload_artifacts:
+        description: "Upload optional diagnostic files (requires available GitHub storage)"
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [validation/bootstrap]
 permissions:
@@ -76,13 +82,14 @@ jobs:
           sha256sum reports/tools/ruff > reports/tools/ruff.sha256
       - name: "📦 Lint"
         id: notify_observed_006
-        if: steps.python_install.outcome == 'success'
+        if: steps.python_install.outcome == 'success' && inputs.upload_artifacts == true
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: validation-tools
           path: reports/tools/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
       - name: "⚙ ️  Resolve missing or place"
         id: node_install
         continue-on-error: true
@@ -310,12 +317,13 @@ jobs:
           PY
       - name: "📦 Artefatos"
         id: notify_observed_008
-        if: always()
+        if: always() && inputs.upload_artifacts == true
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: generated-locks-contracts
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
           path: |
             uv.lock
             apps/web/package-lock.json
@@ -323,16 +331,35 @@ jobs:
             apps/web/src/api/schema.d.ts
       - name: "📦 Validação"
         id: notify_observed_009
-        if: always()
+        if: always() && inputs.upload_artifacts == true
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: validation-evidence
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
           path: |
             reports/
             apps/web/test-results/
             apps/web/playwright-report/
+      - name: "📦 Artifact upload summary"
+        if: always()
+        env:
+          UPLOAD_REQUESTED: ${{ inputs.upload_artifacts }}
+          TOOLS_UPLOAD: ${{ steps.notify_observed_006.outcome }}
+          CONTRACTS_UPLOAD: ${{ steps.notify_observed_008.outcome }}
+          EVIDENCE_UPLOAD: ${{ steps.notify_observed_009.outcome }}
+        run: |
+          {
+            echo '### Optional artifact uploads'
+            echo
+            echo "Requested: ${UPLOAD_REQUESTED:-false}; retention: 3 days."
+            echo "Tools: $TOOLS_UPLOAD; contracts: $CONTRACTS_UPLOAD; evidence: $EVIDENCE_UPLOAD."
+            echo 'Validation results remain in this run summary and logs.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$TOOLS_UPLOAD $CONTRACTS_UPLOAD $EVIDENCE_UPLOAD" == *failure* ]]; then
+            echo '::warning::Optional artifact upload failed. Check GitHub Actions storage quota; tests still determine validation status.'
+          fi
       - name: "🧪 Testes"
         id: notify_observed_010
         if: always()

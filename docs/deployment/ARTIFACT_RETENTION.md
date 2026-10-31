@@ -8,6 +8,7 @@ A palavra *artifact* identifica coisas distintas neste projeto. Não confunda re
 |---|---|---|
 | GitHub CI (`.github/workflows/ci.yml`) | Unit/integration/browser reports | Só falha ou execução manual; 3 dias |
 | GCP offline validation (`.github/workflows/gcp-validation.yml`) | Planos e renderizações | Só falha ou execução manual; 3 dias; mudanças apenas de documentação não disparam o workflow |
+| Bootstrap Check (`bootstrap-validation.yml`) | Ferramentas, contratos e evidências | Somente execução manual com `upload_artifacts=true`; 3 dias; upload opcional não bloqueia os testes |
 | Release provenance (`.github/workflows/release-manifest.yml`) | Manifesto de release | Manual; 90 dias, intencionalmente mais longo para auditoria |
 | Cloud Build staging GCS | Upload `source/*.tgz` | Arquivo de política 7 dias, **ainda não aplicada na conta** |
 | Artifact Registry Docker `photointel/api` | Nova imagem por SHA distinto | Política de 90 dias + proteção das 20 versões mais recentes e tags `retain-*`, **somente arquivo de modelo, dry-run primeiro** |
@@ -29,6 +30,25 @@ gh api "repos/rodkisten/photointel/actions/artifacts?per_page=100" \
 ```
 
 Não criamos uma rotina que apaga indiscriminadamente artifacts de workflows antigos.
+
+## Quando a cota GitHub Actions está cheia
+
+O erro `Artifact storage quota has been hit` é do armazenamento GitHub Actions,
+não do disco da VM nem do Artifact Registry. O aviso de depreciação de
+`punycode` não é a causa dessa falha.
+
+No **Bootstrap Check**, `upload_artifacts` começa desativado. Os testes,
+relatórios locais, logs e resumo da execução continuam funcionando. Para baixar
+arquivos de diagnóstico, execute manualmente com essa opção ativada quando houver
+cota disponível. Os três uploads têm retenção de 3 dias e são best-effort: sua
+falha aparece no resumo/aviso e não substitui o resultado dos testes obrigatórios.
+
+Isso não libera espaço já ocupado nem muda a retenção dos artifacts existentes.
+Para liberar espaço, remova manualmente artifacts antigos após conferir seu
+conteúdo. A mensagem do GitHub informa que o uso é recalculado a cada **6–12 horas**,
+portanto um upload pode continuar bloqueado após a remoção. A cota pode ser
+compartilhada com outros repositórios da mesma conta. Nenhuma exclusão é executada
+por esta correção.
 
 ## Artifact Registry: proteger imagens de produção antes da limpeza
 
