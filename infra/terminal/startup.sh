@@ -111,7 +111,10 @@ echo 'terminal-startup: tailscale network configured'
 terminal_stage=docker-image
 image="$(jq -er .image <<< "$cfg")"
 registry="${image%%/*}"
+echo 'terminal-startup: registry authentication starting'
 printf '%s' "$access_token" | docker --config /run/terminal/docker login -u oauth2accesstoken --password-stdin "https://$registry"
+echo 'terminal-startup: registry authenticated'
+echo 'terminal-startup: docker image pull starting'
 docker --config /run/terminal/docker pull "$image"
 echo 'terminal-startup: docker image pulled'
 install -d -o 1000 -g 1000 -m 0700 /var/lib/terminal/home
