@@ -212,11 +212,12 @@ def build_image(c, g):
     # Validate even cached images before promoting them to the :ready tag.
     check = ('test "$(id -un)" = rod; test "$(id -u)" = 1000; '
              'test "$(id -g)" = 1000; test -w /home/rod; '
-             'for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; '
-             'do command -v "$tool" || exit 1; done; gcloud version')
+             'for tool in gcloud zsh jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; '
+             'do command -v "$tool" || exit 1; done; gcloud version; ' 
+             'zsh -lc "command -v gcloud && gcloud version"')
     subprocess.run(
         ['docker', 'run', '--rm', '--entrypoint', 'bash',
-         version_tag, '-ec', check],
+         version_tag, '-lc', check],
         check=True,
     )
 
