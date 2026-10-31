@@ -1,5 +1,5 @@
 name: "☁️ Cloudflare Setup"
-# Preserve orphaned legacy device credentials and configure frontend Access.
+# Configure frontend Access; retain apex and orphaned Bridge applications.
 on:
   push:
     branches: [main]
