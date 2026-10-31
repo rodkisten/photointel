@@ -328,6 +328,8 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
         "DATABASE_MAX_OVERFLOW": "0",
         "DATABASE_POOL_MODE": "transaction",
         "DATABASE_REQUIRE_TLS": "true",
+        # psycopg-binary bundles libpq/OpenSSL; use the Debian CA bundle explicitly.
+        "DATABASE_TLS_CA_FILE": "/etc/ssl/certs/ca-certificates.crt",
         "DATABASE_PROFILE": config["database_profile"],
         "CATALOG_ASSET_LIMIT": str(config["database_catalog_limit"]),
         "ICLOUD_SESSION_BACKEND": "encrypted_object",
