@@ -10,7 +10,7 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 | [🧰 Bootstrap de dependências](../../.github/workflows/bootstrap-validation.yml) | **Manual** ou `validation/bootstrap` | Resolve locks/contratos e valida o projeto quando precisa recuperar dependências; deixou de duplicar CI a cada push |
 | [🐳 Compose](../../.github/workflows/compose-validation.yml) | Manual ou `validation/compose` | Verifica `make setup`, `make dev` e persistência com banco/MinIO reais |
 | [🏗️ Arquiteturas](../../.github/workflows/container-architectures.yml) | Manual ou `validation/container-architectures` | Testa AMD64/ARM64 e bibliotecas nativas sem enviar imagens |
-| [🌐 Cloudflare Worker Web](../../.github/workflows/deploy-worker.yml) | Manual, `production` | Publica a PWA; independente do Cloud Run API |
+| [🌐 Worker único: frontend + API](../../.github/workflows/deploy-worker.yml) | Manual, `production` | Publica a PWA e atualiza o relay /v1 no MESMO Worker; descobre a URL do Cloud Run via GCP WIF |
 | [🧱 Bootstrap GCP](../../.github/workflows/gcp-bootstrap.yml) | Manual `plan` / `apply`, `production` | Provisiona IAM, SAs, bucket, secrets e Artifact Registry via gcloud, com WIF administrativo separado |
 | [🚀 Deploy GCP](../../.github/workflows/gcp-deploy.yml) | Manual, `main`, `production` | Dropdown `all` (build/reuso → Jobs → API → Scheduler pausado) ou opções individuais, incluindo `migrate` (plan/apply protegido); exige confirmação de migração do banco para publicar API; usa identidade Deployer limitada |
 | [☁️ Validação GCP](../../.github/workflows/gcp-validation.yml) | Push/PR em infra GCP e action compartilhada, manual | Testes de CLI/bootstrap, config, Worker e política ZIP sem GCP real |
@@ -42,7 +42,7 @@ O GitHub token usado para obter o identificador numérico do job tem permissão 
 
 **Deploy, Setup GCP, Migrate Neon, Cloudflare Workers e SSH interativo** usam uma única Environment Variable do GitHub: `vars.GCP_CONFIG_ENV`. Ela aceita JSON (preferido) ou dotenv legado, com WIF, URLs, parâmetros públicos e referências numeradas do Secret Manager. Nenhuma credencial Cloudflare ou Tailscale precisa permanecer em GitHub Secrets.
 
-O bootstrap recebe do mesmo JSON os IDs do **WIF administrativo separado**, enquanto Worker de frontend usa somente os valores públicos no build e busca o token Cloudflare durante o deploy. O SSH restrito à `main` e ao Environment `production` lê o OAuth Tailscale via GCP e mascara os outputs para sua action.
+O bootstrap recebe do mesmo JSON os IDs do **WIF administrativo separado**, enquanto o Worker unificado publica frontend e relay, usando somente dados públicos no build e busca o token Cloudflare durante o deploy. O SSH restrito à `main` e ao Environment `production` lê o OAuth Tailscale via GCP e mascara os outputs para sua action.
 
 As únicas exceções são os Secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`, necessários para notificações antes da autenticação Google, e o token efêmero `GITHUB_TOKEN` do próprio GitHub. Testes isolados/PRs não recebem Secrets de produção.
 
