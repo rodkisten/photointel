@@ -173,11 +173,16 @@ def reconcile_app(api, apps, name, hosts, audience, policies, apply, idps=None):
         references = []
         for target in policies:
             matches = [p for p in current_policies if p.get('name') == target['name']]
+            preserve_service = False
+            if not matches and target.get('decision') == 'non_identity':
+                matches = [p for p in current_policies if p.get('decision') == 'non_identity'
+                           and all(p.get(k, []) == target[k] for k in ('include', 'exclude', 'require'))]
+                preserve_service = bool(matches)
             if len(matches) > 1:
                 raise SetupError('Duplicate managed policy names on ' + name)
             if matches:
                 current = matches[0]
-                if any(current.get(key, [] if isinstance(value, list) else None) != value
+                if not preserve_service and any(current.get(key, [] if isinstance(value, list) else None) != value
                        for key, value in target.items()):
                     current = api.write('PUT', api.base + '/access/apps/' + existing['id'] + '/policies/' + current['id'], target)
             else:
