@@ -19,9 +19,11 @@ export function Status({ value }: { value: unknown }) {
 }
 export function ErrorState({ error, retry }: { error: Error; retry?: () => void }) {
   return <div className="error-state" role="alert"><AlertCircle size={20} />
-    <div><strong>Não foi possível concluir</strong><p>{error.message}</p>
-      {error instanceof ApiError && <small>{error.code}
-        {error.correlationId && ` · ID ${error.correlationId}`}</small>}</div>
+    <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p>
+      {error instanceof ApiError && <details><summary>Detalhes do erro</summary>
+        <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {JSON.stringify(error, null, 2)}
+        </pre></details>}</div>
     {retry && <Button variant="outline" onClick={retry}><RefreshCw size={15} />
       Tentar novamente</Button>}
     {error instanceof ApiError && [401, 403].includes(error.status) &&
@@ -72,4 +74,5 @@ export function PrivateImage({ src, alt, className, onClick, priority = false }:
     decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)}
     onClick={onClick} draggable={false} />;
 }
+
 

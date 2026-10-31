@@ -34,6 +34,53 @@ describe('private API and media', () => {
     expect(screen.getByRole('alert')).not.toHaveTextContent('private provider error');
   });
 
+  it('preserves server auth diagnostics instead of replacing them with generic text', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: {
+      message: 'Autenticação inválida ou expirada', code: 'UNAUTHORIZED',
+      correlation_id: 'body-id', details: { reason: 'audience_mismatch' },
+    } }, { status: 401, headers: { 'X-PhotoIntel-Auth': 'upstream-rejected' } })));
+    let error: unknown;
+    try { await request('/v1/assets?token=PRIVATE'); } catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as ApiError;
+    expect(apiError.message).toBe('Autenticação inválida ou expirada');
+    expect(apiError.toString()).toContain('HTTP 401 · UNAUTHORIZED · GET /v1/assets');
+    expect(apiError.toString()).toContain('auth=upstream-rejected');
+    expect(apiError.correlationId).toBe('body-id');
+    expect(apiError.details).toEqual({ reason: 'audience_mismatch' });
+    expect(JSON.stringify(apiError)).not.toContain('PRIVATE');
+    render(<ErrorState error={apiError} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Autenticação inválida ou expirada');
+    expect(screen.getByText('Detalhes do erro')).toBeVisible();
+  });
+
+  it('keeps validation field errors while excluding echoed form inputs', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ detail: [{
+      loc: ['body', 'limit'], msg: 'Input should be greater than 0', type: 'greater_than',
+      input: 'PRIVATE_FORM_VALUE',
+    }] }, { status: 422 })));
+    let error: unknown;
+    try { await request('/v1/search', { method: 'POST' }); } catch (caught) { error = caught; }
+    expect((error as ApiError).message).toContain('body.limit: Input should be greater than 0');
+    expect((error as ApiError).method).toBe('POST');
+    expect(JSON.stringify(error)).not.toContain('PRIVATE_FORM_VALUE');
+  });
+
+  it('serializes API metadata and preserves the original Error cause', () => {
+    const cause = new TypeError('Failed to fetch');
+    const error = new ApiError('Falha de rede', 0, 'NETWORK_ERROR', undefined, {
+      method: 'GET', path: '/v1/info?secret=PRIVATE', cause,
+      details: { retry: true, token: 'PRIVATE_TOKEN' },
+    });
+    expect(error.cause).toBe(cause);
+    const serialized = JSON.parse(JSON.stringify(error));
+    expect(serialized.name).toBe('ApiError');
+    expect(serialized.path).toBe('/v1/info');
+    expect(serialized.cause.message).toBe('Failed to fetch');
+    expect(serialized.details.token).toBe('[redigido]');
+    expect(JSON.stringify(error)).not.toContain('PRIVATE');
+  });
+
   it('refreshes expired media authorization with a new authenticated URL', async () => {
     const user = userEvent.setup();
     render(<PrivateImage src="/v1/assets/test/media/thumbnail_small" alt="Acervo privado" />);
@@ -65,3 +112,4 @@ describe('private API and media', () => {
     expect(close).toHaveBeenCalledTimes(2);
   });
 });
+
