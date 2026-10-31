@@ -12,7 +12,7 @@ Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes pro
   "GCP_BOOTSTRAP_SERVICE_ACCOUNT": "photointel-bootstrap@photointel.iam.gserviceaccount.com",
   "workflows": {"worker": {"name": "SEU-WORKER-WEB", "domain": "photos.migos.club", "api_base_url": "https://api.photos.migos.club"}},
   "workflow_secrets": {
-    "CLOUDFLARE_API_TOKEN": {"name": "photointel-cloudflare-deploy-token", "version": "1"},
+    "CLOUDFLARE_API_TOKEN": {"name": "photointel-pages-token", "version": "1"},
     "CLOUDFLARE_ACCOUNT_ID": {"name": "photointel-cloudflare-account", "version": "1"},
     "TS_OAUTH_CLIENT_ID": {"name": "photointel-tailscale-client", "version": "1"},
     "TS_OAUTH_SECRET": {"name": "photointel-tailscale-secret", "version": "1"}
@@ -38,7 +38,7 @@ Troque `SEU_WORKER_FRONTEND_EXISTENTE` pelo nome do Worker de frontend. Ele não
 
 `WORKFLOWS__PAGES__PROJECT`, `WORKFLOWS__PAGES__API_BASE_URL` e `CLOUDFLARE_PAGES_PROJECT` são obsoletos. Entradas Pages legadas podem permanecer no dotenv durante a migração, mas o fluxo Worker não as utiliza.
 
-O token Cloudflare requer escopo de edição de Workers, e permissões para configurar o domínio/rota; um token limitado somente ao Pages não é suficiente. Os valores continuam no Google Secret Manager, nunca em `GCP_CONFIG_ENV`. O mesmo GCP WIF autorizado é usado para ler o segredo temporariamente.
+A referência atual `photointel-pages-token` pode ser mantida apesar do nome; não é necessário criar outro secret se o token já estiver válido e tiver os escopos certos. O token Cloudflare requer escopo de edição de Workers, e permissões para configurar o domínio/rota; um token limitado somente ao Pages não é suficiente. Os valores continuam no Google Secret Manager, nunca em `GCP_CONFIG_ENV`. O mesmo GCP WIF autorizado é usado para ler o segredo temporariamente.
 
 ## Ativação inicial
 
@@ -58,8 +58,8 @@ A etapa **⚙ Env** verifica acesso efetivo ao `CLOUDFLARE_API_TOKEN` e `CLOUDFL
 Para inspecionar apenas metadados, sem expor credenciais, no Cloud Shell:
 
 ```bash
-gcloud secrets describe photointel-cloudflare-deploy-token --project=photointel
-gcloud secrets versions list photointel-cloudflare-deploy-token --project=photointel
+gcloud secrets describe photointel-pages-token --project=photointel
+gcloud secrets versions list photointel-pages-token --project=photointel
 ```
 
 Não mantenha tokens em texto puro no próprio `GCP_CONFIG_ENV` nem os cole em comandos que fiquem no histórico do terminal.
