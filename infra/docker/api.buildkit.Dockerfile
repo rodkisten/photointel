@@ -19,7 +19,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
       export APT_CONFIG=/tmp/apt-proxy-ca.conf; \
     fi; \
     apt-get update; \
-    apt-get install -y --no-install-recommends libglib2.0-0 libgomp1; \
+    apt-get install -y --no-install-recommends ca-certificates libglib2.0-0 libgomp1; \
     rm -rf /var/lib/apt/lists/* /tmp/apt-proxy-ca.conf
 RUN groupadd --gid 10001 photointel && useradd --uid 10001 --gid 10001 --no-create-home photointel
 WORKDIR /app
