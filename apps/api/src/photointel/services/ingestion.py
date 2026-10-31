@@ -576,7 +576,7 @@ class ICloudAdapter:
         self.library: Any = None
         self.last_cache_incident: dict[str, Any] | None = None
 
-    def connect(self) -> list[str]:
+    def connect(self, *, require_library: bool = True) -> list[str]:
         import importlib.metadata
         import logging
 
@@ -626,6 +626,8 @@ class ICloudAdapter:
             **self.client.photos.private_libraries,
             **self.client.photos.shared_libraries,
         }
+        if not require_library:
+            return sorted(libraries)
         self.library = libraries.get(self.settings.icloud_library)
         if self.library is None:
             raise AppError(
@@ -888,3 +890,4 @@ async def run_scheduler() -> None:
 
 if __name__ == "__main__":
     asyncio.run(run_scheduler())
+

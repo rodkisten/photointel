@@ -1,0 +1,44 @@
+name: "🍎 iCloud Setup"
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: photointel-icloud-setup
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "⚙ Configuração existente"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - name: "🔐 GCP"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "🧪 Setup contracts"
+        run: python3 -m unittest discover -s infra/gcp/tests -p test_icloud_setup.py -v
+      - name: "🔎 Chave, PostgreSQL e R2 sem acessar Apple"
+        run: python3 infra/gcp/icloud_preflight.py
+      - name: "🧹 Configuração temporária"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
