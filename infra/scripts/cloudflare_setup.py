@@ -126,7 +126,7 @@ def select_app(apps, name, hosts, audience=None):
         raise SetupError('Multiple Access applications match ' + name + '; refusing ambiguous adoption')
     app = candidates[0] if candidates else None
     if app and (app.get('type') != 'self_hosted' or not domains(app).issubset(set(hosts))):
-        raise SetupError('Existing ' + name + ' includes unrelated domains/paths; refusing to replace it')
+        raise SetupError('Existing ' + name + ' includes unrelated domains/paths; refusing to replace it: ' + json.dumps({'name': app.get('name'), 'type': app.get('type'), 'paths': sorted(domains(app)), 'expected': hosts}))
     if any(a is not app for a in matched):
         raise SetupError('Overlapping Access applications protect a managed hostname')
     return app
