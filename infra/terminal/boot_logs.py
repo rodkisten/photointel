@@ -90,7 +90,7 @@ def events(contents: str, boot_time: datetime) -> list[tuple[str, str]]:
     return selected
 
 
-def watch(name: str, zone: str, *, timeout_seconds: int = 210,
+def watch(name: str, zone: str, *, timeout_seconds: int = 720,
           poll_seconds: int = 6) -> int:
     boot = get_boot_time(name, zone)
     print('📋 VM startup events will appear here (safe filtered serial port 1).',
@@ -98,11 +98,15 @@ def watch(name: str, zone: str, *, timeout_seconds: int = 210,
     print('Boot UTC: ' + boot.isoformat(timespec='seconds'), flush=True)
     seen = set()
     deadline = time.monotonic() + timeout_seconds
+    next_heartbeat = time.monotonic() + 45
+    last_checkpoint = 'boot sequence not yet observed'
     while time.monotonic() < deadline:
         for kind, message in events(get_serial(name, zone), boot):
             if (kind, message) in seen:
                 continue
             seen.add((kind, message))
+            if kind == 'info':
+                last_checkpoint = message
             print(('✅ ' if kind == 'ready' else '❌ ' if kind == 'fail' else '▫️ ') + message,
                   flush=True)
             if kind == 'ready':
@@ -112,6 +116,10 @@ def watch(name: str, zone: str, *, timeout_seconds: int = 210,
                 print('Startup failed. Secret Manager references, OAuth and image access '
                       'should be checked based on the last stage shown.', flush=True)
                 return 1
+        if time.monotonic() >= next_heartbeat:
+            print('⏳ Still awaiting terminal-ready; last checkpoint: ' + last_checkpoint,
+                  flush=True)
+            next_heartbeat = time.monotonic() + 45
         time.sleep(poll_seconds)
     print('No terminal-ready marker before diagnostics timeout. The VM may still be '
           'booting. Check current logs or rerun provisioning; the VM auto-stops '
@@ -123,14 +131,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--name', default='photointel-terminal')
     parser.add_argument('--zone', default='us-central1-a')
-    parser.add_argument('--timeout-seconds', type=int, default=210)
+    parser.add_argument('--timeout-seconds', type=int, default=720)
     args = parser.parse_args()
     if not re.fullmatch(r'[a-z][a-z0-9-]{4,28}[a-z0-9]', args.name):
         parser.error('Invalid instance name')
     if not re.fullmatch(r'us-central1-[a-z]', args.zone):
         parser.error('Invalid terminal zone')
-    if not 15 <= args.timeout_seconds <= 300:
-        parser.error('Timeout must be 15 to 300 seconds')
+    if not 15 <= args.timeout_seconds <= 900:
+        parser.error('Timeout must be 15 to 900 seconds')
     try:
         return watch(args.name, args.zone, timeout_seconds=args.timeout_seconds)
     except (RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:

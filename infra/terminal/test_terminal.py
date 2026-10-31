@@ -49,6 +49,23 @@ class TerminalTests(unittest.TestCase):
         self.assertIn('umask 077', script)
         self.assertIn('source installed', script)
 
+    def test_docker_first_boot_emits_safe_progress_checkpoints(self):
+        script = (terminal.ROOT / 'infra/terminal/startup.sh').read_text()
+        for marker in (
+            'terminal-startup: registry authentication starting',
+            'terminal-startup: registry authenticated',
+            'terminal-startup: docker image pull starting',
+            'terminal-startup: docker image pulled',
+            'terminal-startup: docker container started',
+        ):
+            self.assertIn(marker, script)
+        self.assertIn('next_heartbeat = time.monotonic() + 45',
+                      (terminal.ROOT / 'infra/terminal/boot_logs.py').read_text())
+        workflow = (terminal.ROOT / '.github/workflows/gcp-terminal.yml').read_text()
+        self.assertIn("TERMINAL_LOG_TIMEOUT: ${{ inputs.action == 'logs' && '15' || '720' }}",
+                      workflow)
+        self.assertIn("options: [plan, build, provision, start, stop, status, logs]", workflow)
+
     def test_defaults_bound_costs_and_keep_existing_oauth_references(self):
         c = terminal.configuration(base())
         self.assertEqual(c['disk_gb'], 30)
