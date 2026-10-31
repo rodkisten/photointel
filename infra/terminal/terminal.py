@@ -236,7 +236,36 @@ def build_image(c, g):
     print('Terminal image ready: ' + actual)
 
 
+def check_oauth_secret_versions(c, g):
+    """Fail before power cycling the VM when a referenced OAuth version is absent.
+
+    Only identifiers and status are inspected. The secret payload is never
+    fetched by GitHub Actions or printed to the job log.
+    """
+    for key, ref in c['oauth'].items():
+        try:
+            version = g.run('secrets', 'versions', 'describe', ref['version'],
+                            '--secret=' + ref['name'])
+        except RuntimeError:
+            raise RuntimeError(
+                'Terminal OAuth preflight failed: ' + key + ' references '
+                + ref['name'] + ' version ' + ref['version']
+                + '. Version may be missing or bootstrap cannot inspect it. '
+                + 'Check Secret Manager and roles/secretmanager.viewer; '
+                + 'no secret payload was read.'
+            ) from None
+        if version.get('state') != 'ENABLED':
+            raise RuntimeError(
+                'Terminal OAuth preflight failed: ' + key + ' references '
+                + ref['name'] + ' version ' + ref['version']
+                + ' which is not ENABLED. Populate/enable the version '
+                + 'before provisioning the VM.'
+            )
+    print('Terminal OAuth Secret Manager versions: both ENABLED (values hidden).')
+
+
 def provision(c, g, deployer):
+    check_oauth_secret_versions(c, g)
     g.run('services', 'enable', 'compute.googleapis.com', 'secretmanager.googleapis.com',
           'artifactregistry.googleapis.com', 'iam.googleapis.com')
     if g.run('iam', 'service-accounts', 'describe', c['account'], optional=True) is None:
