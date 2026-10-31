@@ -105,15 +105,32 @@ export async function handle(request, env, fetchOrigin = fetch) {
       },
     });
   }
-  const assertion = request.headers.get('Cf-Access-Jwt-Assertion');
+  // Access may deliver its signed application JWT as a same-origin cookie.
+  // This is credential transport only: Cloud Run still verifies signature,
+  // issuer, audience, expiry and allowlist. Never trust decoded cookie claims.
+  let assertion = request.headers.get('Cf-Access-Jwt-Assertion');
+  if (!assertion && incoming.origin === config.frontend) {
+    const cookie = request.headers.get('Cookie') ?? '';
+    if (cookie.length <= 32768) {
+      const matches = cookie.split(';').map(part => part.trim())
+        .filter(part => part.startsWith('CF_Authorization='));
+      if (matches.length === 1) {
+        const value = matches[0].slice('CF_Authorization='.length);
+        if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) {
+          assertion = value;
+        }
+      }
+    }
+  }
   if (!assertion || assertion.length > 16384) {
-    return failure(401, 'Cloudflare Access required');
+    return failure(401, 'Cloudflare Access required', { 'X-PhotoIntel-Auth': 'session-missing' });
   }
   const headers = new Headers();
   for (const name of REQUEST_HEADERS) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
+  headers.set('Cf-Access-Jwt-Assertion', assertion);
   // A fixed origin prevents open proxy/SSRF; caller input is only path and query.
   const target = new URL(config.origin);
   target.pathname = incoming.pathname;
@@ -135,6 +152,8 @@ export async function handle(request, env, fetchOrigin = fetch) {
     const elapsed = Date.now() - started;
     if (response.status >= 500) {
       important('error', 'upstream_server_error', '/v1/*', response.status, elapsed);
+    } else if (response.status === 401 || response.status === 403) {
+      important('warn', 'upstream_auth_rejected', '/v1/*', response.status, elapsed);
     } else if (response.status === 429) {
       important('warn', 'upstream_rate_limited', '/v1/*', 429, elapsed);
     } else if (elapsed >= 3000 && response.status < 400) {
@@ -145,6 +164,9 @@ export async function handle(request, env, fetchOrigin = fetch) {
     outgoing.set('CDN-Cache-Control', 'no-store');
     outgoing.set('Cloudflare-CDN-Cache-Control', 'no-store');
     outgoing.delete('Set-Cookie');
+    if (response.status === 401 || response.status === 403) {
+      outgoing.set('X-PhotoIntel-Auth', 'upstream-rejected');
+    }
     return new Response(response.body, {
       status: response.status, statusText: response.statusText, headers: outgoing,
     });
@@ -157,4 +179,5 @@ export async function handle(request, env, fetchOrigin = fetch) {
 export default {
   fetch(request, env) { return handle(request, env); },
 };
+
 

@@ -133,14 +133,53 @@ test('important logs redact private data and coalesce repeated upstream failures
   }
 });
 
-test('successful requests and expected authentication failures do not emit logs', async t => {
+test('successful requests and missing sessions do not emit logs', async t => {
   const error = t.mock.method(console, 'error', () => {});
   const warning = t.mock.method(console, 'warn', () => {});
   await handle(request(), env);
   await handle(request('/v1/assets', { 'cf-access-jwt-assertion': 'unit' }), env,
     async () => new Response('[]'));
-  await handle(request('/v1/assets', { 'cf-access-jwt-assertion': 'unit' }), env,
-    async () => new Response(null, { status: 401 }));
   assert.equal(error.mock.calls.length, 0);
   assert.equal(warning.mock.calls.length, 0);
+});
+
+
+test('same-origin Access cookie is transported as assertion without other cookies', async () => {
+  const response = await handle(new Request('https://fotos.example.com/v1/assets', {
+    headers: { cookie: 'other=PRIVATE; CF_Authorization=unit.jwt.sig; analytics=NO' },
+  }), env, async upstream => {
+    assert.equal(upstream.headers.get('cf-access-jwt-assertion'), 'unit.jwt.sig');
+    assert.equal(upstream.headers.get('cookie'), null);
+    return new Response('[]');
+  });
+  assert.equal(response.status, 200);
+});
+
+test('missing and ambiguous sessions stay blocked; legacy host does not consume cookies', async () => {
+  for (const [host, cookie] of [
+    ['fotos.example.com', 'CF_Authorization=not-a-jwt'],
+    ['fotos.example.com', 'CF_Authorization=a.b.c; CF_Authorization=x.y.z'],
+    ['api.example.com', 'CF_Authorization=a.b.c'],
+  ]) {
+    const response = await handle(new Request('https://' + host + '/v1/assets', {
+      headers: { cookie },
+    }), env, () => { throw new Error('must not fetch'); });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get('X-PhotoIntel-Auth'), 'session-missing');
+  }
+});
+
+test('explicit assertion takes precedence over cookie and upstream JWT rejection stays blocked', async t => {
+  const log = t.mock.method(console, 'warn', () => {});
+  const response = await handle(new Request('https://fotos.example.com/v1/assets?private=SECRET', {
+    headers: { 'cf-access-jwt-assertion': 'header-jwt', cookie: 'CF_Authorization=cookie.jwt.sig' },
+  }), env, async upstream => {
+    assert.equal(upstream.headers.get('cf-access-jwt-assertion'), 'header-jwt');
+    return new Response('unauthorized', { status: 401 });
+  });
+  assert.equal(response.status, 401);
+  assert.equal(response.headers.get('X-PhotoIntel-Auth'), 'upstream-rejected');
+  assert.equal(log.mock.calls[0].arguments[0].event, 'upstream_auth_rejected');
+  assert.ok(!JSON.stringify(log.mock.calls).includes('SECRET'));
+  assert.ok(!JSON.stringify(log.mock.calls).includes('header-jwt'));
 });
