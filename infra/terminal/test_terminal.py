@@ -137,7 +137,7 @@ class TerminalTests(unittest.TestCase):
 
     def test_serial_boot_events_only_show_safe_current_boot_details(self):
         boot = datetime(2026, 10, 31, 14, 47, 25, tzinfo=timezone.utc)
-        lines = '\\n'.join([
+        lines = '\n'.join([
             '2026-10-31T14:41:01Z photointel-terminal google_metadata_script_runner: Terminal ready: ssh rod@100.1.2.3. Maximum uptime: 120 minutes.',
             '2026-10-31T14:47:42Z photointel-terminal google_metadata_script_runner: Metadata key("startup-script"), command("/bin/bash"): terminal-startup: apt source permissions checked',
             '2026-10-31T14:47:55Z photointel-terminal google_metadata_script_runner: Metadata key("startup-script"), command("/bin/bash"): curl: (22) The requested URL returned error: 404',
