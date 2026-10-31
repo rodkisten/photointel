@@ -7,7 +7,7 @@ on:
         required: true
         type: choice
         default: status
-        options: [plan, build, provision, start, stop, status]
+        options: [plan, build, provision, start, stop, status, logs]
 permissions:
   contents: read
 concurrency:
@@ -39,7 +39,7 @@ jobs:
       - name: "🧪 Validate terminal configuration"
         run: python3 infra/terminal/terminal.py plan
       - name: "🛡️ Check bootstrap identity"
-        if: inputs.action == 'provision' || inputs.action == 'build'
+        if: inputs.action == 'provision' || inputs.action == 'build' || inputs.action == 'logs'
         env:
           BOOTSTRAP_ACCOUNT: ${{ steps.config.outputs.bootstrap_service_account }}
           BOOTSTRAP_PROVIDER: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
@@ -51,24 +51,27 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           project_id: photointel
-          workload_identity_provider: ${{ (inputs.action == 'provision' || inputs.action == 'build') && steps.config.outputs.bootstrap_workload_identity_provider || steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ (inputs.action == 'provision' || inputs.action == 'build') && steps.config.outputs.bootstrap_service_account || steps.config.outputs.service_account }}
+          workload_identity_provider: ${{ (inputs.action == 'provision' || inputs.action == 'build' || inputs.action == 'logs') && steps.config.outputs.bootstrap_workload_identity_provider || steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ (inputs.action == 'provision' || inputs.action == 'build' || inputs.action == 'logs') && steps.config.outputs.bootstrap_service_account || steps.config.outputs.service_account }}
       - name: "🧰 Gcloud"
         if: inputs.action != 'plan'
         uses: google-github-actions/setup-gcloud@v3
       - name: "🖥️ Terminal operation"
         id: terminal_operation
-        if: inputs.action != 'plan'
+        if: inputs.action != 'plan' && inputs.action != 'logs'
         env:
           TERMINAL_ACTION: ${{ inputs.action }}
           TERMINAL_DEPLOYER: ${{ steps.config.outputs.service_account }}
         run: |
           python3 infra/terminal/terminal.py "$TERMINAL_ACTION" --apply --confirm-project photointel
       - name: "📋 VM boot logs + Tailscale readiness"
-        if: inputs.action == 'provision' && steps.terminal_operation.outcome == 'success'
+        if: (inputs.action == 'provision' && steps.terminal_operation.outcome == 'success') || inputs.action == 'logs'
         timeout-minutes: 14
+        continue-on-error: ${{ inputs.action == 'logs' }}
+        env:
+          TERMINAL_LOG_TIMEOUT: ${{ inputs.action == 'logs' && '15' || '720' }}
         run: |
-          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds 720
+          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds "$TERMINAL_LOG_TIMEOUT"
       - name: "🧹 GCP Config"
         if: always()
         uses: ./.github/actions/gcp-config
