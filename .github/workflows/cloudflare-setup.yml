@@ -1,5 +1,5 @@
 name: "☁️ Cloudflare Setup"
-# Reuse existing service policy IDs during Bridge adoption.
+# Preserve orphaned legacy device credentials and configure frontend Access.
 on:
   push:
     branches: [main]
