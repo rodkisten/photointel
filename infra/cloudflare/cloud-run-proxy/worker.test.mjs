@@ -65,3 +65,41 @@ test('unexpected redirect is not followed, and exact-origin preflight is bounded
     assert.notEqual(preflight.headers.get('access-control-allow-origin'), '*');
   }
 });
+
+
+test('one Worker serves frontend assets only on frontend host and proxies /v1', async () => {
+  const seen = [];
+  const assetEnv = {
+    ...env,
+    ASSETS: {
+      fetch: async request => {
+        seen.push(new URL(request.url).pathname);
+        return new Response('<!doctype html><title>PhotoIntel</title>', {
+          headers: { 'Content-Type': 'text/html' },
+        });
+      },
+    },
+  };
+  const home = await handle(new Request('https://fotos.example.com/'), assetEnv);
+  assert.equal(home.status, 200);
+  const spa = await handle(new Request('https://fotos.example.com/library'), assetEnv);
+  assert.equal(spa.status, 200);
+  assert.deepEqual(seen, ['/', '/library']);
+
+  const outsideHost = await handle(new Request('https://api.example.com/library'), assetEnv);
+  assert.equal(outsideHost.status, 404);
+  const blocked = await handle(new Request('https://fotos.example.com/v1/assets'), assetEnv);
+  assert.equal(blocked.status, 401);
+  assert.deepEqual(seen, ['/', '/library'], 'API must never be served as HTML SPA');
+
+  const proxied = await handle(new Request('https://fotos.example.com/v1/assets', {
+    headers: { 'cf-access-jwt-assertion': 'valid-edge-assertion' },
+  }), assetEnv, async upstream => {
+    assert.equal(upstream.url, env.CLOUD_RUN_ORIGIN + '/v1/assets');
+    return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
+  });
+  assert.equal(proxied.status, 200);
+  assert.equal(await proxied.text(), '[]');
+  assert.deepEqual(seen, ['/', '/library']);
+});
+
