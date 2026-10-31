@@ -190,6 +190,46 @@ def reconcile_app(api, apps, name, hosts, audience, policies, apply, idps=None):
     return created
 
 
+
+def adopt_bridge(config, api, apps, hosts):
+    """Recover an existing exact-path Service Auth app without rotating credentials."""
+    bridge_hosts = [h + '/v1/bridge/*' for h in hosts]
+    existing = select_app(apps, 'photointel-bridge', bridge_hosts)
+    if not existing:
+        return None
+    extra = config.setdefault('extra_environment', {})
+    configured = extra.get('ACCESS_BRIDGE_SERVICE_TOKENS', '[]')
+    configured = json.loads(configured) if isinstance(configured, str) else configured
+    if not configured:
+        policies = api.pages(api.base + '/access/apps/' + existing['id'] + '/policies')
+        service_ids = set()
+        for p in policies:
+            if (existing.get('name') == 'photointel-bridge' and p.get('name') == MANAGED_POLICY
+                    and all(p.get(k, []) == policy(desired(config)['emails'])[k] for k in ('decision', 'include', 'exclude', 'require'))):
+                continue
+            # Never drop policy constraints or adopt Bypass/everyone rules.
+            if p.get('decision') != 'non_identity' or p.get('exclude') or p.get('require'):
+                raise SetupError('Existing Bridge policies need explicit service-token configuration; refusing to broaden access')
+            rules = p.get('include', [])
+            if not rules:
+                raise SetupError('Existing Bridge policy has no explicit service token')
+            for rule in rules:
+                token = rule.get('service_token', {})
+                if set(rule) != {'service_token'} or not token.get('token_id'):
+                    raise SetupError('Existing Bridge policy is not restricted to explicit service tokens')
+                service_ids.add(token['token_id'])
+        if not service_ids:
+            raise SetupError('Existing Bridge app has no Service Auth policy to adopt')
+        tokens = api.pages(api.base + '/access/service_tokens')
+        selected = [t for t in tokens if t.get('id') in service_ids]
+        if len(selected) != len(service_ids) or any(not t.get('client_id') for t in selected):
+            raise SetupError('Existing Bridge service tokens could not be resolved')
+        extra['ACCESS_BRIDGE_SERVICE_TOKENS'] = json.dumps(sorted(t['client_id'] for t in selected))
+        print('Adopt existing Bridge: reuse app ID, audience and ' + str(len(selected)) + ' service token(s); no credential rotation.')
+    extra['ACCESS_BRIDGE_AUDIENCE'] = existing.get('aud', '')
+    return existing
+
+
 def inspect(config, api):
     spec = desired(config)
     apps = api.pages(api.base + '/access/apps')
@@ -206,10 +246,11 @@ def inspect(config, api):
     hosts = [spec['host'], *legacy]
     # Path-specific applications win over the parent app. Never silently leave a
     # conflicting Bypass or unrelated path policy shadowing the intended app.
-    bridge_enabled = bool(json.loads(config.get('extra_environment', {}).get('ACCESS_BRIDGE_SERVICE_TOKENS', '[]')))
+    bridge = adopt_bridge(config, api, apps, hosts)
+    bridge_enabled = bridge is not None or bool(json.loads(config.get('extra_environment', {}).get('ACCESS_BRIDGE_SERVICE_TOKENS', '[]')))
     for app in apps:
         nested = [v for v in domains(app) if any(v.startswith(h + '/') for h in hosts)]
-        allowed_bridge = app.get('name') == 'photointel-bridge' and bridge_enabled and all(
+        allowed_bridge = (app is bridge or app.get('name') == 'photointel-bridge') and bridge_enabled and all(
             v in [h + '/v1/bridge/*' for h in hosts] for v in nested)
         if nested and not allowed_bridge:
             policies = api.pages(api.base + '/access/apps/' + app['id'] + '/policies')
@@ -287,6 +328,7 @@ def sync_config(config, api=None, require=False):
     if len(bridge) > 1:
         raise SetupError('Ambiguous Bridge Access app')
     if bridge:
+        adopt_bridge(config, api, apps, [host])
         aud = bridge[0].get('aud', '')
         if not re.fullmatch(r'[a-fA-F0-9]{64}', aud):
             raise SetupError('Cloudflare returned invalid Bridge audience')
