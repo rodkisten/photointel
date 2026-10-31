@@ -221,6 +221,12 @@ def worker_deploy(config: dict) -> None:
         "compatibility_date": WORKER_COMPATIBILITY_DATE,
         "workers_dev": False,
         "preview_urls": False,
+        # Persist only explicit warning/error events; omit per-request invocation noise.
+        "observability": {
+            "enabled": True,
+            "head_sampling_rate": 1,
+            "logs": {"enabled": True, "invocation_logs": False},
+        },
         "vars": {
             "CLOUD_RUN_ORIGIN": discover_cloud_run_origin(config),
             "FRONTEND_ORIGIN": config["frontend_origin"],
@@ -260,6 +266,18 @@ def worker_deploy(config: dict) -> None:
                 "Unified Cloudflare Worker deploy failed; inspect Wrangler logs. "
                 "An existing DNS CNAME for the frontend custom domain may need adjustment."
             )
+        count = sum(1 for path in dist.rglob("*") if path.is_file())
+        print(f"Published {public['WORKER_NAME']}: Worker code + {count} static asset files; important logs enabled.")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as output:
+                output.write(
+                    "\n### Cloudflare Worker\n\n"
+                    f"- Worker: `{public['WORKER_NAME']}`\n"
+                    f"- Static Assets: {count} files via `ASSETS` (not JavaScript modules in the editor).\n"
+                    "- Logs: important warnings/errors only; invocation logs disabled.\n"
+                    "- View in Cloudflare: Worker → Observability → Logs.\n"
+                )
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
@@ -309,3 +327,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

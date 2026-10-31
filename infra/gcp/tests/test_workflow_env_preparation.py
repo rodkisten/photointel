@@ -169,6 +169,10 @@ class WorkflowEnvTests(unittest.TestCase):
             cfg = observed["wrangler"]
             self.assertEqual(cfg["name"], "photointel")
             self.assertEqual(cfg["main"], "./worker.mjs")
+            self.assertEqual(cfg["observability"], {
+                "enabled": True, "head_sampling_rate": 1,
+                "logs": {"enabled": True, "invocation_logs": False},
+            })
             self.assertFalse(cfg["workers_dev"])
             self.assertFalse(cfg["preview_urls"])
             self.assertEqual(cfg["vars"], {
@@ -240,3 +244,4 @@ class WorkflowEnvTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1,6 +1,9 @@
 name: "🌐 Worker · Front + API"
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-worker.yml']
 permissions: {contents: read}
 jobs:
   deploy:
@@ -106,3 +109,4 @@ jobs:
           outcome: ${{ job.status }}
           completed: "1"
           total: "1"
+

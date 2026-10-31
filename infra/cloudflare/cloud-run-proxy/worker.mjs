@@ -5,6 +5,26 @@ const REQUEST_HEADERS = [
 ];
 const METHODS = new Set(['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']);
 
+// Bound repeated incidents to one event/minute per category and isolate.
+// Never log URLs, query strings, headers, JWTs, bodies or exception messages.
+const incidents = new Map();
+function important(level, event, route, status, durationMs = 0) {
+  const now = Date.now();
+  const key = `${event}:${route}:${status}`;
+  const prior = incidents.get(key);
+  if (prior && now - prior.at < 60000) { prior.suppressed++; return; }
+  incidents.set(key, { at: now, suppressed: 0 });
+  console[level]({ service: 'photointel', event, route, status,
+    duration_ms: Math.max(0, Math.round(durationMs)),
+    suppressed_since_last: prior?.suppressed ?? 0 });
+}
+function routeGroup(path) {
+  if (path.startsWith('/v1/')) return '/v1/*';
+  if (path === '/') return '/';
+  if (path.startsWith('/assets/')) return '/assets/*';
+  return 'frontend';
+}
+
 function configuration(env) {
   const origin = new URL(env.CLOUD_RUN_ORIGIN);
   const frontend = new URL(env.FRONTEND_ORIGIN);
@@ -31,7 +51,10 @@ function failure(status, message, extra = {}) {
 export async function handle(request, env, fetchOrigin = fetch) {
   let config;
   try { config = configuration(env); }
-  catch { return failure(503, 'API routing not configured'); }
+  catch {
+    important('error', 'routing_config_invalid', 'configuration', 503);
+    return failure(503, 'API routing not configured');
+  }
   const incoming = new URL(request.url);
   // One Worker, two services: React static assets on the frontend hostname
   // and /v1/* requests proxied to the existing Cloud Run Python API.
@@ -42,14 +65,25 @@ export async function handle(request, env, fetchOrigin = fetch) {
     }
     if (
       incoming.origin !== config.frontend ||
-      !['GET', 'HEAD'].includes(request.method) ||
-      !env.ASSETS || typeof env.ASSETS.fetch !== 'function'
+      !['GET', 'HEAD'].includes(request.method)
     ) {
       return failure(404, 'Route unavailable');
     }
+    if (!env.ASSETS || typeof env.ASSETS.fetch !== 'function') {
+      important('error', 'frontend_assets_binding_missing', routeGroup(incoming.pathname), 503);
+      return failure(503, 'Frontend assets not deployed');
+    }
+    const started = Date.now();
     try {
-      return await env.ASSETS.fetch(request);
+      const response = await env.ASSETS.fetch(request);
+      if (response.status >= 500 || (response.status === 404 && incoming.pathname === '/')) {
+        important('error', 'frontend_assets_failed', routeGroup(incoming.pathname), response.status);
+      } else if (response.status === 404 && incoming.pathname.startsWith('/assets/')) {
+        important('warn', 'frontend_asset_missing', '/assets/*', 404);
+      }
+      return response;
     } catch {
+      important('error', 'frontend_assets_unreachable', routeGroup(incoming.pathname), 503, Date.now() - started);
       return failure(503, 'Frontend temporarily unavailable');
     }
   }
@@ -88,13 +122,23 @@ export async function handle(request, env, fetchOrigin = fetch) {
     method: request.method, headers, body: request.body, redirect: 'manual',
     duplex: 'half',
   });
+  const started = Date.now();
   try {
     const response = await fetchOrigin(upstream, {
       cf: { cacheEverything: false, cacheTtl: 0 },
     });
     if (response.status >= 300 && response.status < 400 && response.status !== 304) {
+      important('error', 'upstream_redirect_rejected', '/v1/*', 502);
       await response.body?.cancel();
       return failure(502, 'Unexpected origin redirect');
+    }
+    const elapsed = Date.now() - started;
+    if (response.status >= 500) {
+      important('error', 'upstream_server_error', '/v1/*', response.status, elapsed);
+    } else if (response.status === 429) {
+      important('warn', 'upstream_rate_limited', '/v1/*', 429, elapsed);
+    } else if (elapsed >= 3000 && response.status < 400) {
+      important('warn', 'upstream_slow', '/v1/*', response.status, elapsed);
     }
     const outgoing = new Headers(response.headers);
     outgoing.set('Cache-Control', 'private, no-store');
@@ -104,9 +148,13 @@ export async function handle(request, env, fetchOrigin = fetch) {
     return new Response(response.body, {
       status: response.status, statusText: response.statusText, headers: outgoing,
     });
-  } catch { return failure(502, 'API temporarily unavailable'); }
+  } catch {
+    important('error', 'upstream_unreachable', '/v1/*', 502, Date.now() - started);
+    return failure(502, 'API temporarily unavailable');
+  }
 }
 
 export default {
   fetch(request, env) { return handle(request, env); },
 };
+

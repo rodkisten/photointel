@@ -103,3 +103,44 @@ test('one Worker serves frontend assets only on frontend host and proxies /v1', 
   assert.deepEqual(seen, ['/', '/library']);
 });
 
+
+test('missing assets produces an actionable error and one important log', async t => {
+  const log = t.mock.method(console, 'error', () => {});
+  const response = await handle(new Request('https://fotos.example.com/'), env);
+  assert.equal(response.status, 503);
+  assert.equal(log.mock.calls.length, 1);
+  assert.equal(log.mock.calls[0].arguments[0].event, 'frontend_assets_binding_missing');
+});
+
+test('important logs redact private data and coalesce repeated upstream failures', async t => {
+  const log = t.mock.method(console, 'error', () => {});
+  let clock = 1000;
+  t.mock.method(Date, 'now', () => clock);
+  const make = () => request('/v1/assets/private-id?token=PRIVATE_QUERY', {
+    'cf-access-jwt-assertion': 'PRIVATE_JWT', authorization: 'Bearer PRIVATE_TOKEN',
+  });
+  const upstream = async () => new Response('PRIVATE_BODY', { status: 500 });
+  await handle(make(), env, upstream);
+  await handle(make(), env, upstream);
+  assert.equal(log.mock.calls.length, 1);
+  clock += 61000;
+  await handle(make(), env, upstream);
+  assert.equal(log.mock.calls.length, 2);
+  assert.equal(log.mock.calls[1].arguments[0].suppressed_since_last, 1);
+  const serialized = JSON.stringify(log.mock.calls.map(call => call.arguments));
+  for (const secret of ['PRIVATE_QUERY', 'PRIVATE_JWT', 'PRIVATE_TOKEN', 'PRIVATE_BODY', 'private-id']) {
+    assert.ok(!serialized.includes(secret));
+  }
+});
+
+test('successful requests and expected authentication failures do not emit logs', async t => {
+  const error = t.mock.method(console, 'error', () => {});
+  const warning = t.mock.method(console, 'warn', () => {});
+  await handle(request(), env);
+  await handle(request('/v1/assets', { 'cf-access-jwt-assertion': 'unit' }), env,
+    async () => new Response('[]'));
+  await handle(request('/v1/assets', { 'cf-access-jwt-assertion': 'unit' }), env,
+    async () => new Response(null, { status: 401 }));
+  assert.equal(error.mock.calls.length, 0);
+  assert.equal(warning.mock.calls.length, 0);
+});
