@@ -77,8 +77,11 @@ class Gcloud:
                     ('not_found', 'was not found', 'does not exist', 'not found', '404')):
                 return None
             details = sorted(set(re.findall(r'\b(?:compute|iam|artifactregistry|serviceusage)\.[A-Za-z]+\.[A-Za-z]+\b', result.stderr)))
-            reason = 'PERMISSION_DENIED' if denied else ('UNAUTHENTICATED' if
-                     'unauthenticated' in error else 'PROVIDER_ERROR')
+            reason = ('PERMISSION_DENIED' if denied else
+                      'NOT_FOUND' if any(marker in error for marker in
+                          ('not_found', 'was not found', 'does not exist', 'not found', '404'))
+                      else 'UNAUTHENTICATED' if 'unauthenticated' in error
+                      else 'PROVIDER_ERROR')
             hint = ''
             if args[:2] == ('compute', 'firewall-rules') and denied:
                 hint = ' Run Setup GCP apply: bootstrap needs roles/compute.securityAdmin.'
@@ -236,6 +239,29 @@ def build_image(c, g):
     print('Terminal image ready: ' + actual)
 
 
+def ensure_oauth_metadata_access(c, g):
+    """Grant bootstrap metadata-only access to the two OAuth secret containers.
+
+    roles/secretmanager.secretAccessor does NOT allow describing versions.
+    Grant viewer at the individual secret, not project scope, without access
+    to any credential payload. Bootstrap already manages IAM for these secrets.
+    """
+    member = ('serviceAccount:photointel-bootstrap@'
+              + c['project'] + '.iam.gserviceaccount.com')
+    for ref in c['oauth'].values():
+        try:
+            g.run('secrets', 'add-iam-policy-binding', ref['name'],
+                  '--member=' + member, '--role=roles/secretmanager.viewer',
+                  '--condition=None')
+        except RuntimeError:
+            raise RuntimeError(
+                'Cannot grant bootstrap metadata-only viewer on '
+                + ref['name'] + '. Verify roles/secretmanager.admin '
+                'or secretmanager.secrets.setIamPolicy on this secret. '
+                'No secret values have been accessed.'
+            ) from None
+
+
 def check_oauth_secret_versions(c, g):
     """Fail before power cycling the VM when a referenced OAuth version is absent.
 
@@ -246,13 +272,24 @@ def check_oauth_secret_versions(c, g):
         try:
             version = g.run('secrets', 'versions', 'describe', ref['version'],
                             '--secret=' + ref['name'])
-        except RuntimeError:
+        except RuntimeError as exc:
+            label = key + ' (' + ref['name'] + ', version ' + ref['version'] + ')'
+            if ': NOT_FOUND' in str(exc):
+                raise RuntimeError(
+                    'Terminal OAuth secret version MISSING: ' + label +
+                    '. Setup GCP creates only the container. Add the real '
+                    'OAuth credential as version 1 in Secret Manager.'
+                ) from None
+            if ': PERMISSION_DENIED' in str(exc):
+                raise RuntimeError(
+                    'Terminal OAuth secret metadata ACCESS DENIED: ' + label +
+                    '. Bootstrap needs roles/secretmanager.viewer on this '
+                    'secret (metadata only). Secret value was not read.'
+                ) from None
             raise RuntimeError(
-                'Terminal OAuth preflight failed: ' + key + ' references '
-                + ref['name'] + ' version ' + ref['version']
-                + '. Version may be missing or bootstrap cannot inspect it. '
-                + 'Check Secret Manager and roles/secretmanager.viewer; '
-                + 'no secret payload was read.'
+                'Terminal OAuth preflight cannot inspect ' + label +
+                '. Check Secret Manager, Google authentication and the '
+                'pinned version; no secret payload was read.'
             ) from None
         if version.get('state') != 'ENABLED':
             raise RuntimeError(
@@ -265,6 +302,7 @@ def check_oauth_secret_versions(c, g):
 
 
 def provision(c, g, deployer):
+    ensure_oauth_metadata_access(c, g)
     check_oauth_secret_versions(c, g)
     g.run('services', 'enable', 'compute.googleapis.com', 'secretmanager.googleapis.com',
           'artifactregistry.googleapis.com', 'iam.googleapis.com')
