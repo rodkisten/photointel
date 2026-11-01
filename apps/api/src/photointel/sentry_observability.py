@@ -124,3 +124,26 @@ def continue_job_trace(payload: dict[str, Any]) -> Iterator[None]:
 def sentry_organization() -> str | None:
     name = os.getenv("SENTRY_ORG", "").strip()
     return name if _ORG.fullmatch(name) else None
+
+@contextmanager
+def request_trace_scope(headers: Any) -> Iterator[None]:
+    """Continue only validated Sentry context, with a separate request scope."""
+    if not sentry_sdk.is_initialized():
+        yield
+        return
+    accepted: dict[str, str] = {}
+    parent = headers.get("sentry-trace")
+    baggage = headers.get("baggage")
+    if isinstance(parent, str) and _TRACE.fullmatch(parent):
+        accepted["sentry-trace"] = parent
+    if isinstance(baggage, str) and _BAGGAGE.fullmatch(baggage) and all(
+        entry.strip().startswith("sentry-") for entry in baggage.split(",")
+    ):
+        accepted["baggage"] = baggage
+    with sentry_sdk.isolation_scope():
+        if accepted:
+            sentry_sdk.continue_trace(accepted)
+        with sentry_sdk.start_transaction(
+            op="http.server", name="photointel.api.request"
+        ):
+            yield
