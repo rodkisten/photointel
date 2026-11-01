@@ -64,7 +64,8 @@ describe('simplified iCloud scale approval UX', () => {
     const user = userEvent.setup();
     await screen.findByRole('checkbox', { name: 'Autorizar backfill contínuo' });
     const continuous = screen.getByRole('checkbox', { name: 'Autorizar backfill contínuo' });
-    expect(continuous).toBeEnabled();
+    // The control is initially disabled until the async ingestion profile loads.
+    await waitFor(() => expect(continuous).toBeEnabled());
     await user.click(continuous);
     const target = screen.getByRole('spinbutton', { name: 'Meta total autorizada' });
     await user.clear(target);

@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
@@ -335,6 +336,213 @@ async def reindex(
     _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
     background_tasks.add_task(safe_notify)
     return row_dict(batch)
+
+
+PREVIEW_STAGES = ("media_download", "metadata_extract", "thumbnail_generate")
+PREVIEW_ACTIVE = ("queued", "preparing", "running", "retrying")
+
+
+async def preview_job_state(session: AsyncSession, asset_id: UUID) -> dict[str, Any]:
+    """Return safe, actionable state; do not return Apple identifiers or object keys."""
+    asset = await session.get(Asset, asset_id)
+    if not asset:
+        raise AppError(ErrorCode.NOT_FOUND, "Foto não encontrada", 404)
+    resources = set(
+        (await session.scalars(
+            select(AssetResource.resource_type).where(
+                AssetResource.asset_id == asset_id,
+                AssetResource.revision == asset.representation_revision,
+                AssetResource.status == "available",
+                AssetResource.resource_type.in_(
+                    ("thumbnail_small", "thumbnail_medium", "preview_large")
+                ),
+            )
+        )).all()
+    )
+    latest = await session.scalar(
+        select(Job).where(Job.asset_id == asset_id,
+                          Job.job_type.in_(PREVIEW_STAGES))
+        .order_by(Job.created_at.desc(), Job.id.desc()).limit(1)
+    )
+    running = await session.scalar(
+        select(Job).where(
+            Job.asset_id == asset_id,
+            Job.job_type.in_(PREVIEW_STAGES),
+            Job.status.in_(PREVIEW_ACTIVE),
+        ).order_by(Job.created_at.desc(), Job.id.desc()).limit(1)
+    )
+    job = running or latest
+    ready = asset.ingestion_status == "completed" and {
+        "thumbnail_small", "thumbnail_medium", "preview_large"
+    }.issubset(resources)
+    status = (
+        "ready" if ready else
+        "processing" if running and running.status in ("running", "preparing") else
+        "queued" if running else
+        "failed" if latest and latest.status == "failed" else
+        "source_pending" if asset.ingestion_status != "completed" else
+        "preview_missing"
+    )
+    dispatch = await session.scalar(
+        select(DispatchOutbox)
+        .where(DispatchOutbox.job_name == "worker")
+        .order_by(DispatchOutbox.created_at.desc()).limit(1)
+    )
+    return {
+        "asset_id": str(asset_id),
+        "status": status,
+        "ingestion_status": asset.ingestion_status,
+        "available_variants": sorted(resources),
+        "job": {
+            "id": str(job.id),
+            "type": job.job_type,
+            "status": job.status,
+            "attempts": job.attempts,
+            "max_attempts": job.maximum_attempts,
+            "error_code": job.error_code,
+            "scheduled_at": job.scheduled_at.isoformat() if job.scheduled_at else None,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+        } if job else None,
+        "worker_dispatch": {
+            "status": dispatch.status,
+            "error_code": dispatch.last_error,
+        } if dispatch else None,
+        "message": {
+            "ready": "Prévia gerada. Atualize a imagem.",
+            "processing": "O worker está processando esta fotografia.",
+            "queued": (
+                "O processamento aguarda um worker. Reativar a fila não duplica jobs."
+            ),
+            "failed": (
+                "O processamento falhou. Consulte o código do job e solicite reparo."
+            ),
+            "source_pending": (
+                "O arquivo foi catalogado, mas ainda precisa ser baixado do iCloud."
+            ),
+            "preview_missing": (
+                "A fotografia foi importada, mas não há uma prévia disponível."
+            ),
+        }[status],
+    }
+
+
+@router.get("/jobs/assets/{asset_id}/preview", tags=["jobs"])
+async def preview_status(asset_id: UUID, session: Session) -> dict[str, Any]:
+    return await preview_job_state(session, asset_id)
+
+
+@router.post("/jobs/assets/{asset_id}/preview/repair", tags=["jobs"])
+async def repair_preview(
+    asset_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """Repair/reawaken one preview, never create duplicate active media jobs."""
+    from photointel.services.jobs import enqueue_job
+    from photointel.services.outbox import enqueue_dispatch
+
+    asset = await session.scalar(
+        select(Asset).where(Asset.id == asset_id).with_for_update()
+    )
+    if not asset:
+        raise AppError(ErrorCode.NOT_FOUND, "Foto não encontrada", 404)
+    if asset.media_type == "video":
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "Prévia de vídeo requer outro pipeline", 422,
+            {"reason": "VIDEO_PREVIEW_UNSUPPORTED"},
+        )
+    if asset.ingestion_status in {"quarantined", "failed"}:
+        raise AppError(
+            ErrorCode.MEDIA_DOWNLOAD_FAILED,
+            "O download anterior falhou ou foi colocado em quarentena. "
+            "Consulte as falhas de ingestão antes de repetir.",
+            409, {"reason": "MEDIA_SOURCE_BLOCKED"},
+        )
+    settings = await effective_settings(session)
+    if (
+        settings.execution_platform == "cloud_run"
+        and os.environ.get("GCP_JOB_DISPATCH_ENABLED", "false").lower() != "true"
+    ):
+        raise AppError(
+            ErrorCode.STORAGE_UNAVAILABLE,
+            "Despacho do Cloud Run desativado. Verifique a configuração "
+            "GCP_JOB_DISPATCH_ENABLED e o Scheduler do worker.",
+            503, {"reason": "WORKER_DISPATCH_DISABLED"},
+        )
+    job = await session.scalar(
+        select(Job).where(
+            Job.asset_id == asset_id,
+            Job.job_type.in_(PREVIEW_STAGES),
+            Job.status.in_(PREVIEW_ACTIVE),
+        ).order_by(Job.created_at.desc()).limit(1).with_for_update()
+    )
+    created = False
+    if job is None:
+        # A completed asset with a retained preview or durable source can be
+        # decoded without downloading from Apple again. If neither exists,
+        # first recover the remote source and follow the normal staged pipeline.
+        retained = await session.scalar(
+            select(AssetResource.id).where(
+                AssetResource.asset_id == asset_id,
+                AssetResource.status == "available",
+                or_(
+                    and_(AssetResource.resource_type == "source_download",
+                         AssetResource.revision == asset.content_revision),
+                    and_(AssetResource.resource_type == "preview_large",
+                         AssetResource.revision == asset.representation_revision),
+                ),
+            ).limit(1)
+        )
+        job_type = (
+            "thumbnail_generate"
+            if asset.ingestion_status == "completed" and retained is not None
+            else "media_download"
+        )
+        if job_type == "media_download" and not asset.source_metadata.get("fixture"):
+            manifest = await session.scalar(
+                select(DiscoveryManifest.id).where(
+                    DiscoveryManifest.asset_id == asset_id,
+                    DiscoveryManifest.content_revision == asset.content_revision,
+                ).limit(1)
+            )
+            if manifest is None:
+                raise AppError(
+                    ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                    "Não há manifesto de origem para recuperar esta foto. "
+                    "Execute uma reconciliação do iCloud antes do reparo.",
+                    409, {"reason": "SOURCE_MANIFEST_MISSING"},
+                )
+        job = await enqueue_job(
+            session, job_type=job_type, asset_id=asset_id,
+            payload={"force": True, "content_revision": asset.content_revision},
+            idempotency_key=f"preview-repair:{asset_id}:{uuid4()}",
+            priority=5,
+        )
+        created = True
+    # A worker that is already running needs no duplicate Cloud Run execution.
+    # Queued/retrying work receives a deduplicated wakeup, including repeated taps.
+    if (settings.execution_platform == "cloud_run"
+            and job.status in ("queued", "retrying")):
+        slot = int(utcnow().timestamp()) // 120
+        await enqueue_dispatch(
+            session, "worker", f"preview-wakeup:{job.id}:{slot}"
+        )
+    audit(session, identity, "preview.repair", asset_id,
+          job_id=str(job.id), created=created)
+    await session.commit()
+    _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
+    background_tasks.add_task(safe_notify)
+    if job.status in ("running", "preparing"):
+        message = "O worker já está processando a foto; acompanhe a etapa atual."
+    elif settings.execution_platform == "cloud_run":
+        message = (
+            "Solicitação de worker registrada no outbox. "
+            "Acompanhe o despacho e as tentativas abaixo."
+        )
+    else:
+        message = "Etapa aguardando o worker local; nenhuma duplicata foi criada."
+    return {"created": created, "job_id": str(job.id), "job_type": job.job_type,
+            "status": job.status, "message": message}
 
 
 @router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])

@@ -330,6 +330,72 @@ async def test_duplicate_tag_creation_is_a_conflict_not_a_database_error(
     assert invalid.status_code == 422
 
 
+async def test_preview_repair_wakes_existing_job_without_creating_duplicates(
+    client: httpx.AsyncClient, asset: Asset, database: AsyncSession,
+) -> None:
+    asset.ingestion_status = "pending"
+    queued = Job(
+        asset_id=asset.id, job_type="media_download", status="queued",
+        idempotency_key=f"pending-preview-{uuid4()}",
+    )
+    database.add(queued)
+    await database.flush()
+    url = f"/v1/jobs/assets/{asset.id}/preview"
+    status = await client.get(url)
+    assert status.status_code == 200, status.text
+    assert status.json()["status"] == "queued"
+    assert status.json()["job"]["id"] == str(queued.id)
+    for _ in range(2):
+        result = await client.post(url + "/repair")
+        assert result.status_code == 200, result.text
+        assert result.json()["created"] is False
+        assert result.json()["job_id"] == str(queued.id)
+    total = await database.scalar(
+        select(func.count(Job.id)).where(
+            Job.asset_id == asset.id,
+            Job.job_type == "media_download",
+        )
+    )
+    assert total == 1
+
+
+async def test_preview_repair_selects_durable_source_and_reports_job_state(
+    client: httpx.AsyncClient, asset: Asset, database: AsyncSession,
+) -> None:
+    database.add(AssetResource(
+        asset_id=asset.id, resource_type="source_download",
+        revision=asset.content_revision,
+        status="available",
+        object_key=f"sources/{asset.id}/fixture.image",
+    ))
+    await database.flush()
+    url = f"/v1/jobs/assets/{asset.id}/preview"
+    repaired = await client.post(url + "/repair")
+    assert repaired.status_code == 200, repaired.text
+    assert repaired.json()["created"] is True
+    assert repaired.json()["job_type"] == "thumbnail_generate"
+    repeated = await client.post(url + "/repair")
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["created"] is False
+    assert repeated.json()["job_id"] == repaired.json()["job_id"]
+    state = await client.get(url)
+    assert state.status_code == 200
+    assert state.json()["job"]["type"] == "thumbnail_generate"
+    assert state.json()["status"] == "queued"
+
+
+async def test_preview_repair_explains_missing_icloud_manifest(
+    client: httpx.AsyncClient, asset: Asset, database: AsyncSession,
+) -> None:
+    asset.ingestion_status = "pending"
+    await database.flush()
+    response = await client.post(
+        f"/v1/jobs/assets/{asset.id}/preview/repair"
+    )
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["details"]["reason"] == "SOURCE_MANIFEST_MISSING"
+
+
 async def test_reindex_skips_first_busy_asset_before_applying_limit(
     client: httpx.AsyncClient, asset: Asset, database: AsyncSession,
 ) -> None:

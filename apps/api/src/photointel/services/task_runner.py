@@ -43,7 +43,7 @@ async def dispatch_ready_worker_followup(
     This non-GPU wakeup is necessary because the discovery runner only claims
     icloud_discovery, while the normal worker handles derivative jobs.
     """
-    if mode not in ("discover", "backfill", "worker"):
+    if mode not in ("discover", "backfill", "worker", "maintenance"):
         return {"status": "not_applicable"}
     from sqlalchemy import select
 
@@ -66,9 +66,15 @@ async def dispatch_ready_worker_followup(
             .limit(1)
         )
         if pending is not None:
-            await enqueue_dispatch(
-                session, "worker", f"finite-worker-wakeup:{uuid4().hex}"
+            # Maintenance runs periodically even when a prior provider call
+            # said "dispatched" but no worker managed to claim the queue.
+            # One wakeup per ten-minute slot bounds redundant Cloud Run starts.
+            dedupe_key = (
+                f"maintenance-worker-wakeup:{int(time.time()) // 600}"
+                if mode == "maintenance"
+                else f"finite-worker-wakeup:{uuid4().hex}"
             )
+            await enqueue_dispatch(session, "worker", dedupe_key)
         await session.commit()
     if pending is None:
         return {"status": "no_runnable_worker_jobs"}
@@ -137,11 +143,15 @@ async def run_finite(
             )
             orphans = await reconcile_orphan_objects(session, limit=min(max_jobs, 1000))
             await session.commit()
+        followup = await dispatch_ready_worker_followup(
+            mode, max(0.0, deadline - time.monotonic())
+        )
         return {
             "mode": mode,
             "status": "completed",
             "recovered": recovered,
             "dispatches": dispatches,
+            "followup": followup,
             **cleanup,
             **orphans,
         }

@@ -42,7 +42,7 @@ def test_existing_queued_job_wakes_before_new_release_gate_check() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mode", ["discover", "backfill", "worker"])
+@pytest.mark.parametrize("mode", ["discover", "backfill", "worker", "maintenance"])
 async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
     monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
@@ -69,7 +69,10 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
 
     async def enqueue(session, mode, key):
         assert mode == "worker"
-        assert key.startswith("finite-worker-wakeup:")
+        assert key.startswith(
+            "maintenance-worker-wakeup:" if mode == "maintenance"
+            else "finite-worker-wakeup:"
+        )
         events.append("enqueue")
 
     async def drain(**kwargs):
@@ -130,7 +133,7 @@ async def test_finite_job_does_not_wake_with_no_work_or_local_platform(
         await dispatch_ready_worker_followup("backfill", 15)
     )["status"] == "not_cloud_run"
     assert (
-        await dispatch_ready_worker_followup("maintenance", 15)
+        await dispatch_ready_worker_followup("migrate", 15)
     )["status"] == "not_applicable"
     enqueue.assert_not_called()
     drain.assert_not_called()
