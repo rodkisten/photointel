@@ -32,7 +32,7 @@ class WorkflowPushSafetyTests(unittest.TestCase):
         ):
             source = (WORKFLOWS / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                block = source.split(f"  {job}:\n", 1)[1].split("\n  ", 1)[0]
+                block = source.split(f"  {job}:\n", 1)[1].split("    steps:", 1)[0]
                 self.assertIn("github.event_name == 'workflow_dispatch'", block)
                 self.assertIn("  push-check:", source)
 
