@@ -25,8 +25,10 @@ describe('whole-app diagnostics', () => {
   });
 
   it('sends only whitelisted metadata to Cloudflare, never stack or error message', async () => {
-    const fetcher = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) =>
-      new Response(null, { status: 204 }));
+    const fetcher = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      if (!url || !options) throw new Error('Missing diagnostic request');
+      return new Response(null, { status: 204 });
+    });
     vi.stubGlobal('fetch', fetcher);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const incident = reportDiagnostic(new Error('PRIVATE_SECRET_IN_MESSAGE'), 'runtime');
