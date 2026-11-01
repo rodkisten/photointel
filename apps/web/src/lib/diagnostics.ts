@@ -1,5 +1,6 @@
 /** Minimal client telemetry: never send URLs, messages, stacks, tokens or photo metadata. */
 import { ApiError } from '../api/error';
+import { captureBrowserException } from './sentry';
 
 export type DiagnosticPhase = 'bootstrap' | 'render' | 'runtime' | 'promise' | 'api' | 'resource' | 'worker';
 export interface Diagnostic {
@@ -10,6 +11,7 @@ export interface Diagnostic {
   status?: number;
   message: string;
   rayId?: string;
+  eventId?: string;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,11 +40,16 @@ export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnosti
     status: api?.status,
     message: error instanceof Error ? error.message : 'Falha inesperada na aplicação',
     rayId: api?.rayId,
+    eventId: api?.eventId,
   };
 }
 
 export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagnostic {
   const incident = diagnosticFor(error, phase);
+  // A server exception already has its own Sentry event; never duplicate it in the UI.
+  if (!incident.eventId && (!(error instanceof ApiError) || error.code === 'NETWORK_ERROR')) {
+    incident.eventId = captureBrowserException(error, incident.id, phase);
+  }
   console.error('[PhotoIntel diagnostic]', {
     correlation_id: incident.id, source: incident.source, phase: incident.phase,
     code: incident.code, status: incident.status, error,
@@ -90,6 +97,7 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
     'Código: ' + incident.code,
     ...(incident.status === undefined ? [] : ['HTTP: ' + incident.status]),
     ...(incident.rayId ? ['Cloudflare Ray: ' + incident.rayId] : []),
+    ...(incident.eventId ? ['Sentry Event ID: ' + incident.eventId] : []),
   ].join('\n');
 }
 
