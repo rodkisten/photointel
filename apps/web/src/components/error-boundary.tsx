@@ -2,6 +2,7 @@ import { Component, type ReactNode } from 'react';
 import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react';
 import { diagnosticClipboardText, diagnosticFor, diagnosticLogsUrl, reportDiagnostic,
   type Diagnostic } from '../lib/diagnostics';
+import { sentryEventUrl } from '../lib/sentry';
 
 export function DiagnosticActions({ incident }: { incident: Diagnostic }) {
   const label = incident.source === 'gcp' ? 'Ver logs no GCP' : 'Ver logs no Cloudflare';
@@ -12,6 +13,9 @@ export function DiagnosticActions({ incident }: { incident: Diagnostic }) {
         console.warn('[PhotoIntel] Área de transferência indisponível');
       });
     }}><ClipboardCopy size={14} />Copiar diagnóstico</button>
+    {incident.eventId && sentryEventUrl(incident.eventId) && <a
+      href={sentryEventUrl(incident.eventId)} target="_blank" rel="noopener noreferrer">
+      <ExternalLink size={14} />Ver ocorrência no Sentry</a>}
     <a href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
       <ExternalLink size={14} />{label}</a>
     {incident.source === 'cloudflare' &&
