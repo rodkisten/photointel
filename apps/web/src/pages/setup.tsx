@@ -22,24 +22,24 @@ export function SetupPage() {
   const releaseMismatch = !!FRONTEND_RELEASE_ID && !!release.data?.git_sha && FRONTEND_RELEASE_ID !== release.data.git_sha;
   function close() { setSelected(null); setEvidence(''); setNotes(''); setAttested(false); }
   return <><PageHeader eyebrow="Implantação controlada" title="Preparação e validação"
-    description="Conclua cada etapa com evidências desta release. Instalar o sistema não libera uma importação completa." />
+    description="Diagnóstico operacional e uma autorização opcional para importações acima de 1.000 fotos. Lotes menores não exigem gates." />
     <SetupStatusPanel />
-    {releaseMismatch && <div className="notice warning" role="alert">Frontend e API pertencem a SHAs diferentes. Atualize os artefatos antes de registrar uma verificação.</div>}
-    <section className="panel" style={{ marginTop: 20 }} aria-label="Gates de verificação">
-      <div className="panel-title"><h2>Gates de verificação</h2><ShieldCheck size={16} className="muted" /></div>
+    {releaseMismatch && <div className="notice">Frontend e API foram publicados de commits diferentes, o que é normal em deploys independentes. Isso não bloqueia o registro de verificações da API. Compatibilidade funcional continua dependendo dos testes e contratos.</div>}
+    <section className="panel" style={{ marginTop: 20 }} aria-label="Autorização para importações grandes">
+      <div className="panel-title"><h2>Importações em larga escala</h2><ShieldCheck size={16} className="muted" /></div>
       <div className="notice"><ShieldCheck size={15} /><span>{gates.data?.full_backfill_unlocked ?
-        'Gates anteriores concluídos. Uma expansão ainda exige autorização explícita e os limites de custo e capacidade.' :
-        'Backfill completo bloqueado. Nenhum gate é aprovado automaticamente por existir uma configuração.'}</span></div>
+        'Autorização de escala registrada para esta API. Ainda são necessários confirmação explícita e limites de lote, armazenamento e custos.' :
+        'Importações de até 1.000 fotos não exigem gates. Para volumes maiores, registre uma única autorização de escala com evidência.'}</span></div>
       {gates.error ? <ErrorState error={gates.error} retry={() => void gates.refetch()} /> : gates.isPending ? <Skeleton /> :
         <div className="gate-list">{gates.data?.items.map((gate) => <article className="gate-item" key={gate.id}>
-          <div className="gate-title"><div><span className="eyebrow">GATE {gate.id}</span><h3>{gate.name}</h3></div>
+          <div className="gate-title"><div><span className="eyebrow">AUTORIZAÇÃO DE ESCALA</span><h3>{gate.name}</h3></div>
             <Status value={gate.status} /></div><p className="muted">{gate.reason}</p>
           {!!gate.requirements?.length && <ul className="gate-requirements">{gate.requirements.map((requirement) =>
             <li key={requirement}>{requirement}</li>)}</ul>}
           {!!gate.evidence?.length && <details><summary>Referências registradas</summary>
             <ul className="gate-references">{gate.evidence.map((reference) => <li key={reference}><code>{reference}</code></li>)}</ul></details>}
           <div className="inline between"><small className="muted">{gate.verified_at ? date(gate.verified_at, true) : 'Sem verificação registrada'}</small>
-            <Button variant="outline" size="sm" disabled={!release.data?.git_sha || releaseMismatch || gate.status === 'blocked'}
+            <Button variant="outline" size="sm" disabled={!release.data?.git_sha || gate.status === 'blocked'}
               onClick={() => { setSelected(gate); setOutcome('passed'); }}><FileCheck size={13} />Registrar verificação</Button></div>
         </article>)}</div>}
     </section>
@@ -62,7 +62,7 @@ export function SetupPage() {
         </>}
     </section>
     <Dialog open={!!selected} onOpenChange={(open) => !open && close()} title="Registrar verificação do gate"
-      description="Declare somente testes executados nesta release. Credenciais configuradas não comprovam uma integração operacional.">
+      description="Para mais de 1.000 fotos, registre o teste e a referência que comprovem capacidade e custo. Não é necessário para lotes menores.">
       <div className="stack"><label className="field">Resultado<select value={outcome} onChange={(event) => setOutcome(event.target.value)}>
         <option value="passed">Teste passou</option><option value="failed">Teste falhou</option><option value="not_verified">Não verificado</option></select></label>
         <label className="field">Referências de evidência, uma por linha<textarea value={evidence} maxLength={4000} rows={4}
@@ -74,7 +74,7 @@ export function SetupPage() {
           <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} /></label>
         <p className="field-help">SHA: {release.data?.git_sha}</p>
       </div><div className="form-actions"><Button variant="outline" onClick={close}>Cancelar</Button>
-        <Button disabled={update.isPending || !attested || !release.data?.git_sha || releaseMismatch || (outcome === 'passed' && !evidence.trim())}
+        <Button disabled={update.isPending || !attested || !release.data?.git_sha || (outcome === 'passed' && !evidence.trim())}
           onClick={async () => { await update.mutateAsync({body: {gate_id: selected?.id, status: outcome,
             evidence: evidence.split('\n').map((line) => line.trim()).filter(Boolean), notes,
             release_sha: release.data?.git_sha, operator_attestation: attested}});
