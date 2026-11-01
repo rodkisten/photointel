@@ -97,9 +97,9 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
 export function jobLogsUrl(jobType: string, jobId?: string, correlationId?: string): string {
   const jobName = jobType === 'icloud_discovery' ? 'photointel-discover' : 'photointel-worker';
   const ids = [jobId, correlationId].filter((id): id is string => Boolean(id && UUID.test(id)));
-  const filter = ids.length ? '\\n(' + ids.map((id, index) =>
+  const filter = ids.length ? '\n(' + ids.map((id, index) =>
     (index === 0 ? 'jsonPayload.job_id="' : 'jsonPayload.correlation_id="') + id + '"'
   ).join(' OR ') + ')' : '';
-  const query = 'resource.type="cloud_run_job"\\nresource.labels.job_name="' + jobName + '"' + filter;
+  const query = 'resource.type="cloud_run_job"\nresource.labels.job_name="' + jobName + '"' + filter;
   return gcpLogsUrl(query);
 }
