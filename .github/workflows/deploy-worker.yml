@@ -1,4 +1,4 @@
-name: "🌐 Worker · Front + API"
+name: "🌐 Cloudflare Worker"
 on:
   push:
     branches: [main]
