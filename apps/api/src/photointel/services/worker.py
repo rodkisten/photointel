@@ -311,6 +311,14 @@ class AssetBusy(Exception):
     """Another committed job owns this asset; defer without consuming an attempt."""
 
 
+def _is_session_lease_contention(exc: BaseException, job_type: str | None) -> bool:
+    return (
+        isinstance(exc, AppError)
+        and exc.code == ErrorCode.RATE_LIMITED
+        and job_type in {"media_download", "icloud_discovery"}
+    )
+
+
 def _is_retryable_transaction_conflict(exc: BaseException) -> bool:
     """PostgreSQL deadlocks and serialization conflicts must retry the entire job."""
     return isinstance(exc, DBAPIError) and getattr(exc.orig, "sqlstate", None) in {
@@ -622,11 +630,7 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
         logger.info("worker_lease_released", jobs=len(job_ids))
         # SIGTERM/cancellation leaves the durable claim recoverable on expiry.
     except Exception as exc:
-        if (
-            isinstance(exc, AppError)
-            and exc.code == ErrorCode.RATE_LIMITED
-            and captured_job_type in {"media_download", "icloud_discovery"}
-        ):
+        if _is_session_lease_contention(exc, captured_job_type):
             # The encrypted iCloud session has a single owner by design.
             # Contention is scheduling, not a failed download or Sentry incident.
             await _fail_jobs(fences, exc, busy=True)
