@@ -355,7 +355,10 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = [
         {"name": name, "value": value} for name, value in sorted(values.items())
     ]
-    allowed = API_SECRETS if mode == "api" else SECRET_FIELDS - {"MIGRATION_DATABASE_URL"}
+    allowed = (
+        API_SECRETS if mode == "api"
+        else SECRET_FIELDS - {"MIGRATION_DATABASE_URL", "SENTRY_API_TOKEN"}
+    )
     if mode == "migrate":
         allowed = {"DATABASE_URL", "MIGRATION_DATABASE_URL"}
     for key, reference in sorted(config["secrets"].items()):
