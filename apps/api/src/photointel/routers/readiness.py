@@ -38,7 +38,7 @@ from photointel.services.import_policy import authorize_import
 from photointel.services.release import get_release_manifest
 from photointel.services.runtime_settings import effective_settings
 from photointel.services.session_store import session_scope
-from photointel.services.verification import GATES, gate_status, require_import_gates
+from photointel.services.verification import gate_status, require_import_gates
 from photointel.storage import LocalStorage, S3Storage, get_storage
 
 router = APIRouter(dependencies=[Depends(require_identity)])
@@ -47,7 +47,7 @@ Actor = Annotated[Identity, Depends(require_identity)]
 
 
 class GateInput(BaseModel):
-    gate_id: Literal["A", "B", "C", "D", "E", "F"]
+    gate_id: Literal["F"]
     status: Literal["passed", "failed", "not_verified"]
     evidence: list[str] = Field(default_factory=list, max_length=20)
     notes: str | None = Field(default=None, max_length=2000)
@@ -89,13 +89,6 @@ async def attest_gate(
         if not body.evidence:
             raise AppError(
                 ErrorCode.INVALID_REQUEST, "Informe referências dos testes reais", 422
-            )
-        states = {
-            item["id"]: item["status"] for item in (await gate_status(session))["items"]
-        }
-        if any(states[key] != "passed" for key in GATES[body.gate_id][1]):
-            raise AppError(
-                ErrorCode.INVALID_REQUEST, "Gates anteriores ainda pendentes", 409
             )
     row = await session.get(VerificationGate, body.gate_id, with_for_update=True)
     if row is None:
@@ -146,9 +139,6 @@ async def setup_status(session: Session) -> dict[str, Any]:
         if settings.icloud_account and settings.icloud_library
         else None
     )
-    states = {
-        item["id"]: item["status"] for item in (await gate_status(session))["items"]
-    }
     # Release connections before storage I/O; configuration is not access proof.
     await session.commit()
     try:
@@ -200,14 +190,8 @@ async def setup_status(session: Session) -> dict[str, Any]:
     check(
         "gpu",
         "Modal / IA",
-        "operational"
-        if states["C"] == "passed"
-        else "unverified"
-        if settings.gpu_enabled
-        else "not_configured",
-        "Inferência real atestada neste release"
-        if states["C"] == "passed"
-        else "Execute o gate C para validar modelos, persistência e custos"
+        "unverified" if settings.gpu_enabled else "not_configured",
+        "GPU habilitada; confirme o resultado nos jobs de inferência e nos logs."
         if settings.gpu_enabled
         else "GPU desativada; nenhum gasto de inferência autorizado",
         "/settings",
@@ -247,7 +231,7 @@ async def import_preview(body: IngestionInput, session: Session) -> dict[str, An
     gate_error = None
     if body.source == "icloud" and settings.verification_gates_enforced:
         try:
-            await require_import_gates(session, body.limit)
+            await require_import_gates(session, max(body.limit, body.target_assets or 0))
         except AppError as exc:
             gate_error = exc.message
     return {
