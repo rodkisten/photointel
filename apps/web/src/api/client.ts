@@ -41,7 +41,8 @@ export function useAction<T = unknown>(path?: string, method = 'POST') {
       return request<T>(url ?? path!, json(method, body));
     },
     onSuccess: () => { void client.invalidateQueries(); },
-    onError: (error) => notify(error.toString(), 'error', reportDiagnostic(error, 'api'),
+    onError: (error) => notify(error instanceof Error ? error.message : 'Falha na operação',
+      'error', reportDiagnostic(error, 'api'),
       error instanceof Error ? error : undefined),
   });
 }
