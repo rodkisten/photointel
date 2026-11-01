@@ -76,10 +76,12 @@ jobs:
           tests/test_backend_contention.py
           tests/test_session_store.py
           tests/test_job_observability.py
-      - name: "🗄️ Enable vector extension"
+      - name: "🗄️ Enable PostgreSQL extensions"
         run: >
           PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
-          -d photointel -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          -d photointel
+          -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
       - name: "🧪 iCloud lease integration"
         run: >
           uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
