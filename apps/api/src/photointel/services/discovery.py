@@ -332,32 +332,37 @@ async def _reserve_download(
 async def _backfill_target(
     session: Any, settings: Settings, payload: dict[str, Any]
 ) -> int | None:
-    """A full-library chain requires a separate current-release operator approval."""
+    """Continue previously approved finite batches, including after API redeploys.
+
+    High-scale permission is checked before the initial job is created. Persisted
+    authorization is never promoted to a larger target, and current runtime
+    capacity/byte/batch limits remain in force for every execution.
+    """
+    from re import fullmatch
     from photointel.services.import_policy import validate_execution
-    from photointel.services.release import get_release_manifest
-    from photointel.services.verification import gate_status
 
     approval = payload.get("backfill_authorization")
-    if not approval:
+    if approval is None:
         return None
-    target = approval.get("target_assets") if isinstance(approval, dict) else None
-    release = get_release_manifest()
+    if not isinstance(approval, dict):
+        raise AppError(ErrorCode.INVALID_REQUEST, "Autorização de backfill inválida", 409)
+    target = approval.get("target_assets")
+    source_sha = approval.get("release_sha")
     if (
         type(target) is not int
         or not 1 <= target <= settings.catalog_asset_limit
         or settings.database_profile != "full"
-        or approval.get("release_sha") != release["git_sha"]
-        or release["provenance_status"] != "identified"
-        or not approval.get("authorized_by")
-        or not approval.get("approved_at")
+        or (source_sha is not None and (
+            not isinstance(source_sha, str)
+            or fullmatch(r"[0-9a-f]{40}", source_sha) is None
+        ))
+        or not isinstance(approval.get("authorized_by"), str)
+        or not approval["authorized_by"].strip()
+        or not isinstance(approval.get("approved_at"), str)
+        or not approval["approved_at"].strip()
     ):
         raise AppError(ErrorCode.INVALID_REQUEST, "Autorização de backfill inválida", 409)
     validate_execution(settings, approval.get("authorization") or {})
-    states = {
-        item["id"]: item["status"] for item in (await gate_status(session))["items"]
-    }
-    if states.get("F") != "passed":
-        raise AppError(ErrorCode.INVALID_REQUEST, "Gate F necessário para backfill", 409)
     return target
 
 
