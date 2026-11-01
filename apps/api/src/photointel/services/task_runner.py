@@ -45,11 +45,12 @@ async def dispatch_ready_worker_followup(
     """
     if mode not in ("discover", "backfill", "worker"):
         return {"status": "not_applicable"}
+    from sqlalchemy import select
+
     from photointel.config import get_settings
     from photointel.database import SessionLocal
     from photointel.models import Job, utcnow
     from photointel.services.outbox import drain_outbox, enqueue_dispatch
-    from sqlalchemy import select
 
     if get_settings().execution_platform != "cloud_run":
         return {"status": "not_cloud_run"}
@@ -110,8 +111,10 @@ async def run_finite(
     started = time.monotonic()
     deadline = started + deadline_seconds
     worker_id = f"task:{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:12]}"
+    from photointel.services.job_notify import safe_notify
     from photointel.services.outbox import drain_outbox
 
+    await safe_notify()
     dispatches = await drain_outbox(
         limit=min(max_jobs, 10),
         deadline_seconds=min(30, max(1, deadline - time.monotonic())),
@@ -183,6 +186,8 @@ async def run_finite(
                     busy=bool(active),
                 )
                 await session.commit()
+            if claimed:
+                await safe_notify()
             claimed_count += len(claimed)
             gpu_ids = [job.id for job in claimed if job.job_type in GPU_TYPES]
             for job in claimed:

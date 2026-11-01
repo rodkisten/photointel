@@ -72,21 +72,37 @@ def append_output(value: str) -> None:
 
 
 def short_workflow(name: str) -> str:
-    """Small title for Lock Screen, Dynamic Island and grouped pushes."""
-    label = name.casefold()
-    if ("bootstrap" in label or "setup" in label) and "gcp" in label:
-        return "PhotoIntel · Setup"
-    if "deploy" in label or "release" in label:
-        return "PhotoIntel · Deploy"
-    for token, pretty in (
-        ("validate", "Validação"), ("ci", "CI"), ("test", "Testes"),
-        ("pages", "Pages"), ("webkit", "WebKit"), ("zip", "ZIP"),
-        ("ssh", "SSH"), ("manifest", "Manifesto"),
-    ):
-        if token in label:
-            return f"PhotoIntel · {pretty}"
-    return "PhotoIntel · CI"
-
+    """Distinct, recognizable title for every workflow, never generic CI."""
+    normalized = re.sub(r"^[^\w]+", "", name, flags=re.UNICODE)
+    normalized = re.sub(r"\s+", " ", normalized).strip().casefold()
+    names = {
+        "artifact cleanup": "Limpeza de artifacts",
+        "bootstrap check": "Bootstrap",
+        "ci": "CI",
+        "cloudflare setup": "Cloudflare Setup",
+        "compose": "Compose",
+        "architectures": "Arquiteturas",
+        "cloudflare worker": "Cloudflare Worker",
+        "worker · front + api": "Cloudflare Worker",
+        "setup gcp": "Setup GCP",
+        "deploy": "Deploy",
+        "diagnose cloud run": "Diagnóstico Cloud Run",
+        "migrate neon": "Migração Neon",
+        "gcp terminal": "Terminal GCP",
+        "gcp check": "Validação GCP",
+        "icloud setup": "Setup iCloud",
+        "icloud validation": "Validação iCloud",
+        "cpu models": "Modelos CPU",
+        "manifest": "Manifesto",
+        "ssh": "SSH",
+        "terminal validation": "Validação Terminal",
+        "webkit": "WebKit",
+        "zip patch": "ZIP Patch",
+    }
+    result = names.get(normalized)
+    if result is None:
+        result = clean_label(re.sub(r"^[^\w]+", "", name).strip(), 42) or "Workflow"
+    return f"PhotoIntel · {result}"
 
 def short_step(name: str) -> str:
     """Compress verbose YAML step labels before sending to the iPhone."""
@@ -218,7 +234,7 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
     if args.action == "start":
         payload = {
             "title": workflow,
-            "body": f"Preparando · {fraction}",
+            "body": f"Iniciando {clean_label(args.job, 24) or 'workflow'} · {fraction}",
             "symbol": "square.stack.3d.up.fill",
             "tint": "#3B82F6",
             "trailing": fraction,
@@ -262,6 +278,7 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
             print(f"🔔 {message}")
         if args.activity_id and ACTIVITY_PATTERN.fullmatch(args.activity_id):
             payload = {
+                "title": workflow,
                 "body": f"{'❌ ' if failed else ''}{label} · {fraction}",
                 "trailing": fraction,
                 "status": "failed" if failed else "running",
@@ -276,8 +293,8 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
     if args.action == "end":
         success = args.outcome.lower().strip() == "success"
         message = "✅ Concluído" if success else "❌ Falhou"
-        if success:
-            # One final push, no per-step success noise.
+        if success and args.activity_id and ACTIVITY_PATTERN.fullmatch(args.activity_id):
+            # Only one completion notification for a real Live Activity.
             try:
                 send("notify-json", device, token, {
                     "title": workflow, "text": f"{message} · {total}/{total}",
@@ -288,6 +305,7 @@ def handle(args: argparse.Namespace, device: str, token: str) -> None:
         if not args.activity_id or not ACTIVITY_PATTERN.fullmatch(args.activity_id):
             return
         payload = {
+            "title": workflow,
             "status": "done" if success else "failed",
             "body": f"{message} · {total}/{total}" if success else message,
             "endsIn": None,

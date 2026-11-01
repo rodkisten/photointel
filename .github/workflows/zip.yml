@@ -66,6 +66,18 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
+      - name: "📱 Live · Início"
+        id: notify_live_start
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: start
+          total: "3"
+          github-token: ${{ github.token }}
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
       - name: "🧰 Setup"
         id: notify_observed_002
         uses: actions/setup-node@v6
@@ -1659,7 +1671,11 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           step: "🚀 Deploy"
+          label: "Pull request"
           outcome: ${{ steps.open-pr.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "3"
+          total: "3"
       - name: "📦 Summary"
         id: notify_observed_007
         if: steps.apply.outputs.changed_count != '0'
@@ -1710,5 +1726,6 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           outcome: ${{ job.status }}
-          completed: "1"
-          total: "1"
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "3"
+          total: "3"

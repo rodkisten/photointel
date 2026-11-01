@@ -21,6 +21,7 @@ from photointel.config import get_settings
 from photointel.database import SessionLocal
 from photointel.errors import AppError, ErrorCode
 from photointel.models import Asset, DiscoveryManifest, Job, JobEvent, utcnow
+from photointel.services.job_notify import safe_notify
 from photointel.services.jobs import (
     ACTIVE,
     claim_jobs,
@@ -408,6 +409,7 @@ async def _fail_jobs(
         ):
             await refresh_batch(session, batch_id)
         await session.commit()
+    await safe_notify()
 
 
 async def _finish_jobs(
@@ -445,6 +447,7 @@ async def _finish_jobs(
     for batch_id in sorted({job.batch_id for job in jobs if job.batch_id}, key=str):
         await refresh_batch(session, batch_id)
     await session.commit()
+    await safe_notify()
 
 
 async def execute_job(job_id: UUID, worker_id: str) -> None:
@@ -601,6 +604,8 @@ async def run_worker() -> None:
                     busy=bool(active or (gpu_task and not gpu_task.done())),
                 )
                 await session.commit()
+            if jobs or gpu_jobs:
+                await safe_notify()
             for job in jobs:
                 active.add(asyncio.create_task(execute_job(job.id, worker_id)))
             if gpu_jobs:

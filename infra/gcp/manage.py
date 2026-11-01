@@ -37,6 +37,8 @@ SECRET_FIELDS = {
     "MODAL_TOKEN",
     "MODAL_PROXY_KEY",
     "MODAL_PROXY_SECRET",
+    "NOTIFY_DEVICE_ID",
+    "NOTIFY_TOKEN",
 }
 WORKFLOW_SECRET_FIELDS = {
     "CLOUDFLARE_API_TOKEN",
@@ -49,6 +51,8 @@ REQUIRED_SECRETS = SECRET_FIELDS - {
     "MODAL_TOKEN",
     "MODAL_PROXY_KEY",
     "MODAL_PROXY_SECRET",
+    "NOTIFY_DEVICE_ID",
+    "NOTIFY_TOKEN",
 }
 SERVICES = (
     "run.googleapis.com",
@@ -79,6 +83,7 @@ PROTECTED_ENV = {
     "GCP_PROJECT_ID",
     "GCP_REGION",
     "GCP_JOB_DISPATCH_ENABLED",
+    "NOTIFY_JOB_EVENTS_ENABLED",
     "EXECUTION_PLATFORM",
     "VERIFICATION_GATES_ENFORCED",
     "TEMP_DIRECTORY",
@@ -336,6 +341,10 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
         "GCP_PROJECT_ID": config["project_id"],
         "GCP_REGION": config["region"],
         "GCP_JOB_DISPATCH_ENABLED": "false" if mode == "migrate" else "true",
+        "NOTIFY_JOB_EVENTS_ENABLED": str(
+            mode != "migrate"
+            and {"NOTIFY_DEVICE_ID", "NOTIFY_TOKEN"} <= config["secrets"].keys()
+        ).lower(),
     }
     values.update(config.get("extra_environment", {}))
     entries: list[dict[str, Any]] = [

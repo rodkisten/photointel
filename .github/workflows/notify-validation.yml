@@ -1,0 +1,81 @@
+name: "📱 Notify Validation"
+run-name: "📱 Notify · ${{ github.event_name }}"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/notify/**'
+      - '.github/actions/notify/**'
+      - 'apps/api/src/photointel/services/job_notify.py'
+      - 'apps/api/src/photointel/services/jobs.py'
+      - 'apps/api/src/photointel/services/worker.py'
+      - 'apps/api/src/photointel/services/task_runner.py'
+      - 'apps/api/src/photointel/routers/operations.py'
+      - 'infra/gcp/manage.py'
+      - 'tests/test_job_notify.py'
+      - 'infra/gcp/tests/test_notify.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/notify-validation.yml'
+  pull_request:
+    paths:
+      - 'infra/notify/**'
+      - '.github/actions/notify/**'
+      - 'apps/api/src/photointel/services/job_notify.py'
+      - 'apps/api/src/photointel/services/jobs.py'
+      - 'apps/api/src/photointel/services/worker.py'
+      - 'apps/api/src/photointel/services/task_runner.py'
+      - 'apps/api/src/photointel/routers/operations.py'
+      - 'infra/gcp/manage.py'
+      - 'tests/test_job_notify.py'
+      - 'infra/gcp/tests/test_notify.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/notify-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  notify-tests:
+    name: "📱 API + Actions tests"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      NOTIFY_JOB_EVENTS_ENABLED: 'false'
+      NOTIFY_DEVICE_ID: ''
+      NOTIFY_TOKEN: ''
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "🐍 UV"
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - name: "🐍 Python"
+        run: uv python install 3.12
+      - name: "📦 Dependencies"
+        run: uv sync --frozen --group ingest
+      - name: "🧪 Notify! API and Actions"
+        run: |
+          uv run --no-sync pytest -q tests/test_job_notify.py
+          python3 -m unittest discover -s infra/gcp/tests -p test_notify.py -v
+      - name: "🔍 Lint"
+        run: >-
+          uv run --no-sync ruff check
+          apps/api/src/photointel/services/job_notify.py
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/task_runner.py
+          apps/api/src/photointel/routers/operations.py
+          tests/test_job_notify.py

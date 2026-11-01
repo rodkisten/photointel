@@ -123,6 +123,41 @@ class NotifyOfflineTests(unittest.TestCase):
                         self.assertEqual(notify.main(), 0)
                     self.assertNotIn("secretTOP123456", stdout.getvalue())
 
+    def test_workflow_titles_are_distinct_not_all_ci(self):
+        names = [
+            "🧪 CI", "🐳 Compose", "☁️ GCP Check", "🍎 iCloud Validation",
+            "🧱 Setup GCP", "🌐 Cloudflare Worker", "📱 GCP Terminal",
+            "🗃️ Migrate Neon", "📦 ZIP Patch", "🧠 CPU Models",
+        ]
+        labels = [notify.short_workflow(name) for name in names]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertEqual(labels[0], "PhotoIntel · CI")
+        self.assertEqual(notify.short_workflow("Custom diagnostics"),
+                         "PhotoIntel · Custom diagnostics")
+
+    def test_no_success_push_without_started_activity(self):
+        import argparse
+        args = argparse.Namespace(action="end", workflow="🌐 Cloudflare Worker",
+                                  job="deploy", outcome="success", activity_id="", total="1")
+        with patch.object(notify, "send") as send:
+            notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
+            send.assert_not_called()
+
+    def test_api_notify_source_and_deployment_contract(self):
+        import ast
+        source = (ROOT / "apps/api/src/photointel/services/job_notify.py").read_text()
+        ast.parse(source)
+        self.assertIn("NOTIFY_JOB_EVENTS_ENABLED", source)
+        self.assertIn("with_for_update=True", source)
+        self.assertIn("scope_for", source)
+        self.assertIn("send_push", source)
+        self.assertIn("drain_job_notifications", source)
+        management = (ROOT / "infra/gcp/manage.py").read_text()
+        self.assertIn('"NOTIFY_DEVICE_ID"', management)
+        self.assertIn('"NOTIFY_TOKEN"', management)
+        self.assertIn('"NOTIFY_JOB_EVENTS_ENABLED"', management)
+        self.assertIn('mode != "migrate"', management)
+
     def test_only_strategic_workflows_send_notify(self):
         strategic = {"gcp-deploy.yml", "gcp-bootstrap.yml", "deploy-worker.yml", "zip.yml"}
         for name in WORKFLOWS:
