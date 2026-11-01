@@ -1,13 +1,16 @@
 import { Component, type ReactNode } from 'react';
-import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw, ScanSearch } from 'lucide-react';
 import { diagnosticClipboardText, diagnosticFor, diagnosticLogsQuery, diagnosticLogsUrl, reportDiagnostic,
   type Diagnostic } from '../lib/diagnostics';
 import { sentryEventUrl } from '../lib/sentry';
+import { useUi } from '../lib/store';
 
-export function DiagnosticActions({ incident }: { incident: Diagnostic }) {
+export function DiagnosticActions({ incident, error }: { incident: Diagnostic; error?: Error }) {
   const label = incident.source === 'gcp' ? 'Ver logs no GCP' : 'Ver logs no Cloudflare';
   return <div className="diagnostic-actions">
     <span className="diagnostic-id">Correlation ID: <code>{incident.id}</code></span>
+    <button type="button" onClick={() => useUi.getState().inspect(incident, error)}>
+      <ScanSearch size={14} />Inspecionar erro</button>
     <button type="button" onClick={() => {
       void navigator.clipboard.writeText(diagnosticClipboardText(incident)).catch(() => {
         console.warn('[PhotoIntel] Área de transferência indisponível');
@@ -16,7 +19,7 @@ export function DiagnosticActions({ incident }: { incident: Diagnostic }) {
     {incident.eventId && sentryEventUrl(incident.eventId) && <a
       href={sentryEventUrl(incident.eventId)} target="_blank" rel="noopener noreferrer">
       <ExternalLink size={14} />Ver ocorrência no Sentry</a>}
-    <a href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
+    <a className="diagnostic-external" href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
       <ExternalLink size={14} />{label}</a>
     {incident.source === 'gcp' && <>
       <button type="button" onClick={() => {

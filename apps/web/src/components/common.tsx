@@ -26,7 +26,7 @@ export function ErrorState({ error, retry }: { error: Error; retry?: () => void 
   const incident = useMemo(() => diagnosticFor(error, 'api'), [error]);
   return <div className="error-state" role="alert"><AlertCircle size={20} />
     <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p>
-      <DiagnosticActions incident={incident} />
+      <DiagnosticActions incident={incident} error={error} />
       {error instanceof ApiError && <details><summary>Detalhes do erro</summary>
         <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {JSON.stringify(error, null, 2)}
@@ -63,7 +63,7 @@ export function Toast() {
   return <div className={`toast toast-${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
     {toast.kind === 'error' ? <AlertCircle size={17} /> : <Check size={17} />}
     <div className="toast-message"><span>{toast.text}</span>
-      {toast.kind === 'error' && toast.incident && <DiagnosticActions incident={toast.incident} />}
+      {toast.kind === 'error' && toast.incident && <DiagnosticActions incident={toast.incident} error={toast.error} />}
     </div><button onClick={dismiss} aria-label="Dispensar aviso"><X size={16} /></button>
   </div>;
 }

@@ -78,6 +78,14 @@ def create_app() -> FastAPI:
     @app.exception_handler(AppError)
     async def application_error(request: Request, exc: AppError) -> JSONResponse:
         request.state.error_code = exc.code
+        # Persist only finite, public domain-reason identifiers, never raw details.
+        reason = exc.details.get("reason") if isinstance(exc.details, dict) else None
+        if (
+            isinstance(reason, str) and reason.isascii()
+            and reason.isupper() and reason.replace("_", "").isalnum()
+            and len(reason) <= 64
+        ):
+            request.state.error_reason = reason
         if exc.status_code >= 500:
             request.state.sentry_event_id = capture_exception(
                 exc, correlation_id=request.state.correlation_id,
@@ -89,6 +97,8 @@ def create_app() -> FastAPI:
     async def validation_error(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        request.state.error_code = "INVALID_REQUEST"
+        request.state.error_reason = "SCHEMA_VALIDATION"
         # Validation inputs may contain credentials; do not serialize Pydantic input/ctx.
         issues = [
             {"path": list(item["loc"]), "type": item["type"]}
@@ -213,8 +223,12 @@ def create_app() -> FastAPI:
                     "status_code": response.status_code,
                     "error_code": getattr(request.state, "error_code", None)
                     or f"HTTP_{response.status_code}",
+                    "reason": getattr(request.state, "error_reason", None),
                     "method": request.method,
-                    "route_group": "/v1/*" if request.url.path.startswith("/v1/") else "other",
+                    "route_group": (
+                        "/v1/jobs/reindex" if request.url.path == "/v1/jobs/reindex"
+                        else "/v1/*" if request.url.path.startswith("/v1/") else "other"
+                    ),
                 },
             )
         response.headers["X-Correlation-ID"] = request.state.correlation_id

@@ -4,8 +4,11 @@ Never expose the Sentry API token to browsers or follow remote redirects.
 """
 import os
 import re
+import time
+from collections import defaultdict, deque
 
 import httpx
+from google.auth.exceptions import GoogleAuthError
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -14,10 +17,50 @@ from photointel.auth import require_identity
 from photointel.database import SessionLocal
 from photointel.errors import AppError, ErrorCode
 from photointel.models import Job
+from photointel.services.cloud_logs import canonical_id, read_incident
 from photointel.sentry_observability import event_id, sentry_organization
 
 router = APIRouter(dependencies=[Depends(require_identity)])
 ISSUE_ID = re.compile(r"^[0-9]{1,24}$")
+_reads: dict[str, deque[float]] = defaultdict(deque)
+
+
+@router.get("/observability/incidents/{identifier}", tags=["observability"])
+async def incident_log_summary(identifier: str) -> dict[str, object]:
+    """One authenticated correlation ID, limited records, no arbitrary Logs query."""
+    normalized = canonical_id(identifier)
+    if not normalized:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Correlation ID inválido", 422)
+    now = time.monotonic()
+    attempts = _reads[normalized]
+    while attempts and now - attempts[0] > 60:
+        attempts.popleft()
+    if len(attempts) >= 5:
+        raise AppError(
+            ErrorCode.RATE_LIMITED,
+            "Muitas consultas deste incidente; tente novamente em um minuto",
+            429,
+        )
+    attempts.append(now)
+    if len(_reads) > 2048:
+        _reads.clear()
+    try:
+        entries = await read_incident(normalized)
+    except (httpx.HTTPError, ValueError, RuntimeError, GoogleAuthError):
+        # Never expose raw Google API errors or IAM identities to the browser.
+        raise AppError(
+            ErrorCode.STORAGE_UNAVAILABLE,
+            "Consulta de logs indisponível. Verifique o acesso de leitura do "
+            "photointel-api ao Cloud Logging (roles/logging.viewer).",
+            503,
+        ) from None
+    return {
+        "correlation_id": normalized,
+        "entries": entries,
+        "source": "gcp",
+        "count": len(entries),
+        "note": "Apenas campos técnicos permitidos; sem dados pessoais, fotos ou tokens.",
+    }
 
 
 @router.get("/observability/sentry-events/{identifier}", tags=["observability"])

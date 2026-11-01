@@ -77,12 +77,19 @@ reconcile_secret_access() {
     change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
   done
 }
+reconcile_diagnostics_access() {
+  # Authenticated read-only incident inspector. Logs are filtered/sanitized in API.
+  change projects add-iam-policy-binding "$PROJECT" \
+    "--member=serviceAccount:photointel-api@$PROJECT.iam.gserviceaccount.com" \
+    --role=roles/logging.viewer --condition=None --format=none
+}
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == permissions ]]; then
   # Only add narrowly scoped secret IAM bindings. Do not provision infrastructure,
   # change workload identity providers, build images or touch database schemas.
   reconcile_secret_access
-  log "✅ Secret Manager runtime/workflow IAM grants reconciled; no resources created."
+  reconcile_diagnostics_access
+  log "✅ Secret Manager + read-only Cloud Logging IAM reconciled; no resources created."
   exit 0
 fi
 if [[ "$MODE" != plan ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
@@ -125,6 +132,7 @@ done
 ensure "Staging bucket $BUCKET" storage buckets describe "$BUCKET" @@CREATE@@ storage buckets create "$BUCKET" "--location=$REGION" --uniform-bucket-level-access --public-access-prevention
 log "Staging bucket location: $(gcp storage buckets describe "$BUCKET" --format='value(location)'); no relocation"
 reconcile_secret_access
+reconcile_diagnostics_access
 # The terminal bootstrap preflight checks OAuth version existence/state without
 # ever reading credential payloads. Metadata-only viewer is scoped to these
 # two secret containers and is distinct from secretAccessor.
