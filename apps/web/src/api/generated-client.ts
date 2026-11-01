@@ -3,7 +3,7 @@ import createClient from 'openapi-fetch';
 import type { components, paths } from './schema';
 import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types';
 import { API_BASE, ApiError } from './client';
-import { apiNetworkError } from './error';
+import { apiNetworkError, isRequestAbort } from './error';
 
 export const api = createClient<paths>({
   baseUrl: API_BASE || window.location.origin,
@@ -13,7 +13,7 @@ export const api = createClient<paths>({
     try {
       return await globalThis.fetch(input);
     } catch (cause) {
-      if (cause instanceof Error && cause.name === 'AbortError') throw cause;
+      if (isRequestAbort(cause)) throw cause;
       throw apiNetworkError(cause, input.method, input.url);
     }
   },
