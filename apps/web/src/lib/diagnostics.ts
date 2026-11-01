@@ -15,11 +15,21 @@ export interface Diagnostic {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sent = new Set<string>();
 
+function newId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
+    hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
 export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnostic {
   const api = error instanceof ApiError ? error : null;
   const name = error instanceof Error ? error.name : 'UnknownError';
   return {
-    id: api?.correlationId && UUID.test(api.correlationId) ? api.correlationId : crypto.randomUUID(),
+    id: api?.correlationId && UUID.test(api.correlationId) ? api.correlationId : newId(),
     phase,
     source: api?.source ?? 'cloudflare',
     code: api?.code && /^[A-Z0-9_]{1,48}$/.test(api.code) ? api.code :
