@@ -2,11 +2,10 @@
 
 from uuid import uuid4
 
-from sqlalchemy.dialects import postgresql
-
 from photointel.errors import AppError
 from photointel.services.jobs import _batch_lock_statement
 from photointel.services.worker import _is_session_lease_contention
+from sqlalchemy.dialects import postgresql
 
 
 def test_icloud_session_is_deferred_only_for_icloud_jobs() -> None:

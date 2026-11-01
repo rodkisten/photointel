@@ -1,0 +1,88 @@
+name: "🧪 Backend Smoke"
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/backend-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/backend-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: "🐍 Unit + iCloud integration"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: local
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "🧰 Python and uv"
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - name: "🐍 Python 3.12"
+        run: uv python install 3.12
+      - name: "📦 Sync locked dependencies"
+        run: uv sync --frozen --group ingest
+      - name: "🔎 Ruff"
+        run: >
+          uv run ruff check
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/jobs.py
+          apps/api/src/photointel/services/discovery.py
+          tests/test_backend_contention.py
+          tests/integration/test_discovery_pipeline_v11.py
+      - name: "🧪 Worker, sessions and correlation"
+        run: >
+          uv run pytest -q
+          tests/test_backend_contention.py
+          tests/test_session_store.py
+          tests/test_job_observability.py
+      - name: "🗄️ Enable PostgreSQL extensions"
+        run: >
+          PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
+          -d photointel
+          -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+      - name: "🧪 iCloud lease integration"
+        run: >
+          uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
+          -k contention_does_not_consume_manifest_attempts
