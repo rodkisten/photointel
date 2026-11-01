@@ -26,13 +26,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         next_step = self.workflow.find("\n      - name:", start + 1)
         return self.workflow[start:next_step if next_step > start else None]
 
-    def test_dropdown_supports_all_and_each_stage(self) -> None:
-        self.assertIn("          - all\n", self.workflow)
+    def test_dropdown_defaults_to_release_and_keeps_individual_stages(self) -> None:
+        self.assertIn("          - release\n", self.workflow)
+        self.assertNotIn("          - all\n", self.workflow)
         for value in ("build", "jobs-deploy", "migrate", "deploy", "scheduler", "cleanup"):
             self.assertIn(f"          - {value}\n", self.workflow)
-        self.assertIn("        default: all", self.workflow)
+        self.assertIn("        default: release", self.workflow)
 
-    def test_all_stages_keep_expected_order(self) -> None:
+    def test_release_stages_keep_expected_order(self) -> None:
         expected = (
             "database_gate", "preflight", "image_cache", "build_image",
             "verify_image", "deploy_jobs", "migrate_database", "deploy_api",
@@ -42,12 +43,48 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertTrue(all(position >= 0 for position in positions), positions)
         self.assertEqual(positions, sorted(positions))
 
-    def test_all_mode_is_wired_to_build_jobs_api_and_scheduler(self) -> None:
+    def test_release_mode_is_wired_to_build_jobs_and_api_only(self) -> None:
         for stage in (
             "preflight", "image_cache", "build_image", "verify_image",
-            "deploy_jobs", "deploy_api", "deploy_scheduler",
+            "deploy_jobs", "deploy_api",
         ):
-            self.assertIn("inputs.action == 'all'", self.stage(stage), stage)
+            self.assertIn("inputs.action == 'release'", self.stage(stage), stage)
+
+    def test_release_excludes_migration_and_scheduler(self) -> None:
+        # Only the operator-selected actions may run these stateful phases.
+        scheduler = self.stage("deploy_scheduler")
+        migrate = self.stage("migrate_database")
+        self.assertIn("if: inputs.action == 'scheduler'", scheduler)
+        self.assertIn("if: inputs.action == 'migrate'", migrate)
+        self.assertNotIn("inputs.action == 'release'", scheduler)
+        self.assertNotIn("inputs.action == 'release'", migrate)
+        self.assertIn("if: inputs.action == 'scheduler'", self.workflow)
+        self.assertLess(self.stages["deploy_jobs"], self.stages["deploy_api"])
+        self.assertLess(self.stages["database_gate"], self.stages["preflight"])
+        self.assertNotIn("jobs execute", self.workflow)
+
+    def test_release_live_notifications_use_three_phase_counts(self) -> None:
+        self.assertIn(
+            "total: ${{ inputs.action == 'release' && '3' || '1' }}",
+            self.workflow,
+        )
+        for stage_name, count in (
+            ('📱 ✓ Build', '1'),
+            ('📱 ✓ Jobs', '2'),
+            ('📱 ✓ API', '3'),
+        ):
+            match = re.search(
+                r"^      - name: \"" + re.escape(stage_name) + r"\"\\n(.*?)(?=^      - name: |\\Z)",
+                self.workflow, re.MULTILINE | re.DOTALL,
+            )
+            self.assertIsNotNone(match, stage_name)
+            self.assertIn(
+                "completed: \"${{ inputs.action == 'release' && '" + count + "' || '1' }}\"",
+                match.group(1),
+                stage_name,
+            )
+        self.assertIn("completed: \"0\"", self.workflow)
+        self.assertIn("if: inputs.action == 'scheduler'", self.stage("deploy_scheduler"))
 
     def test_build_is_reused_and_verified_before_jobs(self) -> None:
         self.assertIn("steps.image_cache.outputs.skip != 'true'", self.stage("build_image"))
@@ -65,14 +102,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("DATABASE_READY", guard)
         self.assertIn("return 1", guard)
         self.assertIn("inputs.action == 'deploy'", self.stage("database_gate"))
-        self.assertIn("inputs.action == 'all'", self.stage("database_gate"))
+        self.assertIn("inputs.action == 'release'", self.stage("database_gate"))
         self.assertNotIn("manage.py migrate", self.workflow, "No automatic database migrations")
         self.assertLess(self.stages["database_gate"], self.stages["build_image"])
 
     def test_migration_is_opt_in_and_requires_database_safety_evidence(self) -> None:
         migrate = self.stage("migrate_database")
         self.assertIn("inputs.action == 'migrate'", migrate)
-        self.assertNotIn("inputs.action == 'all'", migrate)
+        self.assertNotIn("inputs.action == 'release'", migrate)
         self.assertIn("run: bash infra/gcp/release.sh migrate", migrate)
         self.assertIn("inputs.migration_mode", migrate)
         self.assertIn("inputs.migration_database", migrate)
@@ -91,7 +128,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         migration = self.stage("migrate_database")
         self.assertIn("run: bash infra/gcp/release.sh migrate", migration)
         self.assertIn("inputs.migration_mode", migration)
-        self.assertNotIn("inputs.action == 'all'", migration)
+        self.assertNotIn("inputs.action == 'release'", migration)
         self.assertNotIn("migrate_diagnostics", self.workflow)
         self.assertNotIn("diagnose-migration", self.workflow)
         runner = (ROOT / "infra/gcp/release.sh").read_text(encoding="utf-8")
