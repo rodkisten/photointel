@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { AppErrorBoundary } from './components/error-boundary';
+import { IncidentInspector } from './components/incident-inspector';
 import { reportDiagnostic } from './lib/diagnostics';
 import { initSentry } from './lib/sentry';
 
@@ -52,7 +53,7 @@ if (!root) {
     <React.StrictMode>
       <AppErrorBoundary>
         <QueryClientProvider client={client}>
-          <BrowserRouter><App /></BrowserRouter>
+          <BrowserRouter><App /><IncidentInspector /></BrowserRouter>
         </QueryClientProvider>
       </AppErrorBoundary>
     </React.StrictMode>,
