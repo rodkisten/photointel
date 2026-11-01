@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react';
 import { diagnosticClipboardText, diagnosticFor, diagnosticLogsUrl, reportDiagnostic,
   type Diagnostic } from '../lib/diagnostics';
