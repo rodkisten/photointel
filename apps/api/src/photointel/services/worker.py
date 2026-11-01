@@ -21,6 +21,7 @@ from photointel.config import get_settings
 from photointel.database import SessionLocal
 from photointel.errors import AppError, ErrorCode
 from photointel.models import Asset, DiscoveryManifest, Job, JobEvent, utcnow
+from photointel.observability import correlation_context, valid_correlation
 from photointel.services.job_notify import safe_notify
 from photointel.services.jobs import (
     ACTIVE,
@@ -343,7 +344,9 @@ async def _fail_jobs(
                     else "Ativo ocupado; nova tentativa agendada"
                     if busy
                     else "Falha no processamento; verifique diagnóstico"
-                )
+                ),
+                "correlation_id": valid_correlation(job.payload.get("correlation_id")) or str(job.id),
+                "job_id": str(job.id),
             }
             job.scheduled_at = utcnow() + retry_delay(job.attempts, jitter=True)
             job.finished_at = utcnow() if job.status == "failed" else None
@@ -409,6 +412,15 @@ async def _fail_jobs(
         ):
             await refresh_batch(session, batch_id)
         await session.commit()
+        for failed_job in changed:
+            logger.warning(
+                "worker_job_attempt_failed",
+                job_id=str(failed_job.id),
+                job_type=failed_job.job_type,
+                status=failed_job.status,
+                error_code=failed_job.error_code,
+                correlation_id=valid_correlation(failed_job.payload.get("correlation_id")) or str(failed_job.id),
+            )
     await safe_notify()
 
 
@@ -433,6 +445,8 @@ async def _finish_jobs(
             if job.id == leader
             else {"batch_metrics_job_id": str(leader)}
         )
+        job.progress = {**job.progress,
+            "correlation_id": valid_correlation(job.payload.get("correlation_id")) or str(job.id)}
         session.add(
             JobEvent(
                 job_id=job.id,
@@ -447,6 +461,13 @@ async def _finish_jobs(
     for batch_id in sorted({job.batch_id for job in jobs if job.batch_id}, key=str):
         await refresh_batch(session, batch_id)
     await session.commit()
+    for finished_job in jobs:
+        logger.info(
+            "worker_job_completed",
+            job_id=str(finished_job.id),
+            job_type=finished_job.job_type,
+            correlation_id=valid_correlation(finished_job.payload.get("correlation_id")) or str(finished_job.id),
+        )
     await safe_notify()
 
 
@@ -461,6 +482,7 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     fences: list[JobFence] = []
     leases: list[tuple[str, int]] = []
     started = time.monotonic()
+    correlation_token = None
     try:
         async with SessionLocal() as session:
             jobs = list(
@@ -479,6 +501,16 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             )
             if len(jobs) != len(job_ids):
                 return
+            correlation_token = correlation_context.set(
+                valid_correlation(jobs[0].payload.get("correlation_id")) or str(jobs[0].id)
+            )
+            for claimed_job in jobs:
+                logger.info(
+                    "worker_job_started",
+                    job_id=str(claimed_job.id),
+                    job_type=claimed_job.job_type,
+                    correlation_id=valid_correlation(claimed_job.payload.get("correlation_id")) or str(claimed_job.id),
+                )
             fences = [(job.id, worker_id, job.fence_token) for job in jobs]
             leases = await _acquire_asset_leases(session, jobs, worker_id)
             await session.commit()
@@ -546,7 +578,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     except Exception as exc:
         await _fail_jobs(fences, exc)
         logger.warning(
-            "worker_job_failed", jobs=len(job_ids), exception_type=type(exc).__name__
+            "worker_job_failed", jobs=len(job_ids), exception_type=type(exc).__name__,
+            correlation_id=correlation_context.get(),
         )
     finally:
         stopped.set()
@@ -557,6 +590,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             with contextlib.suppress(Exception):
                 async with SessionLocal() as session, session.begin():
                     await release_lease(session, key, worker_id, token)
+        if correlation_token is not None:
+            correlation_context.reset(correlation_token)
 
 
 async def run_worker() -> None:
