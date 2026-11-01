@@ -45,6 +45,15 @@ def _scrub(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
             frame.pop("context_line", None)
             frame.pop("abs_path", None)
     event.pop("message", None)
+    # Keep only anonymous distributed-trace fields, never SDK device contexts.
+    contexts = event.get("contexts")
+    trace = contexts.get("trace") if isinstance(contexts, dict) else None
+    event["contexts"] = (
+        {"trace": {
+            key: value for key, value in trace.items()
+            if key in {"trace_id", "span_id", "parent_span_id", "op"}
+        }} if isinstance(trace, dict) else {}
+    )
     return event
 
 
@@ -59,6 +68,8 @@ def configure_sentry(service: str) -> bool:
         traces_sample_rate=0.10,
         profiles_sample_rate=0.0,
         send_default_pii=False,
+        default_integrations=False,
+        auto_enabling_integrations=False,
         include_local_variables=False,
         max_breadcrumbs=0,
         attach_stacktrace=True,
