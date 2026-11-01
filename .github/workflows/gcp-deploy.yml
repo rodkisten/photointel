@@ -1,5 +1,5 @@
 name: "🚀 Deploy"
-run-name: "🚀 Deploy · ${{ inputs.action || 'all' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }} · ${{ inputs.confirm_project || 'photointel' }}"
+run-name: "🚀 Deploy · ${{ inputs.action || 'release' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }} · ${{ inputs.confirm_project || 'photointel' }}"
 
 on:
   workflow_dispatch:
@@ -7,9 +7,9 @@ on:
       action:
         description: 'Select a stage or run the release'
         type: choice
-        default: all
+        default: release
         options:
-          - all
+          - release
           - build
           - jobs-deploy
           - migrate
@@ -45,7 +45,7 @@ on:
         required: false
 
       database_ready:
-        description: 'For deploy/all: I verified everything'
+        description: 'For deploy/release: I verified everything'
         type: boolean
         default: false
         required: true
@@ -104,7 +104,7 @@ jobs:
         uses: ./.github/actions/notify
         with:
           action: start
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
@@ -112,7 +112,7 @@ jobs:
           job: ${{ github.job }}
       - name: "🛡 Validação DB"
         id: database_gate
-        if: inputs.action == 'all' || inputs.action == 'deploy'
+        if: inputs.action == 'release' || inputs.action == 'deploy'
         env:
           DATABASE_READY: ${{ inputs.database_ready }}
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
@@ -135,7 +135,7 @@ jobs:
           outcome: ${{ steps.database_gate.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "⚙ Env"
@@ -164,7 +164,7 @@ jobs:
           outcome: ${{ steps.config.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🔐 Login"
@@ -191,7 +191,7 @@ jobs:
           outcome: ${{ steps.notify_observed_001.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🧰 Gcloud"
@@ -216,11 +216,11 @@ jobs:
           outcome: ${{ steps.notify_observed_002.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Build"
-        if: ${{ inputs.action == 'all' || inputs.action == 'build' }}
+        if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -236,12 +236,12 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🏗 Pré-check"
         id: preflight
-        if: inputs.action == 'build' || inputs.action == 'all'
+        if: inputs.action == 'build' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh preflight
@@ -263,11 +263,11 @@ jobs:
           outcome: ${{ steps.preflight.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Cache"
-        if: ${{ inputs.action == 'all' || inputs.action == 'build' }}
+        if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -283,12 +283,12 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🏗 Cache"
         id: image_cache
-        if: inputs.action == 'build' || inputs.action == 'all'
+        if: inputs.action == 'build' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
@@ -311,11 +311,11 @@ jobs:
           outcome: ${{ steps.image_cache.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Build"
-        if: ${{ (inputs.action == 'all' || inputs.action == 'build') && steps.image_cache.outputs.skip != 'true' }}
+        if: ${{ (inputs.action == 'release' || inputs.action == 'build') && steps.image_cache.outputs.skip != 'true' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -331,12 +331,12 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🏗 Build"
         id: build_image
-        if: (inputs.action == 'build' || inputs.action == 'all') && steps.image_cache.outputs.skip != 'true'
+        if: (inputs.action == 'build' || inputs.action == 'release') && steps.image_cache.outputs.skip != 'true'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh build
@@ -358,11 +358,11 @@ jobs:
           outcome: ${{ steps.build_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Imagem"
-        if: ${{ inputs.action == 'all' || inputs.action == 'build' }}
+        if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -378,19 +378,19 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🏗 Imagem"
         id: verify_image
-        if: inputs.action == 'build' || inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'all'
+        if: inputs.action == 'build' || inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh verify
 
       - name: "📱 ✓ Build"
-        if: ${{ always() && ((inputs.action == 'all' || inputs.action == 'build') && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled')) }}
+        if: ${{ always() && ((inputs.action == 'release' || inputs.action == 'build') && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled')) }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -406,11 +406,11 @@ jobs:
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ! Imagem"
-        if: ${{ always() && inputs.action != 'all' && inputs.action != 'build' && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
+        if: ${{ always() && inputs.action != 'release' && inputs.action != 'build' && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -426,11 +426,11 @@ jobs:
           outcome: ${{ steps.verify_image.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Jobs"
-        if: ${{ inputs.action == 'all' || inputs.action == 'jobs-deploy' }}
+        if: ${{ inputs.action == 'release' || inputs.action == 'jobs-deploy' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -445,13 +445,13 @@ jobs:
           label: "📦 Jobs"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '1' || '0' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "${{ inputs.action == 'release' && '1' || '0' }}"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📦 Jobs"
         id: deploy_jobs
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'all'
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh jobs-deploy
@@ -472,8 +472,8 @@ jobs:
           label: "📦 Jobs"
           outcome: ${{ steps.deploy_jobs.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '2' || '1' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "${{ inputs.action == 'release' && '2' || '1' }}"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Neon"
@@ -493,7 +493,7 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🗃 Neon"
@@ -524,11 +524,11 @@ jobs:
           outcome: ${{ steps.migrate_database.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ API"
-        if: ${{ inputs.action == 'all' || inputs.action == 'deploy' }}
+        if: ${{ inputs.action == 'release' || inputs.action == 'deploy' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -543,13 +543,13 @@ jobs:
           label: "🚀 API"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '2' || '0' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "${{ inputs.action == 'release' && '2' || '0' }}"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🚀 API"
         id: deploy_api
-        if: inputs.action == 'deploy' || inputs.action == 'all'
+        if: inputs.action == 'deploy' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
           DATABASE_READY: ${{ inputs.database_ready }}
@@ -571,12 +571,12 @@ jobs:
           label: "🚀 API"
           outcome: ${{ steps.deploy_api.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '3' || '1' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "${{ inputs.action == 'release' && '3' || '1' }}"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Agenda"
-        if: ${{ inputs.action == 'all' || inputs.action == 'scheduler' }}
+        if: ${{ inputs.action == 'scheduler' }}
         continue-on-error: true
         uses: ./.github/actions/notify
         with:
@@ -591,13 +591,13 @@ jobs:
           label: "⏰ Agenda"
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '3' || '0' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "0"
+          total: 1
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "⏰ Agenda"
         id: deploy_scheduler
-        if: inputs.action == 'scheduler' || inputs.action == 'all'
+        if: inputs.action == 'scheduler'
         env:
           CONFIRM_PROJECT: ${{ inputs.confirm_project }}
         run: bash infra/gcp/release.sh scheduler
@@ -618,8 +618,8 @@ jobs:
           label: "⏰ Agenda"
           outcome: ${{ steps.deploy_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "${{ inputs.action == 'all' && '4' || '1' }}"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          completed: "1"
+          total: 1
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "📱 ▶ Limpeza"
@@ -639,7 +639,7 @@ jobs:
           outcome: running
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🧹 Código"
@@ -666,7 +666,7 @@ jobs:
           outcome: ${{ steps.pause_scheduler.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           project: ${{ inputs.confirm_project }}
           region: "us-central1"
       - name: "🧹 API"
@@ -682,7 +682,7 @@ jobs:
         uses: ./.github/actions/notify
         with:
           action: end
-          total: ${{ inputs.action == 'all' && '4' || '1' }}
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
           github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
