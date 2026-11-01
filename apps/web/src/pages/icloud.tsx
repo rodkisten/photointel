@@ -1,4 +1,4 @@
-import { Cloud, Info, LockKeyhole, Pause, Play, Terminal } from 'lucide-react';
+import { Cloud, Info, LockKeyhole, Pause, Play, ShieldCheck, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
