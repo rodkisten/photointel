@@ -35,6 +35,8 @@ function hint(error: Error | undefined, status: number | undefined): string {
       'reason' in details ? details.reason : undefined;
     if (reason === 'NO_ELIGIBLE_ASSETS')
       return 'As fotos solicitadas já estão na fila ou não podem ser processadas agora. Consulte os jobs pendentes antes de criar outro lote.';
+    if (error.code === 'VERIFICATION_REQUIRED' || 'required_gates' in (details ?? {}))
+      return 'A API não criou o lote porque a verificação exigida para esta versão está pendente. Abra Preparação e validação para executar e registrar os testes. Não é um problema de login no iCloud.';
     if (error.code === 'GPU_UNAVAILABLE')
       return 'A inferência precisa de GPU configurada. Desmarque JoyTag e SigLIP para processamentos locais.';
     if ([401, 403].includes(error.status))
@@ -126,6 +128,15 @@ export function IncidentInspector() {
             <dt>{label}</dt><dd>{describe(value)}</dd>
           </div>)}
       </dl>
+      {api && (api.code === 'VERIFICATION_REQUIRED' ||
+        (details && 'required_gates' in details)) &&
+        <section className="incident-section">
+          <h3>Como liberar a importação</h3>
+          <p>O Gate A comprova os testes locais de Compose, migrações, API, worker e PWA.
+            Registre evidência verdadeira do release instalado. Não é necessário alterar
+            as credenciais do iCloud.</p>
+          <a className="incident-resolve-link" href="/setup">Abrir Preparação e validação</a>
+        </section>}
       {details && <section className="incident-section">
         <h3>Motivo informado pela API</h3>
         <pre className="incident-json">{JSON.stringify(details, null, 2)}</pre>
