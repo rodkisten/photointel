@@ -7,9 +7,12 @@ import re
 
 import httpx
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from fastapi.responses import RedirectResponse
 
 from photointel.auth import require_identity
+from photointel.database import SessionLocal
+from photointel.models import Job
 from photointel.errors import AppError, ErrorCode
 from photointel.sentry_observability import event_id, sentry_organization
 
@@ -74,3 +77,41 @@ async def sentry_event_redirect(identifier: str) -> RedirectResponse:
         f"events/{normalized}/"
     )
     return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/observability/assets/{asset_id}/latest-error", tags=["observability"])
+async def latest_asset_error(asset_id: str) -> dict[str, str | bool | None]:
+    """Find an actual worker failure before offering a Sentry link in the gallery."""
+    try:
+        from uuid import UUID
+
+        identifier = UUID(asset_id)
+    except ValueError:
+        raise AppError(ErrorCode.INVALID_REQUEST, "ID da foto inválido", 422) from None
+    async with SessionLocal() as session:
+        candidates = (
+            await session.scalars(
+                select(Job).where(Job.asset_id == identifier)
+                .order_by(Job.created_at.desc(), Job.id.desc())
+                .limit(20)
+            )
+        ).all()
+    for job in candidates:
+        details = job.error_details if isinstance(job.error_details, dict) else {}
+        history = job.progress.get("sentry_attempt_events", [])
+        historical_id = None
+        if isinstance(history, list) and history:
+            last = history[-1]
+            historical_id = last.get("event_id") if isinstance(last, dict) else None
+        sentry_id = event_id(details.get("sentry_event_id") or historical_id)
+        if sentry_id:
+            payload = job.payload if isinstance(job.payload, dict) else {}
+            correlation = payload.get("correlation_id")
+            return {
+                "found": True, "sentry_event_id": sentry_id,
+                "job_id": str(job.id),
+                "correlation_id": correlation if isinstance(correlation, str) else None,
+                "error_code": job.error_code,
+            }
+    return {"found": False, "sentry_event_id": None, "job_id": None,
+            "correlation_id": None, "error_code": None}
