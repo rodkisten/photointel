@@ -630,7 +630,7 @@ def bootstrap(runner: Runner) -> None:
             else (
                 {"DATABASE_URL", "MIGRATION_DATABASE_URL"}
                 if role == "migrate"
-                else (SECRET_FIELDS - {"MIGRATION_DATABASE_URL"})
+                else (SECRET_FIELDS - {"MIGRATION_DATABASE_URL", "SENTRY_API_TOKEN"})
             )
         )
         for name in permitted & config["secrets"].keys():
