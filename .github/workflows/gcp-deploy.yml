@@ -127,7 +127,7 @@ jobs:
           github-token: ${{ github.token }}
           device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
           token: ${{ secrets.NOTIFY_TOKEN }}
-          workflow: ${{ github.workflow }}
+          workflow: "${{ github.workflow }} · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
           job: ${{ github.job }}
       - name: "🛡 Validação DB"
         id: database_gate
