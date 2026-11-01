@@ -215,7 +215,8 @@ async def reindex(
             if asset.ingestion_status in {"quarantined", "failed"}:
                 raise AppError(
                     ErrorCode.MEDIA_DECODE_FAILED,
-                    "Mídia em quarentena. Consulte a falha de download antes de reprocessar",
+                    ("Mídia em quarentena. Consulte a falha de download "
+                     "antes de reprocessar"),
                     409,
                 )
             first_stage = (
