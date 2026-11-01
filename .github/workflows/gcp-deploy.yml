@@ -19,7 +19,7 @@ on:
         required: true
 
       migration_mode:
-        description: 'Neon: inspect, apply migrations, or diagnose connection'
+        description: 'Neon: inspect, apply, or diagnose'
         type: choice
         options:
           - plan
@@ -29,7 +29,7 @@ on:
         required: true
 
       migration_database:
-        description: 'For migrate apply: selecting initial-empty affirms database is confirmed empty'
+        description: 'Migrate apply: initial-empty if empty'
         type: choice
         options:
           - unselected
@@ -39,25 +39,25 @@ on:
         required: true
 
       migration_backup_prefix:
-        description: 'Optional: private backup prefix, automatically resolved when uniquely identifiable'
+        description: 'Optional: private backup prefix'
         type: string
         default: ''
         required: false
 
       database_ready:
-        description: 'For deploy/all: I verified Neon migration, secret versions and Cloudflare Access readiness'
+        description: 'For deploy/all: I verified everything'
         type: boolean
         default: false
         required: true
 
       authorize_charges:
-        description: 'I authorize Google Cloud resources and applicable charges'
+        description: 'I authorize Google Cloud charges'
         type: boolean
         default: false
         required: true
 
       confirm_project:
-        description: 'Exact Google Cloud project ID configured in production environment'
+        description: 'Google Cloud project ID'
         type: string
         default: photointel
         required: true
