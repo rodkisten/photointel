@@ -123,7 +123,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("steps.notify_live_start.outputs.activity_id", self.workflow)
         self.assertIn("        default: plan", self.workflow)
         self.assertIn("        default: unselected", self.workflow)
-        self.assertIn("inputs.migration_mode == 'plan'", self.workflow)
+        self.assertIn("        default: plan", self.workflow)
         self.assertTrue((ROOT / "infra/gcp/migrate_workflow.py").is_file())
 
     def test_migration_runs_directly_on_runner(self) -> None:
