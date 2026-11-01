@@ -4,7 +4,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from photointel.sentry_observability import (
     _scrub,
     event_id,
