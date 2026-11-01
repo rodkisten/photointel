@@ -142,8 +142,10 @@ describe('persisted operations and navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Processar lote' }));
     const dialog = screen.getByRole('dialog', { name: 'Processar um lote' });
     await user.click(within(dialog).getByRole('button', { name: 'Criar lote' }));
-    expect(await within(dialog).findByText(/Nenhuma foto disponível para este lote/)).toBeVisible();
-    expect(within(dialog).getByText(/NO_ELIGIBLE_ASSETS/)).toBeVisible();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Nenhuma foto disponível para este lote',
+    );
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('NO_ELIGIBLE_ASSETS');
     expect(within(dialog).getByText('0b465c4e-050d-4647-b939-90c85451d092')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Copiar filtro do GCP' })).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Criar lote' })).toBeEnabled();
