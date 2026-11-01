@@ -2723,3 +2723,27 @@ select:focus-visible, textarea:focus-visible { outline-color: #f5f5f5; }
     transition: none !important;
   }
 }
+
+.jobs-drawer-toggle {
+  position: fixed;
+  z-index: 49;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #515151;
+  border-radius: 999px;
+  padding: 10px 13px;
+  color: #f1f1f1;
+  background: #202020;
+  box-shadow: 0 5px 24px #0008;
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .jobs-drawer-toggle {
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  .jobs-drawer-mini { height: 102px; }
+}
