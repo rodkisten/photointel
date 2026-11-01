@@ -15,7 +15,6 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from photointel.services.job_notify import safe_notify
 
 MODES = ("discover", "backfill", "worker", "maintenance", "migrate")
 GPU_TYPES = ("joytag_inference", "embedding_inference")
@@ -113,6 +112,7 @@ async def run_finite(
     deadline = started + deadline_seconds
     worker_id = f"task:{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:12]}"
     from photointel.services.outbox import drain_outbox
+    from photointel.services.job_notify import safe_notify
 
     await safe_notify()
     dispatches = await drain_outbox(
