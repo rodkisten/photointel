@@ -4,7 +4,7 @@
   --color-foreground: #eceeed;
   --color-muted: #919793;
   --color-border: #2a2d2b;
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: Geist, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 :root {
