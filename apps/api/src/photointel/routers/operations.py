@@ -414,6 +414,7 @@ async def change_batch(
     session: AsyncSession,
     identity: Identity,
     pause: bool,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     batch = await session.scalar(
         select(JobBatch).where(JobBatch.id == batch_id).with_for_update()
@@ -438,22 +439,32 @@ async def change_batch(
         "batch.pause" if pause else "batch.resume",
         batch_id=str(batch_id),
     )
+    platform = (await effective_settings(session)).execution_platform
+    if not pause and platform == "cloud_run":
+        from photointel.services.outbox import enqueue_dispatch
+
+        await enqueue_dispatch(session, "worker", f"batch-resume:{batch_id}:{uuid4()}")
     await session.commit()
+    if not pause:
+        _schedule_cloud_dispatch(background_tasks, platform)
+    background_tasks.add_task(safe_notify)
     return row_dict(batch)
 
 
 @router.post("/job-batches/{batch_id}/pause", tags=["jobs"])
 async def pause_batch(
-    batch_id: UUID, session: Session, identity: Actor
+    batch_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    return await change_batch(batch_id, session, identity, True)
+    return await change_batch(batch_id, session, identity, True, background_tasks)
 
 
 @router.post("/job-batches/{batch_id}/resume", tags=["jobs"])
 async def resume_batch(
-    batch_id: UUID, session: Session, identity: Actor
+    batch_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    return await change_batch(batch_id, session, identity, False)
+    return await change_batch(batch_id, session, identity, False, background_tasks)
 
 
 async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
