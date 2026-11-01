@@ -3,9 +3,8 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from photointel.services import job_notify as notify
-
 import respx
+from photointel.services import job_notify as notify
 
 
 def test_default_is_disabled_and_never_uses_partial_credentials(monkeypatch):
