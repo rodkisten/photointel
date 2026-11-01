@@ -34,7 +34,9 @@ def validate_bounds(max_jobs: int, deadline_seconds: int) -> None:
         raise ValueError("deadline-seconds must be between 10 and 86400")
 
 
-async def dispatch_ready_worker_followup(mode: str, remaining_seconds: float) -> dict[str, Any]:
+async def dispatch_ready_worker_followup(
+    mode: str, remaining_seconds: float
+) -> dict[str, Any]:
     """Wake downstream processing after discovery, even with no Scheduler.
 
     Discover/backfill Jobs enqueue media_download and related work in PostgreSQL.
