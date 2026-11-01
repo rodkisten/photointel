@@ -267,6 +267,19 @@ async def reindex(
     return row_dict(batch)
 
 
+@router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])
+async def job_activity(
+    session: Session, limit: int = Query(24, ge=1, le=100)
+) -> Page[JobOut]:
+    """Recent durable jobs, sorted by creation instead of random UUID values."""
+    rows = (
+        await session.scalars(
+            select(Job).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
+        )
+    ).all()
+    return Page(items=[JobOut.model_validate(job) for job in rows], next_cursor=None)
+
+
 @router.get("/jobs/{job_id}", response_model=JobOut, tags=["jobs"])
 async def job_detail(job_id: UUID, session: Session) -> JobOut:
     job = await session.get(Job, job_id)
@@ -296,7 +309,13 @@ async def retry_job(
     job.error_details = None
     emit_job_event(session, job)
     audit(session, identity, "job.retry", job.asset_id, job_id=str(job.id))
+    platform = (await effective_settings(session)).execution_platform
+    if platform == "cloud_run":
+        from photointel.services.outbox import enqueue_dispatch
+
+        await enqueue_dispatch(session, "worker", f"retry-dispatch:{job.id}:{uuid4()}")
     await session.commit()
+    _schedule_cloud_dispatch(background_tasks, platform)
     background_tasks.add_task(safe_notify)
     return JobOut.model_validate(job)
 
