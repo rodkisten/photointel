@@ -594,6 +594,7 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
         ),
         "maximum_authorized_import_limit": settings.maximum_authorized_import_limit,
         "hard_import_limit": settings.hard_import_limit,
+        "verification_gates_enforced": settings.verification_gates_enforced,
         "catalog_asset_limit": settings.catalog_asset_limit,
         "database_profile": settings.database_profile,
         "last_run": row_dict(last) if last else None,
@@ -690,12 +691,10 @@ async def start_ingestion(
                 409,
             )
         from photointel.services.release import get_release_manifest
-        from photointel.services.verification import gate_status
+        if settings.verification_gates_enforced:
+            from photointel.services.verification import require_import_gates
 
-        if not (await gate_status(session))["full_backfill_unlocked"]:
-            raise AppError(
-                ErrorCode.INVALID_REQUEST, "Conclua o gate F antes do backfill", 409
-            )
+            await require_import_gates(session, body.target_assets)
         backfill_authorization = {
             "target_assets": body.target_assets,
             "release_sha": get_release_manifest()["git_sha"],
@@ -721,9 +720,8 @@ async def start_ingestion(
         _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
         background_tasks.add_task(safe_notify)
         return {"job_id": existing, "already_running": True}
-    # Existing work was already authorized when persisted. Release-scoped
-    # gates apply to NEW imports only; a redeploy must not block waking the
-    # old bounded request. No new work is created in the branch above.
+    # An existing job retains its bounded authorization across deployments.
+    # Only new operations over the large-scale threshold require a gate.
     if body.source == "icloud" and settings.verification_gates_enforced:
         from photointel.services.verification import require_import_gates
 
