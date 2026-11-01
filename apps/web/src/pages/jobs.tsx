@@ -91,7 +91,7 @@ export function JobsPage() {
         return <div className="row-item" key={text(batch.id)}><div style={{ flex: 1 }}>
           <strong>{text(batch.name)}</strong><p>{number(completed)} concluídas · {number(failed)} falhas · {number(skipped)} ignoradas
             {total > 0 ? ` · ${number(total)} totais` : ' · descobrindo total'}</p>
-          {total > 0 && <div className="progress-track" role="progressbar" aria-label="Progresso persistido do lote"
+          {total > 0 && <div className={`progress-track ${['running','queued','retrying'].includes(String(batch.status)) ? 'progress-active' : ''}`} role="progressbar" aria-label="Progresso persistido do lote"
             aria-valuenow={Math.min(finished, total)} aria-valuemin={0} aria-valuemax={total}>
             <div className="progress-fill" style={{ width: `${Math.min(100, finished / total * 100)}%` }} /></div>}</div>
           <Status value={batch.status} /><Button variant="outline" size="icon" aria-label={batch.status === 'paused' ? 'Retomar lote' : 'Pausar lote'}
@@ -138,13 +138,14 @@ export function JobsPage() {
       {job.error_code && <div className="job-error"><strong>{job.error_code}</strong>
         <pre style={{ whiteSpace:'pre-wrap' }}>{JSON.stringify(job.error_details,null,2)}</pre>
         <div className="diagnostic-actions">
-          <a href={jobLogsUrl(job.job_type)} target="_blank" rel="noopener noreferrer">
+          <a href={jobLogsUrl(job.job_type, job.id,
+            typeof job.error_details?.correlation_id === 'string' ? job.error_details.correlation_id : undefined)} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={14} />Ver logs do job no GCP</a>
           <button type="button" onClick={() => void navigator.clipboard.writeText(
             `PhotoIntel job: ${job.id} · ${job.error_code}`)}>
             Copiar ID do job</button>
-          <small>Use o ID do job e o horário da falha para localizar a execução.
-            Os logs do Cloud Run podem não conter esse ID.</small>
+          <small>O link filtra os logs estruturados pelo ID do job e pelo correlation ID.
+            Jobs antigos podem não ter identificadores nos logs.</small>
         </div></div>}</>}
     </Dialog>
     <Dialog open={reindex} onOpenChange={setReindex} title="Processar um lote"
