@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from photointel.config import get_settings
 from photointel.models import IngestionRun, Job, JobBatch, JobEvent, WorkerState, utcnow
 from photointel.observability import job_correlation
+from photointel.sentry_observability import trace_headers
 
 JOB_TYPES = frozenset(
     {
@@ -46,6 +47,8 @@ async def enqueue_job(
     key = idempotency_key or f"manual:{job_type}:{uuid4()}"
     safe_payload = dict(payload or {})
     safe_payload["correlation_id"] = job_correlation(safe_payload)
+    for name, value in trace_headers().items():
+        safe_payload.setdefault(name, value)
     statement = (
         insert(Job)
         .values(
