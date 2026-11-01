@@ -5,7 +5,11 @@ from uuid import uuid4
 
 import pytest
 
-from photointel.sentry_observability import _scrub, event_id, sentry_organization
+from photointel.sentry_observability import (
+    _scrub,
+    event_id,
+    sentry_organization,
+)
 
 
 def test_event_id_never_accepts_unknown_or_injected_paths() -> None:
