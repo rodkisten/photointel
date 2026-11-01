@@ -85,7 +85,7 @@ def short_workflow(name: str) -> str:
         "cloudflare worker": "Cloudflare Worker",
         "worker · front + api": "Cloudflare Worker",
         "setup gcp": "Setup GCP",
-        "deploy": "Deploy GCP",
+        "deploy": "Deploy",
         "diagnose cloud run": "Diagnóstico Cloud Run",
         "migrate neon": "Migração Neon",
         "gcp terminal": "Terminal GCP",
