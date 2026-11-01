@@ -10,13 +10,13 @@
 @property --ui-contrast {
   syntax: "<number>";
   inherits: true;
-  initial-value: 1.22;
+  initial-value: 1.41;
 }
 
 @property --ui-gray-tone {
   syntax: "<percentage>";
   inherits: true;
-  initial-value: 3.5%;
+  initial-value: 3.7%;
 }
 
 :root {
@@ -134,7 +134,7 @@
    */
   --font-family-ui: Geist, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-size-base: 1rem;
-  --text-6: calc(var(--font-size-base) * 6 / 16);
+  --text-6: calc(var(--font-size-base) * 8 / 16); /* 6 */
   --text-8: calc(var(--font-size-base) * 8 / 16);
   --text-9: calc(var(--font-size-base) * 9 / 16);
   --text-10: calc(var(--font-size-base) * 10 / 16);
