@@ -122,6 +122,7 @@ comuns e não autoriza gasto de GPU automaticamente.
 - [Planos GCP sem implantação](docs/evidence/gcp-offline-plans-v11.json).
 - [Aceitação física no iPhone](docs/operations/iphone-acceptance.md).
 
-Os gates B–F permanecem não verificados até testes reais e atestação do operador
-para o SHA implantado. WebKit Linux não equivale a Safari físico, CPU não equivale
-a Modal GPU, e dados sintéticos não comprovam throughput de uma biblioteca iCloud.
+Os antigos gates A-E foram retirados do fluxo de desbloqueio. Somente
+a autorização F permanece para novas operações acima de 1.000 fotos.
+WebKit Linux não equivale a Safari físico, CPU não equivale a Modal GPU,
+e dados sintéticos não comprovam throughput de uma biblioteca iCloud.
