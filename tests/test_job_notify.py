@@ -1,11 +1,11 @@
-"""Notify! API lifecycle: opt-in, batch grouping, bounded requests, and no secrets in logs."""
+"""Notify! API lifecycle tests without live provider calls."""
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-import respx
-
 from photointel.services import job_notify as notify
+
+import respx
 
 
 def test_default_is_disabled_and_never_uses_partial_credentials(monkeypatch):
