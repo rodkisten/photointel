@@ -81,6 +81,16 @@ export function Overview() {
           <PrivateImage src={photo.thumbnail_url} alt={photo.filename} /></Link>)}
       </div> : <p className="muted">As fotografias aparecerão aqui após a primeira importação.</p>}
     </section>
+    <button
+  type="button"
+  onClick={() => {
+    document.dispatchEvent(
+      new Event("photointel:enable-notifications")
+    );
+  }}
+>
+  Ativar notificações
+</button>
     {system.error && <ErrorState error={system.error} retry={() => void system.refetch()} />}
     {system.data?.environment === 'test' && <div className="notice warning" style={{ marginTop: 18 }}>
       <ShieldCheck size={15} /><span>Ambiente de teste. Inferências determinísticas de testes
