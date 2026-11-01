@@ -549,10 +549,6 @@ async def start_ingestion(
             "approved_at": datetime.now(UTC).isoformat(),
             "authorization": authorization,
         }
-    if body.source == "icloud" and settings.verification_gates_enforced:
-        from photointel.services.verification import require_import_gates
-
-        await require_import_gates(session, body.limit)
     # Transaction-scoped only: compatible with Neon transaction pooling. The lock
     # ends before dispatch/network I/O and prevents overlapping API submissions.
     await session.execute(text("SELECT pg_advisory_xact_lock(917314, 1)"))
@@ -570,6 +566,13 @@ async def start_ingestion(
         await session.commit()
         _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
         return {"job_id": existing, "already_running": True}
+    # Existing work was already authorized when persisted. Release-scoped
+    # gates apply to NEW imports only; a redeploy must not block waking the
+    # old bounded request. No new work is created in the branch above.
+    if body.source == "icloud" and settings.verification_gates_enforced:
+        from photointel.services.verification import require_import_gates
+
+        await require_import_gates(session, body.limit)
     batch = JobBatch(
         name="Importação iCloud" if body.source == "icloud" else "Importação sintética"
     )
