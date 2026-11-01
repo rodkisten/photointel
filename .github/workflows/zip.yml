@@ -1,5 +1,5 @@
 name: "📦 ZIP Patch"
-run-name: "📦 ZIP · ${{ inputs.zip_path }} · ${{ inputs.root_mode || 'auto' }}"
+run-name: "📦 ZIP · ${{ inputs.zip_path || 'policy-check' }} · ${{ inputs.root_mode || 'auto' }}"
 
 on:
   push:
