@@ -12,11 +12,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Plan only or reconcile infrastructure using gcloud"
+        description: "Preview, repair Secret Manager IAM only, or reconcile all infrastructure"
         type: choice
         required: true
         default: plan
-        options: [plan, apply]
+        options: [plan, permissions, apply]
 
 permissions:
   contents: read
@@ -105,7 +105,7 @@ jobs:
 
       - name: "🧪 Login"
         id: notify_observed_002
-        if: inputs.mode == 'apply'
+        if: inputs.mode != 'plan'
         env:
           WIF: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
           BOOTSTRAP_ACCOUNT: ${{ steps.config.outputs.bootstrap_service_account }}
@@ -138,7 +138,7 @@ jobs:
           region: "us-central1"
       - name: "🔐 Login"
         id: notify_observed_003
-        if: inputs.mode == 'apply'
+        if: inputs.mode != 'plan'
         uses: google-github-actions/auth@v3
         with:
           project_id: photointel
@@ -167,7 +167,7 @@ jobs:
           region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_004
-        if: inputs.mode == 'apply'
+        if: inputs.mode != 'plan'
         uses: google-github-actions/setup-gcloud@v3
         with:
           project_id: photointel
