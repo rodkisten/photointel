@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.config import get_settings
 from photointel.models import IngestionRun, Job, JobBatch, JobEvent, WorkerState, utcnow
+from photointel.observability import job_correlation
 
 JOB_TYPES = frozenset(
     {
@@ -43,13 +44,15 @@ async def enqueue_job(
     if job_type not in JOB_TYPES:
         raise ValueError("Unsupported job type")
     key = idempotency_key or f"manual:{job_type}:{uuid4()}"
+    safe_payload = dict(payload or {})
+    safe_payload["correlation_id"] = job_correlation(safe_payload)
     statement = (
         insert(Job)
         .values(
             id=uuid4(),
             job_type=job_type,
             asset_id=asset_id,
-            payload=payload or {},
+            payload=safe_payload,
             idempotency_key=key,
             batch_id=batch_id,
             priority=priority,
