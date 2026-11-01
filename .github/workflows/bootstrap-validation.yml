@@ -10,7 +10,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'apps/**'
+    #  - 'apps/**'
       - 'bridges/**'
       - 'gpu/**'
       - 'packages/**'
