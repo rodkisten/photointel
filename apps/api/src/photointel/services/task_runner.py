@@ -258,6 +258,11 @@ async def async_main(arguments: argparse.Namespace) -> int:
         print(json.dumps(result, ensure_ascii=False))
         return 128 + received_signal[0] if received_signal else 0
     finally:
+        # Finite Cloud Run containers must flush error envelopes before shutdown.
+        import sentry_sdk
+
+        if sentry_sdk.is_initialized():
+            await sentry_sdk.flush_async(timeout=2.0)
         if arguments.mode != "migrate":
             from photointel.database import engine
 
