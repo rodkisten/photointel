@@ -643,7 +643,11 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             # under its original fence instead of exhausting its attempt budget.
             await _fail_jobs(
                 fences,
-                AppError("DATABASE_CONTENTION", "Transação concorrente; tentativa reagendada", 503),
+                AppError(
+                    "DATABASE_CONTENTION",
+                    "Transação concorrente; tentativa reagendada",
+                    503,
+                ),
                 busy=True,
             )
             logger.warning("worker_job_deferred", jobs=len(job_ids), reason="database_contention")
