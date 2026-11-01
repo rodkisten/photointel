@@ -73,14 +73,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
             ('📱 ✓ Jobs', '2'),
             ('📱 ✓ API', '3'),
         ):
-            match = re.search(
-                r"^      - name: \"" + re.escape(stage_name) + r"\"\\n(.*?)(?=^      - name: |\\Z)",
-                self.workflow, re.MULTILINE | re.DOTALL,
-            )
-            self.assertIsNotNone(match, stage_name)
+            start = self.workflow.index('      - name: "' + stage_name + '"\\n')
+            end = self.workflow.find("\\n      - name:", start + 1)
+            block = self.workflow[start:end if end >= 0 else None]
             self.assertIn(
-                "completed: \"${{ inputs.action == 'release' && '" + count + "' || '1' }}\"",
-                match.group(1),
+                "completed: \\"${{ inputs.action == 'release' && '" + count + "' || '1' }}\\"",
+                block,
                 stage_name,
             )
         self.assertIn("completed: \"0\"", self.workflow)
