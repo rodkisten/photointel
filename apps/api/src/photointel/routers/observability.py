@@ -76,6 +76,10 @@ async def sentry_event_redirect(identifier: str) -> RedirectResponse:
         f"https://sentry.io/organizations/{org}/issues/{group_id}/"
         f"events/{normalized}/"
     )
+    # Event permalinks sometimes require an explicit numeric project scope.
+    project_id = result.get("event", {}).get("projectID")
+    if ISSUE_ID.fullmatch(str(project_id)):
+        target += f"?project={project_id}"
     return RedirectResponse(
         target, status_code=302, headers={"Cache-Control": "no-store"}
     )
