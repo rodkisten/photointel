@@ -953,8 +953,8 @@ async def download_discovered_asset(
             raise AppError(
                 "INVALID_REPRESENTATION", "Mídia em quarentena; revise antes de tentar"
             )
-        manifest.attempts += 1
-        manifest.status = asset.ingestion_status = "downloading"
+        # Never count a deferred session-lease claim as a download attempt.
+        # Acquire the shared session first, then transition to downloading.
         encrypted = dict(manifest.snapshot.get("encrypted", {}))
         relative = asset.source_metadata.get("cache_relative_path")
         await session.commit()
@@ -969,6 +969,34 @@ async def download_discovered_asset(
             decrypt_remote_snapshot, encrypted, settings, library_id, source_key, revision
         )
         async with session_directory(settings) as directory:
+            # Only a worker holding the encrypted session lease can start an
+            # actual iCloud attempt. Recheck all fences and the manifest after
+            # acquiring that lease, before touching the external provider.
+            async with SessionLocal() as session:
+                await assert_job_fences(session, fences)
+                current = await session.get(Asset, asset_id, with_for_update=True)
+                if current is None or current.content_revision != revision:
+                    raise LeaseLost("Asset changed before session-backed download")
+                current_manifest = await session.scalar(
+                    select(DiscoveryManifest)
+                    .where(
+                        DiscoveryManifest.asset_id == asset_id,
+                        DiscoveryManifest.content_revision == revision,
+                    )
+                    .with_for_update()
+                )
+                if (
+                    current_manifest is None
+                    or current_manifest.status in {"quarantined", "failed"}
+                    or current_manifest.attempts >= current_manifest.maximum_attempts
+                ):
+                    raise AppError(
+                        "INVALID_REPRESENTATION",
+                        "Mídia em quarentena; revise antes de tentar",
+                    )
+                current_manifest.attempts += 1
+                current_manifest.status = current.ingestion_status = "downloading"
+                await session.commit()
             adapter = ICloudAdapter(
                 settings.model_copy(update={"icloud_session_directory": directory})
             )
@@ -1082,7 +1110,10 @@ async def download_discovered_asset(
             await session.commit()
         return {"downloaded": True, "bytes_transferred": transferred, "sha256": digest}
     except BaseException as exc:
-        if not isinstance(exc, (asyncio.CancelledError, LeaseLost)):
+        if (
+            not isinstance(exc, (asyncio.CancelledError, LeaseLost))
+            and not (isinstance(exc, AppError) and exc.code == ErrorCode.RATE_LIMITED)
+        ):
             code = (
                 exc.code if isinstance(exc, AppError) else ErrorCode.MEDIA_DOWNLOAD_FAILED
             )
