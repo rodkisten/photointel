@@ -26,6 +26,53 @@ class CloudRunCommandsTests(unittest.TestCase):
         self.config = json.loads((ROOT / "infra/gcp/config.example.json").read_text())
         self.config["image"] = self.config["image"].replace("REPLACE_GIT_SHA", "a" * 40)
 
+    def test_sentry_secret_permissions_are_minimal_and_worker_has_dsn(self) -> None:
+        self.config["secrets"]["SENTRY_DSN"] = {
+            "name": "photointel-sentry-dsn", "version": "1"
+        }
+        self.config["secrets"]["SENTRY_API_TOKEN"] = {
+            "name": "photointel-sentry-api-token", "version": "1"
+        }
+        self.config["workflow_secrets"]["SENTRY_AUTH_TOKEN"] = {
+            "name": "photointel-sentry-build-token", "version": "1"
+        }
+        runtime = {
+            mode: {item["name"] for item in manage.environment(self.config, mode)}
+            for mode in ("api", "worker", "migrate")
+        }
+        self.assertIn("SENTRY_DSN", runtime["api"])
+        self.assertIn("SENTRY_DSN", runtime["worker"])
+        self.assertIn("SENTRY_API_TOKEN", runtime["api"])
+        self.assertNotIn("SENTRY_API_TOKEN", runtime["worker"])
+        self.assertNotIn("SENTRY_DSN", runtime["migrate"])
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            manage.bootstrap(manage.Runner(self.config, apply=False))
+        commands = [
+            line for line in output.getvalue().splitlines()
+            if "secrets add-iam-policy-binding" in line
+        ]
+        self.assertTrue(any(
+            "photointel-sentry-dsn" in line
+            and "photointel-jobs@" in line for line in commands
+        ))
+        self.assertTrue(any(
+            "photointel-sentry-api-token" in line
+            and "photointel-api@" in line for line in commands
+        ))
+        self.assertFalse(any(
+            "photointel-sentry-api-token" in line
+            and "photointel-jobs@" in line for line in commands
+        ))
+        self.assertTrue(any(
+            "photointel-sentry-build-token" in line
+            and "photointel-deployer@" in line for line in commands
+        ))
+        workflow = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
+        build = workflow.split('name: "🏗 Build do frontend"', 1)[1]
+        build = build.split('name: "📱 Build"', 1)[0]
+        self.assertIn("CONFIRM_PROJECT: photointel", build)
+
     def test_default_plan_cannot_invoke_subprocess(self) -> None:
         with patch("subprocess.run", side_effect=AssertionError("network prohibited")):
             runner = manage.Runner(self.config, apply=False)
