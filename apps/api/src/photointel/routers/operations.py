@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.auth import Identity, require_identity
@@ -189,15 +189,49 @@ async def reindex(
     )
     if estimate > settings.gpu_max_cost_per_run:
         raise AppError(ErrorCode.INVALID_REQUEST, "Lote excede orçamento estimado", 409)
-    query = select(Asset).where(Asset.media_type != "video")
-    if body.asset_ids:
-        query = query.where(Asset.id.in_(body.asset_ids))
-    assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
     requested_types = set(body.job_types)
     job_types = set(requested_types)
     if {"joytag_inference", "embedding_inference"} <= job_types:
         # Inference shares one adapter; scheduling both doubles the work.
         job_types.remove("embedding_inference")
+    if not job_types:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Selecione pelo menos um processamento", 422)
+
+    # Filter busy/ineligible assets *before* LIMIT. Previously we selected the
+    # first N UUIDs, discarded already-queued jobs, then returned a misleading
+    # 409 even when the next N photographs in the library were available.
+    active_states = ("queued", "preparing", "running", "retrying")
+    pending_types = (
+        select(func.count(func.distinct(Job.job_type)))
+        .where(
+            Job.asset_id == Asset.id,
+            Job.job_type.in_(job_types),
+            Job.status.in_(active_states),
+        )
+        .correlate(Asset)
+        .scalar_subquery()
+    )
+    downloading = (
+        select(Job.id)
+        .where(
+            Job.asset_id == Asset.id,
+            Job.job_type.in_(("media_download", "metadata_extract")),
+            Job.status.in_(active_states),
+        )
+        .correlate(Asset)
+        .exists()
+    )
+    query = select(Asset).where(
+        Asset.media_type != "video",
+        Asset.ingestion_status.notin_(("quarantined", "failed")),
+        or_(
+            and_(Asset.ingestion_status == "completed", pending_types < len(job_types)),
+            and_(Asset.ingestion_status != "completed", ~downloading),
+        ),
+    )
+    if body.asset_ids:
+        query = query.where(Asset.id.in_(body.asset_ids))
+    assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
     # Avoid duplicate expensive work when the same tile is tapped repeatedly.
     # Reindex requests may target photos still waiting on the download pipeline.
     pending_by_asset: dict[UUID, set[str]] = {}
@@ -227,8 +261,11 @@ async def reindex(
     if not assets:
         raise AppError(
             ErrorCode.INVALID_REQUEST,
-            "Reprocessamento já está na fila ou não há fotos elegíveis",
+            "Nenhuma foto disponível para este lote. Os itens elegíveis podem já "
+            "estar na fila ou precisar de importação; consulte os jobs pendentes.",
             409,
+            {"reason": "NO_ELIGIBLE_ASSETS", "requested_limit": limit,
+             "requested_job_types": sorted(job_types)},
         )
     batch = JobBatch(
         name="Reprocessamento",
