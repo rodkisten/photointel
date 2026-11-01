@@ -7,13 +7,13 @@ import re
 
 import httpx
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 
 from photointel.auth import require_identity
 from photointel.database import SessionLocal
-from photointel.models import Job
 from photointel.errors import AppError, ErrorCode
+from photointel.models import Job
 from photointel.sentry_observability import event_id, sentry_organization
 
 router = APIRouter(dependencies=[Depends(require_identity)])
