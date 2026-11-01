@@ -428,7 +428,10 @@ async def _fail_jobs(
                     status=job.status,
                     payload={
                         "error_code": str(code),
-                        **({"sentry_event_id": sentry_event_id} if sentry_event_id else {}),
+                        **(
+                            {"sentry_event_id": sentry_event_id}
+                            if sentry_event_id else {}
+                        ),
                     }
                 )
             )
@@ -581,7 +584,9 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
                         if job.asset_id
                     }
                     eligible = [job for job in jobs if not skipped.get(job.id)]
-                    ids = sorted({job.asset_id for job in eligible if job.asset_id}, key=str)
+                    ids = sorted(
+                        {job.asset_id for job in eligible if job.asset_id}, key=str
+                    )
                     result = (
                         await infer_assets(
                             session,
