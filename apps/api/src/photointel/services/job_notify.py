@@ -43,9 +43,9 @@ def scope_for(job_id: UUID, batch_id: UUID | None) -> str:
     return f"batch:{batch_id}" if batch_id else f"job:{job_id}"
 
 
-def segments(done: int, total: int) -> dict[str, int]:
+def segments(done: int, total: int, status: str = "queued") -> dict[str, int]:
     if total == 1:
-        return {"steps": 3, "step": 3 if done else 0}
+        return {"steps": 3, "step": 3 if done else 1 if status == "running" else 0}
     steps = max(2, min(20, total))
     return {"steps": steps, "step": min(steps, int(done * steps / total))}
 
@@ -63,6 +63,25 @@ async def send(
     if not isinstance(result, dict) or result.get("success") is not True:
         raise ValueError("Notify response not confirmed")
     return result
+
+
+async def send_push(
+    client: httpx.AsyncClient, device: str, token: str,
+    title: str, body: str, scope: str,
+) -> None:
+    """One grouped alert for enqueue, and one for terminal outcome."""
+    response = await client.post(
+        f"https://push.getnotifyapp.com/notify-json/{device}",
+        params={"token": token},
+        json={
+            "title": title, "text": body,
+            "groupType": "photointel-" + scope.replace(":", "-"),
+        },
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict) or data.get("success") is not True:
+        raise ValueError("Notify push not confirmed")
 
 
 async def claim_cursor() -> tuple[str, int] | None:
@@ -150,7 +169,7 @@ async def deliver_scope(
     if changed and not prior.get("closed"):
         data = {
             "title": title, "body": body, "trailing": f"{done}/{total}",
-            "status": "running", **segments(done, total),
+            "status": "running", **segments(done, total, status),
         }
         if activity:
             await send(client, activity, token, data)
@@ -159,12 +178,15 @@ async def deliver_scope(
             activity = result.get("activityId", "")
             if not isinstance(activity, str) or not VALID_ACTIVITY.fullmatch(activity):
                 raise ValueError("Notify activity ID missing")
+    if not prior.get("activity_id") and not finished:
+        await send_push(client, device, token, title, body, scope)
     if finished and not prior.get("closed"):
         await send(client, activity, token, {
             "title": title, "body": body, "trailing": f"{done}/{total}",
             "status": "done" if status == "completed" else "failed",
             **segments(total, total), "endsIn": None, "keepFor": 90,
         }, method="DELETE")
+        await send_push(client, device, token, title, body, scope)
     async with SessionLocal() as session, session.begin():
         entry = await session.get(Setting, key, with_for_update=True)
         if entry is None:
