@@ -1,4 +1,5 @@
 name: "🧱 Setup GCP"
+run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · ${{ inputs.confirm_project || 'photointel' }}"
 on:
   workflow_dispatch:
     inputs:

@@ -1,4 +1,5 @@
 name: "☁️ Cloudflare Setup"
+run-name: "☁️ Cloudflare · ${{ inputs.mode || 'plan' }}"
 on:
   workflow_dispatch:
     inputs:

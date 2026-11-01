@@ -1,4 +1,5 @@
 name: "🖥️ SSH"
+run-name: "🖥️ SSH · ${{ inputs.command || 'ssh' }}${{ inputs.command == 'ssh' && format(' · {0} min', inputs.session_minutes) || '' }}"
 
 on:
   workflow_dispatch:

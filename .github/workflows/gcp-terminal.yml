@@ -1,4 +1,5 @@
 name: "📱 GCP Terminal"
+run-name: "📱 Terminal · ${{ inputs.action || 'status' }}"
 on:
   workflow_dispatch:
     inputs:
