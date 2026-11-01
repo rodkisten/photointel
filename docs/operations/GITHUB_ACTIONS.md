@@ -12,7 +12,7 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 | [🏗️ Arquiteturas](../../.github/workflows/container-architectures.yml) | Manual ou `validation/container-architectures` | Testa AMD64/ARM64 e bibliotecas nativas sem enviar imagens |
 | [🌐 Worker único: frontend + API](../../.github/workflows/deploy-worker.yml) | Manual, `production` | Publica a PWA e atualiza o relay /v1 no MESMO Worker; descobre a URL do Cloud Run via GCP WIF |
 | [🧱 Bootstrap GCP](../../.github/workflows/gcp-bootstrap.yml) | Manual `plan` / `apply`, `production` | Provisiona IAM, SAs, bucket, secrets e Artifact Registry via gcloud, com WIF administrativo separado |
-| [🚀 Deploy GCP](../../.github/workflows/gcp-deploy.yml) | Manual, `main`, `production` | Dropdown `all` (build/reuso → Jobs → API → Scheduler pausado) ou opções individuais, incluindo `migrate` (plan/apply protegido); exige confirmação de migração do banco para publicar API; usa identidade Deployer limitada |
+| [🚀 Deploy GCP](../../.github/workflows/gcp-deploy.yml) | Manual, `main`, `production` | Dropdown padrão `release` (build/reuso → Jobs → API, mesmo SHA), ou ações individuais; `migrate` e `scheduler` sempre separados; exige confirmação de banco migrado para publicar API; usa identidade Deployer limitada |
 | [☁️ Validação GCP](../../.github/workflows/gcp-validation.yml) | Push/PR em infra GCP e action compartilhada, manual | Testes de CLI/bootstrap, config, Worker e política ZIP sem GCP real |
 | [🧠 CPU real](../../.github/workflows/real-cpu-smoke.yml) | Manual confirmado ou `validation/real-cpu` | Testa JoyTag/SigLIP com pesos públicos, custo de minutos de runner/download |
 | [🧾 Proveniência](../../.github/workflows/release-manifest.yml) | Manual | Manifesto de evidência do release, sem realizar deploy |
@@ -22,11 +22,11 @@ Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo work
 
 **Conclusão:** todos atendem finalidades distintas. O maior desperdício era disparar a validação pesada de bootstrap junto da CI geral; agora fica opt-in. GCP Deploy/Bootstrap e frontend Worker permanecem separados por identidades e provedores. Remover qualquer workflow restante desabilitaria uma capacidade documentada.
 
-### 🚀 Modo `all` no Deploy GCP
+### 🚀 Modo `release` no Deploy GCP
 
-Selecione `action=all` para executar **num único job e com a mesma tag de commit**: `build` (pula se já existe) → verificação no Artifact Registry → `jobs-deploy` → `deploy` → `scheduler` (pausado). A primeira falha interrompe as etapas seguintes; o cleanup dos arquivos temporários ocorre sempre.
+Selecione `action=release` (padrão) para executar **um único job no mesmo SHA**: `build` (reutiliza imagem existente quando possível) → verificação no Artifact Registry → `jobs-deploy` → `deploy` (API). O pipeline para na primeira falha e remove os arquivos temporários ao final. A Live Activity acompanha 3 fases.
 
-**Migração é deliberadamente externa ao modo `all`.** O checkbox `database_ready` é obrigatório para `all` ou `deploy`, e deve ser marcado somente após verificar Neon migrado, versões de secrets e autenticação Cloudflare. Na primeira instalação, execute `jobs-deploy` → `migrate` (`plan` opcional, `apply` com uma escolha de segurança; SHA automático) → `deploy`. Consulte o [guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md#-workflow-único-dropdown-por-etapa-ou-all).
+**Scheduler e Neon ficam fora do `release`**: selecione explicitamente `scheduler` ou `migrate` para essas operações. A opção `release` não executa os Jobs, não inicia ingestão nem habilita GPU. O checkbox `database_ready` permanece obrigatório e deve ser marcado somente após validar Neon, versões dos secrets e Cloudflare Access. [Guia completo](../deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ### 📱 Terminal: imagens Docker sem API de análise de contêineres
 
@@ -49,11 +49,11 @@ O workflow consulta também sinais de erros de startup nos logs, mas **não impr
 
 ### 🗃️ Neon migrations direto no runner
 
-`action=migrate` executa Alembic no **GitHub Actions**, conectando ao **Neon PostgreSQL direto**. Não há Cloud Run Job de migração. `plan` e `diagnose` leem revisões/tabelas com psycopg e `alembic current -v`; `apply` exige o tipo de banco (`initial-empty` comprovadamente vazio ou `existing-with-backup` com recibo de restauração validado) e executa `alembic upgrade head`. O deployer autentica com WIF e impersona a conta `photointel-migrate` para ler somente o secret de migração do Secret Manager. Execute `GCP Bootstrap → apply` uma vez para conceder `roles/iam.serviceAccountTokenCreator` especificamente nessa conta. Erros seguros e a revisão do Alembic ficam no GitHub Job Summary; não é preciso Cloud Logging. `migrate` não é incluído no modo `all`.
+`action=migrate` executa Alembic no **GitHub Actions**, conectando ao **Neon PostgreSQL direto**. Não há Cloud Run Job de migração. `plan` e `diagnose` leem revisões/tabelas com psycopg e `alembic current -v`; `apply` exige o tipo de banco (`initial-empty` comprovadamente vazio ou `existing-with-backup` com recibo de restauração validado) e executa `alembic upgrade head`. O deployer autentica com WIF e impersona a conta `photointel-migrate` para ler somente o secret de migração do Secret Manager. Execute `GCP Bootstrap → apply` uma vez para conceder `roles/iam.serviceAccountTokenCreator` especificamente nessa conta. Erros seguros e a revisão do Alembic ficam no GitHub Job Summary; não é preciso Cloud Logging. `migrate` não é incluído no modo `release`.
 
 ### 📱 Notify! somente para operações importantes
 
-A integração Notify! foi mantida somente em **GCP Deploy**, **Setup GCP**, **Worker Web** e **ZIP Patch**. CI, smoke tests, validações, WebKit, SSH e manifesto estão silenciosos. Em Deploy/Setup, a Live Activity mostra uma barra de fases e o contador de concluídas, como `2/4`, **sem tempo regressivo**. Seu botão contextual abre o **step atual no GitHub**; erros em Cloud Build, Jobs ou API passam a oferecer **Logs GCP**. Cada etapa de sucesso atualiza a atividade sem criar push, enquanto falhas estratégicas e o sucesso final geram alertas curtos.
+A integração Notify! foi mantida somente em **GCP Deploy**, **Setup GCP**, **Worker Web** e **ZIP Patch**. CI, smoke tests, validações, WebKit, SSH e manifesto estão silenciosos. Em Deploy/Setup, a Live Activity mostra uma barra de fases e o contador de concluídas, como `2/3`, **sem tempo regressivo**. Seu botão contextual abre o **step atual no GitHub**; erros em Cloud Build, Jobs ou API passam a oferecer **Logs GCP**. Cada etapa de sucesso atualiza a atividade sem criar push, enquanto falhas estratégicas e o sucesso final geram alertas curtos.
 
 O GitHub token usado para obter o identificador numérico do job tem permissão `actions: read` só nesses workflows e nunca é colocado no botão. Ver [guia do Notify!](NOTIFY_LIVE_ACTIVITY.md).
 
