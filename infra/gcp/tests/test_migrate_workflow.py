@@ -170,21 +170,38 @@ class MigrationWorkflowTests(unittest.TestCase):
                 alembic.assert_not_called()
 
     def test_automated_verify_is_read_only_and_requires_matching_head(self) -> None:
-        from alembic.config import Config
-        from alembic.script import ScriptDirectory
+        import types
 
-        heads = ScriptDirectory.from_config(Config(str(migrate.ALEMBIC_FILE))).get_heads()
-        self.assertTrue(heads)
+        # GCP offline tests intentionally do not install Alembic.
+        alembic = types.ModuleType("alembic")
+        alembic_config = types.ModuleType("alembic.config")
+        alembic_script = types.ModuleType("alembic.script")
+        alembic_config.Config = lambda path: path
+
+        class MockScript:
+            @staticmethod
+            def from_config(config):
+                return MockScript()
+
+            def get_heads(self):
+                return ["expected_head"]
+
+        alembic_script.ScriptDirectory = MockScript
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.json"
             config.write_text(json.dumps(CONFIG), encoding="utf-8")
             for status, expected in (
-                (migrate.Status(heads[0], 12), 0),
+                (migrate.Status("expected_head", 12), 0),
                 (migrate.Status("base", 0), 1),
                 (migrate.Status("unknown_revision", 12), 1),
             ):
                 with self.subTest(status=status):
                     with (
+                        patch.dict(sys.modules, {
+                            "alembic": alembic,
+                            "alembic.config": alembic_config,
+                            "alembic.script": alembic_script,
+                        }),
                         patch.object(migrate, "validate", return_value=CONFIG),
                         patch.object(migrate, "migration_secret", return_value="HIDDEN"),
                         patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
