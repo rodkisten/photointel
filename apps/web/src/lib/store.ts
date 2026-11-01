@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Diagnostic } from './diagnostics';
+import { reportDiagnostic, type Diagnostic } from './diagnostics';
 
 interface UiState {
   density: number; selected: Set<string>; selecting: boolean;
@@ -21,6 +21,9 @@ export const useUi = create<UiState>((set) => ({
     return { selected, selecting: true };
   }),
   clear: () => set({ selected: new Set(), selecting: false }),
-  notify: (text, kind = 'success', incident) => set({ toast: { text, kind, incident } }),
+  notify: (text, kind = 'success', incident) => set({ toast: {
+    text, kind, incident: kind === 'error'
+      ? incident ?? reportDiagnostic(new Error(text), 'runtime') : undefined,
+  } }),
   dismiss: () => set({ toast: null }),
 }));

@@ -56,7 +56,7 @@ export function DetailList({ data, labels = {} }: { data: Info; labels?: Record<
 export function Toast() {
   const toast = useUi((state) => state.toast);
   const dismiss = useUi((state) => state.dismiss);
-  useEffect(() => { if (toast) { const timer = setTimeout(dismiss, 7000);
+  useEffect(() => { if (toast) { const timer = setTimeout(dismiss, toast.kind === 'error' ? 30_000 : 5_000);
     return () => clearTimeout(timer); } }, [toast, dismiss]);
   if (!toast) return null;
   return <div className={`toast toast-${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
