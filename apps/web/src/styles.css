@@ -1869,7 +1869,7 @@ main {
     font-size: var(--text-11)
   }
   .brand small {
-    font-size: 6px
+    font-size: var(--text-6)
   }
   .sidebar nav a {
     gap: var(--space-2);
