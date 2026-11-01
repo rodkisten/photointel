@@ -9,7 +9,7 @@ import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, cast
 
 import sentry_sdk
 
@@ -62,7 +62,8 @@ def configure_sentry(service: str) -> bool:
         include_local_variables=False,
         max_breadcrumbs=0,
         attach_stacktrace=True,
-        before_send=_scrub,
+        # Sentry Event is a TypedDict; the sanitizer accepts and returns the same map.
+        before_send=cast(Any, _scrub),
         trace_propagation_targets=[],
     )
     sentry_sdk.set_tag("service", service)
