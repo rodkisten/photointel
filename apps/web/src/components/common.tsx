@@ -91,6 +91,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
   const [overrideSrc, setOverrideSrc] = useState<string | null>(null);
   const [incident, setIncident] = useState<Diagnostic | null>(null);
+  const [lastError, setLastError] = useState<Error | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const candidates = useMemo(() => {
     const effective = overrideSrc ?? src;
@@ -105,7 +106,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   }, [src, overrideSrc]);
   useEffect(() => {
     setFailed(false); setVariant(0); setAttempt(0); setIncident(null);
-    setOverrideSrc(null); setPreviewState(null); setPreviewMessage(null);
+    setOverrideSrc(null); setPreviewState(null); setPreviewMessage(null); setLastError(null);
   }, [src]);
   const current = candidates[Math.min(variant, candidates.length - 1)];
   useEffect(() => {
@@ -121,7 +122,10 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
           setFailed(false); setVariant(0); setAttempt((n) => n + 1);
         }
       } catch (error) {
-        if (!cancelled) setIncident(reportDiagnostic(error, 'api'));
+        if (!cancelled) {
+          setLastError(error instanceof Error ? error : new Error('Falha na consulta'));
+          setIncident(reportDiagnostic(error, 'api'));
+        }
       }
     };
     void refresh();
@@ -161,6 +165,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
         response.headers.get('X-Correlation-ID') ?? undefined,
         { source: 'gcp', method: 'GET', path: current });
     } catch (error) {
+      setLastError(error instanceof Error ? error : new Error('Falha no diagnóstico'));
       setIncident(reportDiagnostic(error, 'api'));
     } finally { setDiagnosing(false); }
   }
@@ -172,11 +177,12 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
       const result = await request<{ created: boolean; status: string; message: string }>(
         `/v1/jobs/assets/${assetId}/preview/repair`, json('POST'));
       setPreviewMessage(result.message);
-      setIncident(null);
+      setIncident(null); setLastError(null);
       const state = await request<PreviewState>(`/v1/jobs/assets/${assetId}/preview`);
       setPreviewState(state);
     } catch (error) {
       setPreviewMessage(null);
+      setLastError(error instanceof Error ? error : new Error('Falha no reparo'));
       setIncident(reportDiagnostic(error, 'api'));
     } finally { setRepairing(false); }
   }
@@ -219,7 +225,8 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
             {previewMessage && <p>{previewMessage}</p>}
           </div>}
           {incident && <div className="preview-diagnostic"><strong>{incident.code}</strong>
-            <DiagnosticActions incident={incident} /></div>}
+            {lastError && <p>{lastError.message}</p>}
+            <DiagnosticActions incident={incident} error={lastError ?? undefined} /></div>}
           <p className="muted">O reparo desperta um job existente ou cria somente a etapa faltante. O status é atualizado automaticamente enquanto este painel estiver aberto.</p>
         </div>
       </Dialog>
