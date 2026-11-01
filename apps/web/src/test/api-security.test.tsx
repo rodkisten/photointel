@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, request } from '../api/client';
@@ -106,6 +106,37 @@ describe('private API and media', () => {
     );
     fireEvent.error(screen.getByRole('img'));
     expect(screen.getByRole('button', { name: 'Ações da prévia' })).toBeVisible();
+  });
+
+  it('wakes an already queued preview worker instead of endlessly retrying reindex', async () => {
+    const id = '00000000-0000-4000-8000-000000000001';
+    const url = `/v1/jobs/assets/${id}/preview`;
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === url && init?.method !== 'POST') return Response.json({
+        status: 'queued', ingestion_status: 'pending', available_variants: [],
+        message: 'O processamento aguarda um worker.',
+        job: { id: 'existing-job-id', type: 'media_download', status: 'queued',
+          attempts: 0, max_attempts: 3, error_code: null,
+          scheduled_at: null, created_at: '2026-11-01T19:00:00Z' },
+        worker_dispatch: { status: 'retrying', error_code: 'CLOUD_RUN_DISPATCH_FAILED' },
+      });
+      if (String(input) === url + '/repair' && init?.method === 'POST') return Response.json({
+        created: false, status: 'queued', message: 'O processamento já está na fila; o worker foi acionado.',
+      });
+      throw new Error('Unknown test request');
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const user = userEvent.setup();
+    render(<PrivateImage src={null} assetId={id} alt="Prévia pendente" />);
+    await user.click(screen.getByRole('button', { name: 'Ações da prévia' }));
+    expect(await screen.findByText(/O processamento aguarda um worker/)).toBeVisible();
+    expect(screen.getByText(/CLOUD_RUN_DISPATCH_FAILED/)).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Solicitar reparo da prévia' }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(
+      url + '/repair', expect.objectContaining({ method: 'POST' }),
+    ));
+    expect(await screen.findByText(/O processamento já está na fila; o worker foi acionado/)).toBeVisible();
+    expect(fetcher.mock.calls.filter(([input]) => String(input).includes('/jobs/reindex'))).toHaveLength(0);
   });
 
   it('reveals a GCP log action when an unavailable preview is diagnosed', async () => {
