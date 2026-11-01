@@ -1,0 +1,28 @@
+name: "🔒 Observability dependency lock refresh (temporary)"
+on:
+  push:
+    branches: [feat/sentry-observability-e2e-20261101]
+    paths:
+      - pyproject.toml
+      - apps/web/package.json
+permissions:
+  contents: write
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: feat/sentry-observability-e2e-20261101, persist-credentials: true}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.23'}
+      - name: Refresh official registries and lock both environments
+        run: |
+          npm --prefix apps/web install --package-lock-only --ignore-scripts --no-audit --no-fund
+          uv lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/package-lock.json uv.lock
+          git diff --staged --quiet || git commit -m "chore: lock Sentry frontend and backend SDK dependencies"
+          git push origin HEAD:feat/sentry-observability-e2e-20261101
