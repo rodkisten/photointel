@@ -304,13 +304,28 @@ async def reindex(
 async def job_activity(
     session: Session, limit: int = Query(24, ge=1, le=100)
 ) -> Page[JobOut]:
-    """Recent durable jobs, sorted by creation instead of random UUID values."""
-    rows = (
+    """Prioritize active jobs, then fill remaining slots with recent completed work."""
+    active = list((
         await session.scalars(
-            select(Job).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
+            select(Job).where(
+                Job.status.in_(("queued", "preparing", "running", "retrying"))
+            ).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
         )
-    ).all()
-    return Page(items=[JobOut.model_validate(job) for job in rows], next_cursor=None)
+    ).all())
+    remaining = limit - len(active)
+    finished: list[Job] = []
+    if remaining:
+        finished = list((
+            await session.scalars(
+                select(Job).where(
+                    Job.status.not_in(("queued", "preparing", "running", "retrying"))
+                ).order_by(Job.created_at.desc(), Job.id.desc()).limit(remaining)
+            )
+        ).all())
+    return Page(
+        items=[JobOut.model_validate(job) for job in [*active, *finished]],
+        next_cursor=None,
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut, tags=["jobs"])
