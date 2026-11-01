@@ -19,11 +19,11 @@ summary() {
 }
 
 database_gate() {
-  if [[ "${DATABASE_READY:-false}" != true ]]; then
-    log "::error::API publication requires database_ready=true. Verify Neon migration, Secret Manager versions and Cloudflare Access first."
-    return 1
-  fi
-  log "✅ Operator confirmed database migration, Secret Manager and Cloudflare Access readiness."
+  # A read-only Neon revision verification replaces the old UI checkbox.
+  # Never auto-apply migrations when deploying the API.
+  log "🔎 Checking Neon connection and current Alembic revision."
+  MIGRATION_MODE=verify bash "$ROOT/infra/gcp/release.sh" migrate
+  log "✅ Neon is accessible and the schema matches the checked-out migrations."
 }
 
 manage() {
@@ -57,7 +57,7 @@ case "$PHASE" in
     ;;
   migrate)
     mode="${MIGRATION_MODE:-plan}"
-    [[ "$mode" == plan || "$mode" == apply || "$mode" == diagnose ]] || { log "::error::Invalid migration mode"; exit 2; }
+    [[ "$mode" == plan || "$mode" == apply || "$mode" == diagnose || "$mode" == verify ]] || { log "::error::Invalid migration mode"; exit 2; }
     # Only Alembic dependencies; no GPU, frontend, API server or ML packages.
     migration_venv="$(mktemp -d "${RUNNER_TEMP:-/tmp}/photointel-neon-XXXXXX")"
     trap 'rm -rf "$migration_venv"' EXIT

@@ -343,7 +343,7 @@ def summary(text: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("plan", "apply", "diagnose"), required=True)
+    parser.add_argument("--mode", choices=("plan", "apply", "diagnose", "verify"), required=True)
     parser.add_argument("--project", required=True)
     parser.add_argument(
         "--database",
@@ -370,6 +370,20 @@ def main(argv: list[str] | None = None) -> int:
         before = inspect_database(conninfo, args)
         summary(f"- Alembic before: **{before.revision}**")
         summary(f"- Application tables in public: **{before.user_tables}**")
+        if opts.mode == "verify":
+            # Automated deployment gate. Never run upgrades or migrations.
+            from alembic.config import Config
+            from alembic.script import ScriptDirectory
+
+            heads = set(ScriptDirectory.from_config(Config(str(ALEMBIC_FILE))).get_heads())
+            actual = set(before.revision.split(","))
+            if not heads or actual != heads or before.user_tables == 0:
+                raise MigrationError(
+                    "Neon schema does not match the checked-out Alembic head. "
+                    "Run Migrate Neon plan and apply with verified recovery evidence."
+                )
+            summary("✅ Database matches repository Alembic head (read-only).")
+            return 0
         if opts.mode != "apply":
             run_alembic(opts.mode, url)
             summary("✅ Read-only inspection complete. No migrations executed.")

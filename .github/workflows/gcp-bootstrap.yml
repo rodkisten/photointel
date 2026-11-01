@@ -1,5 +1,5 @@
 name: "🧱 Setup GCP"
-run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · ${{ inputs.confirm_project || 'photointel' }}"
+run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · photointel"
 on:
   push:
     branches: [main]
@@ -17,16 +17,6 @@ on:
         required: true
         default: plan
         options: [plan, apply]
-      authorize_charges:
-        description: "I approve Google Cloud resource changes and potential charges"
-        type: boolean
-        required: true
-        default: false
-      confirm_project:
-        description: "Type the exact GCP project ID"
-        type: string
-        required: true
-        default: photointel
 
 permissions:
   contents: read
@@ -48,7 +38,7 @@ jobs:
           bash -n infra/gcp/bootstrap.sh
           python3 infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json
   bootstrap:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
     name: "🧱 ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     environment: production
@@ -86,7 +76,7 @@ jobs:
         with:
           mode: prepare
           config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: ${{ inputs.confirm_project }}
+          confirm-project: photointel
           release-sha: ${{ github.sha }}
 
       - name: "📱 ! ⚙ Env"
@@ -107,7 +97,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "${{ steps.config.outcome == 'success' && '1' || '0' }}"
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧪 Bootstrap"
         id: notify_observed_001
@@ -119,7 +109,7 @@ jobs:
         env:
           WIF: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
           BOOTSTRAP_ACCOUNT: ${{ steps.config.outputs.bootstrap_service_account }}
-          PROJECT: ${{ inputs.confirm_project }}
+          PROJECT: photointel
         run: |
           set -euo pipefail
           test "$PROJECT" = photointel || { echo "::error::Unexpected target project"; exit 1; }
@@ -144,14 +134,14 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🔐 Login"
         id: notify_observed_003
         if: inputs.mode == 'apply'
         uses: google-github-actions/auth@v3
         with:
-          project_id: ${{ inputs.confirm_project }}
+          project_id: photointel
           workload_identity_provider: ${{ steps.config.outputs.bootstrap_workload_identity_provider }}
           service_account: ${{ steps.config.outputs.bootstrap_service_account }}
 
@@ -173,14 +163,14 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "2"
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_004
         if: inputs.mode == 'apply'
         uses: google-github-actions/setup-gcloud@v3
         with:
-          project_id: ${{ inputs.confirm_project }}
+          project_id: photointel
           version: '>= 500.0.0'
 
       - name: "📱 ! 🧰 Gcloud"
@@ -201,7 +191,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "3"
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Setup"
         if: ${{ always() && steps.notify_observed_004.outcome != 'failure' && steps.checkout.outcome == 'success' }}
@@ -221,14 +211,14 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: ${{ inputs.mode == 'plan' && '1' || '3' }}
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧱 Provisionar"
         id: notify_observed_005
         env:
           BOOTSTRAP_MODE: ${{ inputs.mode }}
-          AUTHORIZE_CHARGES: ${{ inputs.authorize_charges }}
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          AUTHORIZE_CHARGES: "true"
+          CONFIRM_PROJECT: photointel
         run: |
           set -euo pipefail
           bash infra/gcp/bootstrap.sh
@@ -251,7 +241,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: ${{ inputs.mode == 'plan' && '2' || '4' }}
           total: ${{ inputs.mode == 'plan' && '2' || '4' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧹 API"
         id: notify_observed_006

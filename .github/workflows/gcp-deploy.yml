@@ -54,23 +54,6 @@ on:
         default: ''
         required: false
 
-      database_ready:
-        description: 'For deploy/release: I verified everything'
-        type: boolean
-        default: false
-        required: true
-
-      authorize_charges:
-        description: 'I authorize Google Cloud charges'
-        type: boolean
-        default: false
-        required: true
-
-      confirm_project:
-        description: 'Google Cloud project ID'
-        type: string
-        default: photointel
-        required: true
 
 permissions:
   contents: read
@@ -95,7 +78,7 @@ jobs:
       - run: bash -n infra/gcp/release.sh && python3 infra/gcp/manage.py render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.authorize_charges == true || (inputs.action == 'migrate' && (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose')))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 90
@@ -129,41 +112,13 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: "${{ github.workflow }} · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
           job: ${{ github.job }}
-      - name: "🛡 Validação DB"
-        id: database_gate
-        if: inputs.action == 'release' || inputs.action == 'deploy'
-        env:
-          DATABASE_READY: ${{ inputs.database_ready }}
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-        run: bash infra/gcp/release.sh gate
-
-      - name: "📱 ! 🛡 Validação DB"
-        if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          github-token: ${{ github.token }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🛡 Validação DB"
-          step-index: "3"
-          label: "🛡 Validação DB"
-          outcome: ${{ steps.database_gate.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "0"
-          total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
-          region: "us-central1"
       - name: "⚙ Env"
         id: config
         uses: ./.github/actions/gcp-config
         with:
           mode: prepare
           config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: ${{ inputs.confirm_project }}
+          confirm-project: photointel
           release-sha: ${{ github.sha }}
 
       - name: "📱 ! ⚙ Env"
@@ -184,7 +139,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🔐 Login"
         id: notify_observed_001
@@ -211,7 +166,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_002
@@ -236,7 +191,34 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
+          region: "us-central1"
+      - name: "🛡 Validação DB"
+        id: database_gate
+        if: inputs.action == 'release' || inputs.action == 'deploy'
+        env:
+          CONFIRM_PROJECT: photointel
+        run: bash infra/gcp/release.sh gate
+
+      - name: "📱 ! 🛡 Validação DB"
+        if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🛡 Validação DB"
+          step-index: "3"
+          label: "🛡 Validação DB"
+          outcome: ${{ steps.database_gate.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Build"
         if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
@@ -256,13 +238,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🏗 Pré-check"
         id: preflight
         if: inputs.action == 'build' || inputs.action == 'release'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh preflight
 
       - name: "📱 ! Build"
@@ -283,7 +265,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Cache"
         if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
@@ -303,13 +285,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🏗 Cache"
         id: image_cache
         if: inputs.action == 'build' || inputs.action == 'release'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh cache
 
@@ -331,7 +313,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Build"
         if: ${{ (inputs.action == 'release' || inputs.action == 'build') && steps.image_cache.outputs.skip != 'true' }}
@@ -351,13 +333,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🏗 Build"
         id: build_image
         if: (inputs.action == 'build' || inputs.action == 'release') && steps.image_cache.outputs.skip != 'true'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh build
 
       - name: "📱 ! Build"
@@ -378,7 +360,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Imagem"
         if: ${{ inputs.action == 'release' || inputs.action == 'build' }}
@@ -398,13 +380,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🏗 Imagem"
         id: verify_image
         if: inputs.action == 'build' || inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'release'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ github.sha }}
         run: bash infra/gcp/release.sh verify
 
@@ -426,7 +408,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ! Imagem"
         if: ${{ always() && inputs.action != 'release' && inputs.action != 'build' && (steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled') }}
@@ -446,7 +428,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Jobs"
         if: ${{ inputs.action == 'release' || inputs.action == 'jobs-deploy' }}
@@ -466,13 +448,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "${{ inputs.action == 'release' && '1' || '0' }}"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📦 Jobs"
         id: deploy_jobs
         if: inputs.action == 'jobs-deploy' || inputs.action == 'release'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh jobs-deploy
 
       - name: "📱 ✓ Jobs"
@@ -493,7 +475,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "${{ inputs.action == 'release' && '2' || '1' }}"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Neon"
         if: ${{ inputs.action == 'migrate' }}
@@ -513,13 +495,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🗃 Neon"
         id: migrate_database
         if: inputs.action == 'migrate'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ github.sha }}
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
@@ -544,7 +526,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ API"
         if: ${{ inputs.action == 'release' || inputs.action == 'deploy' }}
@@ -564,14 +546,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "${{ inputs.action == 'release' && '2' || '0' }}"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🚀 API"
         id: deploy_api
         if: inputs.action == 'deploy' || inputs.action == 'release'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
-          DATABASE_READY: ${{ inputs.database_ready }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh deploy
 
       - name: "📱 ✓ API"
@@ -592,7 +573,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "${{ inputs.action == 'release' && '3' || '1' }}"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Agenda"
         if: ${{ inputs.action == 'scheduler' }}
@@ -612,13 +593,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: 1
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "⏰ Agenda"
         id: deploy_scheduler
         if: inputs.action == 'scheduler'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh scheduler
 
       - name: "📱 ✓ Agenda"
@@ -639,7 +620,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
           total: 1
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "📱 ▶ Limpeza"
         if: ${{ inputs.action == 'cleanup' }}
@@ -659,13 +640,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧹 Código"
         id: pause_scheduler
         if: inputs.action == 'cleanup'
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
         run: bash infra/gcp/release.sh cleanup
 
       - name: "📱 ✓ Limpeza"
@@ -686,7 +667,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
       - name: "🧹 API"
         id: notify_observed_003
