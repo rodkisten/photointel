@@ -47,7 +47,10 @@ class ICloudDispatchContractTests(unittest.TestCase):
         end = source.index("async def set_ingestion_pause(", start)
         handler = source[start:end]
         self.assertLess(handler.index("if existing:"), handler.index("await require_import_gates("))
-        self.assertLess(handler.index("return {\\"job_id\\": existing"), handler.index("await require_import_gates("))
+        self.assertLess(
+            handler.index('return {"job_id": existing'),
+            handler.index("await require_import_gates("),
+        )
         self.assertLess(handler.index("await require_import_gates("), handler.index("batch = JobBatch("))
 
     def test_finite_discovery_wakes_worker_without_scheduler_or_gpu(self) -> None:
