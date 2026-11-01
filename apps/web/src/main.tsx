@@ -53,9 +53,10 @@ if (!root) {
     <React.StrictMode>
       <AppErrorBoundary>
         <QueryClientProvider client={client}>
-          <BrowserRouter><App /><IncidentInspector /></BrowserRouter>
+          <BrowserRouter><App /></BrowserRouter>
         </QueryClientProvider>
       </AppErrorBoundary>
+      <IncidentInspector />
     </React.StrictMode>,
   );
 }
