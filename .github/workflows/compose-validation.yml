@@ -11,7 +11,7 @@ on:
       - 'infra/scripts/validate-compose.py'
       - 'infra/scripts/setup-env.py'
       - 'apps/api/**'
-      - 'apps/web/**'
+    #  - 'apps/web/**'
       - 'packages/**'
       - 'pyproject.toml'
       - 'uv.lock'
