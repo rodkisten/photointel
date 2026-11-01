@@ -16,7 +16,7 @@ export function initSentry() {
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.1,
     tracePropagationTargets: [/^\/v1\//, new RegExp('^' +
-      window.location.origin.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&') + '/v1/')],
+      window.location.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/v1/')],
     beforeSend(event) {
       delete event.request;
       delete event.user;
