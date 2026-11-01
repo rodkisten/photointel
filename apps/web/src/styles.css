@@ -2861,6 +2861,7 @@ input.input, select.input, textarea.input {
 }
 .incident-actions button:focus-visible, .incident-actions a:focus-visible { outline: 2px solid var(--gray-16); outline-offset: 2px; }
 .incident-help { font-size: var(--text-11); line-height: 1.55; color: var(--text-muted); }
+.toast-message .diagnostic-actions .diagnostic-id,
 .toast-message .diagnostic-actions .diagnostic-external,
 .toast-message .diagnostic-actions > button:not(:first-of-type),
 .toast-message .diagnostic-actions > a { display: none; }
