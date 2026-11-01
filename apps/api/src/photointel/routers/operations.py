@@ -194,6 +194,10 @@ async def reindex(
         query = query.where(Asset.id.in_(body.asset_ids))
     assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
     requested_types = set(body.job_types)
+    job_types = set(requested_types)
+    if {"joytag_inference", "embedding_inference"} <= job_types:
+        # Inference shares one adapter; scheduling both doubles the work.
+        job_types.remove("embedding_inference")
     # Avoid duplicate expensive work when the same tile is tapped repeatedly.
     # Reindex requests may target photos still waiting on the download pipeline.
     pending_by_asset: dict[UUID, set[str]] = {}
@@ -217,7 +221,7 @@ async def reindex(
                  {"media_download", "metadata_extract"}))
             or
             (asset.ingestion_status == "completed" and
-             requested_types.issubset(pending_by_asset.get(asset.id, set())))
+             job_types.issubset(pending_by_asset.get(asset.id, set())))
         )
     ]
     if not assets:
@@ -233,11 +237,6 @@ async def reindex(
     )
     session.add(batch)
     await session.flush()
-    job_types = set(requested_types)
-    if {"joytag_inference", "embedding_inference"} <= job_types:
-        # The adapter runs and persists both models together. Two forced jobs
-        # could enter separate worker batches and pay for the same work twice.
-        job_types.remove("embedding_inference")
     from photointel.services.outbox import enqueue_dispatch
 
     for asset in assets:
