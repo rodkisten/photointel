@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -310,6 +311,14 @@ class AssetBusy(Exception):
     """Another committed job owns this asset; defer without consuming an attempt."""
 
 
+def _is_retryable_transaction_conflict(exc: BaseException) -> bool:
+    """PostgreSQL deadlocks and serialization conflicts must retry the entire job."""
+    return isinstance(exc, DBAPIError) and getattr(exc.orig, "sqlstate", None) in {
+        "40P01",  # deadlock_detected
+        "40001",  # serialization_failure
+    }
+
+
 async def _fail_jobs(
     fences: list[JobFence],
     exc: BaseException,
@@ -368,7 +377,9 @@ async def _fail_jobs(
                         {"attempt": job.attempts, "event_id": sentry_event_id},
                     ],
                 }
-            job.scheduled_at = utcnow() + retry_delay(job.attempts, jitter=True)
+            job.scheduled_at = utcnow() + retry_delay(
+                3 if busy else job.attempts, jitter=True
+            )
             job.finished_at = utcnow() if job.status == "failed" else None
             job.lease_until = None
 
@@ -611,6 +622,26 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
         logger.info("worker_lease_released", jobs=len(job_ids))
         # SIGTERM/cancellation leaves the durable claim recoverable on expiry.
     except Exception as exc:
+        if (
+            isinstance(exc, AppError)
+            and exc.code == ErrorCode.RATE_LIMITED
+            and captured_job_type in {"media_download", "icloud_discovery"}
+        ):
+            # The encrypted iCloud session has a single owner by design.
+            # Contention is scheduling, not a failed download or Sentry incident.
+            await _fail_jobs(fences, exc, busy=True)
+            logger.info("worker_job_deferred", jobs=len(job_ids), reason="icloud_session_busy")
+            return
+        if _is_retryable_transaction_conflict(exc):
+            # A deadlock aborts this entire SQL transaction. Requeue the work
+            # under its original fence instead of exhausting its attempt budget.
+            await _fail_jobs(
+                fences,
+                AppError("DATABASE_CONTENTION", "Transação concorrente; tentativa reagendada", 503),
+                busy=True,
+            )
+            logger.warning("worker_job_deferred", jobs=len(job_ids), reason="database_contention")
+            return
         # Capture the *real traceback* before persisting a sanitized job failure.
         # Retried attempts retain separate event IDs in job.progress.
         with continue_job_trace(captured_payload):
