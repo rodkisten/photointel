@@ -29,13 +29,12 @@ export function ICloudPage() {
   const hardLimit = Number(state.data?.hard_import_limit ?? 10000);
   const authorizedLimit = Number(state.data?.maximum_authorized_import_limit ?? 1000);
   const catalogLimit = Number(state.data?.catalog_asset_limit ?? 1000);
-  const continuousAllowed = gates.data?.full_backfill_unlocked === true &&
-    state.data?.database_profile === 'full';
-  const requiredIds = limit <= 10 ? ['A'] : limit <= 100 ? ['B', 'C'] :
-    limit <= 1000 ? ['D'] : ['E', 'F'];
-  const blockedGates = source === 'icloud' ?
-    (gates.data?.items ?? []).filter((gate) =>
-      requiredIds.includes(gate.id) && gate.status !== 'passed') : [];
+  const continuousAllowed = state.data?.database_profile === 'full';
+  const gatesEnabled = state.data?.verification_gates_enforced !== false;
+  const largeScaleRequiresApproval = source === 'icloud' && gatesEnabled &&
+    (limit > 1000 || (continuous && target > 1000));
+  const largeScaleBlocked = largeScaleRequiresApproval &&
+    gates.data?.full_backfill_unlocked !== true;
   return <><PageHeader eyebrow="Originais sempre preservados" title="Sincronização iCloud"
     description="O servidor importa representações controladas e continua funcionando com o iPhone desconectado."
     actions={<Button variant="outline" disabled={action.isPending || !state.data}
@@ -86,7 +85,7 @@ export function ICloudPage() {
         {source === 'icloud' && mode === 'backfill' && <>
           <label className="checkbox-field"><span>Continuar em lotes até uma meta explícita
             <small>{continuousAllowed ? 'Autorize a quantidade total e acompanhe o lote no Processamento.' :
-              'Exige gate F aprovado e perfil de banco full com capacidade autorizada.'}</small></span>
+              'Exige perfil de banco full e capacidade autorizada. Para mais de 1.000 fotos há uma única validação de escala.'}</small></span>
             <input aria-label="Autorizar backfill contínuo" type="checkbox" disabled={!continuousAllowed}
               checked={continuous && continuousAllowed} onChange={(e) => setContinuous(e.target.checked)} /></label>
           {continuous && continuousAllowed && <label className="field">Meta total autorizada<input
@@ -96,19 +95,17 @@ export function ICloudPage() {
               GPU e orçamento continuam ativos. Pause o lote no Processamento para interromper.</span></label>}
         </>}
         {!canStart && <p className="field-help">Configure ICLOUD_ENABLED e autentique a sessão no host para habilitar a importação real.</p>}
-        {blockedGates.length > 0 && <div className="notice warning" role="alert">
+        {largeScaleBlocked && <div className="notice warning" role="alert">
           <ShieldCheck size={15} aria-hidden="true" />
           <div>
-            <strong>Importação bloqueada por validação desta versão</strong>
-            <p>Antes de importar {limit} fotos, conclua as verificações abaixo. Não é um problema da sessão iCloud.</p>
-            <ul>{blockedGates.map((gate) => <li key={gate.id}>
-              <strong>Gate {gate.id}: {gate.name}</strong>. {gate.reason}
-              {gate.requirements?.length > 0 && <small>Exigência: {gate.requirements.join('; ')}</small>}
-            </li>)}</ul>
-            <Link to="/setup" className="button button-outline">Abrir Preparação e validação</Link>
+            <strong>Autorização necessária acima de 1.000 fotos</strong>
+            <p>Para lotes e metas menores, basta respeitar os limites configurados.
+              Acima de 1.000, registre uma verificação de capacidade e custos. Este aviso não indica problema na sessão iCloud.</p>
+            {gates.error && <small>Não foi possível consultar o estado da autorização. Tente novamente.</small>}
+            <Link to="/setup" className="button button-outline">Autorizar importações grandes</Link>
           </div>
         </div>}
-        <Button disabled={!canStart || blockedGates.length > 0 || action.isPending || limit < 1 || limit > Math.min(hardLimit, authorizedLimit) ||
+        <Button disabled={!canStart || largeScaleBlocked || action.isPending || limit < 1 || limit > Math.min(hardLimit, authorizedLimit) ||
           (continuous && (!continuousAllowed || target < limit || target > catalogLimit)) ||
           (limit > defaultLimit && !expanded)} onClick={async () => {
           try {
