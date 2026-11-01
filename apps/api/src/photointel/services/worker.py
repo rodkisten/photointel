@@ -508,6 +508,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     leases: list[tuple[str, int]] = []
     started = time.monotonic()
     correlation_token: Token[str | None] | None = None
+    captured_payload: dict[str, Any] = {}
+    captured_job_type: str | None = None
     try:
         async with SessionLocal() as session:
             jobs = list(
@@ -526,6 +528,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             )
             if len(jobs) != len(job_ids):
                 return
+            captured_payload = dict(jobs[0].payload)
+            captured_job_type = jobs[0].job_type
             correlation_token = correlation_context.set(
                 _job_correlation(jobs[0])
             )
@@ -604,12 +608,12 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     except Exception as exc:
         # Capture the *real traceback* before persisting a sanitized job failure.
         # Retried attempts retain separate event IDs in job.progress.
-        with continue_job_trace(jobs[0].payload if 'jobs' in locals() and jobs else {}):
+        with continue_job_trace(captured_payload):
             sentry_id = capture_exception(
                 exc,
                 correlation_id=correlation_context.get(),
                 job_id=str(job_ids[0]) if job_ids else None,
-                job_type=jobs[0].job_type if 'jobs' in locals() and jobs else None,
+                job_type=captured_job_type,
             )
         await _fail_jobs(fences, exc, sentry_event_id=sentry_id)
         logger.warning(
