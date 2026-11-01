@@ -409,10 +409,18 @@ async def preview_job_state(session: AsyncSession, asset_id: UUID) -> dict[str, 
         "message": {
             "ready": "Prévia gerada. Atualize a imagem.",
             "processing": "O worker está processando esta fotografia.",
-            "queued": "O processamento aguarda um worker. Reativar a fila não duplica jobs.",
-            "failed": "O processamento falhou. Consulte o código do job e solicite reparo.",
-            "source_pending": "O arquivo foi catalogado, mas ainda precisa ser baixado do iCloud.",
-            "preview_missing": "A fotografia foi importada, mas não há uma prévia disponível.",
+            "queued": (
+                "O processamento aguarda um worker. Reativar a fila não duplica jobs."
+            ),
+            "failed": (
+                "O processamento falhou. Consulte o código do job e solicite reparo."
+            ),
+            "source_pending": (
+                "O arquivo foi catalogado, mas ainda precisa ser baixado do iCloud."
+            ),
+            "preview_missing": (
+                "A fotografia foi importada, mas não há uma prévia disponível."
+            ),
         }[status],
     }
 
@@ -502,7 +510,8 @@ async def repair_preview(
     settings = await effective_settings(session)
     # A worker that is already running needs no duplicate Cloud Run execution.
     # Queued/retrying work receives a deduplicated wakeup, including repeated taps.
-    if settings.execution_platform == "cloud_run" and job.status in ("queued", "retrying"):
+    if (settings.execution_platform == "cloud_run"
+            and job.status in ("queued", "retrying")):
         slot = int(utcnow().timestamp()) // 120
         await enqueue_dispatch(
             session, "worker", f"preview-wakeup:{job.id}:{slot}"
