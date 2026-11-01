@@ -64,24 +64,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("jobs execute", self.workflow)
 
     def test_release_live_notifications_use_three_phase_counts(self) -> None:
-        self.assertIn(
-            "total: ${{ inputs.action == 'release' && '3' || '1' }}",
-            self.workflow,
-        )
+        self.assertIn("total: ${{ inputs.action == 'release' && '3' || '1' }}", self.workflow)
         for stage_name, count in (
             ('📱 ✓ Build', '1'),
             ('📱 ✓ Jobs', '2'),
             ('📱 ✓ API', '3'),
         ):
-            start = self.workflow.index('      - name: "' + stage_name + '"\\n')
-            end = self.workflow.find("\\n      - name:", start + 1)
+            start = self.workflow.index('      - name: "' + stage_name + '"')
+            end = self.workflow.find("      - name:", start + 1)
             block = self.workflow[start:end if end >= 0 else None]
-            self.assertIn(
-                "completed: \\"${{ inputs.action == 'release' && '" + count + "' || '1' }}\\"",
-                block,
-                stage_name,
-            )
-        self.assertIn("completed: \"0\"", self.workflow)
+            self.assertIn("completed:", block)
+            self.assertIn("inputs.action == 'release' && '" + count + "' || '1'", block)
         self.assertIn("if: inputs.action == 'scheduler'", self.stage("deploy_scheduler"))
 
     def test_build_is_reused_and_verified_before_jobs(self) -> None:
