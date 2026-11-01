@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+from contextvars import Token
 import os
 import signal
 import socket
@@ -487,7 +488,7 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     fences: list[JobFence] = []
     leases: list[tuple[str, int]] = []
     started = time.monotonic()
-    correlation_token = None
+    correlation_token: Token[str | None] | None = None
     try:
         async with SessionLocal() as session:
             jobs = list(
