@@ -58,8 +58,9 @@ def create_app() -> FastAPI:
             "If-None-Match",
             "If-Range",
             "Range",
+            "X-Correlation-ID",
         ],
-        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges", "X-Correlation-ID"],
     )
 
     @app.exception_handler(AppError)
@@ -107,7 +108,16 @@ def create_app() -> FastAPI:
     async def protection(request: Request, call_next: Any) -> Any:
         import time
 
-        request.state.correlation_id = str(uuid4())
+        # Accept only canonical UUIDs propagated by the trusted edge.
+        # Never log caller-controlled arbitrary strings or expose credentials.
+        incoming_correlation = request.headers.get("x-correlation-id", "")
+        try:
+            parsed_correlation = str(__import__("uuid").UUID(incoming_correlation))
+            request.state.correlation_id = (
+                parsed_correlation if incoming_correlation == parsed_correlation else str(uuid4())
+            )
+        except (ValueError, AttributeError):
+            request.state.correlation_id = str(uuid4())
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 length = int(request.headers.get("content-length", "0"))
