@@ -116,3 +116,9 @@ export function apiNetworkError(cause: unknown, method: string, path: string): A
   return new ApiError('Não foi possível conectar ao PhotoIntel.', 0, 'NETWORK_ERROR',
     undefined, { method, path, cause, source: 'cloudflare' });
 }
+
+/** DOMException may not inherit from the same Error realm (Safari/jsdom/iframes). */
+export function isRequestAbort(cause: unknown): boolean {
+  return cause !== null && typeof cause === 'object' &&
+    'name' in cause && cause.name === 'AbortError';
+}
