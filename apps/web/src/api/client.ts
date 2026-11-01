@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUi } from '../lib/store';
 import { reportDiagnostic } from '../lib/diagnostics';
-import { ApiError, apiNetworkError, responseError } from './error';
+import { ApiError, apiNetworkError, isRequestAbort, responseError } from './error';
 export { ApiError } from './error';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
@@ -18,7 +18,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (cause) {
     // A canceled request (navigation, query invalidation) is not a network outage.
-    if (cause instanceof Error && cause.name === 'AbortError') throw cause;
+    if (isRequestAbort(cause)) throw cause;
     throw apiNetworkError(cause, init?.method ?? 'GET', path);
   }
   if (!response.ok) throw await responseError(response, path, init?.method ?? 'GET');
