@@ -1,5 +1,5 @@
 name: "🚀 Deploy"
-run-name: "🚀 Deploy · ${{ inputs.action || 'release' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }} · ${{ inputs.confirm_project || 'photointel' }}"
+run-name: "🚀 Deploy · ${{ inputs.action || 'release' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
   workflow_dispatch:
