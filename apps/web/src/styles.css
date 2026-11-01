@@ -63,10 +63,23 @@ h1,h2,h3,p {
 }
 
 h1 {
-  font-size: clamp(25px,3vw,33px);
+  font-size: clamp(var(--text-25), 3vw, var(--text-33));
   line-height: 1.2;
   font-weight: 560;
   letter-spacing: -1.1px
+}
+
+/* Typed length division keeps fluid headings proportional to the base
+   in Safari 26+, Chrome 140+ and other supporting browsers.
+   Browsers without typed division retain the valid clamp() fallback. */
+@supports (font-size: calc(3vw * (18px / 16px))) {
+  h1 {
+    font-size: clamp(
+      var(--text-25),
+      calc(3vw * (var(--font-size-base) / 1rem)),
+      var(--text-33)
+    );
+  }
 }
 
 h2 {
@@ -2522,7 +2535,7 @@ select:focus-visible, textarea:focus-visible { outline-color: var(--text-primary
   /* Safari zoom prevention: keep the actual font at 16px; no blurry transforms. */
   input:not([type="checkbox"]):not([type="radio"]),
   select, textarea {
-    font-size: var(--text-16) !important;
+    font-size: max(16px, var(--text-16)) !important;
   }
 }
 @media(prefers-reduced-motion:reduce) { .spinning { animation: none; } }
