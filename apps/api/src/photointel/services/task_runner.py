@@ -15,7 +15,6 @@ import time
 from typing import Any
 from uuid import uuid4
 
-
 MODES = ("discover", "backfill", "worker", "maintenance", "migrate")
 GPU_TYPES = ("joytag_inference", "embedding_inference")
 
@@ -46,11 +45,12 @@ async def dispatch_ready_worker_followup(
     """
     if mode not in ("discover", "backfill", "worker"):
         return {"status": "not_applicable"}
+    from sqlalchemy import select
+
     from photointel.config import get_settings
     from photointel.database import SessionLocal
     from photointel.models import Job, utcnow
     from photointel.services.outbox import drain_outbox, enqueue_dispatch
-    from sqlalchemy import select
 
     if get_settings().execution_platform != "cloud_run":
         return {"status": "not_cloud_run"}
@@ -111,8 +111,8 @@ async def run_finite(
     started = time.monotonic()
     deadline = started + deadline_seconds
     worker_id = f"task:{socket.gethostname()}:{os.getpid()}:{uuid4().hex[:12]}"
-    from photointel.services.outbox import drain_outbox
     from photointel.services.job_notify import safe_notify
+    from photointel.services.outbox import drain_outbox
 
     await safe_notify()
     dispatches = await drain_outbox(
