@@ -419,7 +419,10 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
             if valid
             else "Sessão Apple reportou falha; revalide pelo terminal seguro"
             if stored and stored.last_error
-            else "Sessão criptografada presente; sem importação recente que comprove acesso Apple"
+            else (
+                "Sessão criptografada presente; sem importação recente "
+                "que comprove acesso Apple"
+            )
             if present
             else "Sessão criptografada ausente; publique-a pelo terminal seguro",
         }
