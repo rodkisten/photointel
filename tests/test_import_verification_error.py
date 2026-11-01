@@ -1,4 +1,5 @@
-"""Small iCloud batches must report actionable release verification blockers."""
+"""Only new operations above 1,000 assets need explicit release approval."""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -8,50 +9,44 @@ from photointel.services import verification
 
 
 @pytest.mark.asyncio
-async def test_ten_photo_import_reports_gate_a_and_setup_action(monkeypatch):
-    mock = AsyncMock(return_value={"items": [
-        {"id": key, "status": "not_verified"} for key in verification.GATES
-    ]})
+@pytest.mark.parametrize("count", [1, 10, 100, 1000])
+async def test_small_and_bounded_imports_do_not_need_gates(monkeypatch, count):
+    status = AsyncMock()
+    monkeypatch.setattr(verification, "gate_status", status)
+
+    await verification.require_import_gates(object(), count)
+    status.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_large_import_reports_single_scale_approval_and_setup_action(monkeypatch):
+    mock = AsyncMock(return_value={
+        "items": [{"id": "F", "status": "not_verified"}]
+    })
     monkeypatch.setattr(verification, "gate_status", mock)
 
     with pytest.raises(AppError) as caught:
-        await verification.require_import_gates(object(), 10)
+        await verification.require_import_gates(object(), 1001)
 
     exc = caught.value
     assert exc.status_code == 409
     assert exc.code == ErrorCode.VERIFICATION_REQUIRED
     assert exc.details["reason"] == "RELEASE_VERIFICATION_PENDING"
-    assert exc.details["required_gates"] == ["A"]
+    assert exc.details["required_gates"] == ["F"]
     assert exc.details["gates"] == [{
-        "id": "A", "name": "Fixtures locais",
-        "requirement": "Compose, migrações, API, worker e PWA",
+        "id": "F",
+        "name": verification.GATES["F"][0],
+        "requirement": verification.GATES["F"][2],
         "status": "not_verified",
     }]
     assert exc.details["action"] == {
-        "label": "Abrir Preparação e validação", "href": "/setup",
+        "label": "Autorizar importações grandes", "href": "/setup",
     }
-    assert "Gate" not in exc.message or "Fixtures locais" in exc.message
 
 
 @pytest.mark.asyncio
-async def test_validated_ten_photo_import_does_not_raise(monkeypatch):
+async def test_large_import_with_scale_approval_passes(monkeypatch):
     monkeypatch.setattr(verification, "gate_status", AsyncMock(return_value={
-        "items": [
-            {"id": key, "status": "passed" if key == "A" else "blocked"}
-            for key in verification.GATES
-        ],
+        "items": [{"id": "F", "status": "passed"}],
     }))
-    await verification.require_import_gates(object(), 10)
-
-
-@pytest.mark.asyncio
-async def test_large_import_still_requires_later_gates(monkeypatch):
-    monkeypatch.setattr(verification, "gate_status", AsyncMock(return_value={
-        "items": [
-            {"id": key, "status": "passed" if key == "A" else "not_verified"}
-            for key in verification.GATES
-        ],
-    }))
-    with pytest.raises(AppError) as caught:
-        await verification.require_import_gates(object(), 100)
-    assert caught.value.details["required_gates"] == ["B", "C"]
+    await verification.require_import_gates(object(), 1001)
