@@ -103,7 +103,7 @@ As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis.
 4. Preencher os secrets com prompts ocultos, configurar o pool `github-actions` / provider `photo-intelligence` e conceder WIF **somente** ao repo `rodkisten/photointel`, `main` e ambiente `production`.
 5. No GitHub `Settings → Environments → production → Environment variables`, definir a variável multiline **`GCP_CONFIG_ENV`**. O workflow `gcp-deploy.yml` usa `vars.GCP_CONFIG_ENV`, **não** `GCP_CONFIG_JSON`.
 6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
-7. Testar autenticação e rotas privadas, revisar custos e só então liberar imports, iCloud, GPU e agendamentos conforme os gates de segurança.
+7. Testar autenticação e rotas privadas e revisar custos. Lotes iCloud de até 1.000 fotos não exigem gates manuais; acima desse volume, a autorização de escala F continua obrigatória.
 
 Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
 
@@ -141,8 +141,10 @@ O `gcp-validation.yml` testa offline, sem credenciais Google. O `gcp-deploy.yml`
 
 GPU e iCloud começam desativados. Os limites iniciais são lote 8, concorrência 1,
 importação 100 mídias, até 20 MiB por download e varredura a cada 60 minutos.
-Expansões autorizadas têm limites de execução explícitos e hard cap; gates
-persistidos mantêm o backfill completo bloqueado. Descoberta gera manifesto e
+Expansões autorizadas têm limites de execução explícitos e hard cap.
+Somente operações novas acima de 1.000 fotos exigem uma autorização de escala
+registrada; backfills contínuos menores dependem de confirmação explícita,
+capacidade de catálogo e perfil full. Descoberta gera manifesto e
 jobs individuais, permitindo continuar quando uma foto falha. Cloud Run executa
 cargas finitas; a API não hospeda cron ou worker permanente. Sessões Apple são
 snapshots AES-GCM com lease/CAS no PostgreSQL, nunca estado durável em `/tmp`.
