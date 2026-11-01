@@ -50,6 +50,7 @@ class AppError(Exception):
 
 
 def error_response(request: Request, exc: AppError) -> JSONResponse:
+    sentry_event = getattr(request.state, 'sentry_event_id', None)
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -58,7 +59,11 @@ def error_response(request: Request, exc: AppError) -> JSONResponse:
                 "message": exc.message,
                 "details": exc.details,
                 "correlation_id": getattr(request.state, "correlation_id", None),
+                "sentry_event_id": sentry_event,
             }
         },
-        headers={"Cache-Control": "no-store"},
+        headers={
+            "Cache-Control": "no-store",
+            **({"X-Sentry-Event-ID": sentry_event} if sentry_event else {}),
+        },
     )
