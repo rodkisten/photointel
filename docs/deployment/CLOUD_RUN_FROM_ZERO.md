@@ -10,7 +10,7 @@
 - Uma identidade humana com privilégios administrativos **somente para o primeiro bootstrap**. Não dê Owner/Editor ou administração permanente ao `photointel-deployer`.
 - Cloud Shell ou terminal Linux com `gcloud`, Python 3.12, Git e acesso ao código. No Codespaces, use o Dev Container; o `gcloud` não está disponível diretamente no a-Shell iOS.
 - Defina alertas de cobrança, quotas e limites de instâncias. Alertas não interrompem automaticamente o faturamento. Consulte [COST_MODEL.md](../../COST_MODEL.md) e [LIMITATIONS.md](../../LIMITATIONS.md).
-- Migrações de banco só são executadas com **`action=migrate`, `migration_mode=apply`** e confirmações explícitas. O modo `all` nunca migra; bases existentes exigem recibo válido de backup e restauração.
+- Migrações de banco só são executadas com **`action=migrate`, `migration_mode=apply`** e confirmações explícitas. O modo `release` nunca migra; bases existentes exigem recibo válido de backup e restauração.
 
 ## 1. Desenvolvimento local e BUILD_CA_FILE
 
@@ -331,25 +331,25 @@ O workflow chama, por exemplo, `bash infra/gcp/release.sh preflight` e `bash inf
 
 A CI testa esses scripts sem acessar Google Cloud, em [`test_release_workflow.py`](../../infra/gcp/tests/test_release_workflow.py) e [`test_release_image.py`](../../infra/gcp/tests/test_release_image.py). Para validar localmente: `bash -n infra/gcp/release.sh && python3 -m unittest discover -s infra/gcp/tests -v`.
 
-## 🚀 Workflow único: dropdown por etapa ou ALL
+## 🚀 Workflow único: dropdown por etapa ou release
 
-O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece o dropdown **`action`** com `build`, `jobs-deploy`, `migrate`, `deploy`, `scheduler`, `cleanup` e **`all`**. Todas as opções executam no mesmo workflow, com os mesmos valores de `vars.GCP_CONFIG_ENV` do Environment `production`.
+O [🚀 GCP Controlled Release](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece o dropdown **`action`** com `build`, `jobs-deploy`, `migrate`, `deploy`, `scheduler`, `cleanup` e **`release`**. Todas as opções executam no mesmo workflow, com os mesmos valores de `vars.GCP_CONFIG_ENV` do Environment `production`.
 
 | Seleção | Operações executadas | Observação |
 |---|---|---|
 | `build` | Verifica prerequisitos → reutiliza imagem do SHA, ou compila/publica | Não cria recursos Cloud Run de runtime |
 | `jobs-deploy` | Confere imagem do SHA → publica 4 Jobs de processamento | Não executa migração |
-| **`migrate`** | Alembic no GitHub → Neon; `plan`, `diagnose` e `apply` | Não faz parte de `all` |
+| **`migrate`** | Alembic no GitHub → Neon; `plan`, `diagnose` e `apply` | Não faz parte de `release` |
 | `deploy` | Confirma `database_ready` → confere imagem → publica API | A migração deve estar concluída |
 | `scheduler` | Cria/atualiza 3 cron jobs **pausados** | Não dispara processamento |
 | `cleanup` | Pausa cron jobs | Não deleta imagens, dados ou services |
-| **`all`** | Confirma `database_ready` → build/reuso → verifica imagem → Jobs → API → Scheduler pausado | Tudo em **uma execução**, interrompendo na primeira falha |
+| **`release`** (padrão) | Confirma `database_ready` → build/reuso → verifica imagem → Jobs → API | Tudo em **uma execução**, interrompendo na primeira falha; Scheduler permanece separado |
 
-**⚠️ Primeira implantação:** o `all` **não executa migrações**. O booleano `database_ready` começa **desmarcado** e só deve ser marcado após confirmar que a migração do Neon foi realizada, as versões referenciadas dos secrets existem e o controle de acesso Cloudflare foi preparado. Isso protege a publicação da API sem banco pronto. Para sua primeira instalação, siga `build` → `jobs-deploy` → **`migrate` (plan e depois apply protegido)** → `deploy` → `scheduler`. Para **releases seguintes**, com o banco migrado/compatível, use `all`.
+**⚠️ Primeira implantação:** o `release` **não executa migrações**. O booleano `database_ready` começa **desmarcado** e só deve ser marcado após confirmar que a migração do Neon foi realizada, as versões referenciadas dos secrets existem e o controle de acesso Cloudflare foi preparado. Isso protege a publicação da API sem banco pronto. Para sua primeira instalação, siga `build` → `jobs-deploy` → **`migrate` (plan e depois apply protegido)** → `deploy` → `scheduler`. Para **releases seguintes**, com o banco migrado/compatível, use `release`. Para criar/ajustar os agendamentos, escolha `scheduler` separadamente; o release não altera agendamentos.
 
-O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita uma imagem existente desse SHA; caso contrário, constrói uma nova, publica-a e verifica o digest antes de alterar os Jobs. Alterar `main` depois de um build anterior significa um SHA novo e portanto uma imagem potencialmente nova.
+O `release` trabalha com **um único SHA** durante toda a execução. Reaproveita uma imagem existente desse SHA; caso contrário, constrói uma nova, publica-a e verifica o digest antes de alterar os Jobs. Alterar `main` depois de um build anterior significa um SHA novo e portanto uma imagem potencialmente nova.
 
-**Como acionar:** `Run workflow` → branch `main` → action `all` (ou etapa isolada) → `confirm_project=photointel` → `authorize_charges=true` após revisão → para `all`/`deploy`, marque `database_ready` somente se verificado. A execução publica um resumo por etapa e remove arquivos temporários do runner ao final.
+**Como acionar:** `Run workflow` → branch `main` → action `release` (ou etapa isolada) → `confirm_project=photointel` → `authorize_charges=true` após revisão → para `release`/`deploy`, marque `database_ready` somente se verificado. A execução publica um resumo por etapa e remove arquivos temporários do runner ao final.
 
 ## 🗃️ Neon migrations diretamente no GitHub Actions
 
@@ -358,7 +358,7 @@ O `all` trabalha com **um único SHA** durante toda a execução. Reaproveita um
 O [GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml) oferece `action=migrate` com `migration_mode=plan`, `diagnose` ou `apply`:
 
 - `plan` / `diagnose`: conecta ao endpoint **direto** do Neon, mostra a revisão Alembic atual, a quantidade de tabelas de aplicação e executa somente `alembic current -v`. Não altera o banco e não exige `authorize_charges`.
-- `apply`: exige `authorize_charges=true` e `migration_database=initial-empty` ou `existing-with-backup`. Executa `alembic upgrade head` no runner GitHub e mostra as transições de revisão e dicas de troubleshooting no próprio Action. **O modo `all` continua sem migrations.**
+- `apply`: exige `authorize_charges=true` e `migration_database=initial-empty` ou `existing-with-backup`. Executa `alembic upgrade head` no runner GitHub e mostra as transições de revisão e dicas de troubleshooting no próprio Action. **O modo `release` continua sem migrations.**
 
 **Credenciais protegidas:** o runner autentica com WIF como `photointel-deployer`, impersona temporariamente **somente** `photointel-migrate` e lê a versão fixa de `MIGRATION_DATABASE_URL` do Secret Manager em memória. A identidade migradora é a única que tem acesso ao secret; o deployer não precisa ganhar acesso direto a todos os segredos. O URL nunca é registrado em logs ou artefatos. O script usa a política TLS verificada com psycopg/SCRAM channel binding e recusa endpoints `-pooler`. O ambiente virtual instala apenas Alembic, SQLAlchemy, psycopg, asyncpg e python-dotenv, com versões fixas do lockfile. Os arquivos temporários são eliminados no encerramento.
 
@@ -379,7 +379,7 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
 1. Execute **`build`**. Ele gera o manifesto de release e a imagem `us-central1-docker.pkg.dev/photointel/photointel/api:COMMIT_SHA_COMPLETO`; upload GCS → Docker → push Artifact Registry → verificação tag/digest. **Build não publica a API.**
 2. Confira o status **SUCCESS** e o digest/tag no [Artifact Registry](https://console.cloud.google.com/artifacts?project=photointel). O builder usa `infra/gcp/cloudbuild.yaml` com logs em Cloud Logging; `gcloud builds submit` pode não transmitir esses logs ao terminal. Consulte a página do build.
 3. Execute **`jobs-deploy`**. Publica os quatro Jobs Run de processamento, com a imagem tagueada pelo SHA; migrações são executadas no GitHub Actions.
-4. **Migração é uma ação individual do mesmo workflow**, mas nunca executada no modo `all`. Use `migrate` → `plan` para inspecionar opcionalmente o Job, depois `migrate` → `apply` com a escolha de banco vazio ou backup e recibo de restauração. O SHA é detectado automaticamente. Veja a seção **Executar `migrate` pelo mesmo GitHub Actions** acima. O Cloud Shell permanece uma alternativa avançada:
+4. **Migração é uma ação individual do mesmo workflow**, mas nunca executada no modo `release`. Use `migrate` → `plan` para inspecionar opcionalmente o Job, depois `migrate` → `apply` com a escolha de banco vazio ou backup e recibo de restauração. O SHA é detectado automaticamente. Veja a seção **Executar `migrate` pelo mesmo GitHub Actions** acima. O Cloud Shell permanece uma alternativa avançada:
 
    Para banco realmente vazio:
 
@@ -440,7 +440,7 @@ O smoke anônimo verifica a proteção de rotas privadas (esperado `401/403`); d
 | `Repository "photointel" not found` | Crie Docker Artifact Registry `photointel` na região `us-central1`; não é o repositório GitHub |
 | `containeranalysis.occurrences.list denied` | `images describe` antigo exigia Artifact Analysis. O `manage.py` atual lista imagens e confere SHA/digest via Artifact Registry Reader |
 | Cloud Build `SUCCESS` mas workflow falha | Inspecione a **etapa após o build** e não reconstrua sem necessidade; o push anterior pode já ter sido concluído |
-| Cloud Run `channel_binding=require` / `asyncpg does not support channel_binding` | URL padrão do Neon exige SCRAM-SHA-256-PLUS, que `asyncpg` não implementa. `db_connection.py` seleciona `postgresql+psycopg` automaticamente e preserva `channel_binding=require`, `sslmode=verify-full` e CAs do sistema. A imagem Docker valida esse perfil sem credenciais antes da publicação. Faça **novo build** da `main` com a correção, depois `deploy` ou `all` após verificar `database_ready`. Não remova `channel_binding=require` nem exponha o URL do banco. |
+| Cloud Run `channel_binding=require` / `asyncpg does not support channel_binding` | URL padrão do Neon exige SCRAM-SHA-256-PLUS, que `asyncpg` não implementa. `db_connection.py` seleciona `postgresql+psycopg` automaticamente e preserva `channel_binding=require`, `sslmode=verify-full` e CAs do sistema. A imagem Docker valida esse perfil sem credenciais antes da publicação. Faça **novo build** da `main` com a correção, depois `deploy` ou `release` após verificar `database_ready`. Não remova `channel_binding=require` nem exponha o URL do banco. |
 
 ## Política de retenção e builds idempotentes
 
