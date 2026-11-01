@@ -1,5 +1,5 @@
 name: "🗃️ Migrate Neon"
-run-name: "🗃️ Neon · ${{ inputs.migration_mode || 'offline-check' }} · ${{ inputs.confirm_project || 'photointel' }}"
+run-name: "🗃️ Neon · ${{ inputs.migration_mode || 'offline-check' }} · photointel"
 
 # Same migration implementation and safeguards as the migrate stage of Deploy.
 # Pushes validate migration scripts offline; applying database changes always requires manual dispatch.
@@ -41,17 +41,6 @@ on:
         default: ''
         required: false
 
-      authorize_charges:
-        description: 'For apply: I authorize the database migration and applicable cloud charges'
-        type: boolean
-        default: false
-        required: true
-
-      confirm_project:
-        description: 'Exact Google Cloud project ID configured in production environment'
-        type: string
-        default: photointel
-        required: true
 
 permissions:
   contents: read
@@ -77,10 +66,7 @@ jobs:
       - run: bash -n infra/gcp/release.sh && bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
     name: "🗃️ Neon · ${{ inputs.migration_mode }}"
-    if: >-
-      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose' ||
-       (inputs.migration_mode == 'apply' && inputs.authorize_charges == true))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 90
@@ -121,7 +107,7 @@ jobs:
         with:
           mode: prepare
           config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: ${{ inputs.confirm_project }}
+          confirm-project: photointel
           release-sha: ${{ github.sha }}
 
       - name: "📱 ! ⚙ Env"
@@ -142,7 +128,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: "1"
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
 
       - name: "🔐 Login"
@@ -170,7 +156,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: "1"
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
 
       - name: "🧰 Gcloud"
@@ -195,7 +181,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: "1"
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
 
       - name: "📱 ▶ Neon"
@@ -215,13 +201,13 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: "1"
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
 
       - name: "🗃 Neon"
         id: migrate_database
         env:
-          CONFIRM_PROJECT: ${{ inputs.confirm_project }}
+          CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ github.sha }}
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
@@ -246,7 +232,7 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "1"
           total: "1"
-          project: ${{ inputs.confirm_project }}
+          project: photointel
           region: "us-central1"
 
       - name: "🧹 API"
