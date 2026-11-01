@@ -25,14 +25,15 @@ somente os parâmetros de autorização explícitos de
 [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md). `gcp-smoke` testa rejeição de acesso
 anônimo ao origin além de saúde; não comprova login real no Safari.
 
-Na PWA, acompanhe onboarding, diagnósticos, gates, fila e último erro persistido.
-Use pause antes de alterações de custos, modelos ou grandes lotes. Não libere o
-backfill completo antes de validar os gates reais de Apple, Modal, 100/1.000 mídias,
-segurança no iPhone, restauração e capacidade do banco.
+Na PWA, acompanhe diagnósticos, autorização de escala, fila e último erro persistido.
+Use pause antes de alterações de custos, modelos ou grandes lotes. Importações
+de até 1.000 fotos não requerem gates: teste primeiro lotes pequenos.
+Acima de 1.000 fotos, a autorização F exige evidências de capacidade/custos
+além de limites de lote, perfil full para backfill contínuo e confirmação da meta.
 
 O perfil Neon inicial limita o catálogo; não basta aumentar `INITIAL_IMPORT_LIMIT`
 para autorizar expansão. API e execução validam os limites, o operador confirma
-expansão e as gates/capacidade continuam aplicáveis. Configure conexões de runtime
+expansão e os limites de capacidade continuam aplicáveis. Configure conexões de runtime
 pooled/TLS e migração direta conforme [NEON_SETUP.md](NEON_SETUP.md).
 Sessões expiradas são recuperadas em terminal, com o fluxo criptografado de
 [ICLOUD_SESSION_SETUP.md](ICLOUD_SESSION_SETUP.md), nunca digitando senha na PWA.
