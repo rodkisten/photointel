@@ -1,5 +1,5 @@
 import { AlertCircle, Camera, Check, RefreshCw, X } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { DiagnosticActions } from './error-boundary';
 import { diagnosticFor, reportDiagnostic } from '../lib/diagnostics';
 import type { Diagnostic } from '../lib/diagnostics';
@@ -89,7 +89,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false }:
     setFailed(false); setVariant(0); setAttempt(0); setIncident(null);
   }, [src]);
   const current = candidates[Math.min(variant, candidates.length - 1)];
-  async function diagnose(event: React.MouseEvent) {
+  async function diagnose(event: MouseEvent) {
     event.stopPropagation();
     setDiagnosing(true);
     try {
