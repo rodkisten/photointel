@@ -2,9 +2,21 @@ name: "🧪 CI"
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
+    paths:
+      - 'apps/**'
+      - 'bridges/**'
+      - 'gpu/**'
+      - 'packages/**'
+      - 'tests/**'
+      - 'infra/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Makefile'
+      - '.env.example'
+      - 'cloudbuild.yaml'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/**'
   pull_request:
     paths-ignore:
       - '**/*.md'
