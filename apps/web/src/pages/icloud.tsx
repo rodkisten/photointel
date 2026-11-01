@@ -1,5 +1,6 @@
 import { Cloud, Info, LockKeyhole, Pause, Play, Terminal } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
 import type { VerificationGates } from '../api/operations';
 import type { Info as InfoData, Page } from '../api/types';
@@ -30,6 +31,11 @@ export function ICloudPage() {
   const catalogLimit = Number(state.data?.catalog_asset_limit ?? 1000);
   const continuousAllowed = gates.data?.full_backfill_unlocked === true &&
     state.data?.database_profile === 'full';
+  const requiredIds = limit <= 10 ? ['A'] : limit <= 100 ? ['B', 'C'] :
+    limit <= 1000 ? ['D'] : ['E', 'F'];
+  const blockedGates = source === 'icloud' ?
+    (gates.data?.items ?? []).filter((gate) =>
+      requiredIds.includes(gate.id) && gate.status !== 'passed') : [];
   return <><PageHeader eyebrow="Originais sempre preservados" title="Sincronização iCloud"
     description="O servidor importa representações controladas e continua funcionando com o iPhone desconectado."
     actions={<Button variant="outline" disabled={action.isPending || !state.data}
@@ -90,13 +96,31 @@ export function ICloudPage() {
               GPU e orçamento continuam ativos. Pause o lote no Processamento para interromper.</span></label>}
         </>}
         {!canStart && <p className="field-help">Configure ICLOUD_ENABLED e autentique a sessão no host para habilitar a importação real.</p>}
-        <Button disabled={!canStart || action.isPending || limit < 1 || limit > Math.min(hardLimit, authorizedLimit) ||
+        {blockedGates.length > 0 && <div className="notice warning" role="alert">
+          <ShieldCheck size={15} aria-hidden="true" />
+          <div>
+            <strong>Importação bloqueada por validação desta versão</strong>
+            <p>Antes de importar {limit} fotos, conclua as verificações abaixo. Não é um problema da sessão iCloud.</p>
+            <ul>{blockedGates.map((gate) => <li key={gate.id}>
+              <strong>Gate {gate.id}: {gate.name}</strong>. {gate.reason}
+              {gate.requirements?.length > 0 && <small>Exigência: {gate.requirements.join('; ')}</small>}
+            </li>)}</ul>
+            <Link to="/setup" className="button button-outline">Abrir Preparação e validação</Link>
+          </div>
+        </div>}
+        <Button disabled={!canStart || blockedGates.length > 0 || action.isPending || limit < 1 || limit > Math.min(hardLimit, authorizedLimit) ||
           (continuous && (!continuousAllowed || target < limit || target > catalogLimit)) ||
           (limit > defaultLimit && !expanded)} onClick={async () => {
-          await action.mutateAsync({url:'/v1/ingestion/start', body:{ source, limit, mode,
-            ...(continuous && continuousAllowed ? {target_assets: target, confirm_full_backfill: true} : {}),
-            ...(library ? {library_id:library} : {}), full_scan:fullScan, confirm_expansion:expanded }});
-          useUi.getState().notify('Importação adicionada à fila. Acompanhe no Processamento.');
+          try {
+            await action.mutateAsync({url:'/v1/ingestion/start', body:{ source, limit, mode,
+              ...(continuous && continuousAllowed ? {target_assets: target, confirm_full_backfill: true} : {}),
+              ...(library ? {library_id:library} : {}), full_scan:fullScan, confirm_expansion:expanded }});
+            useUi.getState().notify('Importação adicionada à fila. Acompanhe no Processamento.');
+          } catch {
+            // The useAction handler already shows the original API error.
+            // Avoid a second generic window.unhandledrejection toast.
+            void gates.refetch();
+          }
         }}><Play size={14} />{source === 'fixture' ? 'Importar fixtures locais' : `Importar até ${limit} fotografias`}</Button>
       </div></section></div>
     <section className="panel" style={{ marginTop: 20 }}><div className="panel-title"><h2>Histórico de sincronização</h2>
