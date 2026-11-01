@@ -110,3 +110,15 @@ export async function responseError(response: Response, path: string, method = '
       eventId: response.headers.get('X-Sentry-Event-ID') ?? nonempty(error.sentry_event_id),
     });
 }
+
+/** Standard transport failure shared by fetch and the generated OpenAPI client. */
+export function apiNetworkError(cause: unknown, method: string, path: string): ApiError {
+  return new ApiError('Não foi possível conectar ao PhotoIntel.', 0, 'NETWORK_ERROR',
+    undefined, { method, path, cause, source: 'cloudflare' });
+}
+
+/** DOMException may not inherit from the same Error realm (Safari/jsdom/iframes). */
+export function isRequestAbort(cause: unknown): boolean {
+  return cause !== null && typeof cause === 'object' &&
+    'name' in cause && cause.name === 'AbortError';
+}

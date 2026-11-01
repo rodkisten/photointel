@@ -6,6 +6,7 @@ export type DiagnosticPhase = 'bootstrap' | 'render' | 'runtime' | 'promise' | '
 export interface Diagnostic {
   id: string;
   phase: DiagnosticPhase;
+  category: string;
   source: 'cloudflare' | 'gcp';
   code: string;
   status?: number;
@@ -16,6 +17,9 @@ export interface Diagnostic {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const sent = new Set<string>();
+// React Query and mutation handlers can report the same Error instance repeatedly.
+// Preserve one incident, one Sentry event and one correlation ID per failure.
+const diagnosed = new WeakMap<Error, Diagnostic>();
 
 function newId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -33,6 +37,7 @@ export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnosti
   return {
     id: api?.correlationId && UUID.test(api.correlationId) ? api.correlationId : newId(),
     phase,
+    category: api ? (api.code === 'NETWORK_ERROR' ? 'api.network' : 'api.http') : `frontend.${phase}`,
     source: api?.source ?? 'cloudflare',
     code: api?.code && /^[A-Z0-9_]{1,48}$/.test(api.code) ? api.code :
       (phase === 'resource' ? 'RESOURCE_LOAD_FAILURE' : phase === 'bootstrap' ? 'BOOT_FAILURE' :
@@ -45,14 +50,20 @@ export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnosti
 }
 
 export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagnostic {
+  const previous = error instanceof Error ? diagnosed.get(error) : undefined;
+  if (previous) return previous;
   const incident = diagnosticFor(error, phase);
-  // A server exception already has its own Sentry event; never duplicate it in the UI.
-  if (!incident.eventId && (!(error instanceof ApiError) || error.code === 'NETWORK_ERROR')) {
-    incident.eventId = captureBrowserException(error, incident.id, phase);
+  // Only transport failures belong in web Sentry; backend/edge HTTP events
+  // already belong to their origin (even if their response has no event ID).
+  if (!(error instanceof ApiError) || error.code === 'NETWORK_ERROR') {
+    if (!incident.eventId) {
+      incident.eventId = captureBrowserException(error, incident.id, phase, incident.category);
+    }
   }
+  if (error instanceof Error) diagnosed.set(error, incident);
   console.error('[PhotoIntel diagnostic]', {
     correlation_id: incident.id, source: incident.source, phase: incident.phase,
-    code: incident.code, status: incident.status, error,
+    category: incident.category, code: incident.code, status: incident.status, error,
   });
   // API exceptions already have an origin correlation ID; client-side errors
   // need a sanitized entry in Cloudflare Workers Logs to become searchable.
@@ -94,6 +105,7 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
     'Correlation ID: ' + incident.id,
     'Origem: ' + incident.source,
     'Fase: ' + incident.phase,
+    'Categoria: ' + incident.category,
     'Código: ' + incident.code,
     ...(incident.status === undefined ? [] : ['HTTP: ' + incident.status]),
     ...(incident.rayId ? ['Cloudflare Ray: ' + incident.rayId] : []),

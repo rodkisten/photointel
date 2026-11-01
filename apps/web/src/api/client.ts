@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUi } from '../lib/store';
 import { reportDiagnostic } from '../lib/diagnostics';
-import { ApiError, responseError } from './error';
+import { ApiError, apiNetworkError, isRequestAbort, responseError } from './error';
 export { ApiError } from './error';
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
@@ -17,8 +17,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...init?.headers },
     });
   } catch (cause) {
-    throw new ApiError('Não foi possível conectar ao PhotoIntel.', 0, 'NETWORK_ERROR',
-      undefined, { method: init?.method ?? 'GET', path, cause, source: 'cloudflare' });
+    // A canceled request (navigation, query invalidation) is not a network outage.
+    if (isRequestAbort(cause)) throw cause;
+    throw apiNetworkError(cause, init?.method ?? 'GET', path);
   }
   if (!response.ok) throw await responseError(response, path, init?.method ?? 'GET');
   return response.status === 204 ? undefined as T : await response.json() as T;
