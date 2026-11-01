@@ -8,6 +8,7 @@ export interface ApiErrorContext {
   cause?: unknown;
   source?: 'cloudflare' | 'gcp';
   rayId?: string;
+  eventId?: string;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -44,6 +45,7 @@ export class ApiError extends Error {
   readonly details?: unknown;
   readonly source: 'cloudflare' | 'gcp';
   readonly rayId?: string;
+  readonly eventId?: string;
 
   constructor(message: string, status: number, code: string,
     correlationId?: string, context: ApiErrorContext = {}) {
@@ -59,6 +61,7 @@ export class ApiError extends Error {
     this.details = safeDetails(context.details);
     this.source = context.source ?? 'gcp';
     this.rayId = context.rayId;
+    this.eventId = context.eventId;
   }
 
   override toString(): string {
@@ -73,7 +76,7 @@ export class ApiError extends Error {
     return { name: this.name, message: this.message, status: this.status,
       statusText: this.statusText, code: this.code, method: this.method, path: this.path,
       authStage: this.authStage, correlationId: this.correlationId, details: this.details,
-      source: this.source, rayId: this.rayId,
+      source: this.source, rayId: this.rayId, eventId: this.eventId,
       cause: this.cause instanceof Error ? { name: this.cause.name, message: this.cause.message } : undefined,
     };
   }
@@ -104,5 +107,6 @@ export async function responseError(response: Response, path: string, method = '
       details: error.details ?? validation,
       source: response.headers.get('X-PhotoIntel-Source') === 'cloudflare' ? 'cloudflare' : 'gcp',
       rayId: response.headers.get('X-Cloudflare-Ray') ?? undefined,
+      eventId: response.headers.get('X-Sentry-Event-ID') ?? nonempty(error.sentry_event_id),
     });
 }
