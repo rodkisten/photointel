@@ -81,6 +81,8 @@ jobs:
         run: npm --prefix apps/web ci
       - name: "🏗 Build do frontend"
         id: notify_observed_004
+        env:
+          CONFIRM_PROJECT: photointel
         run: python3 infra/scripts/prepare_workflow_env.py worker-build
       - name: "📱 Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
