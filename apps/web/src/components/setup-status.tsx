@@ -30,7 +30,7 @@ export function SetupStatusPanel({ compact = false }: { compact?: boolean }) {
           {href && <Button asChild variant="outline" size="sm"><Link to={href}>Continuar<ArrowRight size={13} /></Link></Button>}</div>}
         <div className="inline between" style={{ marginTop: 16 }}>
           <small className="muted">Diagnóstico: {date(setup.data?.checked_at, true)}</small>
-          {compact && <Button asChild variant="ghost" size="sm"><Link to="/setup">Ver gates e release<ArrowRight size={13} /></Link></Button>}
+          {compact && <Button asChild variant="ghost" size="sm"><Link to="/setup">Ver diagnóstico e release<ArrowRight size={13} /></Link></Button>}
         </div>
       </>}
   </section>;
