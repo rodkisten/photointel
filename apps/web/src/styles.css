@@ -2875,3 +2875,25 @@ input.input, select.input, textarea.input {
   .incident-fields > div { grid-template-columns: minmax(88px, 36%) minmax(0, 1fr); }
   .incident-actions button, .incident-actions a { flex: 1 1 135px; justify-content: center; }
 }
+
+
+/* Explain blocked iCloud verification directly within the mobile operation. */
+.incident-resolve-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  font-size: var(--text-12);
+  font-weight: 600;
+  text-decoration: none;
+}
+.notice.warning ul { margin: var(--space-2) 0; padding-left: 20px; }
+.notice.warning li { margin-block: var(--space-2); }
+.notice.warning li small { display: block; margin-top: var(--space-1); color: var(--text-muted); }
+.notice.warning .button { display: inline-flex; margin-top: var(--space-3); }
