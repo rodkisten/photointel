@@ -72,7 +72,11 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
         events.append("dispatch")
         return {"status": "completed", "claimed": 1, "dispatched": 1, "retrying": 0}
 
-    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(execution_platform="cloud_run"))
+    monkeypatch.setattr(
+        config,
+        "get_settings",
+        lambda: SimpleNamespace(execution_platform="cloud_run"),
+    )
     monkeypatch.setattr(database, "SessionLocal", lambda: Session())
     monkeypatch.setattr(outbox, "enqueue_dispatch", enqueue)
     monkeypatch.setattr(outbox, "drain_outbox", drain)
@@ -105,13 +109,23 @@ async def test_finite_job_does_not_wake_with_no_work_or_local_platform(
     monkeypatch.setattr(outbox, "enqueue_dispatch", enqueue)
     monkeypatch.setattr(outbox, "drain_outbox", drain)
     monkeypatch.setattr(database, "SessionLocal", lambda: Session())
-    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(execution_platform="cloud_run"))
+    monkeypatch.setattr(
+        config,
+        "get_settings",
+        lambda: SimpleNamespace(execution_platform="cloud_run"),
+    )
     result = await dispatch_ready_worker_followup("backfill", 15)
     assert result["status"] == "no_runnable_worker_jobs"
 
-    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(execution_platform="vps"))
-    assert (await dispatch_ready_worker_followup("backfill", 15))["status"] == "not_cloud_run"
-    assert (await dispatch_ready_worker_followup("maintenance", 15))["status"] == "not_applicable"
+    monkeypatch.setattr(
+        config, "get_settings", lambda: SimpleNamespace(execution_platform="vps")
+    )
+    assert (
+        await dispatch_ready_worker_followup("backfill", 15)
+    )["status"] == "not_cloud_run"
+    assert (
+        await dispatch_ready_worker_followup("maintenance", 15)
+    )["status"] == "not_applicable"
     enqueue.assert_not_called()
     drain.assert_not_called()
 
@@ -135,10 +149,16 @@ async def test_worker_followup_remains_durable_when_job_deadline_is_reached(
 
     enqueue = AsyncMock()
     drain = AsyncMock(side_effect=AssertionError("must not dispatch past deadline"))
-    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(execution_platform="cloud_run"))
+    monkeypatch.setattr(
+        config,
+        "get_settings",
+        lambda: SimpleNamespace(execution_platform="cloud_run"),
+    )
     monkeypatch.setattr(database, "SessionLocal", lambda: Session())
     monkeypatch.setattr(outbox, "enqueue_dispatch", enqueue)
     monkeypatch.setattr(outbox, "drain_outbox", drain)
-    assert (await dispatch_ready_worker_followup("backfill", 0))["status"] == "queued_for_retry"
+    assert (
+        await dispatch_ready_worker_followup("backfill", 0)
+    )["status"] == "queued_for_retry"
     enqueue.assert_awaited_once()
     drain.assert_not_called()
