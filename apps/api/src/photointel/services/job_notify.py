@@ -238,7 +238,9 @@ async def drain_job_notifications(*, limit: int = 200) -> dict[str, int | str]:
         raise
     except Exception as exc:
         advanced = cursor
-        LOG.warning("notify_delivery_failed", extra={"exception_type": type(exc).__name__})
+        LOG.warning(
+            "notify_delivery_failed", extra={"exception_type": type(exc).__name__}
+        )
         return {"status": "retry", "events": 0}
     finally:
         await release_cursor(owner, advanced)
@@ -258,4 +260,6 @@ async def safe_notify() -> None:
             async with asyncio.timeout(20):
                 await drain_job_notifications()
         except Exception as exc:
-            LOG.warning("notify_attempt_failed", extra={"exception_type": type(exc).__name__})
+            LOG.warning(
+                "notify_attempt_failed", extra={"exception_type": type(exc).__name__}
+            )
