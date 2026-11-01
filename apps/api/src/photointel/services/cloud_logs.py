@@ -40,7 +40,8 @@ def _safe_text(value: Any, pattern: re.Pattern[str]) -> str | None:
 
 
 def _safe_int(value: Any, minimum: int, maximum: int) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum else None
+    return (value if isinstance(value, int) and not isinstance(value, bool)
+            and minimum <= value <= maximum else None)
 
 
 def _payload(entry: dict[str, Any]) -> dict[str, Any]:
@@ -73,8 +74,9 @@ def normalize_entry(entry: dict[str, Any], correlation_id: str) -> dict[str, Any
     if not isinstance(timestamp, str) or len(timestamp) > 40:
         timestamp = None
     severity = entry.get("severity")
-    severity = severity if severity in {"DEFAULT", "DEBUG", "INFO", "NOTICE",
-                                        "WARNING", "ERROR", "CRITICAL", "ALERT", "EMERGENCY"} else "DEFAULT"
+    valid_levels = {"DEFAULT", "DEBUG", "INFO", "NOTICE", "WARNING",
+                    "ERROR", "CRITICAL", "ALERT", "EMERGENCY"}
+    severity = severity if severity in valid_levels else "DEFAULT"
     reason = payload.get("reason")
     if not _safe_text(reason, _SAFE_CODE):
         reason = None
@@ -87,10 +89,13 @@ def normalize_entry(entry: dict[str, Any], correlation_id: str) -> dict[str, Any
         "error_code": _safe_text(payload.get("error_code"), _SAFE_CODE),
         "reason": reason,
         "method": payload.get("method") if payload.get("method") in _METHODS else None,
-        "route_group": payload.get("route_group") if payload.get("route_group") in {"/v1/*", "/v1/jobs/reindex", "other"} else None,
+        "route_group": (payload.get("route_group")
+                        if payload.get("route_group") in {"/v1/*", "/v1/jobs/reindex", "other"}
+                        else None),
         "exception_type": _safe_text(payload.get("exception_type"), _SAFE_TYPE),
         "job_type": _safe_text(payload.get("job_type"), _SAFE_EVENT),
-        "job_id": canonical_id(payload.get("job_id")) if isinstance(payload.get("job_id"), str) else None,
+        "job_id": (canonical_id(payload.get("job_id"))
+                   if isinstance(payload.get("job_id"), str) else None),
     }
 
 
@@ -106,7 +111,7 @@ def _get_token() -> str:
 
 
 async def read_incident(correlation_id: str) -> list[dict[str, Any]]:
-    """One fixed project, bounded time window and bounded result set. No free-form filter."""
+    """Bounded read in a fixed project with no free-form filters."""
     if canonical_id(correlation_id) is None:
         raise ValueError("Invalid correlation ID")
     token = await asyncio.to_thread(_get_token)
@@ -124,7 +129,10 @@ async def read_incident(correlation_id: str) -> list[dict[str, Any]]:
     ) as client:
         response = await client.post(
             _API,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
             json={"resourceNames": [f"projects/{_PROJECT}"], "filter": query,
                   "orderBy": "timestamp desc", "pageSize": 30},
         )
