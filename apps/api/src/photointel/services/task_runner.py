@@ -230,6 +230,12 @@ async def run_finite(
 
 
 async def async_main(arguments: argparse.Namespace) -> int:
+    # Cloud Run Jobs do not boot FastAPI: configure JSON logging explicitly.
+    # Otherwise worker_job_* becomes unstructured text instead of jsonPayload.
+    from photointel.config import get_settings
+    from photointel.logging import configure_logging
+
+    configure_logging(get_settings().log_level)
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     received_signal: list[int] = []
