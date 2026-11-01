@@ -96,6 +96,21 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     event.stopPropagation();
     setDiagnosing(true);
     try {
+      // If a worker failed for this photo, link to that *specific* captured error.
+      if (assetId && /^[a-f0-9-]{36}$/i.test(assetId)) {
+        const latest = await request<{
+          found: boolean; sentry_event_id: string | null;
+          correlation_id: string | null; error_code: string | null;
+        }>(`/v1/observability/assets/${assetId}/latest-error`);
+        if (latest.found && latest.sentry_event_id) {
+          throw new ApiError('Falha registrada no worker de processamento', 500,
+            latest.error_code || 'MEDIA_PROCESSING_FAILED',
+            latest.correlation_id || undefined, {
+              source: 'gcp', eventId: latest.sentry_event_id,
+              method: 'GET', path: '/v1/observability/assets/latest-error',
+            });
+        }
+      }
       if (!current) throw new ApiError('Prévia ainda não gerada', 404,
         'PREVIEW_NOT_GENERATED', undefined, { source: 'gcp' });
       const response = await fetch(apiUrl(current), {

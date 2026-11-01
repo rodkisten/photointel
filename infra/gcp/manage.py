@@ -39,12 +39,15 @@ SECRET_FIELDS = {
     "MODAL_PROXY_SECRET",
     "NOTIFY_DEVICE_ID",
     "NOTIFY_TOKEN",
+    "SENTRY_DSN",
+    "SENTRY_API_TOKEN",
 }
 WORKFLOW_SECRET_FIELDS = {
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_ACCOUNT_ID",
     "TS_OAUTH_CLIENT_ID",
     "TS_OAUTH_SECRET",
+    "SENTRY_AUTH_TOKEN",
 }
 API_SECRETS = SECRET_FIELDS - {"MIGRATION_DATABASE_URL", "ICLOUD_SESSION_KEY"}
 REQUIRED_SECRETS = SECRET_FIELDS - {
@@ -53,6 +56,8 @@ REQUIRED_SECRETS = SECRET_FIELDS - {
     "MODAL_PROXY_SECRET",
     "NOTIFY_DEVICE_ID",
     "NOTIFY_TOKEN",
+    "SENTRY_DSN",
+    "SENTRY_API_TOKEN",
 }
 SERVICES = (
     "run.googleapis.com",
@@ -350,7 +355,10 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = [
         {"name": name, "value": value} for name, value in sorted(values.items())
     ]
-    allowed = API_SECRETS if mode == "api" else SECRET_FIELDS - {"MIGRATION_DATABASE_URL"}
+    allowed = (
+        API_SECRETS if mode == "api"
+        else SECRET_FIELDS - {"MIGRATION_DATABASE_URL", "SENTRY_API_TOKEN"}
+    )
     if mode == "migrate":
         allowed = {"DATABASE_URL", "MIGRATION_DATABASE_URL"}
     for key, reference in sorted(config["secrets"].items()):

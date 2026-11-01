@@ -9,6 +9,9 @@ on:
       - '.github/actions/notify/**'
       - 'apps/api/src/photointel/services/job_notify.py'
       - 'apps/api/src/photointel/services/jobs.py'
+      - 'apps/api/src/photointel/sentry_observability.py'
+      - 'apps/api/src/photointel/routers/observability.py'
+      - 'tests/test_sentry_observability.py'
       - 'apps/api/src/photointel/services/worker.py'
       - 'apps/api/src/photointel/services/task_runner.py'
       - 'apps/api/src/photointel/routers/operations.py'
@@ -24,6 +27,9 @@ on:
       - '.github/actions/notify/**'
       - 'apps/api/src/photointel/services/job_notify.py'
       - 'apps/api/src/photointel/services/jobs.py'
+      - 'apps/api/src/photointel/sentry_observability.py'
+      - 'apps/api/src/photointel/routers/observability.py'
+      - 'tests/test_sentry_observability.py'
       - 'apps/api/src/photointel/services/worker.py'
       - 'apps/api/src/photointel/services/task_runner.py'
       - 'apps/api/src/photointel/routers/operations.py'
@@ -69,7 +75,7 @@ jobs:
         run: uv sync --frozen --group ingest
       - name: "🧪 Notify! API and Actions"
         run: |
-          uv run --no-sync pytest -q tests/test_job_notify.py
+          uv run --no-sync pytest -q tests/test_job_notify.py tests/test_sentry_observability.py tests/test_job_observability.py
           python3 -m unittest discover -s infra/gcp/tests -p test_notify.py -v
       - name: "🔍 Lint"
         run: >-
@@ -79,3 +85,12 @@ jobs:
           apps/api/src/photointel/services/task_runner.py
           apps/api/src/photointel/routers/operations.py
           tests/test_job_notify.py
+          tests/test_sentry_observability.py
+          apps/api/src/photointel/sentry_observability.py
+          apps/api/src/photointel/routers/observability.py
+      - name: "🧬 Typecheck Sentry"
+        run: >-
+          uv run --no-sync mypy
+          apps/api/src/photointel/sentry_observability.py
+          apps/api/src/photointel/routers/observability.py
+          apps/api/src/photointel/services/worker.py

@@ -12,6 +12,7 @@ dependencies = [
   "httpx>=0.28,<1", "boto3>=1.36,<2", "structlog>=25,<27",
   "pyjwt[crypto]>=2.10,<3", "python-multipart>=0.0.20,<1",
   "cryptography>=44,<51", "google-auth[requests]>=2.40,<3",
+  "sentry-sdk[fastapi]>=2.49,<4",
 ]
 
 [dependency-groups]

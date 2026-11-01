@@ -5,6 +5,9 @@ import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@ta
 import App from './App';
 import { AppErrorBoundary } from './components/error-boundary';
 import { reportDiagnostic } from './lib/diagnostics';
+import { initSentry } from './lib/sentry';
+
+initSentry();
 import { useUi } from './lib/store';
 import './styles.css';
 

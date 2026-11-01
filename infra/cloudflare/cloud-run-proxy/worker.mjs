@@ -2,6 +2,7 @@
 const REQUEST_HEADERS = [
   'accept', 'content-type', 'authorization', 'cf-access-jwt-assertion',
   'origin', 'if-none-match', 'if-range', 'range', 'last-event-id',
+  'sentry-trace', 'baggage',
 ];
 const METHODS = new Set(['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']);
 
@@ -248,6 +249,16 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
+  // Propagation data is controlled and bounded, never forward arbitrary baggage.
+  const trace = headers.get('sentry-trace');
+  if (trace && !/^[0-9a-f]{32}-[0-9a-f]{16}(?:-[01])?$/.test(trace)) {
+    headers.delete('sentry-trace');
+  }
+  const baggage = headers.get('baggage');
+  if (baggage && (baggage.length > 2048 ||
+      !baggage.split(',').every(item => item.trim().startsWith('sentry-')))) {
+    headers.delete('baggage');
+  }
   headers.set('Cf-Access-Jwt-Assertion', assertion);
   headers.set('X-Correlation-ID', correlationId);
   // A fixed origin prevents open proxy/SSRF; caller input is only path and query.
@@ -296,7 +307,41 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
   }
 }
 
-export async function handle(request, env, fetchOrigin = fetch) {
+/** Lightweight Sentry envelope for failures originating at the Cloudflare edge.
+ * No URL, request body, cookie, stack text, user identifier or authentication data.
+ * Sentry accepts the event ID and issues can be resolved through the API.
+ */
+function captureEdgeFailure(env, correlationId, status, ctx) {
+  if (!env.SENTRY_DSN) return null;
+  let dsn;
+  try {
+    dsn = new URL(env.SENTRY_DSN);
+    if (dsn.protocol !== 'https:' || !/^\\d+$/.test(dsn.pathname.slice(1)) ||
+        !dsn.username || dsn.password || !dsn.hostname.endsWith('.sentry.io')) return null;
+  } catch { return null; }
+  const projectId = dsn.pathname.slice(1);
+  const eventId = crypto.randomUUID().replaceAll('-', '');
+  const endpoint = dsn.origin + '/api/' + projectId + '/envelope/';
+  const stamp = new Date().toISOString();
+  const payload = [
+    JSON.stringify({ event_id: eventId, dsn: env.SENTRY_DSN, sent_at: stamp }),
+    JSON.stringify({ type: 'event' }),
+    JSON.stringify({
+      event_id: eventId, timestamp: stamp, platform: 'javascript',
+      level: 'error', environment: 'production', release: env.RELEASE_SHA || undefined,
+      exception: { values: [{ type: 'CloudflareWorkerFailure', value: 'HTTP ' + status }] },
+      tags: { service: 'photointel-cloudflare', correlation_id: correlationId },
+    }),
+  ].join('\n') + '\n';
+  const pending = fetch(endpoint, { method: 'POST',
+    headers: { 'Content-Type': 'application/x-sentry-envelope' },
+    body: payload,
+  }).catch(() => undefined);
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(pending);
+  return eventId;
+}
+
+export async function handle(request, env, fetchOrigin = fetch, ctx = null) {
   const correlationId = crypto.randomUUID();
   let response;
   try {
@@ -308,6 +353,12 @@ export async function handle(request, env, fetchOrigin = fetch) {
   const headers = new Headers(response.headers);
   if (!headers.has('X-Correlation-ID')) headers.set('X-Correlation-ID', correlationId);
   if (!headers.has('X-PhotoIntel-Source')) headers.set('X-PhotoIntel-Source', 'cloudflare');
+  // The origin itself owns its Sentry exceptions. Only capture edge-side 5xx.
+  if (response.status >= 500 && headers.get('X-PhotoIntel-Source') === 'cloudflare' &&
+      !headers.has('X-Sentry-Event-ID')) {
+    const edgeEvent = captureEdgeFailure(env, correlationId, response.status, ctx);
+    if (edgeEvent) headers.set('X-Sentry-Event-ID', edgeEvent);
+  }
   const ray = request.headers.get('cf-ray');
   if (ray && /^[a-z0-9-]{8,64}$/i.test(ray)) headers.set('X-Cloudflare-Ray', ray);
   return new Response(response.body, {
@@ -316,7 +367,7 @@ export async function handle(request, env, fetchOrigin = fetch) {
 }
 
 export default {
-  fetch(request, env) { return handle(request, env); },
+  fetch(request, env, ctx) { return handle(request, env, fetch, ctx); },
 };
 
 

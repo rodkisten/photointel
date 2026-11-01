@@ -80,12 +80,18 @@ def worker_environment(config: dict) -> dict[str, str]:
         raise WorkflowEnvironmentError("Invalid GitHub release commit SHA")
     # All browser fetches now hit /v1/* on the same origin.
     # WORKFLOWS__PAGES__* and WORKFLOWS__WORKER__API_BASE_URL are legacy.
-    return {
+    extras = config.get("extra_environment", {})
+    public = {
         "VITE_API_BASE_URL": "",
         "WORKER_NAME": name,
         "WORKER_DOMAIN": domain,
         "VITE_RELEASE_ID": sha,
     }
+    if extras.get("VITE_SENTRY_DSN"):
+        public["VITE_SENTRY_DSN"] = extras["VITE_SENTRY_DSN"]
+    if extras.get("SENTRY_ORG"):
+        public["VITE_SENTRY_ORG"] = extras["SENTRY_ORG"]
+    return public
 
 
 def discover_cloud_run_origin(config: dict) -> str:
@@ -233,6 +239,8 @@ def worker_deploy(config: dict) -> None:
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": config["access_audience"],
             "RELEASE_SHA": public["VITE_RELEASE_ID"],
+            **({"SENTRY_DSN": public["VITE_SENTRY_DSN"]}
+               if public.get("VITE_SENTRY_DSN") else {}),
         },
         "assets": {
             "directory": "../../../apps/web/dist",
@@ -300,9 +308,31 @@ def ssh_environment(config: dict) -> None:
         output.write(f"ts_oauth_secret={secret}\n")
 
 
+def worker_build(config: dict) -> None:
+    """Build the SPA with optional private Sentry source-map upload credentials."""
+    extras = config.get("extra_environment", {})
+    env = os.environ.copy()
+    if "SENTRY_AUTH_TOKEN" in config.get("workflow_secrets", {}):
+        org, project = extras.get("SENTRY_ORG", ""), extras.get("SENTRY_PROJECT", "")
+        if not (isinstance(org, str) and isinstance(project, str)
+                and WORKER_NAME.fullmatch(org) and WORKER_NAME.fullmatch(project)):
+            raise WorkflowEnvironmentError(
+                "SENTRY_ORG and SENTRY_PROJECT are required for sourcemap uploads"
+            )
+        env["SENTRY_AUTH_TOKEN"] = secret_value(config, "SENTRY_AUTH_TOKEN")
+        env["SENTRY_ORG"] = org
+        env["SENTRY_PROJECT"] = project
+    result = subprocess.run(
+        ["npm", "--prefix", "apps/web", "run", "build"],
+        cwd=ROOT, env=env, check=False,
+    )
+    if result.returncode:
+        raise WorkflowEnvironmentError("Frontend production build failed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=("worker", "worker-deploy", "ssh"))
+    parser.add_argument("target", choices=("worker", "worker-build", "worker-deploy", "ssh"))
     opts = parser.parse_args()
     try:
         config = read_config()
@@ -317,6 +347,8 @@ def main() -> int:
                 )
             append_public_env(public)
             print("✅ Unified frontend/API Worker config and Secret Manager access verified.")
+        elif opts.target == "worker-build":
+            worker_build(config)
         elif opts.target == "worker-deploy":
             from cloudflare_setup import SetupError, sync_config
             try:

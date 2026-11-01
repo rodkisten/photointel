@@ -234,8 +234,10 @@ async def async_main(arguments: argparse.Namespace) -> int:
     # Otherwise worker_job_* becomes unstructured text instead of jsonPayload.
     from photointel.config import get_settings
     from photointel.logging import configure_logging
+    from photointel.sentry_observability import configure_sentry
 
     configure_logging(get_settings().log_level)
+    configure_sentry("photointel-worker")
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     received_signal: list[int] = []
@@ -256,6 +258,11 @@ async def async_main(arguments: argparse.Namespace) -> int:
         print(json.dumps(result, ensure_ascii=False))
         return 128 + received_signal[0] if received_signal else 0
     finally:
+        # Finite Cloud Run containers must flush error envelopes before shutdown.
+        import sentry_sdk
+
+        if sentry_sdk.is_initialized():
+            await sentry_sdk.flush_async(timeout=2.0)
         if arguments.mode != "migrate":
             from photointel.database import engine
 

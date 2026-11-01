@@ -23,6 +23,7 @@ from photointel.database import SessionLocal
 from photointel.errors import AppError, ErrorCode
 from photointel.models import Asset, DiscoveryManifest, Job, JobEvent, utcnow
 from photointel.observability import correlation_context, valid_correlation
+from photointel.sentry_observability import capture_exception, continue_job_trace
 from photointel.services.job_notify import safe_notify
 from photointel.services.jobs import (
     ACTIVE,
@@ -314,6 +315,7 @@ async def _fail_jobs(
     exc: BaseException,
     *,
     busy: bool = False,
+    sentry_event_id: str | None = None,
 ) -> None:
     code = (
         exc.code
@@ -353,7 +355,19 @@ async def _fail_jobs(
                 ),
                 "correlation_id": _job_correlation(job),
                 "job_id": str(job.id),
+                **({"sentry_event_id": sentry_event_id} if sentry_event_id else {}),
             }
+            if sentry_event_id:
+                recent = job.progress.get("sentry_attempt_events", [])
+                if not isinstance(recent, list):
+                    recent = []
+                job.progress = {
+                    **job.progress,
+                    "sentry_attempt_events": [
+                        *recent[-9:],
+                        {"attempt": job.attempts, "event_id": sentry_event_id},
+                    ],
+                }
             job.scheduled_at = utcnow() + retry_delay(job.attempts, jitter=True)
             job.finished_at = utcnow() if job.status == "failed" else None
             job.lease_until = None
@@ -410,7 +424,15 @@ async def _fail_jobs(
                         )
             session.add(
                 JobEvent(
-                    job_id=job.id, status=job.status, payload={"error_code": str(code)}
+                    job_id=job.id,
+                    status=job.status,
+                    payload={
+                        "error_code": str(code),
+                        **(
+                            {"sentry_event_id": sentry_event_id}
+                            if sentry_event_id else {}
+                        ),
+                    }
                 )
             )
         for batch_id in sorted(
@@ -489,6 +511,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
     leases: list[tuple[str, int]] = []
     started = time.monotonic()
     correlation_token: Token[str | None] | None = None
+    captured_payload: dict[str, Any] = {}
+    captured_job_type: str | None = None
     try:
         async with SessionLocal() as session:
             jobs = list(
@@ -507,6 +531,8 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             )
             if len(jobs) != len(job_ids):
                 return
+            captured_payload = dict(jobs[0].payload)
+            captured_job_type = jobs[0].job_type
             correlation_token = correlation_context.set(
                 _job_correlation(jobs[0])
             )
@@ -529,60 +555,72 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
                     leases,
                 )
             )
-            skipped: dict[UUID, str | None] = {}
-            if batch:
-                from photointel.services.inference import infer_assets
+            with continue_job_trace(jobs[0].payload):
+                skipped: dict[UUID, str | None] = {}
+                if batch:
+                    from photointel.services.inference import infer_assets
 
-                assets = {
-                    asset.id: asset
-                    for asset in (
-                        await session.scalars(
-                            select(Asset).where(
-                                Asset.id.in_(
-                                    [job.asset_id for job in jobs if job.asset_id]
+                    assets = {
+                        asset.id: asset
+                        for asset in (
+                            await session.scalars(
+                                select(Asset).where(
+                                    Asset.id.in_(
+                                        [job.asset_id for job in jobs if job.asset_id]
+                                    )
                                 )
                             )
+                        ).all()
+                    }
+                    if any(job.asset_id not in assets for job in jobs):
+                        raise AppError(ErrorCode.NOT_FOUND, "Ativo não encontrado", 404)
+                    skipped = {
+                        job.id: superseded_reason(
+                            job.payload,
+                            assets[job.asset_id].content_revision,
+                            assets[job.asset_id].representation_revision,
                         )
-                    ).all()
-                }
-                if any(job.asset_id not in assets for job in jobs):
-                    raise AppError(ErrorCode.NOT_FOUND, "Ativo não encontrado", 404)
-                skipped = {
-                    job.id: superseded_reason(
-                        job.payload,
-                        assets[job.asset_id].content_revision,
-                        assets[job.asset_id].representation_revision,
+                        for job in jobs
+                        if job.asset_id
+                    }
+                    eligible = [job for job in jobs if not skipped.get(job.id)]
+                    ids = sorted(
+                        {job.asset_id for job in eligible if job.asset_id}, key=str
                     )
-                    for job in jobs
-                    if job.asset_id
-                }
-                eligible = [job for job in jobs if not skipped.get(job.id)]
-                ids = sorted({job.asset_id for job in eligible if job.asset_id}, key=str)
-                result = (
-                    await infer_assets(
-                        session,
-                        ids,
-                        await effective_settings(session),
-                        job_fences=fences,
-                        force_asset_ids={
-                            job.asset_id
-                            for job in eligible
-                            if job.asset_id and job.payload.get("force")
-                        },
+                    result = (
+                        await infer_assets(
+                            session,
+                            ids,
+                            await effective_settings(session),
+                            job_fences=fences,
+                            force_asset_ids={
+                                job.asset_id
+                                for job in eligible
+                                if job.asset_id and job.payload.get("force")
+                            },
+                        )
+                        if ids
+                        else {"completed": 0, "skipped": len(jobs)}
                     )
-                    if ids
-                    else {"completed": 0, "skipped": len(jobs)}
-                )
-            else:
-                result = await _dispatch(session, jobs[0])
-            await _finish_jobs(session, jobs, result, started, skipped)
+                else:
+                    result = await _dispatch(session, jobs[0])
+                await _finish_jobs(session, jobs, result, started, skipped)
     except AssetBusy as exc:
         await _fail_jobs(fences, exc, busy=True)
     except (LeaseLost, asyncio.CancelledError):
         logger.info("worker_lease_released", jobs=len(job_ids))
         # SIGTERM/cancellation leaves the durable claim recoverable on expiry.
     except Exception as exc:
-        await _fail_jobs(fences, exc)
+        # Capture the *real traceback* before persisting a sanitized job failure.
+        # Retried attempts retain separate event IDs in job.progress.
+        with continue_job_trace(captured_payload):
+            sentry_id = capture_exception(
+                exc,
+                correlation_id=correlation_context.get(),
+                job_id=str(job_ids[0]) if job_ids else None,
+                job_type=captured_job_type,
+            )
+        await _fail_jobs(fences, exc, sentry_event_id=sentry_id)
         logger.warning(
             "worker_job_failed", jobs=len(job_ids), exception_type=type(exc).__name__,
             correlation_id=correlation_context.get(),

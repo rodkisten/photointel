@@ -6,6 +6,7 @@ import { apiUrl, useApi } from '../api/client';
 import type { Info, Job, Page } from '../api/types';
 import { Status } from './common';
 import { jobLogsUrl } from '../lib/diagnostics';
+import { sentryEventUrl } from '../lib/sentry';
 
 type Size = 'closed' | 'mini' | 'half' | 'full';
 const STORAGE_KEY = 'photointel:jobs-drawer:v1';
@@ -163,6 +164,12 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           <div><strong>{job.job_type.replaceAll('_', ' ')}</strong>
             <small>ID {job.id.slice(0, 8)} · tentativa {job.attempts}/{job.maximum_attempts}</small></div>
           <Status value={job.status}/>
+          {job.status === 'failed' &&
+            typeof job.error_details?.sentry_event_id === 'string' &&
+            sentryEventUrl(job.error_details.sentry_event_id) && <a
+            href={sentryEventUrl(job.error_details.sentry_event_id)}
+            target="_blank" rel="noopener noreferrer" aria-label="Ver erro no Sentry">
+            <ArrowUpRight size={16}/></a>}
           {job.status === 'failed' && <a href={jobLogsUrl(job.job_type, job.id,
             typeof job.error_details?.correlation_id === 'string' ?
               job.error_details.correlation_id : undefined)} target="_blank" rel="noopener noreferrer"
