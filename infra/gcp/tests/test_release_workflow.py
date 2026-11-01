@@ -74,7 +74,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
             end = self.workflow.find("      - name:", start + 1)
             block = self.workflow[start:end if end >= 0 else None]
             self.assertIn("completed:", block)
-            self.assertIn("inputs.action == 'release' && '" + count + "' || '1'", block)
+            if stage_name == '📱 ✓ Build':
+                self.assertIn('completed: "1"', block)
+            else:
+                self.assertIn(
+                    "inputs.action == 'release' && '" + count + "' || '1'", block
+                )
         self.assertIn("if: inputs.action == 'scheduler'", self.stage("deploy_scheduler"))
 
     def test_build_is_reused_and_verified_before_jobs(self) -> None:
