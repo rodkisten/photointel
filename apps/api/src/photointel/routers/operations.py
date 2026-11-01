@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select, text
@@ -417,7 +417,14 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
             "checked_at": live_success.finished_at if live_success else None,
             "reason": "Descoberta recente comprovou acesso; Apple pode expirar a sessão"
             if valid
-            else "Execute o workflow de sessão criptografada pelo terminal",
+            else "Sessão Apple reportou falha; revalide pelo terminal seguro"
+            if stored and stored.last_error
+            else (
+                "Sessão criptografada presente; sem importação recente "
+                "que comprove acesso Apple"
+            )
+            if present
+            else "Sessão criptografada ausente; publique-a pelo terminal seguro",
         }
     else:
         auth = await asyncio.to_thread(authentication_state, settings)
@@ -482,11 +489,24 @@ async def ingestion_runs(
     }
 
 
+def _schedule_cloud_dispatch(background_tasks: BackgroundTasks, platform: str) -> None:
+    """Wake the durable outbox after commit, without blocking the HTTP response.
+
+    The outbox owns retries and idempotency. This kick does not execute the
+    ingestion in the API process and does not start GPU or the Scheduler.
+    """
+    if platform == "cloud_run":
+        from photointel.services.outbox import drain_outbox
+
+        background_tasks.add_task(drain_outbox, limit=3, deadline_seconds=20)
+
+
 @router.post("/ingestion/start", status_code=202, tags=["ingestion"])
 async def start_ingestion(
     body: IngestionInput,
     session: Session,
     identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     from photointel.services.jobs import enqueue_job
 
@@ -545,6 +565,10 @@ async def start_ingestion(
         .limit(1)
     )
     if existing:
+        # The previous request may have enqueued work while no Scheduler/Job
+        # was running. Give that durable outbox a safe, idempotent kick.
+        await session.commit()
+        _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
         return {"job_id": existing, "already_running": True}
     batch = JobBatch(
         name="Importação iCloud" if body.source == "icloud" else "Importação sintética"
@@ -572,6 +596,7 @@ async def start_ingestion(
         )
     audit(session, identity, "ingestion.start", limit=body.limit, source=body.source)
     await session.commit()
+    _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
     return {"job_id": job.id, "batch_id": batch.id, "status": job.status}
 
 

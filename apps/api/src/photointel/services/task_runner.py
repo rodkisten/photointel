@@ -34,6 +34,53 @@ def validate_bounds(max_jobs: int, deadline_seconds: int) -> None:
         raise ValueError("deadline-seconds must be between 10 and 86400")
 
 
+async def dispatch_ready_worker_followup(
+    mode: str, remaining_seconds: float
+) -> dict[str, Any]:
+    """Wake downstream processing after discovery, even with no Scheduler.
+
+    Discover/backfill Jobs enqueue media_download and related work in PostgreSQL.
+    This non-GPU wakeup is necessary because the discovery runner only claims
+    icloud_discovery, while the normal worker handles derivative jobs.
+    """
+    if mode not in ("discover", "backfill", "worker"):
+        return {"status": "not_applicable"}
+    from photointel.config import get_settings
+    from photointel.database import SessionLocal
+    from photointel.models import Job, utcnow
+    from photointel.services.outbox import drain_outbox, enqueue_dispatch
+    from sqlalchemy import select
+
+    if get_settings().execution_platform != "cloud_run":
+        return {"status": "not_cloud_run"}
+    async with SessionLocal() as session:
+        pending = await session.scalar(
+            select(Job.id)
+            .where(
+                Job.status.in_(("queued", "retrying")),
+                Job.job_type != "icloud_discovery",
+                Job.scheduled_at <= utcnow(),
+            )
+            .order_by(Job.priority.desc(), Job.scheduled_at, Job.created_at)
+            .limit(1)
+        )
+        if pending is not None:
+            await enqueue_dispatch(
+                session, "worker", f"finite-worker-wakeup:{uuid4().hex}"
+            )
+        await session.commit()
+    if pending is None:
+        return {"status": "no_runnable_worker_jobs"}
+    # Even near the deadline the intent stays durable in PostgreSQL. Never
+    # run GCP calls while a database transaction is open.
+    if remaining_seconds <= 1:
+        return {"status": "queued_for_retry"}
+    result = await drain_outbox(
+        limit=3, deadline_seconds=min(20.0, remaining_seconds - 1)
+    )
+    return {"status": "wake_attempted", **result}
+
+
 async def run_finite(
     mode: str,
     *,
@@ -163,9 +210,13 @@ async def run_finite(
         for task in pending:
             task.cancel()
         await asyncio.gather(*pending, return_exceptions=True)
+    followup = await dispatch_ready_worker_followup(
+        mode, max(0.0, deadline - time.monotonic())
+    )
     return {
         "mode": mode,
         "status": "interrupted" if shutdown.is_set() else "completed",
+        "followup": followup,
         "claimed_jobs": claimed_count,
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "source_of_truth": "postgresql",
