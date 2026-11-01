@@ -56,10 +56,12 @@ Inserções retroativas que escapem da cabeça dependem dessa reconciliação, e
 da suposição incorreta de que data de captura equivale à data de adição.
 
 A continuação automática de um backfill exige **outra autorização explícita**:
-perfil `full`, capacidade suficiente, `target_assets`, confirmação do operador,
-release identificado e Gate F aprovado no mesmo release. Cada continuação tem
-limite finito e chave idempotente baseada em scan/cursor. Não há continuação
-implícita de um teste de 100, 500 ou 1.000 fotos. Pausa e cancelamento do lote
+perfil `full`, capacidade suficiente, `target_assets` e confirmação do operador.
+Somente metas novas acima de 1.000 fotos exigem a autorização F da API; uma
+sequência já autorizada sobrevive a redeploys sem ampliar a meta original.
+Cada continuação tem limite finito, limites correntes de capacidade e bytes e
+chave idempotente baseada em scan/cursor. Não há continuação implícita
+de um teste de 100, 500 ou 1.000 fotos. Pausa e cancelamento do lote
 continuam sendo respeitados pela aquisição da fila PostgreSQL.
 
 ## Falhas isoladas e proteção de identidade
@@ -133,4 +135,5 @@ remoção de uma foto no iCloud.
 criptografados e imagens procedurais. Ele cobre limites 100/500/1.000, falha isolada,
 retomada, anchors deslocados, ausência de conexão SQL durante I/O e continuação
 controlada. Esses adapters controlados **não** provam autenticação ou throughput
-real no iCloud. Os gates B–F exigem os testes externos descritos no runbook.
+real no iCloud. Testes externos permanecem recomendados, mas não exigem os antigos gates
+B-E. A autorização F é necessária somente acima de 1.000 fotos.
