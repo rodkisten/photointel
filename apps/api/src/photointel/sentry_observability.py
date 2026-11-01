@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Iterator
-from uuid import UUID
+from typing import Any
 
 import sentry_sdk
 
@@ -20,7 +20,9 @@ _BAGGAGE = re.compile(r"^[\x20-\x7e]{1,2048}$")
 
 
 def event_id(value: Any) -> str | None:
-    return value.lower() if isinstance(value, str) and _HEX_EVENT.fullmatch(value.lower()) else None
+    if not isinstance(value, str) or not _HEX_EVENT.fullmatch(value.lower()):
+        return None
+    return value.lower()
 
 
 def _scrub(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
