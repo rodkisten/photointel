@@ -1,5 +1,7 @@
 import { AlertCircle, Camera, Check, RefreshCw, X } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { DiagnosticActions } from './error-boundary';
+import { diagnosticFor } from '../lib/diagnostics';
 import { ApiError, apiUrl } from '../api/client';
 import { statusLabel, text } from '../lib/format';
 import { useUi } from '../lib/store';
@@ -18,8 +20,10 @@ export function Status({ value }: { value: unknown }) {
   return <span className={`status status-${status}`}><i />{statusLabel(status)}</span>;
 }
 export function ErrorState({ error, retry }: { error: Error; retry?: () => void }) {
+  const incident = useMemo(() => diagnosticFor(error, 'api'), [error]);
   return <div className="error-state" role="alert"><AlertCircle size={20} />
     <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p>
+      <DiagnosticActions incident={incident} />
       {error instanceof ApiError && <details><summary>Detalhes do erro</summary>
         <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {JSON.stringify(error, null, 2)}

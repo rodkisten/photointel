@@ -112,7 +112,7 @@ test('missing assets produces an actionable error and one important log', async 
   assert.equal(log.mock.calls[0].arguments[0].event, 'frontend_assets_binding_missing');
 });
 
-test('important logs redact private data and coalesce repeated upstream failures', async t => {
+test('important edge errors are individually correlated and redact private data', async t => {
   const log = t.mock.method(console, 'error', () => {});
   let clock = 1000;
   t.mock.method(Date, 'now', () => clock);
@@ -122,11 +122,13 @@ test('important logs redact private data and coalesce repeated upstream failures
   const upstream = async () => new Response('PRIVATE_BODY', { status: 500 });
   await handle(make(), env, upstream);
   await handle(make(), env, upstream);
-  assert.equal(log.mock.calls.length, 1);
+  assert.equal(log.mock.calls.length, 2);
+  assert.ok(log.mock.calls.every(call => Boolean(call.arguments[0].correlation_id)));
+  assert.notEqual(log.mock.calls[0].arguments[0].correlation_id,
+    log.mock.calls[1].arguments[0].correlation_id);
   clock += 61000;
   await handle(make(), env, upstream);
-  assert.equal(log.mock.calls.length, 2);
-  assert.equal(log.mock.calls[1].arguments[0].suppressed_since_last, 1);
+  assert.equal(log.mock.calls.length, 3);
   const serialized = JSON.stringify(log.mock.calls.map(call => call.arguments));
   for (const secret of ['PRIVATE_QUERY', 'PRIVATE_JWT', 'PRIVATE_TOKEN', 'PRIVATE_BODY', 'private-id']) {
     assert.ok(!serialized.includes(secret));
@@ -205,4 +207,43 @@ test('missing login config cannot silently return SPA or redirect to an arbitrar
     });
     assert.equal(response.status, 503);
   }
+});
+
+test('a broken Cloud Run setting cannot blank the frontend shell', async t => {
+  const errors = t.mock.method(console, 'error', () => {});
+  const config = { FRONTEND_ORIGIN: env.FRONTEND_ORIGIN, CLOUD_RUN_ORIGIN: 'not-a-url',
+    ASSETS: { fetch: async () => new Response('<!doctype html><div id="root"></div>',
+      { headers: { 'Content-Type': 'text/html' } }) } };
+  for (const path of ['/', '/library', '/assets/app.js']) {
+    const response = await handle(new Request(env.FRONTEND_ORIGIN + path), config);
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get('X-PhotoIntel-Source'), 'cloudflare');
+    assert.match(response.headers.get('X-Correlation-ID'), /^[0-9a-f-]{36}$/);
+  }
+  const api = await handle(new Request(env.FRONTEND_ORIGIN + '/v1/assets'), config);
+  assert.equal(api.status, 503);
+  assert.equal(errors.mock.calls.at(-1).arguments[0].event, 'routing_config_invalid');
+  assert.equal(errors.mock.calls.at(-1).arguments[0].correlation_id,
+    api.headers.get('X-Correlation-ID'));
+});
+
+test('browser reports contain only approved metadata and can be searched by ID', async t => {
+  const errors = t.mock.method(console, 'error', () => {});
+  const id = '75ce59c1-fc9b-4d20-9f1e-e40a9d4e954d';
+  const url = env.FRONTEND_ORIGIN + '/__diagnostics/client-errors';
+  const response = await handle(new Request(url, {
+    method: 'POST',
+    headers: { Origin: env.FRONTEND_ORIGIN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, phase: 'render', code: 'CLIENT_FAILURE',
+      secret: 'DO_NOT_LOG_THIS', stack: 'private' }),
+  }), env);
+  assert.equal(response.status, 204);
+  assert.equal(errors.mock.calls.at(-1).arguments[0].correlation_id, id);
+  assert.ok(!JSON.stringify(errors.mock.calls).includes('DO_NOT_LOG_THIS'));
+  const blocked = await handle(new Request(url, {
+    method: 'POST',
+    headers: { Origin: 'https://evil.invalid', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, phase: 'render', code: 'CLIENT_FAILURE' }),
+  }), env);
+  assert.equal(blocked.status, 403);
 });

@@ -8,11 +8,17 @@ export const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/,
 export const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init, credentials: 'include', cache: 'no-store',
-    headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init, credentials: 'include', cache: 'no-store',
+      headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init?.headers },
+    });
+  } catch (cause) {
+    throw new ApiError('Não foi possível conectar ao PhotoIntel.', 0, 'NETWORK_ERROR',
+      undefined, { method: init?.method ?? 'GET', path, cause, source: 'cloudflare' });
+  }
   if (!response.ok) throw await responseError(response, path, init?.method ?? 'GET');
   return response.status === 204 ? undefined as T : await response.json() as T;
 }

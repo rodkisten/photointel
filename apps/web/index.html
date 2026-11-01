@@ -20,177 +20,70 @@
 
     <title>Photo Intelligence Cloud</title>
 
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-      import {
-        getAnalytics,
-        isSupported as isAnalyticsSupported
-      } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
-      import {
-        getMessaging,
-        isSupported as isMessagingSupported,
-        onMessage,
-        onRegistered,
-        register
-      } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-messaging.js";
-
-      const firebaseConfig = {
-        apiKey: "AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY",
-        authDomain: "photointel-firebase.firebaseapp.com",
-        projectId: "photointel-firebase",
-        storageBucket: "photointel-firebase.firebasestorage.app",
-        messagingSenderId: "723658488603",
-        appId: "1:723658488603:web:64c64e34743b9aabe431be",
-        measurementId: "G-RE93MWG6FN"
-      };
-
-      // Firebase Console > Configuracoes do projeto > Cloud Messaging
-      // > Configuracao da Web > Certificados Web Push > Chave publica.
-      const VAPID_PUBLIC_KEY = "BPMDhEs2FPaek4BwM2UVJBrMrRnDDXxLRn8SDeji1hZNGC8hft0IEplz5Y7jKnfRGBb14iKWtbNyGOw__nXHCHQ";
-      const WORKER_URL = "/sw.js";
-
-      const app = initializeApp(firebaseConfig);
-      let registrationPromise = null;
-
-      // O Analytics e opcional e nao deve impedir o funcionamento do Push.
-      isAnalyticsSupported()
-        .then((supported) => {
-          if (supported) {
-            getAnalytics(app);
+    <script>
+      // Runs before Vite/Firebase modules, so even a failed JS bundle can show a diagnosis.
+      (() => {
+        let bootstrapFailure = false;
+        window.addEventListener("error", (event) => {
+          if (event.target instanceof HTMLScriptElement ||
+              event.target instanceof HTMLLinkElement) {
+            bootstrapFailure = true;
           }
-        })
-        .catch((error) => console.warn("[PhotoIntel Analytics]", error));
+        }, true);
 
-      async function registerForPush(messaging) {
-        if (VAPID_PUBLIC_KEY === "COLE_AQUI_SUA_CHAVE_PUBLICA_VAPID") {
-          throw new Error("Configure a chave publica VAPID antes de ativar o Push.");
-        }
+        window.addEventListener("load", () => {
+          setTimeout(() => {
+            const root = document.getElementById("root");
+            if (!root || root.children.length > 0) return;
 
-        if (registrationPromise) {
-          return registrationPromise;
-        }
-
-        registrationPromise = (async () => {
-          // Reutiliza o mesmo worker ja registrado por src/main.tsx.
-          // Nao registra outro service worker no escopo raiz.
-          const workerRegistration = await navigator.serviceWorker.register(WORKER_URL, {
-            scope: "/",
-            updateViaCache: "none"
-          });
-
-          await register(messaging, {
-            vapidKey: VAPID_PUBLIC_KEY,
-            serviceWorkerRegistration: workerRegistration
-          });
-
-          console.info("[PhotoIntel Push] Registro FCM iniciado com sucesso.");
-        })();
-
-        try {
-          await registrationPromise;
-        } catch (error) {
-          registrationPromise = null;
-          throw error;
-        }
-      }
-
-      const messagingReady = (async () => {
-        if (
-          !window.isSecureContext ||
-          !("Notification" in window) ||
-          !("serviceWorker" in navigator) ||
-          !("PushManager" in window) ||
-          !(await isMessagingSupported())
-        ) {
-          console.warn("[PhotoIntel Push] Navegador ou contexto sem suporte a Web Push.");
-          return null;
-        }
-
-        const messaging = getMessaging(app);
-
-        onMessage(messaging, (payload) => {
-          console.info("[PhotoIntel Push] Mensagem em primeiro plano:", payload);
-
-          window.dispatchEvent(
-            new CustomEvent("photointel:fcm-message", {
-              detail: payload
-            })
-          );
-          // No React, escute este evento e mostre seu toast/banner.
+            const id = crypto.randomUUID();
+            const code = bootstrapFailure ? "RESOURCE_LOAD_FAILURE" : "BOOT_FAILURE";
+            const panel = document.createElement("section");
+            panel.setAttribute("role", "alert");
+            panel.setAttribute("data-photointel-error", "");
+            panel.style.cssText = "min-height:100dvh;padding:48px 20px;background:#101112;color:#eceeed;" +
+              "font:15px/1.65 system-ui,sans-serif;display:grid;place-items:center";
+            panel.innerHTML = `
+              <div style="max-width:570px;width:100%;padding:30px;border:1px solid #343936;
+                          border-radius:20px;background:#181a19">
+                <h1 style="font-size:24px;margin:0 0 14px">O PhotoIntel não conseguiu iniciar</h1>
+                <p>O carregamento do aplicativo falhou. Nenhum dado original foi alterado.</p>
+                <p>Correlation ID: <code id="photointel-boot-id"></code></p>
+                <p id="photointel-boot-code" style="opacity:.75"></p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px">
+                  <button type="button" id="photointel-boot-reload">Tentar novamente</button>
+                  <button type="button" id="photointel-boot-copy">Copiar ID</button>
+                  <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages"
+                     target="_blank" rel="noopener noreferrer">Ver logs no Cloudflare</a>
+                </div>
+              </div>`;
+            if (root) {
+              root.replaceChildren(panel);
+            } else {
+              document.body.appendChild(panel);
+            }
+            document.getElementById("photointel-boot-id").textContent = id;
+            document.getElementById("photointel-boot-code").textContent = "Tipo: " + code;
+            document.getElementById("photointel-boot-reload").onclick = () => location.reload();
+            document.getElementById("photointel-boot-copy").onclick = () => {
+              void navigator.clipboard.writeText(id).catch(() => undefined);
+            };
+            // Only a minimal whitelisted event reaches Cloudflare logs.
+            void fetch("/__diagnostics/client-errors", {
+              method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, phase: "bootstrap", code }),
+            }).catch(() => undefined);
+          }, 5000);
         });
-
-        onRegistered(messaging, (installationId) => {
-          if (!installationId) {
-            return;
-          }
-
-          console.info("[PhotoIntel Push] Firebase Installation ID:", installationId);
-          try {
-            localStorage.setItem("photointel:fcm:installation-id", installationId);
-          } catch (error) {
-            console.warn("[PhotoIntel Push] Nao foi possivel salvar o FID localmente:", error);
-          }
-
-          window.dispatchEvent(
-            new CustomEvent("photointel:fcm-registered", {
-              detail: { installationId }
-            })
-          );
-          // TODO: associe installationId ao usuario autenticado no seu backend.
-          // Nao envie credenciais de servidor nem chaves privadas ao navegador.
-        });
-
-        // Se o usuario ja concedeu permissao, revalida o registro ao abrir o app.
-        if (Notification.permission === "granted") {
-          void registerForPush(messaging).catch((error) => {
-            console.error("[PhotoIntel Push] Falha na renovacao do registro:", error);
-          });
-        }
-
-        return messaging;
-      })().catch((error) => {
-        console.error("[PhotoIntel Push] Falha ao inicializar FCM:", error);
-        return null;
-      });
-
-      async function enableNotifications() {
-        if (!("Notification" in window)) {
-          throw new Error("Notificacoes nao sao suportadas neste navegador.");
-        }
-
-        // Deve ser chamado imediatamente no gesto do usuario (clique/toque).
-        const permission = Notification.permission === "default"
-          ? await Notification.requestPermission()
-          : Notification.permission;
-
-        if (permission !== "granted") {
-          throw new Error(`Permissao de notificacoes: ${permission}`);
-        }
-
-        const messaging = await messagingReady;
-        if (!messaging) {
-          throw new Error("Firebase Messaging indisponivel neste ambiente.");
-        }
-
-        await registerForPush(messaging);
-      }
-
-      // Dispare este evento diretamente no onClick de um botao React:
-      // document.dispatchEvent(new Event("photointel:enable-notifications"));
-      document.addEventListener("photointel:enable-notifications", () => {
-        void enableNotifications().catch((error) => {
-          console.error("[PhotoIntel Push] Nao foi possivel ativar:", error);
-          window.dispatchEvent(
-            new CustomEvent("photointel:fcm-error", {
-              detail: { message: String(error), error }
-            })
-          );
-        });
-      });
+      })();
     </script>
+
+
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/fcm.js"></script>
   </body>
 </html>

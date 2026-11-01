@@ -2451,3 +2451,37 @@ main {
   .failure-row { flex-wrap: wrap; gap: 10px; }
   .failure-actions { justify-content: flex-start; }
 }
+
+/* Global incident and crash recovery. Does not depend on React providers. */
+.crash-screen {
+  min-height: 100dvh; display: grid; place-items: center;
+  padding: 36px 18px; background: #101112; color: #eceeed;
+}
+.crash-card {
+  width: min(100%, 640px); padding: clamp(24px, 5vw, 40px);
+  background: #171a18; border: 1px solid #303532; border-radius: 20px;
+  display: grid; gap: 16px;
+}
+.crash-card > svg { color: #f5c18e; }
+.crash-card > p:not(.eyebrow) { color: #adb5ae; }
+.crash-card details pre {
+  white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px;
+  overflow: auto; padding: 12px; background: #101112; border-radius: 8px;
+}
+.diagnostic-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px;
+  margin-top: 12px; max-width: 100%; font-size: 12px;
+}
+.diagnostic-actions .diagnostic-id {
+  flex-basis: 100%; overflow-wrap: anywhere; color: #c1cfc4;
+}
+.diagnostic-actions code { user-select: all; }
+.diagnostic-actions a, .diagnostic-actions button, .crash-retry {
+  display: inline-flex; align-items: center; gap: 7px; border-radius: 8px;
+  border: 1px solid #414b43; background: #242a25; color: #e6ede6;
+  padding: 9px 12px; font-size: 12px; font-weight: 550; cursor: pointer;
+}
+.diagnostic-actions small {
+  width: 100%; color: #8e9c92; font-size: 11px;
+}
+.crash-retry { width: fit-content; font-size: 13px; }

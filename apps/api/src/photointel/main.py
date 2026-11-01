@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -58,8 +58,9 @@ def create_app() -> FastAPI:
             "If-None-Match",
             "If-Range",
             "Range",
+            "X-Correlation-ID",
         ],
-        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges", "X-Correlation-ID"],
     )
 
     @app.exception_handler(AppError)
@@ -107,7 +108,16 @@ def create_app() -> FastAPI:
     async def protection(request: Request, call_next: Any) -> Any:
         import time
 
-        request.state.correlation_id = str(uuid4())
+        # Accept only canonical UUIDs propagated by the trusted edge.
+        # Never log caller-controlled arbitrary strings or expose credentials.
+        incoming_correlation = request.headers.get("x-correlation-id", "")
+        try:
+            parsed_correlation = str(UUID(incoming_correlation))
+            request.state.correlation_id = (
+                parsed_correlation if incoming_correlation == parsed_correlation else str(uuid4())
+            )
+        except (ValueError, AttributeError):
+            request.state.correlation_id = str(uuid4())
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 length = int(request.headers.get("content-length", "0"))
@@ -167,6 +177,18 @@ def create_app() -> FastAPI:
                 for key in expired:
                     _requests.pop(key, None)
         response = await call_next(request)
+        if response.status_code >= 400:
+            # GCP Logs Explorer can always find the correlation ID of an API error.
+            # Never emit private URLs, query strings, request bodies or JWTs.
+            logger.warning(
+                "api_http_error",
+                extra={
+                    "correlation_id": request.state.correlation_id,
+                    "status_code": response.status_code,
+                    "method": request.method,
+                    "route_group": "/v1/*" if request.url.path.startswith("/v1/") else "other",
+                },
+            )
         response.headers["X-Correlation-ID"] = request.state.correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"

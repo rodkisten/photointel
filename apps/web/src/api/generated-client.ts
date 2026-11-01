@@ -20,6 +20,8 @@ function fail(response: Response, body: unknown): never {
     response.status,
     error?.error?.code ?? `HTTP_${response.status}`,
     response.headers.get('X-Correlation-ID') ?? undefined,
+    { source: response.headers.get('X-PhotoIntel-Source') === 'cloudflare' ? 'cloudflare' : 'gcp',
+      rayId: response.headers.get('X-Cloudflare-Ray') ?? undefined },
   );
 }
 
