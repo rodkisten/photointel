@@ -51,6 +51,7 @@ from photointel.schemas import (
 from photointel.serializers import decode_uuid_cursor, encode_cursor, row_dict
 from photointel.services.catalog import audit
 from photointel.services.import_policy import authorize_import
+from photointel.services.job_notify import safe_notify
 from photointel.services.runtime_settings import effective_settings
 
 router = APIRouter(dependencies=[Depends(require_identity)])
@@ -154,7 +155,8 @@ async def job_events(
 
 @router.post("/jobs/reindex", tags=["jobs"])
 async def reindex(
-    body: ReindexInput, session: Session, identity: Actor
+    body: ReindexInput, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     from photointel.services.jobs import enqueue_job
 
@@ -231,6 +233,7 @@ async def reindex(
         estimated_cost=estimate,
     )
     await session.commit()
+    background_tasks.add_task(safe_notify)
     return row_dict(batch)
 
 
@@ -243,7 +246,9 @@ async def job_detail(job_id: UUID, session: Session) -> JobOut:
 
 
 @router.post("/jobs/{job_id}/retry", response_model=JobOut, tags=["jobs"])
-async def retry_job(job_id: UUID, session: Session, identity: Actor) -> JobOut:
+async def retry_job(
+    job_id: UUID, session: Session, identity: Actor, background_tasks: BackgroundTasks
+) -> JobOut:
     job = await session.scalar(select(Job).where(Job.id == job_id).with_for_update())
     if not job:
         raise AppError(ErrorCode.NOT_FOUND, "Job não encontrado", 404)
@@ -262,11 +267,14 @@ async def retry_job(job_id: UUID, session: Session, identity: Actor) -> JobOut:
     emit_job_event(session, job)
     audit(session, identity, "job.retry", job.asset_id, job_id=str(job.id))
     await session.commit()
+    background_tasks.add_task(safe_notify)
     return JobOut.model_validate(job)
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=JobOut, tags=["jobs"])
-async def cancel_job(job_id: UUID, session: Session, identity: Actor) -> JobOut:
+async def cancel_job(
+    job_id: UUID, session: Session, identity: Actor, background_tasks: BackgroundTasks
+) -> JobOut:
     job = await session.scalar(select(Job).where(Job.id == job_id).with_for_update())
     if not job:
         raise AppError(ErrorCode.NOT_FOUND, "Job não encontrado", 404)
@@ -279,6 +287,7 @@ async def cancel_job(job_id: UUID, session: Session, identity: Actor) -> JobOut:
     emit_job_event(session, job)
     audit(session, identity, "job.cancel", job.asset_id, job_id=str(job.id))
     await session.commit()
+    background_tasks.add_task(safe_notify)
     return JobOut.model_validate(job)
 
 
@@ -565,6 +574,7 @@ async def start_ingestion(
         # was running. Give that durable outbox a safe, idempotent kick.
         await session.commit()
         _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
+        background_tasks.add_task(safe_notify)
         return {"job_id": existing, "already_running": True}
     # Existing work was already authorized when persisted. Release-scoped
     # gates apply to NEW imports only; a redeploy must not block waking the
@@ -600,6 +610,7 @@ async def start_ingestion(
     audit(session, identity, "ingestion.start", limit=body.limit, source=body.source)
     await session.commit()
     _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
+    background_tasks.add_task(safe_notify)
     return {"job_id": job.id, "batch_id": batch.id, "status": job.status}
 
 
