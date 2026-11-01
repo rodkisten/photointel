@@ -12,6 +12,10 @@ export default tseslint.config(
     languageOptions: { globals: globals.serviceworker },
   },
   {
+    files: ['public/fcm.js'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },

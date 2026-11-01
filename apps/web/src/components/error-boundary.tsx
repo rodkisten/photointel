@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react';
 import { diagnosticClipboardText, diagnosticFor, diagnosticLogsUrl, reportDiagnostic,
   type Diagnostic } from '../lib/diagnostics';
@@ -29,7 +29,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, _info: ErrorInfo) {
+  componentDidCatch(error: Error) {
     this.setState({ incident: reportDiagnostic(error, 'render') });
   }
 

@@ -25,8 +25,10 @@ describe('whole-app diagnostics', () => {
   });
 
   it('sends only whitelisted metadata to Cloudflare, never stack or error message', async () => {
-    const fetcher = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) =>
-      new Response(null, { status: 204 }));
+    const fetcher = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      if (!url || !options) throw new Error('Missing diagnostic request');
+      return new Response(null, { status: 204 });
+    });
     vi.stubGlobal('fetch', fetcher);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const incident = reportDiagnostic(new Error('PRIVATE_SECRET_IN_MESSAGE'), 'runtime');
@@ -37,7 +39,7 @@ describe('whole-app diagnostics', () => {
     const body = JSON.stringify(JSON.parse(String(options.body)));
     expect(body).toContain(incident.id);
     expect(body).not.toContain('PRIVATE_SECRET_IN_MESSAGE');
-    expect(Object.keys(JSON.parse(options.body)).sort()).toEqual(['code', 'id', 'phase']);
+    expect(Object.keys(JSON.parse(String(options.body))).sort()).toEqual(['code', 'id', 'phase']);
   });
 
   it('shows recovery actions rather than a blank screen after a React render exception', () => {
