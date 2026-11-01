@@ -8,6 +8,7 @@ import { IngestionFailures } from '../components/ingestion-failures';
 import { localPath } from '../lib/safe-path';
 
 const sha = 'a'.repeat(40);
+vi.mock('../lib/release', () => ({ FRONTEND_RELEASE_ID: 'b'.repeat(40) }));
 afterEach(() => vi.unstubAllGlobals());
 function mount(content: React.ReactNode) {
   const client = new QueryClient({defaultOptions: {queries: {retry: false, gcTime: 0}, mutations: {retry: false}}});
@@ -32,6 +33,7 @@ describe('release-bound operational readiness', () => {
     expect(await screen.findByText('Consulta de saúde executada')).toBeVisible();
     expect(screen.getByText(/GPU desativada.*outros custos/)).toBeVisible();
     await screen.findByText('Importações acima de 1.000 fotos');
+    expect(screen.getByText(/Frontend e API foram publicados de commits diferentes/)).toBeVisible();
     const buttons = screen.getAllByRole('button', {name: 'Registrar verificação'});
     expect(buttons).toHaveLength(1);
     expect(buttons[0]).toBeEnabled();
