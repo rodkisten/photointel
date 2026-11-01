@@ -58,6 +58,33 @@ function failure(status, message, extra = {}) {
   });
 }
 
+function frontendFailure(status, correlationId) {
+  // HTML fallback works without bundled JS, Firebase, or an ASSETS binding.
+  const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PhotoIntel · diagnóstico</title></head>
+<body style="margin:0;min-height:100dvh;background:#101112;color:#eceeed;
+font:15px/1.6 system-ui;display:grid;place-items:center;padding:20px">
+<main style="max-width:580px;border:1px solid #343936;border-radius:18px;padding:28px">
+<h1>PhotoIntel temporariamente indisponível</h1>
+<p>O Cloudflare não conseguiu servir a interface. Os dados originais não foram alterados.</p>
+<p>Correlation ID: <code>${correlationId}</code></p>
+<a style="color:#bcd9bf" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages">
+Ver logs no Cloudflare</a>
+<p>Abra o Worker photointel, Observability, e filtre pelo correlation_id.</p>
+<button type="button" onclick="location.reload()">Tentar novamente</button>
+</main></body></html>`;
+  return new Response(html, { status, headers: {
+    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  } });
+}
+function isNavigation(request, pathname) {
+  return request.headers.get('Accept')?.includes('text/html') ||
+    (!pathname.startsWith('/assets/') && !/\.[a-z0-9]{1,8}$/i.test(pathname));
+}
+
 async function dispatch(request, env, fetchOrigin, correlationId) {
   const incoming = new URL(request.url);
   const log = (level, event, route, status, durationMs = 0) =>
@@ -135,7 +162,8 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     }
     if (!env.ASSETS || typeof env.ASSETS.fetch !== 'function') {
       log('error', 'frontend_assets_binding_missing', routeGroup(incoming.pathname), 503);
-      return failure(503, 'Frontend assets not deployed');
+      return isNavigation(request, incoming.pathname)
+        ? frontendFailure(503, correlationId) : failure(503, 'Frontend assets not deployed');
     }
     const started = Date.now();
     try {
@@ -145,10 +173,14 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       } else if (response.status === 404 && incoming.pathname.startsWith('/assets/')) {
         log('warn', 'frontend_asset_missing', '/assets/*', 404);
       }
+      if (response.status >= 500 && isNavigation(request, incoming.pathname)) {
+        return frontendFailure(response.status, correlationId);
+      }
       return response;
     } catch {
       log('error', 'frontend_assets_unreachable', routeGroup(incoming.pathname), 503, Date.now() - started);
-      return failure(503, 'Frontend temporarily unavailable');
+      return isNavigation(request, incoming.pathname)
+        ? frontendFailure(503, correlationId) : failure(503, 'Frontend temporarily unavailable');
     }
   }
   if (!METHODS.has(request.method)) {
