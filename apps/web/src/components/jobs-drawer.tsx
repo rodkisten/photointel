@@ -116,7 +116,13 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
     else resize(size === 'full' ? 'half' : size === 'half' ? 'mini' : 'closed');
   };
 
-  if (hidden || size === 'closed') return null;
+  if (hidden) return null;
+  if (size === 'closed') return activeJobs.length ? <button type="button"
+    className="jobs-drawer-toggle" onClick={() => resize('mini')}
+    aria-label={`Mostrar ${activeJobs.length} jobs ativos`}>
+    <Activity size={17} className={activeJobs.some((job) => job.status === 'running') ?
+      'job-running-icon' : ''} /><span>{activeJobs.length} jobs</span><ChevronUp size={15}/>
+  </button> : null;
   return <section className={'jobs-drawer jobs-drawer-' + size} aria-label="Monitor de jobs"
     aria-live="off" data-testid="jobs-drawer">
     <button type="button" className="jobs-drawer-grip" aria-label="Arraste para ajustar o painel de jobs"
