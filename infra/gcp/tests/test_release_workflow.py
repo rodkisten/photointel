@@ -96,7 +96,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("inputs.action == 'release'", gate)
         self.assertLess(self.stages["database_gate"], self.stages["build_image"])
         # Credentials must exist before an automated, read-only Neon verification.
-        self.assertLess(self.stages["notify_observed_002"], self.stages["database_gate"])
+        self.assertLess(self.workflow.index('      - name: "🧰 Gcloud"'), self.stages["database_gate"])
         self.assertNotIn("database_ready:", self.workflow)
         self.assertNotIn("authorize_charges:", self.workflow)
         self.assertNotIn("confirm_project:", self.workflow)
