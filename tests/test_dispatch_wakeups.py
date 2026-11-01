@@ -35,6 +35,12 @@ def test_manual_import_wakes_the_durable_outbox_after_commit() -> None:
     )
 
 
+def test_existing_queued_job_wakes_before_new_release_gate_check() -> None:
+    source = inspect.getsource(operations.start_ingestion)
+    assert source.index("if existing:") < source.index("await require_import_gates(")
+    assert source.index("await require_import_gates(") < source.index("batch = JobBatch(")
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["discover", "backfill", "worker"])
 async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
