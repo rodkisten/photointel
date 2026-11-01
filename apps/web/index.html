@@ -20,6 +20,65 @@
 
     <title>Photo Intelligence Cloud</title>
 
+    <script>
+      // Runs before Vite/Firebase modules, so even a failed JS bundle can show a diagnosis.
+      (() => {
+        let bootstrapFailure = false;
+        window.addEventListener("error", (event) => {
+          if (event.target instanceof HTMLScriptElement ||
+              event.target instanceof HTMLLinkElement) {
+            bootstrapFailure = true;
+          }
+        }, true);
+
+        window.addEventListener("load", () => {
+          setTimeout(() => {
+            const root = document.getElementById("root");
+            if (!root || root.children.length > 0) return;
+
+            const id = crypto.randomUUID();
+            const code = bootstrapFailure ? "RESOURCE_LOAD_FAILURE" : "BOOT_FAILURE";
+            const panel = document.createElement("section");
+            panel.setAttribute("role", "alert");
+            panel.setAttribute("data-photointel-error", "");
+            panel.style.cssText = "min-height:100dvh;padding:48px 20px;background:#101112;color:#eceeed;" +
+              "font:15px/1.65 system-ui,sans-serif;display:grid;place-items:center";
+            panel.innerHTML = `
+              <div style="max-width:570px;width:100%;padding:30px;border:1px solid #343936;
+                          border-radius:20px;background:#181a19">
+                <h1 style="font-size:24px;margin:0 0 14px">O PhotoIntel não conseguiu iniciar</h1>
+                <p>O carregamento do aplicativo falhou. Nenhum dado original foi alterado.</p>
+                <p>Correlation ID: <code id="photointel-boot-id"></code></p>
+                <p id="photointel-boot-code" style="opacity:.75"></p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:22px">
+                  <button type="button" id="photointel-boot-reload">Tentar novamente</button>
+                  <button type="button" id="photointel-boot-copy">Copiar ID</button>
+                  <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages"
+                     target="_blank" rel="noopener noreferrer">Ver logs no Cloudflare</a>
+                </div>
+              </div>`;
+            if (root) {
+              root.replaceChildren(panel);
+            } else {
+              document.body.appendChild(panel);
+            }
+            document.getElementById("photointel-boot-id").textContent = id;
+            document.getElementById("photointel-boot-code").textContent = "Tipo: " + code;
+            document.getElementById("photointel-boot-reload").onclick = () => location.reload();
+            document.getElementById("photointel-boot-copy").onclick = () => {
+              void navigator.clipboard.writeText(id).catch(() => undefined);
+            };
+            // Only a minimal whitelisted event reaches Cloudflare logs.
+            void fetch("/__diagnostics/client-errors", {
+              method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, phase: "bootstrap", code }),
+            }).catch(() => undefined);
+          }, 5000);
+        });
+      })();
+    </script>
+
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
       import {
