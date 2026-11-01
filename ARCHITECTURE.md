@@ -130,8 +130,10 @@ propagação ao iCloud. A ausência de Bridge não interrompe o catálogo cloud.
 
 Não existem rotinas de exclusão de originais, substituição da biblioteca ou
 escrita em massa automática. Duplicatas são grupos de revisão não destrutivos.
-Gates persistidos separam fixtures, autenticação Apple, Modal real, 100/1.000
-assets e expansão. Nenhum gate externo é aprovado apenas pela presença de código.
+A autorização manual foi simplificada: até 1.000 fotos não há bloqueio por
+gates; operações novas maiores exigem apenas a autorização F de escala,
+com evidências e SHA da API. Limites de lote, bytes e capacidade continuam
+validados na API e no worker. Deploys independentes de web e API são permitidos.
 
 O detalhamento de recursos e IAM está em
 [docs/architecture/CLOUD_RUN_TARGET.md](docs/architecture/CLOUD_RUN_TARGET.md);
