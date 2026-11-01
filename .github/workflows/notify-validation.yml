@@ -72,4 +72,10 @@ jobs:
           uv run --no-sync pytest -q tests/test_job_notify.py
           python3 -m unittest discover -s infra/gcp/tests -p test_notify.py -v
       - name: "🔍 Lint"
-        run: uv run --no-sync ruff check apps/api/src/photointel/services/job_notify.py tests/test_job_notify.py
+        run: >-
+          uv run --no-sync ruff check
+          apps/api/src/photointel/services/job_notify.py
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/task_runner.py
+          apps/api/src/photointel/routers/operations.py
+          tests/test_job_notify.py
