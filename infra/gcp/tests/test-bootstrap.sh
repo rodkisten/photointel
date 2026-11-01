@@ -105,8 +105,14 @@ if grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD
 fi
 grep -F 'secrets add-iam-policy-binding photointel-sentry-build-token' "$GCLOUD_TRACE" |
     grep -Fq 'photointel-deployer@replace-project-id.iam.gserviceaccount.com'
-if grep -Eq 'services enable|artifacts |storage |projects |iam service-accounts |secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
+grep -F 'projects add-iam-policy-binding replace-project-id' "$GCLOUD_TRACE" |
+    grep -F -- '--member=serviceAccount:photointel-api@replace-project-id.iam.gserviceaccount.com' |
+    grep -Fq -- '--role=roles/logging.viewer'
+if grep -Eq 'services enable|artifacts |storage |iam service-accounts |secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
     echo "ERROR: IAM-only mode attempted broader provisioning" >&2; exit 1
+fi
+if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 1 ]]; then
+    echo "ERROR: IAM-only mode changed unexpected project policies" >&2; exit 1
 fi
 echo "Bootstrap offline tests passed: plan, idempotence, IAM-only repair and denial."
 
