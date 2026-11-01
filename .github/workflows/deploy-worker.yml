@@ -11,16 +11,54 @@ on:
       - 'infra/scripts/diagnose_access.py'
       - '.github/actions/gcp-config/**'
       - '.github/workflows/deploy-worker.yml'
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'packages/contracts/**'
+      - 'infra/cloudflare/**'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'infra/scripts/cloudflare_setup.py'
+      - 'infra/scripts/diagnose_access.py'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
 permissions: {contents: read}
 concurrency:
   group: photointel-cloudflare-worker-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  preflight:
+    name: "🧪 Frontend · lint, types, tests, production build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "🧰 Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: "📦 Install locked dependencies"
+        run: npm --prefix apps/web ci
+      - name: "🧹 ESLint"
+        run: npm --prefix apps/web run lint
+      - name: "📐 TypeScript"
+        run: npm --prefix apps/web run typecheck
+      - name: "🧪 All frontend tests"
+        run: npm --prefix apps/web test
+      - name: "🧪 Cloudflare Worker tests"
+        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+      - name: "🏗 Production Vite build"
+        run: npm --prefix apps/web run build
+
   deploy:
     name: "🌐 Publish unified Worker"
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    needs: preflight
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     environment: production
     permissions:
       contents: read
