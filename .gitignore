@@ -26,3 +26,9 @@ gha-creds-*.json
 # Local Cloudflare relay deployment configuration.
 infra/cloudflare/cloud-run-proxy/wrangler.toml
 infra/cloudflare/cloud-run-proxy/.wrangler/
+
+# GCP_CONFIG_ENV generates these local, non-committable release artifacts.
+# They must not make the checkout dirty before release-manifest.py runs.
+infra/gcp/config.local.json
+infra/gcp/rendered/
+infra/gcp/state/
