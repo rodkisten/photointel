@@ -5,6 +5,7 @@ on:
     paths:
       - pyproject.toml
       - apps/web/package.json
+      - .github/workflows/observability-deps.yml
 permissions:
   contents: write
 jobs:
@@ -25,4 +26,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web/package-lock.json uv.lock
           git diff --staged --quiet || git commit -m "chore: lock Sentry frontend and backend SDK dependencies"
+          git fetch origin feat/sentry-observability-e2e-20261101
+          git rebase origin/feat/sentry-observability-e2e-20261101
           git push origin HEAD:feat/sentry-observability-e2e-20261101
