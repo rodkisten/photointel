@@ -32,7 +32,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: photointel-gcp-production
+  # Push checks must not cancel or block manually authorized production operations.
+  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-bootstrap-push-check' || 'photointel-gcp-production' }}
   cancel-in-progress: false
 
 jobs:

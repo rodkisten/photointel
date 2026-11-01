@@ -1,5 +1,5 @@
 name: "🗃️ Migrate Neon"
-run-name: "🗃️ Neon · ${{ inputs.migration_mode }} · ${{ inputs.confirm_project }}"
+run-name: "🗃️ Neon · ${{ inputs.migration_mode || 'offline-check' }} · ${{ inputs.confirm_project || 'photointel' }}"
 
 # Same migration implementation and safeguards as the migrate stage of Deploy.
 # Pushes validate migration scripts offline; applying database changes always requires manual dispatch.
@@ -62,7 +62,8 @@ env:
 
 # Serialize against bootstrap and deploy, so migration never races with a release.
 concurrency:
-  group: photointel-gcp-production
+  # Push checks must not cancel or block manually authorized production operations.
+  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-migrate-push-check' || 'photointel-gcp-production' }}
   cancel-in-progress: false
 
 jobs:

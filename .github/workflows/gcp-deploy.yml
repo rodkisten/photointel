@@ -1,5 +1,5 @@
 name: "🚀 Deploy"
-run-name: "🚀 Deploy · ${{ inputs.action || 'release' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
+run-name: "🚀 Deploy · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
   push:
@@ -80,7 +80,8 @@ env:
   CLICOLOR_FORCE: "1"    # Works for many C/C++ tools and Unix utilities
 
 concurrency:
-  group: photointel-gcp-production
+  # Push checks must not cancel or block manually authorized production operations.
+  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || 'photointel-gcp-production' }}
   cancel-in-progress: false
 
 jobs:
