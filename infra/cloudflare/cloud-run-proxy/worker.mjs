@@ -332,7 +332,7 @@ function captureEdgeFailure(env, correlationId, status, ctx) {
       exception: { values: [{ type: 'CloudflareWorkerFailure', value: 'HTTP ' + status }] },
       tags: { service: 'photointel-cloudflare', correlation_id: correlationId },
     }),
-  ].join('\\n') + '\\n';
+  ].join('\n') + '\n';
   const pending = fetch(endpoint, { method: 'POST',
     headers: { 'Content-Type': 'application/x-sentry-envelope' },
     body: payload,
