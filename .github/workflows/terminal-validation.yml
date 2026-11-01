@@ -1,10 +1,11 @@
 name: "🧪 Terminal validation"
 on:
+  workflow_dispatch:
   pull_request:
-    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml']
+    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml', '.github/actions/gcp-config/**']
   push:
     branches: [main]
-    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml']
+    paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml', '.github/actions/gcp-config/**']
 permissions:
   contents: read
 jobs:

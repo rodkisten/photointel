@@ -8,7 +8,20 @@ on:
         required: false
         default: false
   push:
-    branches: [validation/bootstrap]
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'bridges/**'
+      - 'gpu/**'
+      - 'packages/**'
+      - 'tests/**'
+      - 'infra/docker/**'
+      - 'infra/migrations/**'
+      - 'infra/scripts/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Makefile'
+      - '.github/workflows/bootstrap-validation.yml'
 permissions:
   contents: read
 concurrency:

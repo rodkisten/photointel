@@ -1,5 +1,16 @@
 name: "🧾 Manifest"
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/scripts/release-manifest.py'
+      - 'docs/evidence/**'
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'gpu/**'
+      - 'infra/docker/**'
+      - 'infra/gcp/build_source_manifest.py'
+      - '.github/workflows/release-manifest.yml'
   workflow_dispatch:
     inputs:
       container_digest:
@@ -41,5 +52,5 @@ jobs:
         with:
           name: release-provenance-${{ github.sha }}
           path: reports/release-manifest.json
-          retention-days: 90
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 14 || 3 }}
 

@@ -20,7 +20,16 @@ class StandaloneMigrationWorkflowTests(unittest.TestCase):
 
     def test_only_manual_migrations_and_main_branch(self):
         self.assertIn("  workflow_dispatch:", self.migrate)
-        self.assertNotIn("  push:", self.migrate)
+        self.assertIn("  push:", self.migrate)
+        self.assertIn("    branches: [main]", self.migrate)
+        self.assertIn("  push-check:", self.migrate)
+        self.assertIn("if: github.event_name == 'push'", self.migrate)
+        self.assertIn("github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'", self.migrate)
+        # Pushes may run offline checks but must never execute production migrations.
+        push_job = self.migrate.split("  push-check:", 1)[1].split("  migrate:", 1)[0]
+        self.assertNotIn("release.sh migrate", push_job)
+        self.assertNotIn("gcloud", push_job)
+        self.assertNotIn("id-token: write", push_job)
         self.assertNotIn("  pull_request:", self.migrate)
         self.assertIn("github.ref == 'refs/heads/main'", self.migrate)
         self.assertIn("name: \"🗃️ Migrate Neon\"", self.migrate)

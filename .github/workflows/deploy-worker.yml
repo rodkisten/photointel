@@ -1,7 +1,21 @@
 name: "🌐 Worker · Front + API"
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/contracts/**'
+      - 'infra/cloudflare/**'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'infra/scripts/cloudflare_setup.py'
+      - 'infra/scripts/diagnose_access.py'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
 permissions: {contents: read}
+concurrency:
+  group: photointel-cloudflare-worker-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   deploy:
     name: "🌐 Publish unified Worker"

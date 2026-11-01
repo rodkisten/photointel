@@ -2,7 +2,17 @@ name: "🧠 CPU Models"
 
 on:
   push:
-    branches: [validation/real-cpu]
+    branches: [main]
+    paths:
+      - 'gpu/**'
+      - 'apps/api/src/photointel/services/inference*'
+      - 'apps/api/src/photointel/models.py'
+      - 'infra/scripts/real-cpu-smoke.py'
+      - 'infra/migrations/**'
+      - 'packages/taxonomy/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/real-cpu-smoke.yml'
   workflow_dispatch:
     inputs:
       confirm_download:
@@ -23,7 +33,7 @@ jobs:
     name: "🧠 Smoke"
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.confirm_download == true)
-      || (github.event_name == 'push' && github.ref == 'refs/heads/validation/real-cpu')
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
