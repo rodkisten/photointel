@@ -30,12 +30,12 @@ interface IncidentResponse {
 
 function hint(error: Error | undefined, status: number | undefined): string {
   if (error instanceof ApiError) {
-    const details = error.details;
-    const reason = details && typeof details === 'object' && !Array.isArray(details) &&
-      'reason' in details ? details.reason : undefined;
+    const details = error.details && typeof error.details === 'object' &&
+      !Array.isArray(error.details) ? error.details : null;
+    const reason = details && 'reason' in details ? details.reason : undefined;
     if (reason === 'NO_ELIGIBLE_ASSETS')
       return 'As fotos solicitadas já estão na fila ou não podem ser processadas agora. Consulte os jobs pendentes antes de criar outro lote.';
-    if (error.code === 'VERIFICATION_REQUIRED' || 'required_gates' in (details ?? {}))
+    if (error.code === 'VERIFICATION_REQUIRED' || (details && 'required_gates' in details))
       return 'A API não criou o lote porque a verificação exigida para esta versão está pendente. Abra Preparação e validação para executar e registrar os testes. Não é um problema de login no iCloud.';
     if (error.code === 'GPU_UNAVAILABLE')
       return 'A inferência precisa de GPU configurada. Desmarque JoyTag e SigLIP para processamentos locais.';
