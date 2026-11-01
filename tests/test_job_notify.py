@@ -71,6 +71,23 @@ async def test_notify_rejects_redirects_and_does_not_follow_provider(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_notify_groups_batch_pushes_instead_of_spamming_each_photo():
+    with respx.mock(assert_all_mocked=True) as mock:
+        route = mock.post(
+            "https://push.getnotifyapp.com/notify-json/IODEVICE123456"
+        ).mock(return_value=httpx.Response(200, json={"success": True}))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            await notify.send_push(
+                client, "IODEVICE123456", "SECRET123456",
+                "PhotoIntel · Importação iCloud", "Concluído · 100/100 jobs",
+                "batch:00000000-0000-0000-0000-000000000001",
+            )
+        assert route.call_count == 1
+        assert b"Conclu" in route.calls.last.request.content
+        assert b"photointel-batch-" in route.calls.last.request.content
+
+
+@pytest.mark.asyncio
 async def test_cursor_delivery_limit_fails_closed():
     for limit in (0, -1, 501):
         with pytest.raises(ValueError):

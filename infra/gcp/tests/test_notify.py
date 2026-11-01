@@ -143,6 +143,21 @@ class NotifyOfflineTests(unittest.TestCase):
             notify.handle(args, "IOFAKE1234567", "fakeTOKEN123456")
             send.assert_not_called()
 
+    def test_api_notify_source_and_deployment_contract(self):
+        import ast
+        source = (ROOT / "apps/api/src/photointel/services/job_notify.py").read_text()
+        ast.parse(source)
+        self.assertIn("NOTIFY_JOB_EVENTS_ENABLED", source)
+        self.assertIn("with_for_update=True", source)
+        self.assertIn("scope_for", source)
+        self.assertIn("send_push", source)
+        self.assertIn("drain_job_notifications", source)
+        management = (ROOT / "infra/gcp/manage.py").read_text()
+        self.assertIn('"NOTIFY_DEVICE_ID"', management)
+        self.assertIn('"NOTIFY_TOKEN"', management)
+        self.assertIn('"NOTIFY_JOB_EVENTS_ENABLED"', management)
+        self.assertIn('mode != "migrate"', management)
+
     def test_only_strategic_workflows_send_notify(self):
         strategic = {"gcp-deploy.yml", "gcp-bootstrap.yml", "deploy-worker.yml", "zip.yml"}
         for name in WORKFLOWS:
