@@ -634,7 +634,9 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             # The encrypted iCloud session has a single owner by design.
             # Contention is scheduling, not a failed download or Sentry incident.
             await _fail_jobs(fences, exc, busy=True)
-            logger.info("worker_job_deferred", jobs=len(job_ids), reason="icloud_session_busy")
+            logger.info(
+                "worker_job_deferred", jobs=len(job_ids), reason="icloud_session_busy"
+            )
             return
         if _is_retryable_transaction_conflict(exc):
             # A deadlock aborts this entire SQL transaction. Requeue the work
