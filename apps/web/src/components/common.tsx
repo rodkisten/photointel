@@ -109,7 +109,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   }, [src]);
   const current = candidates[Math.min(variant, candidates.length - 1)];
   useEffect(() => {
-    if (!actionsOpen || !assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
+    if (!actionsOpen || overrideSrc || !assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
     let cancelled = false;
     const refresh = async () => {
       try {
@@ -127,7 +127,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     void refresh();
     const timer = setInterval(() => { void refresh(); }, 8000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [actionsOpen, assetId]);
+  }, [actionsOpen, assetId, overrideSrc]);
 
   async function diagnose(event: MouseEvent) {
     event.stopPropagation();
@@ -195,7 +195,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
           {src && <Button variant="outline" onClick={() => { setFailed(false); setVariant(0);
             setIncident(null); setAttempt((value) => value + 1); setActionsOpen(false); }}>
             <RefreshCw size={15}/>Recarregar imagem</Button>}
-          {assetId && <Button variant="outline" disabled={repairing}
+          {assetId && <Button variant="outline" disabled={repairing || previewState?.status === 'processing'}
             onClick={(event) => void repair(event)}>
             <RefreshCw size={15}/>{repairing ? 'Enfileirando…' : 'Solicitar reparo da prévia'}</Button>}
           {src && <Button variant="ghost" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
