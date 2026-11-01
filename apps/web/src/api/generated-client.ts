@@ -3,12 +3,20 @@ import createClient from 'openapi-fetch';
 import type { components, paths } from './schema';
 import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types';
 import { API_BASE, ApiError } from './client';
+import { apiNetworkError } from './error';
 
 export const api = createClient<paths>({
   baseUrl: API_BASE || window.location.origin,
   credentials: 'include',
   cache: 'no-store',
-  fetch: (input) => globalThis.fetch(input),
+  fetch: async (input) => {
+    try {
+      return await globalThis.fetch(input);
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === 'AbortError') throw cause;
+      throw apiNetworkError(cause, input.method, input.url);
+    }
+  },
 });
 
 function fail(response: Response, body: unknown): never {
