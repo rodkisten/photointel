@@ -87,7 +87,7 @@ def normalize_entry(entry: dict[str, Any], correlation_id: str) -> dict[str, Any
         "error_code": _safe_text(payload.get("error_code"), _SAFE_CODE),
         "reason": reason,
         "method": payload.get("method") if payload.get("method") in _METHODS else None,
-        "route_group": payload.get("route_group") if payload.get("route_group") in {"/v1/*", "other"} else None,
+        "route_group": payload.get("route_group") if payload.get("route_group") in {"/v1/*", "/v1/jobs/reindex", "other"} else None,
         "exception_type": _safe_text(payload.get("exception_type"), _SAFE_TYPE),
         "job_type": _safe_text(payload.get("job_type"), _SAFE_EVENT),
         "job_id": canonical_id(payload.get("job_id")) if isinstance(payload.get("job_id"), str) else None,
