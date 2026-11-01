@@ -16,14 +16,19 @@ GATES = {
     "F": (
         "Importações acima de 1.000 fotos",
         [],
-        "Teste uma importação pequena e confira limites de capacidade e custos antes de autorizar a escala.",
+        "Teste uma importação pequena e confira capacidade e custos "
+        "antes de autorizar a escala.",
     ),
 }
 
 
 async def gate_status(session: AsyncSession) -> dict[str, Any]:
     release = get_release_manifest()
-    sha = release.get("git_sha") if release.get("provenance_status") == "identified" else None
+    sha = (
+        release.get("git_sha")
+        if release.get("provenance_status") == "identified"
+        else None
+    )
     rows = {
         row.id: row for row in (await session.scalars(select(VerificationGate))).all()
     }
@@ -33,7 +38,8 @@ async def gate_status(session: AsyncSession) -> dict[str, Any]:
         current = bool(row and sha and row.release_sha == sha)
         status = row.status if current and row else "not_verified"
         reason = (
-            "A autorização foi registrada para outra versão da API; confirme antes de iniciar uma nova operação grande."
+            "A autorização foi registrada para outra versão da API; "
+            "confirme antes de iniciar uma nova operação grande."
             if row and not current
             else requirement
         )
@@ -64,7 +70,8 @@ async def require_import_gates(session: AsyncSession, requested: int) -> None:
         return
     raise AppError(
         ErrorCode.VERIFICATION_REQUIRED,
-        "Para importar mais de 1.000 fotos, valide a autorização de escala em Preparação e validação. "
+        "Para importar mais de 1.000 fotos, valide a autorização "
+        "de escala em Preparação e validação. "
         "Lotes de até 1.000 fotos não exigem gates.",
         409,
         {
