@@ -2,7 +2,18 @@ name: "📱 WebKit"
 
 on:
   push:
-    branches: [validation/webkit]
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'infra/scripts/run-e2e.sh'
+      - 'infra/docker/**'
+      - 'infra/migrations/**'
+      - 'tests/**'
+      - 'packages/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/webkit-validation.yml'
   workflow_dispatch:
 
 permissions:

@@ -2,6 +2,12 @@ name: "📦 ZIP Patch"
 run-name: "📦 ZIP · ${{ inputs.zip_path }} · ${{ inputs.root_mode || 'auto' }}"
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'zip/**'
+      - 'infra/scripts/zip-patch-policy*.cjs'
+      - '.github/workflows/zip.yml'
   workflow_dispatch:
     inputs:
       zip_path:
@@ -35,7 +41,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  push-check:
+    name: "🧪 ZIP patch policy"
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node --test infra/scripts/zip-patch-policy.test.cjs
   apply-zip:
+    if: github.event_name == 'workflow_dispatch'
     name: "📦 Apply"
     runs-on: ubuntu-24.04
     timeout-minutes: 15

@@ -9,6 +9,10 @@ on:
       - 'apps/api/src/photointel/services/icloud_admin.py'
       - 'apps/api/src/photointel/services/runtime_settings.py'
       - '.github/workflows/icloud-validation.yml'
+      - 'infra/terminal/**'
+      - 'infra/gcp/icloud_*'
+      - 'apps/api/src/photointel/services/icloud_*'
+      - '.github/workflows/icloud-setup.yml'
   pull_request:
     paths:
       - 'infra/scripts/icloud_terminal.py'
@@ -17,6 +21,10 @@ on:
       - 'apps/api/src/photointel/services/icloud_admin.py'
       - 'apps/api/src/photointel/services/runtime_settings.py'
       - '.github/workflows/icloud-validation.yml'
+      - 'infra/terminal/**'
+      - 'infra/gcp/icloud_*'
+      - 'apps/api/src/photointel/services/icloud_*'
+      - '.github/workflows/icloud-setup.yml'
   workflow_dispatch:
 permissions:
   contents: read

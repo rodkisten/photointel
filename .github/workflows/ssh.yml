@@ -2,6 +2,14 @@ name: "🖥️ SSH"
 run-name: "🖥️ SSH · ${{ inputs.command || 'ssh' }}${{ inputs.command == 'ssh' && format(' · {0} min', inputs.session_minutes) || '' }}"
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/commit-session.sh'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'Makefile'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/ssh.yml'
   workflow_dispatch:
     inputs:
       command:
@@ -53,10 +61,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  push-check:
+    name: "🧪 SSH scripts (offline)"
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - run: |
+          bash -n scripts/commit-session.sh
+          make -n help > /dev/null
   development:
     name: "🖥️ Session"
     # Interactive SSH has access to production WIF; restrict to trusted main.
-    if: inputs.command != 'ssh' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && (inputs.command != 'ssh' || github.ref == 'refs/heads/main')
     environment: ${{ inputs.command == 'ssh' && 'production' || 'development' }}
     permissions:
       contents: write
