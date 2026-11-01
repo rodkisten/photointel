@@ -1,12 +1,12 @@
 # Notify! for PhotoIntel API jobs
 
-GitHub Actions uses \`.github/actions/notify\`; the Cloud Run API and workers use
-\`apps/api/src/photointel/services/job_notify.py\`.
+GitHub Actions uses `.github/actions/notify`; the Cloud Run API and workers use
+`apps/api/src/photointel/services/job_notify.py`.
 
 ## What arrives on the iPhone
 
 - One **Live Activity per batch** (or per standalone job), named after the actual
-  processing activity: e.g. \`PhotoIntel · Importação iCloud\`.
+  processing activity: e.g. `PhotoIntel · Importação iCloud`.
 - Events: **Enfileirado**, **Processando**, **Tentando novamente**, **Concluído**,
   **Falhou** or **Cancelado**.
 - Real progress as finished jobs / total jobs. The number of segments is capped
@@ -17,29 +17,29 @@ GitHub Actions uses \`.github/actions/notify\`; the Cloud Run API and workers us
 
 ## One-time Secret Manager setup
 
-The \`NOTIFY_DEVICE_ID\` and \`NOTIFY_TOKEN\` used by GitHub Actions are **not**
+The `NOTIFY_DEVICE_ID` and `NOTIFY_TOKEN` used by GitHub Actions are **not**
 automatically available to the API.
 
 1. Create two **distinct secrets** in Google Cloud Secret Manager, using your
-   existing Notify! device ID and token. For example, \`photointel-notify-device-id\`
-   and \`photointel-notify-token\`.
-2. Add pinned references under \`secrets\` in the existing \`GCP_CONFIG_ENV\` JSON
+   existing Notify! device ID and token. For example, `photointel-notify-device-id`
+   and `photointel-notify-token`.
+2. Add pinned references under `secrets` in the existing `GCP_CONFIG_ENV` JSON
    variable, without including secret values:
 
-\`\`\`json
+```json
 {
   "NOTIFY_DEVICE_ID": {"name": "photointel-notify-device-id", "version": "1"},
   "NOTIFY_TOKEN": {"name": "photointel-notify-token", "version": "1"}
 }
-\`\`\`
+```
 
-   The snippet contains **only the two new entries** for the existing \`secrets\`
+   The snippet contains **only the two new entries** for the existing `secrets`
    object. Do not replace the full deployment configuration with it.
 3. Run the operator-approved **Setup GCP apply** to grant the API/worker service
-   accounts \`secretmanager.secretAccessor\` on these references.
+   accounts `secretmanager.secretAccessor` on these references.
 4. Run the approved **Deploy release** process after checking database readiness.
 
-The deployment renderer enables \`NOTIFY_JOB_EVENTS_ENABLED=true\` only when
+The deployment renderer enables `NOTIFY_JOB_EVENTS_ENABLED=true` only when
 both references exist. Without them, no outbound Notify! calls are made.
 A configured secret reference with a missing version causes the guarded deploy
 to fail, instead of printing or exposing a secret.
