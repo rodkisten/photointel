@@ -177,6 +177,18 @@ def create_app() -> FastAPI:
                 for key in expired:
                     _requests.pop(key, None)
         response = await call_next(request)
+        if response.status_code >= 400:
+            # GCP Logs Explorer can always find the correlation ID of an API error.
+            # Never emit private URLs, query strings, request bodies or JWTs.
+            logger.warning(
+                "api_http_error",
+                extra={
+                    "correlation_id": request.state.correlation_id,
+                    "status_code": response.status_code,
+                    "method": request.method,
+                    "route_group": "/v1/*" if request.url.path.startswith("/v1/") else "other",
+                },
+            )
         response.headers["X-Correlation-ID"] = request.state.correlation_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
