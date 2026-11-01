@@ -23,6 +23,7 @@ export function JobsPage() {
   const [status, setStatus] = useState(''); const [cursor, setCursor] = useState('');
   const [job, setJob] = useState<Job | null>(null); const [reindex, setReindex] = useState(false);
   const [limit, setLimit] = useState(100); const [confirm, setConfirm] = useState(false);
+  const [batchError, setBatchError] = useState<Error | null>(null);
   const [kinds, setKinds] = useState(['duplicate_analysis', 'quality_analysis']);
   const [live, setLive] = useState(false);
   const client = useQueryClient(); const action = useAction();
@@ -70,7 +71,7 @@ export function JobsPage() {
   const counts = obj(stats.data?.job_counts);
   return <><PageHeader eyebrow="Operação contínua" title="Centro de processamento"
     description="Cada etapa persistida, com retomada segura e erros que podem ser inspecionados."
-    actions={<Button onClick={() => setReindex(true)}><Plus size={14} />Processar lote</Button>} />
+    actions={<Button onClick={() => { setBatchError(null); setReindex(true); }}><Plus size={14} />Processar lote</Button>} />
     <div className="metrics">{[
       ['Na fila', stats.data?.pending_processing], ['Em execução', counts.running ?? 0],
       ['Concluídos', counts.completed ?? 0], ['Falhas finais', counts.failed ?? 0],
@@ -165,10 +166,24 @@ export function JobsPage() {
         {limit > 100 && <label className="checkbox-field"><span>Confirmo reprocessar mais de 100 fotos</span>
           <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /></label>}
         <div className="notice"><Info size={14} />Estimativas e limites são verificados pelo servidor antes de criar os jobs.</div>
+        {batchError && <ErrorState error={batchError} />}
       </div><div className="form-actions"><Button variant="outline" onClick={() => setReindex(false)}>Cancelar</Button>
         <Button disabled={action.isPending || !kinds.length || limit < 1 || limit > 10000 || (limit > 100 && !confirm)}
-          onClick={async () => { await action.mutateAsync({ url:'/v1/jobs/reindex', body: {
-            limit, job_types:kinds, confirm_large_batch:confirm,
-          } }); setReindex(false); useUi.getState().notify('Lote criado na fila durável.'); }}>Criar lote</Button></div>
+          onClick={async () => {
+            setBatchError(null);
+            try {
+              await action.mutateAsync({ url:'/v1/jobs/reindex', body: {
+                limit, job_types:kinds, confirm_large_batch:confirm,
+              } });
+            } catch (error) {
+              // React Query already reports the precise ApiError to the toast.
+              // Swallow this handled rejection so window.unhandledrejection cannot
+              // overwrite it with a generic "Falha detectada" notification.
+              setBatchError(error instanceof Error ? error : new Error('Falha ao criar lote'));
+              return;
+            }
+            setReindex(false);
+            useUi.getState().notify('Lote criado na fila durável.');
+          }}>Criar lote</Button></div>
     </Dialog></>;
 }

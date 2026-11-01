@@ -32,6 +32,8 @@ function newId(): string {
 }
 
 export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnostic {
+  const previouslyReported = error instanceof Error ? diagnosed.get(error) : undefined;
+  if (previouslyReported) return previouslyReported;
   const api = error instanceof ApiError ? error : null;
   const name = error instanceof Error ? error.name : 'UnknownError';
   return {
@@ -90,9 +92,19 @@ function gcpLogsUrl(query: string): string {
     encodeURIComponent(query) + ';duration=P7D?project=photointel';
 }
 
+/** Copyable Logs Explorer query: avoids WebKit/in-app browsers dropping the
+ * semicolon URL parameters or trimming encoded parentheses on redirect. */
+export function diagnosticLogsQuery(incident: Diagnostic): string {
+  const id = UUID.test(incident.id) ? incident.id : '';
+  return ['resource.type="cloud_run_revision"',
+    'resource.labels.service_name="photointel-api"',
+    ...(id ? ['SEARCH("' + id + '")'] : ['severity>=WARNING']),
+  ].join('\n');
+}
+
 export function diagnosticLogsUrl(incident: Diagnostic): string {
   if (incident.source === 'gcp') {
-    return gcpLogsUrl('SEARCH("' + incident.id + '")');
+    return gcpLogsUrl(diagnosticLogsQuery(incident));
   }
   // Without an account ID, route to the official Workers page and let the
   // operator select PhotoIntel > Observability and filter correlation_id.

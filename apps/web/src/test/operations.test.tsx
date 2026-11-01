@@ -116,6 +116,43 @@ describe('persisted operations and navigation', () => {
     ));
   });
 
+  it('keeps a failed batch creation dialog open and shows the actual 409 cause', async () => {
+    const user = userEvent.setup();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetcher.mockImplementation(async (input) => {
+      const path = String(input);
+      if (path === '/v1/jobs/reindex') return Response.json({
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Nenhuma foto disponível para este lote',
+          details: { reason: 'NO_ELIGIBLE_ASSETS', requested_limit: 10 },
+          correlation_id: '0b465c4e-050d-4647-b939-90c85451d092',
+        },
+      }, { status: 409, headers: {
+        'X-Correlation-ID': '0b465c4e-050d-4647-b939-90c85451d092',
+        'X-PhotoIntel-Source': 'gcp',
+      } });
+      if (path.startsWith('/v1/jobs?')) return Response.json({ items: [], next_cursor: null });
+      if (path === '/v1/system/capabilities') return Response.json({
+        gpu_inference: { state: 'not_configured', reason: 'GPU desligada' },
+      });
+      return Response.json({ items: [], next_cursor: null });
+    });
+    mount();
+    await user.click(screen.getByRole('button', { name: 'Processar lote' }));
+    const dialog = screen.getByRole('dialog', { name: 'Processar um lote' });
+    await user.click(within(dialog).getByRole('button', { name: 'Criar lote' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Nenhuma foto disponível para este lote',
+    );
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('NO_ELIGIBLE_ASSETS');
+    expect(within(dialog).getByText('0b465c4e-050d-4647-b939-90c85451d092')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Copiar filtro do GCP' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Criar lote' })).toBeEnabled();
+    expect(useUi.getState().toast?.text).toContain('Nenhuma foto disponível');
+    errorSpy.mockRestore();
+  });
+
   it('opens the accessible mobile navigation and reaches a real page', async () => {
     const user = userEvent.setup();
     mount(<App />, '/albums');

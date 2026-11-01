@@ -77,6 +77,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(AppError)
     async def application_error(request: Request, exc: AppError) -> JSONResponse:
+        request.state.error_code = exc.code
         if exc.status_code >= 500:
             request.state.sentry_event_id = capture_exception(
                 exc, correlation_id=request.state.correlation_id,
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        request.state.error_code = "INTERNAL_ERROR"
         request.state.sentry_event_id = capture_exception(
             exc, correlation_id=request.state.correlation_id,
             error_code="INTERNAL_ERROR",
@@ -209,6 +211,8 @@ def create_app() -> FastAPI:
                 extra={
                     "correlation_id": request.state.correlation_id,
                     "status_code": response.status_code,
+                    "error_code": getattr(request.state, "error_code", None)
+                    or f"HTTP_{response.status_code}",
                     "method": request.method,
                     "route_group": "/v1/*" if request.url.path.startswith("/v1/") else "other",
                 },
