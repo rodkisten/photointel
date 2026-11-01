@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#090909" />
+  <title>PhotoIntel | Laboratório de design system</title>
+  <style>
+    @property --ui-contrast {
+      syntax: '<number>';
+      inherits: true;
+      initial-value: 1.22;
+    }
+    @property --ui-gray-tone {
+      syntax: '<percentage>';
+      inherits: true;
+      initial-value: 3.5%;
+    }
+
+    :root {
+      /* Tokens reais do design system do PhotoIntel. */
+      --ui-gray-tone: 3.7%;
+      --ui-contrast: 1.41;
+      --font-size-base: 1rem;
+      --text-6: calc(var(--font-size-base) * 6 / 16);
+      --text-8: calc(var(--font-size-base) * 8 / 16);
+      --text-9: calc(var(--font-size-base) * 9 / 16);
+      --text-10: calc(var(--font-size-base) * 10 / 16);
+      --text-11: calc(var(--font-size-base) * 11 / 16);
+      --text-12: calc(var(--font-size-base) * 12 / 16);
+      --text-13: calc(var(--font-size-base) * 13 / 16);
+      --text-14: calc(var(--font-size-base) * 14 / 16);
+      --text-15: calc(var(--font-size-base) * 15 / 16);
+      --text-16: calc(var(--font-size-base) * 16 / 16);
+      --text-17: calc(var(--font-size-base) * 17 / 16);
+      --text-18: calc(var(--font-size-base) * 18 / 16);
+      --text-20: calc(var(--font-size-base) * 20 / 16);
+      --text-23: calc(var(--font-size-base) * 23 / 16);
+      --text-24: calc(var(--font-size-base) * 24 / 16);
+      --text-25: calc(var(--font-size-base) * 25 / 16);
+      --text-26: calc(var(--font-size-base) * 26 / 16);
+      --text-27: calc(var(--font-size-base) * 27 / 16);
+      --text-30: calc(var(--font-size-base) * 30 / 16);
+      --text-31: calc(var(--font-size-base) * 31 / 16);
+      --text-33: calc(var(--font-size-base) * 33 / 16);
+      --text-36: calc(var(--font-size-base) * 36 / 16);
+      --text-53: calc(var(--font-size-base) * 53 / 16);
+      --gray-0: hsl(0 0% var(--ui-gray-tone));
+      --gray-1: hsl(0 0% calc(var(--ui-gray-tone) + 1% * var(--ui-contrast)));
+      --gray-2: hsl(0 0% calc(var(--ui-gray-tone) + 2.8% * var(--ui-contrast)));
+      --gray-3: hsl(0 0% calc(var(--ui-gray-tone) + 4.2% * var(--ui-contrast)));
+      --gray-4: hsl(0 0% calc(var(--ui-gray-tone) + 5.7% * var(--ui-contrast)));
+      --gray-5: hsl(0 0% calc(var(--ui-gray-tone) + 7.6% * var(--ui-contrast)));
+      --gray-6: hsl(0 0% calc(var(--ui-gray-tone) + 10% * var(--ui-contrast)));
+      --gray-7: hsl(0 0% calc(var(--ui-gray-tone) + 12.5% * var(--ui-contrast)));
+      --gray-8: hsl(0 0% calc(var(--ui-gray-tone) + 15.5% * var(--ui-contrast)));
+      --gray-9: hsl(0 0% calc(var(--ui-gray-tone) + 18.5% * var(--ui-contrast)));
+      --gray-10: hsl(0 0% calc(var(--ui-gray-tone) + 23% * var(--ui-contrast)));
+      --gray-11: hsl(0 0% calc(var(--ui-gray-tone) + 29% * var(--ui-contrast)));
+      --gray-12: hsl(0 0% calc(var(--ui-gray-tone) + 38% * var(--ui-contrast)));
+      --gray-13: hsl(0 0% calc(var(--ui-gray-tone) + 48% * var(--ui-contrast)));
+      --gray-14: hsl(0 0% calc(var(--ui-gray-tone) + 60% * var(--ui-contrast)));
+      --gray-15: hsl(0 0% calc(var(--ui-gray-tone) + 68% * var(--ui-contrast)));
+      --gray-16: hsl(0 0% calc(var(--ui-gray-tone) + 75% * var(--ui-contrast)));
+      --gray-17: hsl(0 0% calc(var(--ui-gray-tone) + 80% * var(--ui-contrast)));
+      --surface-base: var(--gray-0);
+      --surface-sidebar: var(--gray-1);
+      --surface-field: var(--gray-2);
+      --surface-panel: var(--gray-3);
+      --surface-card: var(--gray-4);
+      --surface-raised: var(--gray-5);
+      --surface-hover: var(--gray-7);
+      --surface-active: var(--gray-8);
+      --border-subtle: var(--gray-6);
+      --border-default: var(--gray-8);
+      --border-strong: var(--gray-10);
+      --border-focus: var(--gray-15);
+      --text-primary: var(--gray-16);
+      --text-secondary: var(--gray-14);
+      --text-muted: var(--gray-13);
+      --text-faint: var(--gray-12);
+      --text-inverse: var(--gray-1);
+      --accent-primary: var(--gray-17);
+      --accent-contrast: var(--gray-0);
+      --danger-text: #e8aeb4;
+      --danger-bg: #302023;
+      --danger-border: #76505a;
+      --warning-text: #dcc8a0;
+      --warning-bg: #30291e;
+      --warning-border: #6d583a;
+      --progress-text: #d5cdac;
+      --progress-bg: #302d23;
+      --progress-border: #635a42;
+      --radius: 10px;
+      --radius-lg: 16px;
+      color-scheme: dark;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--surface-base);
+      color: var(--text-primary);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { min-width: 320px; margin: 0; background: var(--surface-base); color: var(--text-primary); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; }
+    h1,h2,h3,h4,p { margin: 0; }
+    svg { display: block; }
+    .icon { width: 17px; height: 17px; flex: none; }
+    .app { max-width: 1700px; padding: 38px clamp(16px, 3.2vw, 52px) 80px; margin: auto; }
+    .app-header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 38px; }
+    .identity { display: flex; align-items: center; gap: 12px; }
+    .identity-mark { width: 40px; height: 40px; border: 1px solid var(--border-default); border-radius: 12px; background: var(--accent-primary); color: var(--accent-contrast); display: grid; place-items: center; font-weight: 850; font-size: var(--text-16); letter-spacing: -1px; }
+    .identity-name { font-size: var(--text-14); font-weight: 680; letter-spacing: -.35px; }
+    .identity-sub { font-size: var(--text-10); margin-top: 4px; color: var(--text-muted); letter-spacing: 1.4px; text-transform: uppercase; }
+    .header-pill { border: 1px solid var(--border-default); color: var(--text-secondary); background: var(--surface-panel); border-radius: 100px; padding: 8px 11px; font-size: var(--text-11); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .header-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
+    .intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; margin-bottom: 32px; }
+    .overline { font-size: var(--text-10); font-weight: 680; text-transform: uppercase; letter-spacing: 2.2px; color: var(--text-muted); margin-bottom: 13px; }
+    .intro h1 { font-size: clamp(var(--text-31), 4.4vw, var(--text-53)); font-weight: 650; line-height: 1.08; letter-spacing: -.055em; }
+    @supports (font-size: calc(3vw * (18px / 16px))) {
+      .intro h1 {
+        font-size: clamp(var(--text-31), calc(4.4vw * (var(--font-size-base) / 1rem)), var(--text-53));
+      }
+    }
+    .intro p { color: var(--text-muted); line-height: 1.65; font-size: var(--text-13); max-width: 600px; margin-top: 16px; }
+    .intro .formula { border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: 10px; padding: 10px 13px; color: var(--text-secondary); font-size: var(--text-11); white-space: nowrap; }
+    .formula code { color: var(--text-primary); }
+    .workbench { display: grid; grid-template-columns: minmax(280px, 332px) minmax(0, 1fr); align-items: start; gap: 23px; }
+    .editor { position: sticky; top: 20px; display: grid; gap: 16px; }
+    .module { border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: var(--radius-lg); padding: 21px; min-width: 0; }
+    .module-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 21px; }
+    .module-title { font-size: var(--text-13); font-weight: 650; letter-spacing: -.25px; }
+    .module-sub { font-size: var(--text-11); color: var(--text-muted); margin-top: 6px; line-height: 1.55; }
+    .mini-label { font-size: var(--text-10); color: var(--text-faint); text-transform: uppercase; letter-spacing: 1.3px; }
+    .control { display: grid; gap: 12px; margin-bottom: 26px; }
+    .control:last-of-type { margin-bottom: 0; }
+    .control-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .control-head label { font-size: var(--text-12); font-weight: 600; }
+    .control-head output { font-size: var(--text-11); font-variant-numeric: tabular-nums; color: var(--text-primary); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 8px; min-width: 64px; text-align: center; }
+    .range-row { display: flex; gap: 10px; align-items: center; }
+    input[type="range"] { width: 100%; appearance: none; -webkit-appearance: none; height: 5px; border-radius: 10px; background: linear-gradient(to right, var(--text-secondary) 0 var(--percent), var(--gray-8) var(--percent) 100%); cursor: pointer; }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; background: var(--text-primary); border: 3px solid var(--surface-panel); box-shadow: 0 0 0 1px var(--text-primary); width: 16px; height: 16px; border-radius: 50%; }
+    input[type="range"]::-moz-range-thumb { background: var(--text-primary); border: 3px solid var(--surface-panel); box-shadow: 0 0 0 1px var(--text-primary); width: 12px; height: 12px; border-radius: 50%; }
+    .range-hints { display: flex; justify-content: space-between; color: var(--text-faint); font-size: var(--text-10); }
+    .control-desc { font-size: var(--text-11); line-height: 1.55; color: var(--text-muted); }
+    .divider { height: 1px; background: var(--border-default); margin: 21px 0; }
+    .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .preset { border: 1px solid var(--border-default); padding: 10px; background: var(--surface-card); border-radius: 8px; color: var(--text-secondary); text-align: left; font-size: var(--text-11); display: flex; flex-direction: column; gap: 7px; }
+    .preset:hover { background: var(--surface-hover); }
+    .preset[aria-pressed="true"] { border-color: var(--text-secondary); background: var(--surface-active); color: var(--text-primary); }
+    .preset strong { font-size: var(--text-11); font-weight: 650; }
+    .preset small { color: var(--text-muted); font-size: var(--text-10); }
+    .mini-palette { display: flex; gap: 3px; }
+    .mini-palette span { width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgb(255 255 255 / 5%); }
+    .actions { display: flex; gap: 7px; margin-top: 18px; }
+    .action { min-height: 37px; display: inline-flex; justify-content: center; align-items: center; gap: 8px; padding: 0 12px; background: var(--surface-raised); color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: 8px; font-size: var(--text-11); font-weight: 620; }
+    .action:hover { background: var(--surface-hover); }
+    .action.primary { background: var(--accent-primary); color: var(--accent-contrast); border-color: var(--accent-primary); flex: 1; }
+    .action.primary:hover { background: var(--gray-15); }
+    .value-code { margin-top: 14px; font-size: var(--text-11); line-height: 1.9; color: var(--text-muted); background: var(--surface-field); padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; overflow-x: auto; }
+    .value-code .token { color: var(--text-primary); }
+    .editor-note { font-size: var(--text-11); line-height: 1.6; color: var(--text-muted); border-left: 2px solid var(--border-strong); padding-left: 12px; }
+    .results { min-width: 0; display: grid; gap: 20px; }
+    .result-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .result-header h2 { font-size: var(--text-14); font-weight: 650; }
+    .result-header p { font-size: var(--text-11); color: var(--text-muted); margin-top: 5px; }
+    .segmented { border: 1px solid var(--border-default); background: var(--surface-panel); display: flex; gap: 2px; padding: 3px; border-radius: 9px; }
+    .segmented button { font-size: var(--text-11); color: var(--text-muted); border: 0; border-radius: 6px; padding: 8px 11px; background: transparent; display: inline-flex; align-items: center; gap: 7px; }
+    .segmented button[aria-pressed="true"] { background: var(--surface-active); color: var(--text-primary); }
+    .preview-area { padding: clamp(13px, 2vw, 24px); background: var(--gray-1); border: 1px solid var(--border-default); border-radius: var(--radius-lg); min-width: 0; }
+    .preview-scroller { min-width: 0; display: flex; justify-content: center; overflow-x: auto; scrollbar-width: thin; }
+    .mockup { container: preview / inline-size; width: 100%; min-width: 290px; max-width: 100%; border: 1px solid var(--border-default); background: var(--surface-base); border-radius: 11px; overflow: hidden; display: grid; grid-template-columns: 170px minmax(0,1fr); min-height: 510px; transition: width .25s ease, max-width .25s ease; }
+    .mockup.mobile-preview { width: 390px; max-width: 100%; grid-template-columns: minmax(0,1fr); min-height: 595px; }
+    .mock-sidebar { min-width: 0; padding: 19px 11px; border-right: 1px solid var(--border-subtle); background: var(--surface-sidebar); display: flex; flex-direction: column; gap: 6px; }
+    .mock-brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 24px; font-size: var(--text-12); font-weight: 650; }
+    .mock-brand-mark { width: 23px; height: 23px; flex: none; background: var(--accent-primary); color: var(--accent-contrast); border-radius: 6px; display: grid; place-items: center; font-size: var(--text-9); font-weight: 800; }
+    .mock-nav { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px; border-radius: 6px; color: var(--text-muted); font-size: var(--text-11); }
+    .mock-nav.selected { background: var(--surface-active); color: var(--text-primary); }
+    .mock-nav svg { width: 14px; height: 14px; }
+    .mock-sidebar-footer { margin-top: auto; border-top: 1px solid var(--border-subtle); padding: 18px 9px 0; font-size: var(--text-10); color: var(--text-faint); }
+    .mock-main { min-width: 0; display: flex; flex-direction: column; }
+    .mock-topbar { height: 49px; padding: 0 21px; display: flex; align-items: center; justify-content: space-between; gap: 9px; border-bottom: 1px solid var(--border-subtle); color: var(--text-faint); font-size: var(--text-10); }
+    .mock-topbar strong { color: var(--text-secondary); font-weight: 580; }
+    .online { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+    .online i { width: 6px; height: 6px; border-radius: 100%; background: var(--gray-15); }
+    .mock-content { padding: 24px; display: grid; align-content: start; gap: 17px; }
+    .mock-eyebrow { text-transform: uppercase; font-size: var(--text-9); letter-spacing: 1.6px; color: var(--text-faint); margin-bottom: 8px; }
+    .mock-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    .mock-page-heading h3 { font-size: var(--text-23); letter-spacing: -.9px; font-weight: 570; }
+    .mock-description { color: var(--text-muted); font-size: var(--text-10); margin-top: 6px; line-height: 1.5; }
+    .mock-button { background: var(--accent-primary); color: var(--accent-contrast); border: 1px solid var(--accent-primary); border-radius: 6px; height: 31px; padding: 0 11px; white-space: nowrap; font-size: var(--text-10); font-weight: 650; }
+    .mock-button.secondary { background: var(--surface-raised); color: var(--text-secondary); border-color: var(--border-default); }
+    .mock-button:hover { filter: brightness(1.1); }
+    .mock-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 11px; }
+    .mock-metric { min-width: 0; padding: 15px; background: var(--surface-card); border: 1px solid var(--border-default); border-radius: 8px; }
+    .mock-metric .label { display: block; font-size: var(--text-10); color: var(--text-muted); margin-bottom: 14px; }
+    .mock-metric strong { font-size: var(--text-25); font-weight: 520; line-height: 1; letter-spacing: -1px; }
+    .mock-metric .caption { display: block; font-size: var(--text-9); color: var(--text-faint); margin-top: 10px; }
+    .mock-columns { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0, 1fr); gap: 11px; }
+    .mock-panel { min-width: 0; border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: 9px; padding: 15px; }
+    .mock-panel h4 { font-size: var(--text-12); font-weight: 630; margin-bottom: 13px; }
+    .mock-label { display: block; font-size: var(--text-10); color: var(--text-muted); margin-bottom: 6px; }
+    .mock-field { width: 100%; min-width: 0; border: 1px solid var(--border-default); border-radius: 6px; height: 34px; padding: 0 10px; background: var(--surface-field); color: var(--text-secondary); font-size: var(--text-12); }
+    .mock-controls { margin-top: 12px; display: flex; gap: 7px; flex-wrap: wrap; }
+    .mock-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); font-size: var(--text-10); }
+    .mock-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .mock-row:first-child { padding-top: 0; }
+    .mock-row span:first-child { min-width: 0; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; }
+    .status { white-space: nowrap; padding: 5px 7px; border: 1px solid var(--border-strong); border-radius: 5px; font-size: var(--text-9); color: var(--text-secondary); background: var(--surface-raised); }
+    .status.running { background: var(--progress-bg); border-color: var(--progress-border); color: var(--progress-text); }
+    .status.failed { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+    .mock-progress { margin-top: 10px; height: 4px; border-radius: 10px; overflow: hidden; background: var(--gray-8); }
+    .mock-progress > span { height: 100%; width: 63%; display: block; border-radius: 10px; background: var(--gray-16); }
+    .mock-footer { display: flex; gap: 10px; align-items: center; font-size: var(--text-10); color: var(--text-muted); }
+    .mock-dot { height: 7px; width: 7px; background: var(--gray-15); border-radius: 50%; }
+    .mock-drawer { margin-top: auto; border-top: 1px solid var(--border-strong); background: var(--surface-raised); padding: 11px 17px; display: flex; align-items: center; gap: 12px; font-size: var(--text-10); }
+    .mock-drawer strong { font-size: var(--text-11); font-weight: 600; }
+    .mock-drawer .drawer-desc { margin-top: 5px; color: var(--text-muted); }
+    .mock-drawer .mock-progress { margin-top: 6px; width: 100%; }
+    .mock-drawer .drawer-center { min-width: 0; flex: 1; }
+    .mock-drawer .percent { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .mock-bottom-nav { display: none; }
+    .mobile-preview .mock-sidebar { display: none; }
+    .mobile-preview .mock-topbar { height: 52px; }
+    .mobile-preview .mock-content { padding: 19px 15px; gap: 13px; }
+    .mobile-preview .mock-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .mobile-preview .mock-columns { grid-template-columns: minmax(0,1fr); }
+    .mobile-preview .mock-metric { padding: 12px; }
+    .mobile-preview .mock-bottom-nav { display: flex; justify-content: space-around; padding: 10px; border-top: 1px solid var(--border-default); background: var(--surface-sidebar); }
+    .mobile-preview .mock-bottom-nav span { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: var(--text-9); color: var(--text-muted); }
+    .mobile-preview .mock-bottom-nav span.active { color: var(--text-primary); }
+    .mobile-preview .mock-bottom-nav svg { width: 15px; height: 15px; }
+    @container preview (width < 690px) {
+      .mock-metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .mock-columns { grid-template-columns: minmax(0,1fr); }
+      .mock-content { padding: 16px; }
+    }
+    @container preview (width < 465px) {
+      .mock-sidebar { display: none; }
+      .mockup:not(.mobile-preview) { grid-template-columns: minmax(0,1fr); }
+    }
+    .typography-section { border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: var(--radius-lg); padding: 20px; }
+    .type-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+    .type-item { border: 1px solid var(--border-subtle); background: var(--surface-card); padding: 12px; border-radius: 8px; min-width: 0; overflow: hidden; }
+    .type-sample { min-height: 45px; display: flex; align-items: center; overflow: hidden; line-height: 1.2; font-weight: 540; white-space: nowrap; text-overflow: ellipsis; }
+    .type-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px; color: var(--text-muted); font-size: var(--text-10); margin-top: 8px; }
+    .type-meta code { color: var(--text-secondary); }
+    @container preview (width < 600px) { .mock-page-heading h3 { font-size: var(--text-20); } }
+    .palette-section, .semantic-section { border: 1px solid var(--border-default); background: var(--surface-panel); border-radius: var(--radius-lg); padding: 20px; }
+    .palette-intro { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .palette-intro h2 { font-size: var(--text-13); font-weight: 650; }
+    .palette-intro span { color: var(--text-muted); font-size: var(--text-10); }
+    .palette-grid { display: grid; grid-template-columns: repeat(9,minmax(0,1fr)); gap: 7px; }
+    .swatch { min-width: 0; position: relative; }
+    .swatch-color { aspect-ratio: 1.08; min-height: 36px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--gray-17) 12%, transparent); position: relative; }
+    .swatch-color button { position: absolute; inset: 0; border: 0; background: transparent; width: 100%; cursor: copy; }
+    .swatch-index { font-size: var(--text-10); color: var(--text-secondary); padding-top: 7px; }
+    .swatch-hex { color: var(--text-muted); font-size: var(--text-9); margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .semantic-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+    .semantic { min-width: 0; display: flex; gap: 10px; align-items: center; background: var(--surface-card); padding: 8px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+    .semantic-chip { width: 28px; height: 28px; border-radius: 6px; flex: none; border: 1px solid color-mix(in srgb, var(--gray-17) 15%, transparent); }
+    .semantic-name { color: var(--text-secondary); font-size: var(--text-9); overflow-wrap: anywhere; }
+    .semantic-hex { font-size: var(--text-10); margin-top: 3px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .contrast-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; margin-top: 18px; }
+    .contrast-item { border: 1px solid var(--border-default); border-radius: 9px; padding: 12px; background: var(--surface-card); }
+    .contrast-item label { font-size: var(--text-10); color: var(--text-muted); display: block; margin-bottom: 11px; }
+    .contrast-score { font-size: var(--text-23); font-weight: 650; letter-spacing: -.75px; font-variant-numeric: tabular-nums; }
+    .contrast-rating { display: block; margin-top: 7px; font-size: var(--text-9); color: var(--text-secondary); }
+    .contrast-rating.pass { color: var(--text-primary); }
+    .note { color: var(--text-muted); font-size: var(--text-10); line-height: 1.65; margin-top: 13px; }
+    .footer { margin: 32px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: var(--text-faint); font-size: var(--text-11); }
+    .footer a { color: var(--text-secondary); }
+    .toast { position: fixed; left: 50%; bottom: 22px; z-index: 5; transform: translateX(-50%) translateY(10px); background: var(--gray-10); color: var(--text-primary); border: 1px solid var(--border-strong); padding: 10px 14px; border-radius: 9px; box-shadow: 0 15px 30px rgb(0 0 0 / 40%); font-size: var(--text-11); white-space: nowrap; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; }
+    .toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+    @media (max-width: 1070px) {
+      .workbench { grid-template-columns: minmax(0,1fr); }
+      .editor { position: static; display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+      .editor-note { grid-column: 1 / -1; }
+    }
+    @media (max-width: 680px) {
+      .app { padding-top: 22px; }
+      .app-header { margin-bottom: 30px; }
+      .header-pill { display: none; }
+      .intro { margin-bottom: 25px; }
+      .intro .formula { display: none; }
+      .editor { grid-template-columns: minmax(0,1fr); }
+      .editor-note { grid-column: auto; }
+      .palette-grid { grid-template-columns: repeat(6,minmax(0,1fr)); }
+      .type-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .semantic-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .contrast-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+      .contrast-score { font-size: var(--text-18); }
+      .mock-sidebar { display: none; }
+      .mockup { grid-template-columns: minmax(0,1fr); }
+      .footer { flex-direction: column; align-items: flex-start; gap: 7px; }
+    }
+    @media (max-width: 390px) {
+      .palette-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+      .semantic-grid { grid-template-columns: minmax(0,1fr); }
+      .contrast-grid { grid-template-columns: minmax(0,1fr); }
+      .mock-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <div class="identity">
+        <div class="identity-mark" aria-hidden="true">P/</div>
+        <div><div class="identity-name">PhotoIntel</div><div class="identity-sub">Design system lab</div></div>
+      </div>
+      <span class="header-pill"><i aria-hidden="true"></i> Preview em tempo real <span aria-hidden="true">·</span> 100% local</span>
+    </header>
+
+    <section class="intro" aria-labelledby="main-title">
+      <div>
+        <div class="overline">Tema monocromático · Laboratório</div>
+        <h1 id="main-title">Encontre o seu<br />tom de preto.</h1>
+        <p>Ajuste a tonalidade, o contraste e o tamanho base da fonte. Toda a paleta e a tipografia acompanham seus ajustes em tempo real, sem dependências externas.</p>
+      </div>
+      <div class="formula"><code>gray[n] = tom + offset[n] × contraste</code></div>
+    </section>
+
+    <div class="workbench">
+      <aside class="editor" aria-label="Editor do tema">
+        <div class="module">
+          <div class="module-head">
+            <div><h2 class="module-title">Parâmetros</h2><p class="module-sub">Cores e tipografia calculadas a partir de três valores.</p></div>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 7h16M7 4v6M4 17h16m-7-3v6" /></svg>
+          </div>
+          <div class="control">
+            <div class="control-head"><label for="tone">Tom base de cinza</label><output id="toneValue" for="tone">3,7%</output></div>
+            <div class="range-row"><input type="range" min="0" max="15" step="0.1" value="3.7" id="tone" aria-describedby="toneHelp" /></div>
+            <div class="range-hints"><span>0% · Preto puro</span><span>15% · Grafite</span></div>
+            <p class="control-desc" id="toneHelp">Controla a luminosidade da superfície mais escura, <code>--gray-0</code>.</p>
+          </div>
+          <div class="control">
+            <div class="control-head"><label for="contrast">Intensidade de contraste</label><output id="contrastValue" for="contrast">1,41×</output></div>
+            <div class="range-row"><input type="range" min="0.7" max="1.65" step="0.01" value="1.41" id="contrast" aria-describedby="contrastHelp" /></div>
+            <div class="range-hints"><span>0,70× · Suave</span><span>1,65× · Forte</span></div>
+            <p class="control-desc" id="contrastHelp">Multiplica a distância entre os tons. Valores altos iluminam textos e acentuam bordas.</p>
+          </div>
+          <div class="divider"></div>
+          <div class="control">
+            <div class="control-head"><label for="fontBase">Tamanho base da fonte</label><output id="fontBaseValue" for="fontBase">16px</output></div>
+            <div class="range-row"><input type="range" min="12" max="22" step="0.25" value="16" id="fontBase" aria-describedby="fontHelp" /></div>
+            <div class="range-hints"><span>12px · Compacto</span><span>22px · Maior</span></div>
+            <p class="control-desc" id="fontHelp">Todos os tamanhos seguem a fórmula <code>base × tamanho original ÷ 16</code>. Em 16px, a interface mantém exatamente as fontes atuais.</p>
+          </div>
+          <div class="module-head" style="margin-bottom:13px"><div><h2 class="module-title">Presets</h2><p class="module-sub">Pontos de partida para explorar.</p></div></div>
+          <div class="presets" id="presets"></div>
+          <div class="actions">
+            <button class="action primary" type="button" id="copyCss">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+              Copiar CSS
+            </button>
+            <button class="action" type="button" id="resetTheme">Restaurar</button>
+          </div>
+          <pre class="value-code"><code><span class="token">--ui-gray-tone:</span> <span id="codeTone">3.7%</span>;
+<span class="token">--ui-contrast:</span> <span id="codeContrast">1.41</span>;
+<span class="token">--font-size-base:</span> <span id="codeFontBase">16px</span>;</code></pre>
+        </div>
+        <div class="module">
+          <div class="module-head"><div><h2 class="module-title">Exportação</h2><p class="module-sub">Use no <code>design-system.css</code> do PhotoIntel.</p></div></div>
+          <button class="action" type="button" id="downloadCss" style="width:100%;justify-content:center">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v3h16v-3"/></svg>
+            Baixar variáveis .css
+          </button>
+          <p class="note">O CSS exportado contém as três variáveis ajustáveis. Todo o restante continua sendo calculado pelo design system.</p>
+        </div>
+        <p class="editor-note">As cores de status (erro, atenção e processamento) são deliberadamente independentes da escala cinza, para preservar seu significado.</p>
+      </aside>
+
+      <main class="results">
+        <section aria-labelledby="preview-title">
+          <div class="result-header" style="margin-bottom:13px">
+            <div><h2 id="preview-title">Preview da interface</h2><p>Painéis, sidebar, botões, campos, status e jobs usando os tokens reais.</p></div>
+            <div class="segmented" role="group" aria-label="Formato do preview">
+              <button type="button" id="desktopBtn" aria-pressed="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8m-4-3v3"/></svg> Desktop</button>
+              <button type="button" id="mobileBtn" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg> iPhone</button>
+            </div>
+          </div>
+          <div class="preview-area"><div class="preview-scroller">
+            <div class="mockup" id="mockup">
+              <nav class="mock-sidebar" aria-label="Exemplo de navegação">
+                <div class="mock-brand"><span class="mock-brand-mark">P/</span> PhotoIntel</div>
+                <div class="mock-nav selected"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Visão geral</div>
+                <div class="mock-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="m21 15-5-5-10 11"/></svg> Galeria</div>
+                <div class="mock-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> Pesquisas</div>
+                <div class="mock-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18M7 3v18M17 3v18M3 17h18"/></svg> Processamento</div>
+                <div class="mock-sidebar-footer">photo intelligence<br />cloud v1.1</div>
+              </nav>
+              <div class="mock-main">
+                <div class="mock-topbar"><div>Workspace <span style="padding:0 7px">/</span> <strong>Visão geral</strong></div><div class="online"><i></i> Conectado</div></div>
+                <div class="mock-content">
+                  <div class="mock-page-heading"><div><div class="mock-eyebrow">Dashboard</div><h3>Visão geral</h3><p class="mock-description">Sua biblioteca em um só lugar.</p></div><button class="mock-button" type="button">+ Novo job</button></div>
+                  <div class="mock-metrics">
+                    <div class="mock-metric"><span class="label">Total de fotos</span><strong>149,8k</strong><span class="caption">Biblioteca sincronizada</span></div>
+                    <div class="mock-metric"><span class="label">Processadas</span><strong>82,4k</strong><span class="caption">55% da biblioteca</span></div>
+                    <div class="mock-metric"><span class="label">Jobs ativos</span><strong>03</strong><span class="caption">2 na fila · 1 rodando</span></div>
+                  </div>
+                  <div class="mock-columns">
+                    <div class="mock-panel"><h4>Buscar fotos</h4><label class="mock-label" for="exampleSearch">Busca semântica</label><input id="exampleSearch" class="mock-field" type="text" placeholder="Ex: praia ao pôr do sol" /><div class="mock-controls"><button class="mock-button" type="button">Pesquisar</button><button class="mock-button secondary" type="button">Filtros</button></div></div>
+                    <div class="mock-panel"><h4>Serviços</h4><div class="mock-row"><span>API de processamento</span><span class="status">Operacional</span></div><div class="mock-row"><span>iCloud Sync</span><span class="status running">Rodando</span></div><div class="mock-row"><span>Último deploy</span><span class="status failed">Falhou</span></div></div>
+                  </div>
+                  <div class="mock-panel"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><h4 style="margin:0">Processamento recente</h4><span class="status running">Em andamento</span></div><div style="display:flex;justify-content:space-between;gap:8px;margin-top:18px;font-size: var(--text-10)"><span style="color:var(--text-secondary)">Gerando embeddings</span><span style="color:var(--text-muted)">63%</span></div><div class="mock-progress"><span></span></div><div class="mock-footer" style="margin-top:12px"><span class="mock-dot"></span> <span>1.264 de 2.000 imagens processadas</span></div></div>
+                </div>
+                <div class="mock-drawer"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><div class="drawer-center"><strong>3 jobs em andamento</strong><div class="drawer-desc">Embedding · 1 de 3 executando</div><div class="mock-progress"><span></span></div></div><span class="percent">63%</span></div>
+                <div class="mock-bottom-nav"><span class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Home</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="m21 15-5-5-10 11"/></svg>Fotos</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18M7 3v18M17 3v18M3 17h18"/></svg>Jobs</span></div>
+              </div>
+            </div>
+          </div></div>
+        </section>
+        <section class="typography-section" aria-labelledby="typography-title">
+          <div class="palette-intro"><h2 id="typography-title">Escala tipográfica calculada <span>/ 20 tamanhos</span></h2><span>Fonte base <strong id="fontBaseSummary">16px</strong></span></div>
+          <div id="typographyScale" class="type-grid"></div>
+          <p class="note">Amostras reais usando as mesmas CSS custom properties do projeto. Entradas do iPhone continuam respeitando o mínimo de 16px para evitar zoom automático no foco.</p>
+        </section>
+        <section class="palette-section" aria-labelledby="palette-title"><div class="palette-intro"><h2 id="palette-title">Escala calculada <span style="color:var(--text-faint)">/ 18 tons</span></h2><span>Clique em uma cor para copiar o HEX</span></div><div id="palette" class="palette-grid"></div></section>
+        <section class="semantic-section" aria-labelledby="semantic-title">
+          <div class="palette-intro"><h2 id="semantic-title">Tokens semânticos</h2><span>Superfícies, texto e bordas</span></div>
+          <div id="semantics" class="semantic-grid"></div>
+          <div class="divider"></div>
+          <div class="palette-intro"><h2>Contraste de texto</h2><span>WCAG 2.2 · sobre painéis</span></div>
+          <div class="contrast-grid" id="contrastScores"></div>
+          <p class="note">Os índices são calculados a partir das cores RGB da escala neutra. Referências: AA normal ≥ 4,5:1, AA para texto grande ≥ 3:1 e AAA normal ≥ 7:1.</p>
+        </section>
+      </main>
+    </div>
+    <footer class="footer"><span>PhotoIntel Design System · arquivo independente · sem CDN, sem servidor, sem conexão</span><span>CSS custom properties · @property · container queries</span></footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    (() => {
+      'use strict';
+      const OFFSETS = [0,1,2.8,4.2,5.7,7.6,10,12.5,15.5,18.5,23,29,38,48,60,68,75,80];
+      const PRESETS = [
+        { name: 'Carbono', sub: 'Preto mais profundo', tone: 1.5, contrast: 1.2 },
+        { name: 'PhotoIntel', sub: 'Padrão atual', tone: 3.7, contrast: 1.41 },
+        { name: 'Grafite', sub: 'Superfícies mais claras', tone: 7, contrast: 1.1 },
+        { name: 'Alto contraste', sub: 'Separação mais forte', tone: 2, contrast: 1.5 }
+      ];
+      const SEMANTICS = [
+        ['Background',0], ['Sidebar',1], ['Input',2], ['Panel',3],
+        ['Card',4], ['Raised',5], ['Border',8], ['Border strong',10],
+        ['Text faint',12], ['Text muted',13], ['Text secondary',14], ['Text primary',16]
+      ];
+      const $ = (id) => document.getElementById(id);
+      const root = document.documentElement;
+      const toneEl = $('tone');
+      const contrastEl = $('contrast');
+      const fontBaseEl = $('fontBase');
+      const FONT_STEPS = [6,8,9,10,11,12,13,14,15,16,17,18,20,24,25,26,27,30,33,36];
+      const clamp = (v,min,max) => Math.max(min, Math.min(max,v));
+      let toastTimer;
+      const fmt = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
+      const toneValue = (tone, contrast, offset) => clamp(tone + offset * contrast, 0, 100);
+      const hexFromLevel = (level) => {
+        const n = Math.round(clamp(level,0,100) * 2.55).toString(16).padStart(2,'0').toUpperCase();
+        return '#' + n.repeat(3);
+      };
+      const luminance = (level) => {
+        const v = clamp(level,0,100) / 100;
+        return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055,2.4);
+      };
+      const wcag = (l1,l2) => {
+        const a = luminance(l1), b = luminance(l2);
+        return (Math.max(a,b)+.05) / (Math.min(a,b)+.05);
+      };
+      function showToast(message) {
+        const el = $('toast');
+        el.textContent = message;
+        el.classList.add('visible');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('visible'), 2300);
+      }
+      async function copy(text, message) {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const field = document.createElement('textarea');
+            field.value = text;
+            field.setAttribute('readonly', '');
+            field.style.position = 'fixed';
+            field.style.opacity = '0';
+            document.body.appendChild(field);
+            field.select();
+            const success = document.execCommand('copy');
+            field.remove();
+            if (!success) throw new Error('Copy unavailable');
+          }
+          showToast(message);
+        } catch {
+          showToast('Cópia indisponível neste navegador. Use o código exibido.');
+        }
+      }
+      function setView(isMobile) {
+        $('mockup').classList.toggle('mobile-preview', isMobile);
+        $('desktopBtn').setAttribute('aria-pressed', String(!isMobile));
+        $('mobileBtn').setAttribute('aria-pressed', String(isMobile));
+      }
+      function drawPresets(tone, contrast) {
+        const wrap = $('presets');
+        wrap.replaceChildren();
+        PRESETS.forEach(preset => {
+          const active = Math.abs(preset.tone-tone)<.001 && Math.abs(preset.contrast-contrast)<.001;
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'preset';
+          b.setAttribute('aria-pressed', String(active));
+          const name = document.createElement('strong'); name.textContent = preset.name;
+          const sub = document.createElement('small'); sub.textContent = preset.sub;
+          const mini = document.createElement('div'); mini.className = 'mini-palette';
+          [0,3,5,8,13,16].forEach(index => {
+            const span = document.createElement('span');
+            span.style.background = hexFromLevel(toneValue(preset.tone,preset.contrast,OFFSETS[index]));
+            mini.appendChild(span);
+          });
+          b.append(name,sub,mini);
+          b.addEventListener('click', () => { toneEl.value = preset.tone; contrastEl.value = preset.contrast; render(); });
+          wrap.appendChild(b);
+        });
+      }
+      function drawPalette(levels) {
+        const wrap = $('palette'); wrap.replaceChildren();
+        levels.forEach((level,i) => {
+          const hex = hexFromLevel(level);
+          const item = document.createElement('div'); item.className = 'swatch';
+          const color = document.createElement('div'); color.className = 'swatch-color'; color.style.background = hex;
+          const btn = document.createElement('button'); btn.type='button'; btn.setAttribute('aria-label', `Copiar cor gray-${i}: ${hex}`);
+          btn.title = `Copiar ${hex}`; btn.addEventListener('click', () => copy(hex, `${hex} copiado`));
+          color.appendChild(btn);
+          const index = document.createElement('div'); index.className = 'swatch-index'; index.textContent = `gray-${i}`;
+          const code = document.createElement('div'); code.className = 'swatch-hex'; code.textContent = hex;
+          item.append(color,index,code); wrap.appendChild(item);
+        });
+      }
+      function drawSemantics(levels) {
+        const wrap = $('semantics'); wrap.replaceChildren();
+        SEMANTICS.forEach(([name,index])=>{
+          const item = document.createElement('div'); item.className = 'semantic';
+          const chip = document.createElement('div'); chip.className = 'semantic-chip'; chip.style.background = hexFromLevel(levels[index]);
+          const words = document.createElement('div'); words.style.minWidth='0';
+          const label = document.createElement('div'); label.className='semantic-name'; label.textContent=name;
+          const hex = document.createElement('div'); hex.className='semantic-hex'; hex.textContent=hexFromLevel(levels[index]);
+          words.append(label,hex); item.append(chip,words); wrap.appendChild(item);
+        });
+      }
+      function drawContrast(levels) {
+        const wrap = $('contrastScores'); wrap.replaceChildren();
+        [[16,'Principal'],[14,'Secundário'],[13,'Muted']].forEach(([index,label])=>{
+          const score = wcag(levels[index],levels[3]);
+          const rating = score >= 7 ? 'AAA' : score >= 4.5 ? 'AA' : score >= 3 ? 'AA texto grande' : 'Abaixo de AA';
+          const item = document.createElement('div'); item.className = 'contrast-item';
+          const title = document.createElement('label'); title.textContent=label;
+          const amount = document.createElement('div'); amount.className='contrast-score'; amount.textContent=fmt(score)+':1';
+          const status = document.createElement('small'); status.className='contrast-rating'+(score>=4.5?' pass':''); status.textContent=rating;
+          item.append(title,amount,status); wrap.appendChild(item);
+        });
+      }
+      function drawTypography(base) {
+        const wrap = $('typographyScale');
+        wrap.replaceChildren();
+        FONT_STEPS.forEach((step) => {
+          const item = document.createElement('div');
+          item.className = 'type-item';
+          const sample = document.createElement('div');
+          sample.className = 'type-sample';
+          sample.textContent = step >= 20 ? 'Aa Bb 123' : 'Aa Bb Cc';
+          sample.style.fontSize = `var(--text-${step})`;
+          const meta = document.createElement('div');
+          meta.className = 'type-meta';
+          const token = document.createElement('code');
+          token.textContent = `--text-${step}`;
+          const size = document.createElement('span');
+          size.textContent = `${fmt(base * step / 16, 2)}px`;
+          meta.append(token, size);
+          item.append(sample, meta);
+          wrap.appendChild(item);
+        });
+      }
+      function makeCss(tone, contrast, fontBase) {
+        return `:root {\n  --ui-gray-tone: ${tone.toFixed(1)}%;\n  --ui-contrast: ${contrast.toFixed(2)};\n  --font-size-base: ${fontBase.toFixed(2).replace(/\.?0+$/, '')}px;\n}\n`;
+      }
+      function render() {
+        const tone = clamp(Number(toneEl.value),0,15);
+        const contrast = clamp(Number(contrastEl.value),.7,1.65);
+        const fontBase = clamp(Number(fontBaseEl.value),12,22);
+        const levels = OFFSETS.map(offset => toneValue(tone,contrast,offset));
+        root.style.setProperty('--ui-gray-tone',tone.toFixed(1)+'%');
+        root.style.setProperty('--ui-contrast',contrast.toFixed(2));
+        root.style.setProperty('--font-size-base',fontBase+'px');
+        $('toneValue').textContent=fmt(tone,1)+'%';
+        $('contrastValue').textContent=fmt(contrast)+'×';
+        $('fontBaseValue').textContent=fmt(fontBase,2).replace(/,?0+$/, '')+'px';
+        $('fontBaseSummary').textContent=fmt(fontBase,2).replace(/,?0+$/, '')+'px';
+        $('codeFontBase').textContent=fontBase+'px';
+        $('codeTone').textContent=tone.toFixed(1)+'%';
+        $('codeContrast').textContent=contrast.toFixed(2);
+        toneEl.style.setProperty('--percent',((tone/15)*100).toFixed(1)+'%');
+        contrastEl.style.setProperty('--percent',(((contrast-.7)/(.95))*100).toFixed(1)+'%');
+        fontBaseEl.style.setProperty('--percent',(((fontBase-12)/10)*100).toFixed(1)+'%');
+        drawPresets(tone,contrast);
+        drawPalette(levels);
+        drawSemantics(levels);
+        drawContrast(levels);
+        drawTypography(fontBase);
+        try { history.replaceState(null,'',`#tone=${tone.toFixed(1)}&contrast=${contrast.toFixed(2)}&font=${fontBase.toFixed(2)}`); } catch {}
+      }
+      function restoreHash() {
+        const query = location.hash.slice(1);
+        const params = new URLSearchParams(query);
+        const tone = Number(params.get('tone'));
+        const contrast = Number(params.get('contrast'));
+        const fontBase = Number(params.get('font'));
+        if (params.has('tone') && Number.isFinite(tone)) toneEl.value=clamp(tone,0,15);
+        if (params.has('contrast') && Number.isFinite(contrast)) contrastEl.value=clamp(contrast,.7,1.65);
+        if (params.has('font') && Number.isFinite(fontBase)) fontBaseEl.value=clamp(fontBase,12,22);
+      }
+      toneEl.addEventListener('input', render);
+      contrastEl.addEventListener('input', render);
+      fontBaseEl.addEventListener('input', render);
+      $('desktopBtn').addEventListener('click', () => setView(false));
+      $('mobileBtn').addEventListener('click', () => setView(true));
+      $('resetTheme').addEventListener('click', () => { toneEl.value=3.7; contrastEl.value=1.41; fontBaseEl.value=16; render(); showToast('Tema padrão restaurado'); });
+      $('copyCss').addEventListener('click', () => copy(makeCss(Number(toneEl.value), Number(contrastEl.value), Number(fontBaseEl.value)), 'Variáveis CSS copiadas'));
+      $('downloadCss').addEventListener('click', () => {
+        const blob = new Blob([makeCss(Number(toneEl.value), Number(contrastEl.value), Number(fontBaseEl.value))], {type:'text/css;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href=url; a.download='photointel-theme-variables.css';
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+        showToast('Variáveis CSS exportadas');
+      });
+      restoreHash(); render();
+      setView(false);
+    })();
+  </script>
+</body>
+</html>
