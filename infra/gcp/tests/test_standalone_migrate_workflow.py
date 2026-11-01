@@ -42,22 +42,27 @@ class StandaloneMigrationWorkflowTests(unittest.TestCase):
             "          - unselected", "          - initial-empty",
             "          - existing-with-backup",
             "default: plan", "default: unselected",
-            "confirm_project:", "default: photointel",
         ):
             with self.subTest(item=text):
                 self.assertIn(text, self.migrate)
                 self.assertIn(text, self.deploy)
 
-    def test_apply_is_explicitly_authorized_and_never_the_default(self):
-        self.assertIn("inputs.migration_mode == 'apply' && inputs.authorize_charges == true", self.migrate)
-        self.assertIn("inputs.migration_mode == 'plan'", self.migrate)
-        self.assertIn("inputs.migration_mode == 'diagnose'", self.migrate)
-        self.assertIn("default: false", self.migrate)
+    def test_apply_is_explicit_choice_and_never_default(self):
+        for content in (self.migrate, self.deploy):
+            self.assertIn("default: plan", content)
+            self.assertIn("          - apply", content)
+            self.assertNotIn("authorize_charges:", content)
+            self.assertNotIn("confirm_project:", content)
+            self.assertNotIn("database_ready:", content)
+            self.assertNotIn("inputs.confirm_project", content)
+            self.assertNotIn("inputs.authorize_charges", content)
+        self.assertIn("github.event_name == 'workflow_dispatch'", self.migrate)
+        self.assertIn("github.ref == 'refs/heads/main'", self.migrate)
 
     def test_same_exact_runner_and_inputs_as_existing_deploy(self):
         for line in (
             "run: bash infra/gcp/release.sh migrate",
-            "CONFIRM_PROJECT: ${{ inputs.confirm_project }}",
+            "CONFIRM_PROJECT: photointel",
             "RELEASE_SHA: ${{ github.sha }}",
             "MIGRATION_MODE: ${{ inputs.migration_mode }}",
             "MIGRATION_DATABASE: ${{ inputs.migration_database }}",
