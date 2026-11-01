@@ -47,7 +47,7 @@ logger = structlog.get_logger()
 
 def _job_correlation(job: Job) -> str:
     """Old persisted jobs fall back to their own stable identifier."""
-    return _job_correlation(job)
+    return valid_correlation(job.payload.get("correlation_id")) or str(job.id)
 
 
 def superseded_reason(
