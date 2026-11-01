@@ -22,7 +22,7 @@ export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnosti
     id: api?.correlationId && UUID.test(api.correlationId) ? api.correlationId : crypto.randomUUID(),
     phase,
     source: api?.source ?? 'cloudflare',
-    code: api?.code && /^[A-Z_]{1,48}$/.test(api.code) ? api.code :
+    code: api?.code && /^[A-Z0-9_]{1,48}$/.test(api.code) ? api.code :
       (phase === 'resource' ? 'RESOURCE_LOAD_FAILURE' : phase === 'bootstrap' ? 'BOOT_FAILURE' :
         phase === 'api' ? 'API_ERROR' : name === 'ChunkLoadError' ? 'CHUNK_LOAD_FAILURE' : 'CLIENT_FAILURE'),
     status: api?.status,
