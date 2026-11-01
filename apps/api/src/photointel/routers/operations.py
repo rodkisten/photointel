@@ -417,7 +417,11 @@ async def ingestion_state(session: AsyncSession) -> dict[str, Any]:
             "checked_at": live_success.finished_at if live_success else None,
             "reason": "Descoberta recente comprovou acesso; Apple pode expirar a sessão"
             if valid
-            else "Execute o workflow de sessão criptografada pelo terminal",
+            else "Sessão Apple reportou falha; revalide pelo terminal seguro"
+            if stored and stored.last_error
+            else "Sessão criptografada presente; sem importação recente que comprove acesso Apple"
+            if present
+            else "Sessão criptografada ausente; publique-a pelo terminal seguro",
         }
     else:
         auth = await asyncio.to_thread(authentication_state, settings)
