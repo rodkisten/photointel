@@ -120,49 +120,39 @@ def attestation(gate: str, **changes: Any) -> dict[str, Any]:
     }
 
 
-async def test_gates_require_evidence_prerequisites_and_exact_release(readiness_api):
+async def test_single_large_scale_gate_requires_evidence_and_api_release(readiness_api):
     client, session, release, _ = readiness_api
     initial = (await client.get("/v1/verification/gates")).json()
     assert initial["full_backfill_unlocked"] is False
+    assert [gate["id"] for gate in initial["items"]] == ["F"]
+    assert (
+        await client.patch("/v1/verification/gates", json=attestation("A"))
+    ).status_code == 422
     assert (
         await client.patch(
-            "/v1/verification/gates",
-            json=attestation("B"),
-        )
-    ).status_code == 409
-    assert (
-        await client.patch(
-            "/v1/verification/gates",
-            json=attestation("A", evidence=[]),
+            "/v1/verification/gates", json=attestation("F", evidence=[])
         )
     ).status_code == 422
     assert (
         await client.patch(
-            "/v1/verification/gates",
-            json=attestation("A", release_sha="8" * 40),
+            "/v1/verification/gates", json=attestation("F", release_sha="8" * 40)
         )
     ).status_code == 409
     assert (
         await client.patch(
-            "/v1/verification/gates",
-            json=attestation("A", operator_attestation=False),
+            "/v1/verification/gates", json=attestation("F", operator_attestation=False)
         )
     ).status_code == 422
-    for gate in ("A", "B", "C"):
-        assert (
-            await client.patch(
-                "/v1/verification/gates",
-                json=attestation(gate),
-            )
-        ).status_code == 200
-    row = await session.get(VerificationGate, "B")
+    assert (
+        await client.patch("/v1/verification/gates", json=attestation("F"))
+    ).status_code == 200
+    row = await session.get(VerificationGate, "F")
     assert row.release_sha == SHA
     assert row.verified_by == "local-development"
+    assert (await client.get("/v1/verification/gates")).json()["full_backfill_unlocked"]
     release["git_sha"] = "9" * 40
     changed = (await client.get("/v1/verification/gates")).json()
-    states = {row["id"]: row["status"] for row in changed["items"]}
-    assert states["A"] == "not_verified"
-    assert states["B"] == "blocked"
+    assert changed["items"][0]["status"] == "not_verified"
     assert changed["full_backfill_unlocked"] is False
 
 
@@ -193,8 +183,17 @@ async def test_fixture_ingestion_cannot_prove_icloud_or_unlock_real_import(readi
         "/v1/ingestion/preview", json={"source": "icloud", "limit": 100}
     )
     assert preview.status_code == 200
-    assert preview.json()["can_start"] is False
-    assert preview.json()["gate_error"] is not None
+    assert preview.json()["can_start"] is True
+    assert preview.json()["gate_error"] is None
+    large = await client.post(
+        "/v1/ingestion/preview", json={
+            "source": "icloud", "limit": 100, "mode": "backfill",
+            "target_assets": 1001, "confirm_full_backfill": True,
+        }
+    )
+    assert large.status_code == 200
+    assert large.json()["can_start"] is False
+    assert large.json()["gate_error"] is not None
     assert (await client.get("/v1/verification/gates")).json()[
         "full_backfill_unlocked"
     ] is False
