@@ -79,7 +79,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 /* Apenas a shell estatica e armazenada. API, midia privada e rotas nao sao cacheadas. */
-const SHELL_CACHE = 'photointel-shell-v1';
+const SHELL_CACHE = 'photointel-shell-v2';
 const SHELL_ASSETS = ['/icon.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -93,10 +93,18 @@ self.addEventListener('activate', (event) => {
   )).then(() => self.clients.claim()));
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || !SHELL_ASSETS.includes(url.pathname)) return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  // Network-first refreshes public icons; offline fallback only for these static files.
+  event.respondWith(fetch(event.request, { cache: 'no-store' }).then((response) => {
+    if (response.ok) void caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, response.clone()));
+    return response;
+  }).catch(async () => (await caches.match(event.request)) || Response.error()));
 });
 
 

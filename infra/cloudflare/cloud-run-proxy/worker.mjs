@@ -128,6 +128,18 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       return failure(400, 'Invalid diagnostics');
     }
   }
+  if (incoming.pathname === '/__app/version') {
+    if (incoming.origin !== config.frontend || request.method !== 'GET') {
+      return failure(404, 'Route unavailable');
+    }
+    return new Response(JSON.stringify({
+      release: /^[a-f0-9]{40}$/.test(env.RELEASE_SHA ?? '') ? env.RELEASE_SHA : null,
+    }), { headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store, max-age=0',
+      'CDN-Cache-Control': 'no-store',
+    } });
+  }
   if (incoming.pathname === '/auth/login') {
     if (incoming.origin !== config.frontend || request.method !== 'GET') {
       return failure(404, 'Route unavailable');
@@ -176,7 +188,17 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       if (response.status >= 500 && isNavigation(request, incoming.pathname)) {
         return frontendFailure(response.status, correlationId);
       }
-      return response;
+      const headers = new Headers(response.headers);
+      if (isNavigation(request, incoming.pathname) ||
+          ['/index.html', '/sw.js', '/manifest.webmanifest', '/fcm.js'].includes(incoming.pathname)) {
+        headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        headers.set('CDN-Cache-Control', 'no-store');
+        headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+        headers.set('Pragma', 'no-cache');
+      }
+      return new Response(response.body, {
+        status: response.status, statusText: response.statusText, headers,
+      });
     } catch {
       log('error', 'frontend_assets_unreachable', routeGroup(incoming.pathname), 503, Date.now() - started);
       return isNavigation(request, incoming.pathname)

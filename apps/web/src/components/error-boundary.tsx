@@ -30,6 +30,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
+    document.getElementById('boot-splash')?.remove();
     this.setState({ incident: reportDiagnostic(error, 'render') });
   }
 
