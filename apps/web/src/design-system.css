@@ -1,6 +1,7 @@
 /*
  * PhotoIntel Design System
- * Change ONLY --ui-gray-tone and --ui-contrast to retune the neutral palette.
+ * Adjust --ui-gray-tone and --ui-contrast to retune the neutral palette.
+ * Adjust --font-size-base to resize the entire typography scale proportionally.
  * All gray values are calculated from these controls. No green/blue cast.
  *
  * --ui-gray-tone: black point (2% = deeper black; 8% = lighter canvas)
@@ -125,25 +126,34 @@
   --radius-sheet: 17px;
   --radius-pill: 999px;
 
-  /* Typography: compact UI, but native iOS form controls stay >= 16px. */
+  /* Typography scale:
+   * --font-size-base: 1rem (usually 16px) reproduces every previous size.
+   * Change only this value (e.g. 15px, 17px, 18px, or 1.125rem).
+   * All steps retain their original proportional ratios: size / 16.
+   * Native iOS form controls never fall below 16px to avoid focus zoom.
+   */
   --font-family-ui: Geist, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --text-8: .5rem;
-  --text-9: .5625rem;
-  --text-10: .625rem;
-  --text-11: .6875rem;
-  --text-12: .75rem;
-  --text-13: .8125rem;
-  --text-14: .875rem;
-  --text-15: .9375rem;
-  --text-16: 1rem;
-  --text-17: 1.0625rem;
-  --text-18: 1.125rem;
-  --text-20: 1.25rem;
-  --text-24: 1.5rem;
-  --text-26: 1.625rem;
-  --text-27: 1.6875rem;
-  --text-30: 1.875rem;
-  --text-33: 2.0625rem;
+  --font-size-base: 1rem;
+  --text-6: calc(var(--font-size-base) * 6 / 16);
+  --text-8: calc(var(--font-size-base) * 8 / 16);
+  --text-9: calc(var(--font-size-base) * 9 / 16);
+  --text-10: calc(var(--font-size-base) * 10 / 16);
+  --text-11: calc(var(--font-size-base) * 11 / 16);
+  --text-12: calc(var(--font-size-base) * 12 / 16);
+  --text-13: calc(var(--font-size-base) * 13 / 16);
+  --text-14: calc(var(--font-size-base) * 14 / 16);
+  --text-15: calc(var(--font-size-base) * 15 / 16);
+  --text-16: calc(var(--font-size-base) * 16 / 16);
+  --text-17: calc(var(--font-size-base) * 17 / 16);
+  --text-18: calc(var(--font-size-base) * 18 / 16);
+  --text-20: calc(var(--font-size-base) * 20 / 16);
+  --text-24: calc(var(--font-size-base) * 24 / 16);
+  --text-25: calc(var(--font-size-base) * 25 / 16);
+  --text-26: calc(var(--font-size-base) * 26 / 16);
+  --text-27: calc(var(--font-size-base) * 27 / 16);
+  --text-30: calc(var(--font-size-base) * 30 / 16);
+  --text-33: calc(var(--font-size-base) * 33 / 16);
+  --text-36: calc(var(--font-size-base) * 36 / 16);
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -173,6 +183,23 @@
 }
 
 @theme inline {
+  /* Tailwind's standard text utilities follow the same scale. */
+  --text-xs: var(--text-12);
+  --text-sm: var(--text-14);
+  --text-base: var(--text-16);
+  --text-lg: var(--text-18);
+  --text-xl: var(--text-20);
+  --text-2xl: var(--text-24);
+  --text-3xl: var(--text-30);
+  --text-4xl: var(--text-36);
+  --text-xs--line-height: calc(var(--font-size-base) * 16 / 16);
+  --text-sm--line-height: calc(var(--font-size-base) * 20 / 16);
+  --text-base--line-height: calc(var(--font-size-base) * 24 / 16);
+  --text-lg--line-height: calc(var(--font-size-base) * 28 / 16);
+  --text-xl--line-height: calc(var(--font-size-base) * 28 / 16);
+  --text-2xl--line-height: calc(var(--font-size-base) * 32 / 16);
+  --text-3xl--line-height: calc(var(--font-size-base) * 36 / 16);
+  --text-4xl--line-height: calc(var(--font-size-base) * 40 / 16);
   --font-sans: var(--font-family-ui);
   --color-background: var(--surface-base);
   --color-foreground: var(--text-primary);
@@ -185,7 +212,8 @@
   --radius-card: var(--radius-md);
 }
 
-/* Override these two root values at runtime, e.g. document.documentElement.style.
- * setProperty('--ui-contrast', '1.4') or setProperty('--ui-gray-tone', '5%').
+/* Override primary root values at runtime, e.g. document.documentElement.style.
+ * setProperty('--ui-contrast', '1.4'), setProperty('--ui-gray-tone', '5%'),
+ * or setProperty('--font-size-base', '17px').
  * For opt-in compact density set --ui-density: compact on a container.
  */
