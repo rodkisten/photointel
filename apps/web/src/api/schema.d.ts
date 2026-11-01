@@ -1782,7 +1782,7 @@ export interface components {
              * Gate Id
              * @enum {string}
              */
-            gate_id: "A" | "B" | "C" | "D" | "E" | "F";
+            gate_id: "F";
             /**
              * Status
              * @enum {string}
