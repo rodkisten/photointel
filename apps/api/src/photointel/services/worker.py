@@ -45,6 +45,11 @@ from photointel.services.runtime_settings import effective_settings
 logger = structlog.get_logger()
 
 
+def _job_correlation(job: Job) -> str:
+    """Old persisted jobs fall back to their own stable identifier."""
+    return _job_correlation(job)
+
+
 def superseded_reason(
     payload: dict[str, Any],
     content_revision: str,
@@ -345,7 +350,7 @@ async def _fail_jobs(
                     if busy
                     else "Falha no processamento; verifique diagnóstico"
                 ),
-                "correlation_id": valid_correlation(job.payload.get("correlation_id")) or str(job.id),
+                "correlation_id": _job_correlation(job),
                 "job_id": str(job.id),
             }
             job.scheduled_at = utcnow() + retry_delay(job.attempts, jitter=True)
@@ -419,7 +424,7 @@ async def _fail_jobs(
                 job_type=failed_job.job_type,
                 status=failed_job.status,
                 error_code=failed_job.error_code,
-                correlation_id=valid_correlation(failed_job.payload.get("correlation_id")) or str(failed_job.id),
+                correlation_id=_job_correlation(failed_job),
             )
     await safe_notify()
 
@@ -446,7 +451,7 @@ async def _finish_jobs(
             else {"batch_metrics_job_id": str(leader)}
         )
         job.progress = {**job.progress,
-            "correlation_id": valid_correlation(job.payload.get("correlation_id")) or str(job.id)}
+            "correlation_id": _job_correlation(job)}
         session.add(
             JobEvent(
                 job_id=job.id,
@@ -466,7 +471,7 @@ async def _finish_jobs(
             "worker_job_completed",
             job_id=str(finished_job.id),
             job_type=finished_job.job_type,
-            correlation_id=valid_correlation(finished_job.payload.get("correlation_id")) or str(finished_job.id),
+            correlation_id=_job_correlation(finished_job),
         )
     await safe_notify()
 
@@ -502,14 +507,14 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
             if len(jobs) != len(job_ids):
                 return
             correlation_token = correlation_context.set(
-                valid_correlation(jobs[0].payload.get("correlation_id")) or str(jobs[0].id)
+                _job_correlation(jobs[0])
             )
             for claimed_job in jobs:
                 logger.info(
                     "worker_job_started",
                     job_id=str(claimed_job.id),
                     job_type=claimed_job.job_type,
-                    correlation_id=valid_correlation(claimed_job.payload.get("correlation_id")) or str(claimed_job.id),
+                    correlation_id=_job_correlation(claimed_job),
                 )
             fences = [(job.id, worker_id, job.fence_token) for job in jobs]
             leases = await _acquire_asset_leases(session, jobs, worker_id)
