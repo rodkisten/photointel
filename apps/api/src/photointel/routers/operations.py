@@ -193,6 +193,43 @@ async def reindex(
     if body.asset_ids:
         query = query.where(Asset.id.in_(body.asset_ids))
     assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
+    requested_types = set(body.job_types)
+    job_types = set(requested_types)
+    if {"joytag_inference", "embedding_inference"} <= job_types:
+        # Inference shares one adapter; scheduling both doubles the work.
+        job_types.remove("embedding_inference")
+    # Avoid duplicate expensive work when the same tile is tapped repeatedly.
+    # Reindex requests may target photos still waiting on the download pipeline.
+    pending_by_asset: dict[UUID, set[str]] = {}
+    if assets:
+        existing = (
+            await session.execute(
+                select(Job.asset_id, Job.job_type).where(
+                    Job.asset_id.in_([asset.id for asset in assets]),
+                    Job.status.in_(("queued", "preparing", "running", "retrying")),
+                )
+            )
+        ).all()
+        for existing_asset_id, existing_type in existing:
+            if existing_asset_id:
+                pending_by_asset.setdefault(existing_asset_id, set()).add(existing_type)
+    assets = [
+        asset for asset in assets
+        if not (
+            (asset.ingestion_status != "completed" and
+             pending_by_asset.get(asset.id, set()).intersection(
+                 {"media_download", "metadata_extract"}))
+            or
+            (asset.ingestion_status == "completed" and
+             job_types.issubset(pending_by_asset.get(asset.id, set())))
+        )
+    ]
+    if not assets:
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "Reprocessamento já está na fila ou não há fotos elegíveis",
+            409,
+        )
     batch = JobBatch(
         name="Reprocessamento",
         total_assets=len(assets),
@@ -200,12 +237,6 @@ async def reindex(
     )
     session.add(batch)
     await session.flush()
-    requested_types = set(body.job_types)
-    job_types = set(requested_types)
-    if {"joytag_inference", "embedding_inference"} <= job_types:
-        # The adapter runs and persists both models together. Two forced jobs
-        # could enter separate worker batches and pay for the same work twice.
-        job_types.remove("embedding_inference")
     from photointel.services.outbox import enqueue_dispatch
 
     for asset in assets:
@@ -235,6 +266,8 @@ async def reindex(
             )
             continue
         for job_type in sorted(job_types):
+            if job_type in pending_by_asset.get(asset.id, set()):
+                continue
             inference = job_type.endswith("_inference")
             payload: dict[str, Any] = {"force": True}
             if inference:
@@ -267,6 +300,34 @@ async def reindex(
     return row_dict(batch)
 
 
+@router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])
+async def job_activity(
+    session: Session, limit: int = Query(24, ge=1, le=100)
+) -> Page[JobOut]:
+    """Prioritize active jobs, then fill remaining slots with recent completed work."""
+    active = list((
+        await session.scalars(
+            select(Job).where(
+                Job.status.in_(("queued", "preparing", "running", "retrying"))
+            ).order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
+        )
+    ).all())
+    remaining = limit - len(active)
+    finished: list[Job] = []
+    if remaining:
+        finished = list((
+            await session.scalars(
+                select(Job).where(
+                    Job.status.not_in(("queued", "preparing", "running", "retrying"))
+                ).order_by(Job.created_at.desc(), Job.id.desc()).limit(remaining)
+            )
+        ).all())
+    return Page(
+        items=[JobOut.model_validate(job) for job in [*active, *finished]],
+        next_cursor=None,
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=JobOut, tags=["jobs"])
 async def job_detail(job_id: UUID, session: Session) -> JobOut:
     job = await session.get(Job, job_id)
@@ -296,7 +357,13 @@ async def retry_job(
     job.error_details = None
     emit_job_event(session, job)
     audit(session, identity, "job.retry", job.asset_id, job_id=str(job.id))
+    platform = (await effective_settings(session)).execution_platform
+    if platform == "cloud_run":
+        from photointel.services.outbox import enqueue_dispatch
+
+        await enqueue_dispatch(session, "worker", f"retry-dispatch:{job.id}:{uuid4()}")
     await session.commit()
+    _schedule_cloud_dispatch(background_tasks, platform)
     background_tasks.add_task(safe_notify)
     return JobOut.model_validate(job)
 
@@ -361,6 +428,7 @@ async def change_batch(
     session: AsyncSession,
     identity: Identity,
     pause: bool,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     batch = await session.scalar(
         select(JobBatch).where(JobBatch.id == batch_id).with_for_update()
@@ -385,22 +453,32 @@ async def change_batch(
         "batch.pause" if pause else "batch.resume",
         batch_id=str(batch_id),
     )
+    platform = (await effective_settings(session)).execution_platform
+    if not pause and platform == "cloud_run":
+        from photointel.services.outbox import enqueue_dispatch
+
+        await enqueue_dispatch(session, "worker", f"batch-resume:{batch_id}:{uuid4()}")
     await session.commit()
+    if not pause:
+        _schedule_cloud_dispatch(background_tasks, platform)
+    background_tasks.add_task(safe_notify)
     return row_dict(batch)
 
 
 @router.post("/job-batches/{batch_id}/pause", tags=["jobs"])
 async def pause_batch(
-    batch_id: UUID, session: Session, identity: Actor
+    batch_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    return await change_batch(batch_id, session, identity, True)
+    return await change_batch(batch_id, session, identity, True, background_tasks)
 
 
 @router.post("/job-batches/{batch_id}/resume", tags=["jobs"])
 async def resume_batch(
-    batch_id: UUID, session: Session, identity: Actor
+    batch_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
-    return await change_batch(batch_id, session, identity, False)
+    return await change_batch(batch_id, session, identity, False, background_tasks)
 
 
 async def ingestion_state(session: AsyncSession) -> dict[str, Any]:

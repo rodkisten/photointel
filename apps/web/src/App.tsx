@@ -9,6 +9,7 @@ import type { Info } from './api/types';
 import { Dialog } from './components/ui/dialog';
 import { Button } from './components/ui/button';
 import { Toast } from './components/common';
+import { JobsDrawer } from './components/jobs-drawer';
 import { Overview } from './pages/overview';
 import { Library } from './pages/library';
 import { SearchPage } from './pages/search';
@@ -85,6 +86,7 @@ function Shell() {
         {data ? data.environment === 'production' ? 'Privado e conectado' : 'Ambiente local' :
           isError ? 'Sem conexão com a API' : 'Conectando à API'}</div>
     </header><main id="main" tabIndex={-1}><Outlet /></main></div>
+    <JobsDrawer hidden={menu} />
     <nav className="bottom-nav" aria-label="Navegação móvel">
       {[navigation[1], navigation[2], navigation[3], navigation[6]].map(({ to, label, icon: Icon }) =>
         <NavLink key={to} to={to}><Icon size={21} /><span>{label === 'Busca inteligente' ? 'Buscar' :

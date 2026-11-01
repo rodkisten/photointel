@@ -4,7 +4,7 @@ import { ApiError } from '../api/error';
 import { AppErrorBoundary, DiagnosticActions } from '../components/error-boundary';
 import { Toast } from '../components/common';
 import { useUi } from '../lib/store';
-import { diagnosticFor, diagnosticLogsUrl, reportDiagnostic } from '../lib/diagnostics';
+import { diagnosticFor, diagnosticLogsUrl, jobLogsUrl, reportDiagnostic } from '../lib/diagnostics';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -12,6 +12,18 @@ afterEach(() => {
 });
 
 describe('whole-app diagnostics', () => {
+  it('links to the Cloud Run job and exact persisted identifiers', () => {
+    const jobId = '510e985c-fb17-4294-ac63-42b7ac1c1b3c';
+    const correlation = 'dd487042-1190-4441-afb3-0bfd328c2c3c';
+    const url = new URL(jobLogsUrl('thumbnail_generate', jobId, correlation));
+    expect(url.hostname).toBe('console.cloud.google.com');
+    expect(url.searchParams.get('project')).toBe('photointel');
+    const query = decodeURIComponent(url.pathname);
+    expect(query).toContain('resource.labels.job_name="photointel-worker"');
+    expect(query).toContain('jsonPayload.job_id="' + jobId + '"');
+    expect(query).toContain('jsonPayload.correlation_id="' + correlation + '"');
+    expect(decodeURIComponent(jobLogsUrl('icloud_discovery'))).toContain('photointel-discover');
+  });
   it('preserves Cloud Run correlation IDs in a filterable GCP logs link', () => {
     const id = 'b663f9ee-1699-4b2c-b157-ff5573f0316f';
     const error = new ApiError('Falha na API', 503, 'DATABASE_UNAVAILABLE', id,

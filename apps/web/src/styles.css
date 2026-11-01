@@ -2557,3 +2557,193 @@ select:focus-visible, textarea:focus-visible { outline-color: #f5f5f5; }
   }
 }
 @media(prefers-reduced-motion:reduce) { .spinning { animation: none; } }
+
+/* Global job activity: mobile bottom sheet with snap heights, and a desktop dock. */
+.jobs-drawer {
+  position: fixed;
+  z-index: 49;
+  right: 20px;
+  bottom: 20px;
+  width: min(420px, calc(100vw - 32px));
+  background: #191919;
+  border: 1px solid #454545;
+  border-radius: 16px;
+  box-shadow: 0 -12px 48px #000b;
+  color: #ededed;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: height .23s ease, box-shadow .23s ease;
+}
+.jobs-drawer-mini { height: 90px; }
+.jobs-drawer-half { height: min(390px, 52dvh); }
+.jobs-drawer-full { height: min(690px, 78dvh); }
+.jobs-drawer-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 19px;
+  min-height: 19px;
+  background: transparent;
+  border: 0;
+  touch-action: none;
+  cursor: ns-resize;
+}
+.jobs-drawer-grip span {
+  width: 34px;
+  height: 4px;
+  border-radius: 5px;
+  background: #696969;
+}
+.jobs-drawer-header {
+  padding: 1px 13px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 7px;
+}
+.jobs-drawer-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 9px;
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #efefef;
+  text-align: left;
+}
+.jobs-drawer-heading > span { display: grid; min-width: 0; }
+.jobs-drawer-heading strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+.jobs-drawer-heading small { margin-top: 3px; color: #9d9d9d; font-size: 10px; }
+.jobs-drawer-actions { display: flex; align-items: center; gap: 1px; }
+.jobs-drawer-actions > button, .jobs-drawer-actions > a {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 32px;
+  color: #bcbcbc;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+}
+.jobs-drawer-actions > button:hover, .jobs-drawer-actions > a:hover { background: #343434; }
+.jobs-drawer-overall { padding: 0 15px 11px; }
+.jobs-drawer-stats { display: flex; justify-content: space-between; gap: 10px; font-size: 10px; color: #a8a8a8; }
+.jobs-drawer-stats strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobs-drawer-overall .progress-track { height: 3px; margin-top: 7px; }
+.jobs-drawer-content { flex: 1; overflow: auto; overscroll-behavior: contain; padding: 0 14px 15px; }
+.jobs-drawer-job {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #353535;
+  padding: 12px 1px;
+}
+.jobs-drawer-job > div { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.jobs-drawer-job strong { font-size: 11px; font-weight: 500; text-transform: capitalize; }
+.jobs-drawer-job small { font-size: 9px; color: #979797; }
+.jobs-drawer-job > a { color: #c6c6c6; }
+.jobs-drawer-view-all {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #454545;
+  border-radius: 8px;
+  font-size: 11px;
+}
+/* Pulsing progress and status, reduced to static visuals when requested. */
+.status-running, .status-preparing, .status-retrying, .status-queued {
+  animation: job-status-pulse 1.7s ease-in-out infinite;
+}
+.status-running i, .status-preparing i, .status-retrying i {
+  animation: job-dot-pulse 1.7s ease-in-out infinite;
+}
+.progress-active .progress-fill {
+  position: relative;
+  background: linear-gradient(90deg, #959595, #eeeeee, #959595);
+  background-size: 200% 100%;
+  animation: job-progress-pulse 2s ease-in-out infinite;
+}
+.job-running-icon { animation: job-dot-pulse 1.5s ease-in-out infinite; }
+@keyframes job-status-pulse { 0%,100% { opacity: .74; } 50% { opacity: 1; } }
+@keyframes job-dot-pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes job-progress-pulse { 0%,100% { background-position: 100% 0; opacity: .7; }
+  50% { background-position: 0 0; opacity: 1; } }
+
+/* Failed image tiles must never become oversized button grids. */
+.image-unavailable {
+  padding: 6px !important;
+  gap: 4px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.image-unavailable > svg { flex-shrink: 0; width: 16px; height: 16px; }
+.image-unavailable > span {
+  font-size: 10px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.image-unavailable > button:not(.preview-action-button) { display: none; }
+.image-unavailable .preview-action-button {
+  display: inline-flex;
+  justify-content: center;
+  padding: 5px;
+  max-width: 95%;
+  font-size: 10px;
+}
+@media (max-width: 800px) {
+  .jobs-drawer {
+    inset: auto 0 calc(66px + env(safe-area-inset-bottom));
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    box-shadow: 0 -9px 35px #000c;
+  }
+  .jobs-drawer-mini { height: 86px; }
+  .jobs-drawer-half { height: min(370px, 45dvh); }
+  .jobs-drawer-full { height: min(760px, 75dvh); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jobs-drawer, .status-running, .status-preparing, .status-retrying,
+  .status-queued, .status-running i, .status-preparing i,
+  .status-retrying i, .progress-active .progress-fill, .job-running-icon {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.jobs-drawer-toggle {
+  position: fixed;
+  z-index: 49;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #515151;
+  border-radius: 999px;
+  padding: 10px 13px;
+  color: #f1f1f1;
+  background: #202020;
+  box-shadow: 0 5px 24px #0008;
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .jobs-drawer-toggle {
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  .jobs-drawer-mini { height: 102px; }
+}

@@ -1,4 +1,4 @@
-import { AlertCircle, Camera, Check, RefreshCw, X } from 'lucide-react';
+import { AlertCircle, Camera, Check, MoreHorizontal, RefreshCw, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { DiagnosticActions } from './error-boundary';
 import { diagnosticFor, reportDiagnostic } from '../lib/diagnostics';
@@ -8,6 +8,7 @@ import { ApiError, apiUrl, json, request } from '../api/client';
 import { statusLabel, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { Button } from './ui/button';
+import { Dialog } from './ui/dialog';
 import type { Info } from '../api/types';
 
 export function PageHeader({ eyebrow, title, description, actions }: {
@@ -76,6 +77,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   const [diagnosing, setDiagnosing] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [incident, setIncident] = useState<Diagnostic | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const candidates = useMemo(() => {
     if (!src) return [];
     const result = [src];
@@ -124,18 +126,31 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     finally { setRepairing(false); }
   }
   if (!src || failed) return <div className={`image-unavailable ${className ?? ''}`}>
-    <Camera size={22} />
+    <Camera size={16} aria-hidden="true" />
     <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
-    {src && <button type="button" onClick={(event) => { event.stopPropagation();
-      setFailed(false); setVariant(0); setIncident(null);
-      setAttempt((value) => value + 1); }}>Recarregar</button>}
-    {assetId && <button type="button" disabled={repairing} onClick={(event) => void repair(event)}>
-      {repairing ? 'Enfileirando…' : 'Reprocessar'}</button>}
-    <button type="button" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
-      {diagnosing ? 'Consultando…' : 'Ver erro'}</button>
-    {incident && <div className="preview-diagnostic" onClick={(event) => event.stopPropagation()}>
-      <strong>{incident.code}</strong><DiagnosticActions incident={incident} />
-    </div>}
+    <button type="button" className="preview-action-button" aria-label="Ações da prévia"
+      onClick={(event) => { event.stopPropagation(); setActionsOpen(true); }}>
+      <MoreHorizontal size={16} />
+    </button>
+    <div onClick={(event) => event.stopPropagation()}>
+      <Dialog open={actionsOpen} onOpenChange={setActionsOpen} title="Prévia da fotografia"
+        description={src ? 'Não foi possível carregar a imagem. Confira os detalhes ou tente recuperar a prévia.' :
+          'A prévia ainda não foi disponibilizada pelo processamento.'}>
+        <div className="stack">
+          {src && <Button variant="outline" onClick={() => { setFailed(false); setVariant(0);
+            setIncident(null); setAttempt((value) => value + 1); setActionsOpen(false); }}>
+            <RefreshCw size={15}/>Recarregar imagem</Button>}
+          {assetId && <Button variant="outline" disabled={repairing}
+            onClick={(event) => void repair(event)}>
+            <RefreshCw size={15}/>{repairing ? 'Enfileirando…' : 'Solicitar reparo da prévia'}</Button>}
+          {src && <Button variant="ghost" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
+            {diagnosing ? 'Consultando…' : 'Inspecionar erro de mídia'}</Button>}
+          {incident && <div className="preview-diagnostic"><strong>{incident.code}</strong>
+            <DiagnosticActions incident={incident} /></div>}
+          <p className="muted">O reparo usa a fila durável. Evite repetir pedidos enquanto um job estiver aguardando.</p>
+        </div>
+      </Dialog>
+    </div>
   </div>;
   const url = attempt ? `${current}${current.includes('?') ? '&' : '?'}retry=${attempt}` : current;
   return <img key={`${url}-${variant}`} src={apiUrl(url)}

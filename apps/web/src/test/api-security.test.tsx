@@ -89,7 +89,8 @@ describe('private API and media', () => {
     expect(image).toHaveAttribute('referrerpolicy', 'no-referrer');
     fireEvent.error(image);
     expect(screen.queryByRole('img')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Recarregar' }));
+    await user.click(screen.getByRole('button', { name: 'Ações da prévia' }));
+    await user.click(screen.getByRole('button', { name: 'Recarregar imagem' }));
     expect(screen.getByRole('img')).toHaveAttribute(
       'src', '/v1/assets/test/media/thumbnail_small?retry=1',
     );
@@ -104,7 +105,7 @@ describe('private API and media', () => {
       'src', '/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_small',
     );
     fireEvent.error(screen.getByRole('img'));
-    expect(screen.getByRole('button', { name: 'Ver erro' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Ações da prévia' })).toBeVisible();
   });
 
   it('reveals a GCP log action when an unavailable preview is diagnosed', async () => {
@@ -116,7 +117,8 @@ describe('private API and media', () => {
     render(<PrivateImage src="/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_small"
       alt="Sem prévia" />);
     fireEvent.error(screen.getByRole('img'));
-    await user.click(screen.getByRole('button', { name: 'Ver erro' }));
+    await user.click(screen.getByRole('button', { name: 'Ações da prévia' }));
+    await user.click(screen.getByRole('button', { name: 'Inspecionar erro de mídia' }));
     expect(await screen.findByRole('link', { name: 'Ver logs no GCP' })).toBeVisible();
     expect(screen.getByText('NOT_FOUND')).toBeVisible();
   });
