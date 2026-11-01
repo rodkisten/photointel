@@ -1,7 +1,7 @@
 import { AlertCircle, Camera, Check, MoreHorizontal, RefreshCw, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { DiagnosticActions } from './error-boundary';
-import { diagnosticFor, reportDiagnostic } from '../lib/diagnostics';
+import { reportDiagnostic } from '../lib/diagnostics';
 import type { Diagnostic } from '../lib/diagnostics';
 import { responseError } from '../api/error';
 import { ApiError, apiUrl, json, request } from '../api/client';
