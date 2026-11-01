@@ -193,6 +193,39 @@ async def reindex(
     if body.asset_ids:
         query = query.where(Asset.id.in_(body.asset_ids))
     assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
+    requested_types = set(body.job_types)
+    # Avoid duplicate expensive work when the same tile is tapped repeatedly.
+    # Reindex requests may target photos still waiting on the download pipeline.
+    pending_by_asset: dict[UUID, set[str]] = {}
+    if assets:
+        existing = (
+            await session.execute(
+                select(Job.asset_id, Job.job_type).where(
+                    Job.asset_id.in_([asset.id for asset in assets]),
+                    Job.status.in_(("queued", "preparing", "running", "retrying")),
+                )
+            )
+        ).all()
+        for existing_asset_id, existing_type in existing:
+            if existing_asset_id:
+                pending_by_asset.setdefault(existing_asset_id, set()).add(existing_type)
+    assets = [
+        asset for asset in assets
+        if not (
+            (asset.ingestion_status != "completed" and
+             pending_by_asset.get(asset.id, set()).intersection(
+                 {"media_download", "metadata_extract"}))
+            or
+            (asset.ingestion_status == "completed" and
+             requested_types.issubset(pending_by_asset.get(asset.id, set())))
+        )
+    ]
+    if not assets:
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "Reprocessamento já está na fila ou não há fotos elegíveis",
+            409,
+        )
     batch = JobBatch(
         name="Reprocessamento",
         total_assets=len(assets),
@@ -200,7 +233,6 @@ async def reindex(
     )
     session.add(batch)
     await session.flush()
-    requested_types = set(body.job_types)
     job_types = set(requested_types)
     if {"joytag_inference", "embedding_inference"} <= job_types:
         # The adapter runs and persists both models together. Two forced jobs
@@ -235,6 +267,8 @@ async def reindex(
             )
             continue
         for job_type in sorted(job_types):
+            if job_type in pending_by_asset.get(asset.id, set()):
+                continue
             inference = job_type.endswith("_inference")
             payload: dict[str, Any] = {"force": True}
             if inference:
