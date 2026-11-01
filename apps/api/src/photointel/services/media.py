@@ -622,6 +622,41 @@ async def verify_media_stage(
                 "Cache retirado: hash preservado; representação não foi relida",
                 409,
             ) from None
+        # Prefer the existing retained preview when available; if both the
+        # ephemeral cache and preview are absent, process_asset can still
+        # restore the immutable source_download object from private R2.
+        if stage == "thumbnail_generate":
+            preview = await session.scalar(
+                select(AssetResource.id).where(
+                    AssetResource.asset_id == asset.id,
+                    AssetResource.revision == asset.representation_revision,
+                    AssetResource.resource_type == "preview_large",
+                    AssetResource.status == "available",
+                ).limit(1)
+            )
+            if preview is not None:
+                return await rebuild_from_preview(
+                    session, asset, settings, stage, job_fences=job_fences
+                )
+            source = await session.scalar(
+                select(AssetResource.id).where(
+                    AssetResource.asset_id == asset.id,
+                    AssetResource.revision == asset.content_revision,
+                    AssetResource.resource_type == "source_download",
+                    AssetResource.status == "available",
+                ).limit(1)
+            )
+            if source is not None:
+                result = await process_asset(
+                    session, asset, settings, job_fences=job_fences
+                )
+                return {**result, "regenerated": True, "source": "durable_source"}
+            raise AppError(
+                ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                "Não há prévia nem origem persistida. Refaça o download iCloud.",
+                409,
+                {"reason": "SOURCE_NOT_RETAINED"},
+            )
         return await rebuild_from_preview(
             session, asset, settings, stage, job_fences=job_fences
         )
