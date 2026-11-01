@@ -182,6 +182,7 @@ class WorkflowEnvTests(unittest.TestCase):
                 "FRONTEND_ORIGIN": "https://photos.example.org",
                 "ACCESS_TEAM_DOMAIN": "photointel.cloudflareaccess.com",
                 "ACCESS_AUDIENCE": "a" * 64,
+                "RELEASE_SHA": "b" * 40,
             })
             self.assertEqual(cfg["assets"], {
                 "directory": "../../../apps/web/dist",
