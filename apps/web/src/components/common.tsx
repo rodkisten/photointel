@@ -23,7 +23,7 @@ export function Status({ value }: { value: unknown }) {
   return <span className={`status status-${status}`}><i />{statusLabel(status)}</span>;
 }
 export function ErrorState({ error, retry }: { error: Error; retry?: () => void }) {
-  const incident = useMemo(() => diagnosticFor(error, 'api'), [error]);
+  const incident = useMemo(() => reportDiagnostic(error, 'api'), [error]);
   return <div className="error-state" role="alert"><AlertCircle size={20} />
     <div><strong>Não foi possível concluir</strong><p>{error.toString()}</p>
       <DiagnosticActions incident={incident} />
