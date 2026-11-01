@@ -76,7 +76,9 @@ async def sentry_event_redirect(identifier: str) -> RedirectResponse:
         f"https://sentry.io/organizations/{org}/issues/{group_id}/"
         f"events/{normalized}/"
     )
-    return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
+    return RedirectResponse(
+        target, status_code=302, headers={"Cache-Control": "no-store"}
+    )
 
 
 @router.get("/observability/assets/{asset_id}/latest-error", tags=["observability"])
