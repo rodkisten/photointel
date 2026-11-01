@@ -7,6 +7,7 @@ import asyncio
 import base64
 import io
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -891,3 +892,27 @@ async def test_interrupted_ingestion_recovery_is_bounded_and_idempotent(
         assert await recover_interrupted_ingestion_runs(session, limit=1) == 1
         await session.commit()
         assert await recover_interrupted_ingestion_runs(session, limit=1) == 0
+
+
+async def test_contention_does_not_consume_manifest_attempts(
+    pipeline, monkeypatch: pytest.MonkeyPatch
+):
+    factory, settings, adapter, photos, _ = pipeline
+    adapter.photos = photos(1)
+    await discovery.discover_icloud(settings, 1, mode="backfill")
+    async with factory() as session:
+        asset = (await session.scalars(select(Asset))).one()
+
+    @asynccontextmanager
+    async def occupied(*args, **kwargs):
+        raise AppError("RATE_LIMITED", "Shared session busy", 503)
+        yield
+
+    monkeypatch.setattr(discovery, "session_directory", occupied)
+    with pytest.raises(AppError):
+        await discovery.download_discovered_asset(asset.id, settings)
+
+    async with factory() as session:
+        manifest = (await session.scalars(select(DiscoveryManifest))).one()
+        assert manifest.attempts == 0
+        assert manifest.status != "downloading"
