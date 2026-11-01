@@ -76,7 +76,7 @@ class StandaloneMigrationWorkflowTests(unittest.TestCase):
 
     def test_auth_notifications_cleanup_and_shared_production_lock(self):
         for expected in (
-            "group: photointel-gcp-production",
+            "|| 'photointel-gcp-production'",
             "cancel-in-progress: false",
             "contents: read",
             "id-token: write",
