@@ -81,14 +81,17 @@ def worker_environment(config: dict) -> dict[str, str]:
     # All browser fetches now hit /v1/* on the same origin.
     # WORKFLOWS__PAGES__* and WORKFLOWS__WORKER__API_BASE_URL are legacy.
     extras = config.get("extra_environment", {})
-    return {
+    public = {
         "VITE_API_BASE_URL": "",
-        "VITE_SENTRY_DSN": extras.get("VITE_SENTRY_DSN", ""),
-        "VITE_SENTRY_ORG": extras.get("SENTRY_ORG", ""),
         "WORKER_NAME": name,
         "WORKER_DOMAIN": domain,
         "VITE_RELEASE_ID": sha,
     }
+    if extras.get("VITE_SENTRY_DSN"):
+        public["VITE_SENTRY_DSN"] = extras["VITE_SENTRY_DSN"]
+    if extras.get("SENTRY_ORG"):
+        public["VITE_SENTRY_ORG"] = extras["SENTRY_ORG"]
+    return public
 
 
 def discover_cloud_run_origin(config: dict) -> str:
@@ -236,7 +239,8 @@ def worker_deploy(config: dict) -> None:
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": config["access_audience"],
             "RELEASE_SHA": public["VITE_RELEASE_ID"],
-            "SENTRY_DSN": public["VITE_SENTRY_DSN"],
+            **({"SENTRY_DSN": public["VITE_SENTRY_DSN"]}
+               if public.get("VITE_SENTRY_DSN") else {}),
         },
         "assets": {
             "directory": "../../../apps/web/dist",
