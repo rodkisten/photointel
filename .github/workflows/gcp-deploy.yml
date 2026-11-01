@@ -112,33 +112,6 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: "${{ github.workflow }} · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
           job: ${{ github.job }}
-      - name: "🛡 Validação DB"
-        id: database_gate
-        if: inputs.action == 'release' || inputs.action == 'deploy'
-        env:
-          CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh gate
-
-      - name: "📱 ! 🛡 Validação DB"
-        if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: step
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_TOKEN }}
-          github-token: ${{ github.token }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          step: "🛡 Validação DB"
-          step-index: "3"
-          label: "🛡 Validação DB"
-          outcome: ${{ steps.database_gate.outcome }}
-          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
-          completed: "0"
-          total: ${{ inputs.action == 'release' && '3' || '1' }}
-          project: photointel
-          region: "us-central1"
       - name: "⚙ Env"
         id: config
         uses: ./.github/actions/gcp-config
@@ -215,6 +188,33 @@ jobs:
           step-index: "9"
           label: "🧰 Gcloud"
           outcome: ${{ steps.notify_observed_002.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "0"
+          total: ${{ inputs.action == 'release' && '3' || '1' }}
+          project: photointel
+          region: "us-central1"
+      - name: "🛡 Validação DB"
+        id: database_gate
+        if: inputs.action == 'release' || inputs.action == 'deploy'
+        env:
+          CONFIRM_PROJECT: photointel
+        run: bash infra/gcp/release.sh gate
+
+      - name: "📱 ! 🛡 Validação DB"
+        if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          github-token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🛡 Validação DB"
+          step-index: "3"
+          label: "🛡 Validação DB"
+          outcome: ${{ steps.database_gate.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "0"
           total: ${{ inputs.action == 'release' && '3' || '1' }}
