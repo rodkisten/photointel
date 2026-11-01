@@ -330,6 +330,52 @@ async def test_duplicate_tag_creation_is_a_conflict_not_a_database_error(
     assert invalid.status_code == 422
 
 
+async def test_reindex_skips_first_busy_asset_before_applying_limit(
+    client: httpx.AsyncClient, asset: Asset, database: AsyncSession,
+) -> None:
+    # A previous regression applied LIMIT before removing already-queued jobs.
+    # A repeat "Processar lote" of 1 photo returned 409 forever even if
+    # later photos were ready for processing.
+    busy = Asset(
+        id=UUID("00000000-0000-4000-8000-000000000001"),
+        library_id=asset.library_id,
+        source_asset_key=f"busy-{uuid4()}",
+        filename="busy.jpg",
+        media_type="image",
+        ingestion_status="completed",
+    )
+    database.add(busy)
+    await database.flush()
+    database.add(Job(
+        asset_id=busy.id,
+        job_type="thumbnail_generate",
+        status="queued",
+        idempotency_key=f"already-queued-{uuid4()}",
+    ))
+    await database.flush()
+    response = await client.post("/v1/jobs/reindex", json={
+        "limit": 1, "job_types": ["thumbnail_generate"],
+    })
+    assert response.status_code == 200, response.text
+    batch_jobs = (
+        await database.scalars(
+            select(Job).where(Job.batch_id == UUID(response.json()["id"]))
+        )
+    ).all()
+    assert len(batch_jobs) == 1
+    assert batch_jobs[0].asset_id == asset.id
+    assert batch_jobs[0].job_type == "thumbnail_generate"
+
+    # A blocked explicit choice gives an actionable message and reason,
+    # rather than silently creating a duplicate job or reporting a 500.
+    rejected = await client.post("/v1/jobs/reindex", json={
+        "asset_ids": [str(busy.id)],
+        "limit": 1, "job_types": ["thumbnail_generate"],
+    })
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["details"]["reason"] == "NO_ELIGIBLE_ASSETS"
+
+
 @pytest.mark.parametrize(
     "job_types",
     [
