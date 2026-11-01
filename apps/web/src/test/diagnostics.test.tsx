@@ -4,7 +4,7 @@ import { ApiError } from '../api/error';
 import { AppErrorBoundary, DiagnosticActions } from '../components/error-boundary';
 import { Toast } from '../components/common';
 import { useUi } from '../lib/store';
-import { diagnosticFor, diagnosticLogsUrl, jobLogsUrl, reportDiagnostic } from '../lib/diagnostics';
+import { diagnosticFor, diagnosticLogsQuery, diagnosticLogsUrl, jobLogsUrl, reportDiagnostic } from '../lib/diagnostics';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -32,10 +32,13 @@ describe('whole-app diagnostics', () => {
     expect(incident.id).toBe(id);
     expect(incident.source).toBe('gcp');
     expect(decodeURIComponent(diagnosticLogsUrl(incident))).toContain(id);
+    expect(diagnosticLogsQuery(incident)).toContain('SEARCH("' + id + '")');
+    expect(diagnosticLogsQuery(incident)).toContain('resource.labels.service_name="photointel-api"');
     render(<DiagnosticActions incident={incident} />);
     expect(screen.getByText(id)).toBeVisible();
     expect(screen.getByRole('link', { name: 'Ver logs no GCP' }))
       .toHaveAttribute('href', expect.stringContaining('project=photointel'));
+    expect(screen.getByRole('button', { name: 'Copiar filtro do GCP' })).toBeVisible();
   });
 
   it('sends only whitelisted metadata to Cloudflare, never stack or error message', async () => {
