@@ -169,6 +169,34 @@ class MigrationWorkflowTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 alembic.assert_not_called()
 
+    def test_automated_verify_is_read_only_and_requires_matching_head(self) -> None:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        heads = ScriptDirectory.from_config(Config(str(migrate.ALEMBIC_FILE))).get_heads()
+        self.assertTrue(heads)
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.json"
+            config.write_text(json.dumps(CONFIG), encoding="utf-8")
+            for status, expected in (
+                (migrate.Status(heads[0], 12), 0),
+                (migrate.Status("base", 0), 1),
+                (migrate.Status("unknown_revision", 12), 1),
+            ):
+                with self.subTest(status=status):
+                    with (
+                        patch.object(migrate, "validate", return_value=CONFIG),
+                        patch.object(migrate, "migration_secret", return_value="HIDDEN"),
+                        patch.object(migrate, "connection_profile", return_value=("conninfo", {})),
+                        patch.object(migrate, "inspect_database", return_value=status),
+                        patch.object(migrate, "run_alembic") as alembic_command,
+                    ):
+                        self.assertEqual(migrate.main([
+                            "--mode", "verify", "--project", PROJECT,
+                            "--config", str(config)
+                        ]), expected)
+                        alembic_command.assert_not_called()
+
     def test_apply_requires_safety_choice(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "config.json"
