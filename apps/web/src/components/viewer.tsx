@@ -71,7 +71,7 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
             if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.8) {
               if (dx < 0 && next) onNavigate(next.id); else if (dx > 0 && previous) onNavigate(previous.id);
             } touch.current = null;
-          }}><PrivateImage src={preview} alt={asset?.filename ?? 'Fotografia'} priority /></div>}
+          }}><PrivateImage src={preview} alt={asset?.filename ?? 'Fotografia'} assetId={id} priority /></div>}
       {previous && <button className="viewer-arrow prev" aria-label="Fotografia anterior"
         onClick={() => onNavigate(previous.id)}><ChevronLeft size={20} /></button>}
       {next && <button className="viewer-arrow next" aria-label="Próxima fotografia"

@@ -4,7 +4,7 @@ import { DiagnosticActions } from './error-boundary';
 import { diagnosticFor, reportDiagnostic } from '../lib/diagnostics';
 import type { Diagnostic } from '../lib/diagnostics';
 import { responseError } from '../api/error';
-import { ApiError, apiUrl } from '../api/client';
+import { ApiError, apiUrl, json, request } from '../api/client';
 import { statusLabel, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { Button } from './ui/button';
@@ -66,14 +66,15 @@ export function Toast() {
     </div><button onClick={dismiss} aria-label="Dispensar aviso"><X size={16} /></button>
   </div>;
 }
-export function PrivateImage({ src, alt, className, onClick, priority = false }: {
+export function PrivateImage({ src, alt, className, onClick, priority = false, assetId }: {
   src: string | null | undefined; alt: string; className?: string;
-  onClick?: () => void; priority?: boolean;
+  onClick?: () => void; priority?: boolean; assetId?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [variant, setVariant] = useState(0);
   const [diagnosing, setDiagnosing] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [incident, setIncident] = useState<Diagnostic | null>(null);
   const candidates = useMemo(() => {
     if (!src) return [];
@@ -109,12 +110,27 @@ export function PrivateImage({ src, alt, className, onClick, priority = false }:
       setIncident(reportDiagnostic(error, 'api'));
     } finally { setDiagnosing(false); }
   }
+  async function repair(event: MouseEvent) {
+    event.stopPropagation();
+    if (!assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
+    setRepairing(true);
+    try {
+      await request('/v1/jobs/reindex', json('POST', {
+        asset_ids: [assetId], limit: 1, job_types: ['thumbnail_generate'],
+      }));
+      useUi.getState().notify('Reprocessamento da prévia enfileirado.');
+      setIncident(null);
+    } catch (error) { setIncident(reportDiagnostic(error, 'api')); }
+    finally { setRepairing(false); }
+  }
   if (!src || failed) return <div className={`image-unavailable ${className ?? ''}`}>
     <Camera size={22} />
     <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
     {src && <button type="button" onClick={(event) => { event.stopPropagation();
       setFailed(false); setVariant(0); setIncident(null);
       setAttempt((value) => value + 1); }}>Recarregar</button>}
+    {assetId && <button type="button" disabled={repairing} onClick={(event) => void repair(event)}>
+      {repairing ? 'Enfileirando…' : 'Reprocessar'}</button>}
     <button type="button" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
       {diagnosing ? 'Consultando…' : 'Ver erro'}</button>
     {incident && <div className="preview-diagnostic" onClick={(event) => event.stopPropagation()}>

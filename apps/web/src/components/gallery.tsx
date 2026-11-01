@@ -163,7 +163,7 @@ function PhotoTile({ asset, selected, selecting, onSelect, onOpen }: {
       held.current = false; timer.current = setTimeout(() => { held.current = true; onSelect(); }, 550);
     } }} onPointerUp={cancel} onPointerCancel={cancel} onPointerMove={cancel}
     onContextMenu={(event) => { event.preventDefault(); if (!held.current) onSelect(); }}>
-    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} />
+    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} assetId={asset.id} />
     <span className="photo-select" aria-hidden="true">{selected && <Check size={13} />}</span>
     <span className="photo-overlay">{asset.media_type === 'video' && <Image size={12} />}
       {asset.filename}</span>

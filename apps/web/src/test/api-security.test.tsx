@@ -95,6 +95,32 @@ describe('private API and media', () => {
     );
   });
 
+  it('tries a smaller private thumbnail before showing a failure', () => {
+    render(<PrivateImage src="/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_medium"
+      alt="Prévia de teste" />);
+    const image = screen.getByRole('img', { name: 'Prévia de teste' });
+    fireEvent.error(image);
+    expect(screen.getByRole('img', { name: 'Prévia de teste' })).toHaveAttribute(
+      'src', '/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_small',
+    );
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('button', { name: 'Ver erro' })).toBeVisible();
+  });
+
+  it('reveals a GCP log action when an unavailable preview is diagnosed', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      error: { code: 'NOT_FOUND', message: 'Prévia pendente' },
+    }, { status: 404, headers: { 'X-PhotoIntel-Source': 'gcp',
+      'X-Correlation-ID': 'b663f9ee-1699-4b2c-b157-ff5573f0316f' } })));
+    render(<PrivateImage src="/v1/assets/00000000-0000-0000-0000-000000000001/media/thumbnail_small"
+      alt="Sem prévia" />);
+    fireEvent.error(screen.getByRole('img'));
+    await user.click(screen.getByRole('button', { name: 'Ver erro' }));
+    expect(await screen.findByRole('link', { name: 'Ver logs no GCP' })).toBeVisible();
+    expect(screen.getByText('NOT_FOUND')).toBeVisible();
+  });
+
   it('gives dialogs an accessible name, close action and Escape behavior', async () => {
     const user = userEvent.setup();
     const close = vi.fn();

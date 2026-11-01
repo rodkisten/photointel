@@ -206,7 +206,33 @@ async def reindex(
         # The adapter runs and persists both models together. Two forced jobs
         # could enter separate worker batches and pay for the same work twice.
         job_types.remove("embedding_inference")
+    from photointel.services.outbox import enqueue_dispatch
+
     for asset in assets:
+        # The media pipeline is ordered: download → extract → derived variants.
+        # Never enqueue thumbnail/hash/quality against a source that is not ready.
+        if asset.ingestion_status != "completed":
+            if asset.ingestion_status in {"quarantined", "failed"}:
+                raise AppError(
+                    ErrorCode.MEDIA_DECODE_FAILED,
+                    "Mídia em quarentena. Consulte a falha de download antes de reprocessar",
+                    409,
+                )
+            first_stage = (
+                "metadata_extract"
+                if asset.ingestion_status in {"downloaded", "processing"}
+                or asset.source_metadata.get("fixture")
+                else "media_download"
+            )
+            await enqueue_job(
+                session,
+                job_type=first_stage,
+                asset_id=asset.id,
+                payload={"content_revision": asset.content_revision},
+                batch_id=batch.id,
+                idempotency_key=f"reindex-repair:{batch.id}:{asset.id}:{first_stage}",
+            )
+            continue
         for job_type in sorted(job_types):
             inference = job_type.endswith("_inference")
             payload: dict[str, Any] = {"force": True}
@@ -224,6 +250,8 @@ async def reindex(
             )
             if inference:
                 job.progress = {"inference_models": ["joytag", "siglip2"]}
+    if settings.execution_platform == "cloud_run":
+        await enqueue_dispatch(session, "worker", f"reindex-dispatch:{batch.id}")
     audit(
         session,
         identity,
@@ -233,6 +261,7 @@ async def reindex(
         estimated_cost=estimate,
     )
     await session.commit()
+    _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
     background_tasks.add_task(safe_notify)
     return row_dict(batch)
 
