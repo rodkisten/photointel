@@ -48,18 +48,31 @@ pela mesma autorização dos demais endpoints administrativos.
 A leitura usa allowlist e limite de 64 KiB. Campos desconhecidos são descartados,
 referências de outro SHA são omitidas e manifesto ausente ou inválido resulta em
 `unidentified`/`unverified`. `/setup` mostra os campos seguros e as referências. A build web recebe
-`VITE_RELEASE_ID` com o SHA e bloqueia o registro de gates se diferir da API.
-O workflow Pages identifica a build com `github.sha`.
+`VITE_RELEASE_ID` para identificar a própria build. O frontend e a API podem
+ser publicados a partir de SHAs diferentes. Isso aparece como informação na
+interface, não como bloqueio. Testes funcionais e contratos continuam sendo
+necessários para comprovar compatibilidade. O workflow Pages identifica a build
+com `github.sha`.
 `validation_status=referenced` significa que existem referências, não que o
 servidor verificou o provedor externo ou auditou os relatórios por conta própria.
 
 `--allow-dirty` serve somente para diagnóstico local, com
 `provenance_status=dirty`; evidências desse estado não devem aprovar uma release.
-Gates de integração real continuam separados e exigem verificação explícita.
+O procedimento foi simplificado: lotes de até 1.000 fotos e sincronização
+automática não exigem gates manuais. Apenas novas operações com limite ou meta
+acima de 1.000 fotos exigem a autorização F, vinculada ao SHA da API e com
+evidência real. A aprovação F não substitui os limites de lote, bytes,
+capacidade, perfil do banco, autorização explícita da meta e proteção de custos.
+Autorizações de backfill já persistidas continuam válidas após redeploy da API,
+mas são revalidadas contra os limites correntes em cada execução.
+Os registros históricos dos gates A-E são preservados no banco para auditoria,
+mas não são exigidos ou apresentados no fluxo operacional.
 
 ## Atualização e rollback
 
 Gere o manifesto da imagem que será executada. Após rollback, use novamente o
 manifesto daquela imagem e consulte `/v1/release`; não copie evidências do build
-mais novo para o antigo. Antes de ampliar a biblioteca, confira que os gates
-apontam para o SHA instalado e que as revisões de modelo não mudaram.
+mais novo para o antigo. Antes de iniciar uma *nova* operação acima de 1.000 fotos, confira a
+autorização F para o SHA instalado da API. Mudanças apenas no frontend
+não invalidam essa autorização; operações de backfill já aceitas continuam
+com a meta aprovada, sujeitas aos limites atuais.
