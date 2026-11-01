@@ -25,14 +25,16 @@ describe('whole-app diagnostics', () => {
   });
 
   it('sends only whitelisted metadata to Cloudflare, never stack or error message', async () => {
-    const fetcher = vi.fn(async () => new Response(null, { status: 204 }));
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _options?: RequestInit) =>
+      new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetcher);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const incident = reportDiagnostic(new Error('PRIVATE_SECRET_IN_MESSAGE'), 'runtime');
     expect(incident.id).toMatch(/^[0-9a-f-]{36}$/);
     const [url, options] = fetcher.mock.calls[0];
+    if (!options) throw new Error('Missing request options');
     expect(url).toBe('/__diagnostics/client-errors');
-    const body = JSON.stringify(JSON.parse(options.body));
+    const body = JSON.stringify(JSON.parse(String(options.body)));
     expect(body).toContain(incident.id);
     expect(body).not.toContain('PRIVATE_SECRET_IN_MESSAGE');
     expect(Object.keys(JSON.parse(options.body)).sort()).toEqual(['code', 'id', 'phase']);
