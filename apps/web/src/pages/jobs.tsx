@@ -10,6 +10,7 @@ import { Dialog } from '../components/ui/dialog';
 import { date, items, number, obj, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { jobLogsUrl } from '../lib/diagnostics';
+import { sentryEventUrl } from '../lib/sentry';
 
 const jobNames: Record<string, string> = {
   icloud_discovery: 'Descoberta iCloud', media_download: 'Download da representação',
@@ -138,6 +139,10 @@ export function JobsPage() {
       {job.error_code && <div className="job-error"><strong>{job.error_code}</strong>
         <pre style={{ whiteSpace:'pre-wrap' }}>{JSON.stringify(job.error_details,null,2)}</pre>
         <div className="diagnostic-actions">
+          {typeof job.error_details?.sentry_event_id === 'string' &&
+            sentryEventUrl(job.error_details.sentry_event_id) && <a
+              href={sentryEventUrl(job.error_details.sentry_event_id)} target="_blank"
+              rel="noopener noreferrer"><ExternalLink size={14}/>Ver erro exato no Sentry</a>}
           <a href={jobLogsUrl(job.job_type, job.id,
             typeof job.error_details?.correlation_id === 'string' ? job.error_details.correlation_id : undefined)} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={14} />Ver logs do job no GCP</a>
