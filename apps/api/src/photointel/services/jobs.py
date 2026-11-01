@@ -301,6 +301,15 @@ async def worker_seen(
     )
 
 
+def _batch_lock_statement(batch_id: UUID):
+    return (
+        select(JobBatch)
+        .where(JobBatch.id == batch_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    )
+
+
 async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
     if not batch_id:
         return
@@ -308,14 +317,9 @@ async def refresh_batch(session: AsyncSession, batch_id: UUID | None) -> None:
 
     # Serialize aggregation after the job's fenced update. A stale concurrent
     # snapshot must not leave a fully completed batch marked as running forever.
-    batch = await session.scalar(
-        select(JobBatch)
-        .where(
-            JobBatch.id == batch_id,
-        )
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
+    # FOR NO KEY UPDATE serializes batch writers without blocking FK KEY SHARE
+    # checks from concurrently enqueued/updated jobs in the same batch.
+    batch = await session.scalar(_batch_lock_statement(batch_id))
     if not batch:
         return
     counts: dict[str, int] = {
