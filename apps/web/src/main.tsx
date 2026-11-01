@@ -24,7 +24,7 @@ const client = new QueryClient({
 function reportNonFatal(error: unknown, phase: 'runtime' | 'promise' | 'resource' | 'worker') {
   const incident = reportDiagnostic(error, phase);
   if (document.querySelector('.app-shell')) {
-    useUi.getState().notify('Falha detectada · ID ' + incident.id, 'error');
+    useUi.getState().notify('Falha detectada · ID ' + incident.id, 'error', incident);
   }
 }
 

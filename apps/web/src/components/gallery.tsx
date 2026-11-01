@@ -151,17 +151,21 @@ function PhotoTile({ asset, selected, selecting, onSelect, onOpen }: {
   const held = useRef(false);
   const cancel = () => { if (timer.current) clearTimeout(timer.current); };
   useEffect(() => cancel, []);
-  return <button className={`photo-tile ${selected ? 'selected' : ''} ${selecting ? 'selecting' : ''}`}
+  return <div role="button" tabIndex={0} className={`photo-tile ${selected ? 'selected' : ''} ${selecting ? 'selecting' : ''}`}
     onClick={() => { if (held.current) { held.current = false; return; }
-      if (selecting) onSelect(); else onOpen(); }} aria-label={asset.filename}
+      if (selecting) onSelect(); else onOpen(); }}
+    onKeyDown={(event) => { if (event.target === event.currentTarget &&
+      (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault(); if (selecting) onSelect(); else onOpen();
+    } }} aria-label={asset.filename}
     aria-pressed={selecting ? selected : undefined}
     onPointerDown={(event) => { if (event.pointerType === 'touch') {
       held.current = false; timer.current = setTimeout(() => { held.current = true; onSelect(); }, 550);
     } }} onPointerUp={cancel} onPointerCancel={cancel} onPointerMove={cancel}
     onContextMenu={(event) => { event.preventDefault(); if (!held.current) onSelect(); }}>
-    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} />
+    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} assetId={asset.id} />
     <span className="photo-select" aria-hidden="true">{selected && <Check size={13} />}</span>
     <span className="photo-overlay">{asset.media_type === 'video' && <Image size={12} />}
       {asset.filename}</span>
-  </button>;
+  </div>;
 }

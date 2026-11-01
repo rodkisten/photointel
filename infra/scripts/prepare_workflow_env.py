@@ -232,6 +232,7 @@ def worker_deploy(config: dict) -> None:
             "FRONTEND_ORIGIN": config["frontend_origin"],
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": config["access_audience"],
+            "RELEASE_SHA": public["VITE_RELEASE_ID"],
         },
         "assets": {
             "directory": "../../../apps/web/dist",

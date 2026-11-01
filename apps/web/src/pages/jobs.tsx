@@ -1,5 +1,5 @@
 import { Activity, ChevronDown, Cpu, Info, Pause, Play, Plus,
-  RefreshCw, RotateCcw, X } from 'lucide-react';
+  ExternalLink, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { apiUrl, useAction, useApi } from '../api/client';
@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Dialog } from '../components/ui/dialog';
 import { date, items, number, obj, text } from '../lib/format';
 import { useUi } from '../lib/store';
+import { jobLogsUrl } from '../lib/diagnostics';
 
 const jobNames: Record<string, string> = {
   icloud_discovery: 'Descoberta iCloud', media_download: 'Download da representação',
@@ -135,7 +136,16 @@ export function JobsPage() {
         started: date(job.started_at,true), finished: date(job.finished_at,true), heartbeat: date(job.heartbeat_at,true),
       }} /><h3 style={{ margin: '20px 0 10px' }}>Progresso registrado</h3><pre className="code-block bounded-pre">{JSON.stringify(job.progress,null,2)}</pre>
       {job.error_code && <div className="job-error"><strong>{job.error_code}</strong>
-        <pre style={{ whiteSpace:'pre-wrap' }}>{JSON.stringify(job.error_details,null,2)}</pre></div>}</>}
+        <pre style={{ whiteSpace:'pre-wrap' }}>{JSON.stringify(job.error_details,null,2)}</pre>
+        <div className="diagnostic-actions">
+          <a href={jobLogsUrl(job.job_type)} target="_blank" rel="noopener noreferrer">
+            <ExternalLink size={14} />Ver logs do job no GCP</a>
+          <button type="button" onClick={() => void navigator.clipboard.writeText(
+            `PhotoIntel job: ${job.id} · ${job.error_code}`)}>
+            Copiar ID do job</button>
+          <small>Use o ID do job e o horário da falha para localizar a execução.
+            Os logs do Cloud Run podem não conter esse ID.</small>
+        </div></div>}</>}
     </Dialog>
     <Dialog open={reindex} onOpenChange={setReindex} title="Processar um lote"
       description="A IA só executa com adapter configurado e limites de custo aprovados. Nenhuma imagem é apagada.">

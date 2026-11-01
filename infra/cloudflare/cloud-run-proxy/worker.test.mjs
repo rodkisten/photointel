@@ -247,3 +247,31 @@ test('browser reports contain only approved metadata and can be searched by ID',
   }), env);
   assert.equal(blocked.status, 403);
 });
+
+test('release version is no-store and bound to this frontend, not leaked to other origins', async () => {
+  const sha = 'a'.repeat(40);
+  const configured = { ...env, RELEASE_SHA: sha };
+  const result = await handle(new Request(env.FRONTEND_ORIGIN + '/__app/version'), configured);
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { release: sha });
+  assert.match(result.headers.get('cache-control'), /no-store/);
+  assert.equal((await handle(request('/__app/version'), configured)).status, 404);
+  assert.deepEqual(await (await handle(new Request(env.FRONTEND_ORIGIN + '/__app/version'), env)).json(),
+    { release: null });
+});
+
+test('SPA navigation and sw.js bypass edge cache; versioned assets keep normal caching', async () => {
+  const configured = {
+    ...env,
+    ASSETS: { fetch: async () => new Response('ok', {
+      headers: { 'Cache-Control': 'public, max-age=86400' },
+    }) },
+  };
+  for (const path of ['/', '/library', '/sw.js', '/manifest.webmanifest', '/index.html']) {
+    const response = await handle(new Request(env.FRONTEND_ORIGIN + path), configured);
+    assert.match(response.headers.get('cache-control'), /no-store/, path);
+    assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
+  }
+  const asset = await handle(new Request(env.FRONTEND_ORIGIN + '/assets/app.abcd1234.js'), configured);
+  assert.equal(asset.headers.get('cache-control'), 'public, max-age=86400');
+});

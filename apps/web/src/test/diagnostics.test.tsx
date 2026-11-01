@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/error';
 import { AppErrorBoundary, DiagnosticActions } from '../components/error-boundary';
+import { Toast } from '../components/common';
+import { useUi } from '../lib/store';
 import { diagnosticFor, diagnosticLogsUrl, reportDiagnostic } from '../lib/diagnostics';
 
 afterEach(() => {
@@ -40,6 +42,15 @@ describe('whole-app diagnostics', () => {
     expect(body).toContain(incident.id);
     expect(body).not.toContain('PRIVATE_SECRET_IN_MESSAGE');
     expect(Object.keys(JSON.parse(String(options.body))).sort()).toEqual(['code', 'id', 'phase']);
+  });
+
+  it('adds a Cloudflare console link to even a generic error toast', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    useUi.getState().notify('Falha inesperada', 'error');
+    render(<Toast />);
+    expect(screen.getByRole('link', { name: 'Ver logs no Cloudflare' })).toBeVisible();
+    useUi.getState().dismiss();
   });
 
   it('shows recovery actions rather than a blank screen after a React render exception', () => {
