@@ -32,6 +32,8 @@ function newId(): string {
 }
 
 export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnostic {
+  const previouslyReported = error instanceof Error ? diagnosed.get(error) : undefined;
+  if (previouslyReported) return previouslyReported;
   const api = error instanceof ApiError ? error : null;
   const name = error instanceof Error ? error.name : 'UnknownError';
   return {
