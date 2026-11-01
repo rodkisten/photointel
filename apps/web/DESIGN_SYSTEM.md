@@ -8,6 +8,9 @@ application class names remain in `styles.css`.
 - `--ui-gray-tone: 3.5%` is the base canvas luminance (achromatic HSL).
 - `--ui-contrast: 1.22` expands the luminance gap between surfaces, borders,
   and text. Try `1` for softer contrast or `1.4` for stronger contrast.
+- `--font-size-base: 1rem` (normally 16px) controls all typography tokens.
+  The 20 original steps use `calc(var(--font-size-base) * N / 16)`.
+  `1rem` preserves the existing sizes; `18px` makes each size 12.5% larger.
 - `--ui-density: comfortable` (or `compact`) controls supported container
   layouts and field spacing.
 
@@ -17,6 +20,7 @@ A runtime theme panel can use:
 ```ts
 document.documentElement.style.setProperty('--ui-gray-tone', '4%');
 document.documentElement.style.setProperty('--ui-contrast', '1.3');
+document.documentElement.style.setProperty('--font-size-base', '18px');
 ```
 
 The entire neutral ramp `--gray-0` through `--gray-17` is computed using
@@ -29,7 +33,10 @@ adding new hex literals. Status colors are exceptions intentionally.
 
 Use `--space-1` to `--space-14` for spacing; `--radius-sm`,
 `--radius-md`, `--radius-lg`; `--text-10` to `--text-33` for
-typographic sizes. Shared classes use Tailwind 4's `@apply` when helpful.
+typographic sizes, now calculated from the single `--font-size-base` token.
+Tailwind's `text-xs`, `text-sm`, `text-base` through `text-4xl` utilities also
+share the base and proportionally scaled line heights.
+Shared classes use Tailwind 4's `@apply` when helpful.
 
 The page, panel, filters and other responsive regions use named
 `container-type: inline-size` containers and `@container` rules. This
@@ -40,7 +47,7 @@ supported by Safari 16+ and custom-property style queries by Safari 18+.
 
 ## iPhone Safari
 
-Native inputs/selects/textareas stay at 16px on small screens to prevent
+Native inputs/selects/textareas stay at 16px or above on small screens to prevent
 focus zoom. The old `transform: scale(.92)` workaround was removed to
 avoid undersized hit targets, overflow, and blurry text. Safe-area
 insets, dynamic viewport units, reduced motion and touch behavior remain.
