@@ -47,7 +47,7 @@ Sem esses secrets, o integrador apenas informa "Notify! disabled" e os workflows
 
 ### Como o contador funciona
 
-O seletor `action` define a quantidade real de fases estratégicas. Em `all` são quatro: **Build → Jobs → API → Agenda**; nas ações individuais há uma única fase. Em Setup GCP há a fase **Setup**. Os eventos `running` atualizam o botão para o step que vai começar; eventos `success` aumentam a contagem somente depois da conclusão. Etapas ignoradas não contam. Falhas preservam o último contador válido.
+O seletor `action` define a quantidade real de fases estratégicas. Em `release` são três: **Build → Jobs → API**; `scheduler` e outras ações individuais têm uma única fase. Em Setup GCP há a fase **Setup**. Os eventos `running` atualizam o botão para o step que vai começar; eventos `success` aumentam a contagem somente depois da conclusão. Etapas ignoradas não contam. Falhas preservam o último contador válido.
 
 A API Notify! aceita `steps` (de 2 a 20), `step` (concluídas), `trailing` (`2/4`) e `button: {title, url, open: true}`. O campo `endsIn` não é enviado ao iniciar nem atualizar, e é limpo ao finalizar. Consulte [a documentação oficial](https://getnotifyapp.com/apidocs/).
 

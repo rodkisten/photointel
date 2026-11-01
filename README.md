@@ -83,11 +83,13 @@ Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, valida�
 
 A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
 
-## 🚀 Publicação simplificada: uma etapa ou todas
+## 🚀 Publicação simplificada: um clique para o release
 
-No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), o dropdown `action` permite escolher `build`, `jobs-deploy`, **`migrate`** (`plan`/`apply`), `deploy`, `scheduler`, `cleanup` ou **`all`**. O modo `all` executa em sequência, com o **mesmo SHA**, `build` (reutiliza a imagem existente, se houver) → verificação → Jobs → API → agendamentos pausados. Uma falha interrompe os steps seguintes; o cleanup da configuração local ocorre no final.
+No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml), a opção padrão **`release`** executa no **mesmo SHA e uma única execução**: `build` (com cache de imagem) → validação de digest → `jobs-deploy` → `deploy` (API). Uma falha interrompe a sequência; o cleanup local ocorre no final. As notificações mostram **3 fases: Build → Jobs → API**.
 
-**Atenção na primeira instalação:** `all` **não** migra o banco. `database_ready` começa desmarcado e deve ser confirmado apenas depois de migrar e validar Neon, secrets e Cloudflare Access. Na primeira instalação, use `jobs-deploy` → **`migrate` (`plan` opcional; `apply` com uma única escolha de segurança)** → `deploy`. A migração roda Alembic diretamente no GitHub Actions contra o Neon (sem Cloud Run Job). A identidade migradora obtém a versão fixa do Secret Manager e o CLI consulta o estado do banco antes de qualquer alteração; migrações nunca fazem parte de `all`. [Detalhes do fluxo e de cada opção](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
+As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis. **`migrate` e `scheduler` são separados**, jamais disparados pelo `release`. O release publica as definições dos Cloud Run Jobs, mas não os executa e não inicia ingestão ou GPU.
+
+**Segurança:** `database_ready` começa desmarcado. Confirme-o somente depois de migrar e validar Neon, versões dos secrets e Cloudflare Access. Na primeira instalação, configure a infraestrutura, execute a migração explicitamente quando necessária e só então use `release`. [Guia e restrições](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Google Cloud Run: do zero ao deploy
 
