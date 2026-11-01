@@ -89,18 +89,24 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertLess(self.stages["build_image"], self.stages["verify_image"])
         self.assertLess(self.stages["verify_image"], self.stages["deploy_jobs"])
 
-    def test_api_publication_requires_explicit_operator_readiness(self) -> None:
-        self.assertIn("        default: false", self.workflow)
-        self.assertIn("inputs.database_ready", self.stage("database_gate"))
-        self.assertIn("DATABASE_READY", self.stage("database_gate"))
-        self.assertIn("run: bash infra/gcp/release.sh gate", self.stage("database_gate"))
-        guard = (ROOT / "infra/gcp/release.sh").read_text(encoding="utf-8")
-        self.assertIn("DATABASE_READY", guard)
-        self.assertIn("return 1", guard)
-        self.assertIn("inputs.action == 'deploy'", self.stage("database_gate"))
-        self.assertIn("inputs.action == 'release'", self.stage("database_gate"))
-        self.assertNotIn("manage.py migrate", self.workflow, "No automatic database migrations")
+    def test_api_publication_checks_real_database_head_without_manual_confirmation(self) -> None:
+        gate = self.stage("database_gate")
+        self.assertIn("run: bash infra/gcp/release.sh gate", gate)
+        self.assertIn("inputs.action == 'deploy'", gate)
+        self.assertIn("inputs.action == 'release'", gate)
         self.assertLess(self.stages["database_gate"], self.stages["build_image"])
+        # Credentials must exist before an automated, read-only Neon verification.
+        self.assertLess(self.stages["notify_observed_002"], self.stages["database_gate"])
+        self.assertNotIn("database_ready:", self.workflow)
+        self.assertNotIn("authorize_charges:", self.workflow)
+        self.assertNotIn("confirm_project:", self.workflow)
+        self.assertNotIn("inputs.confirm_project", self.workflow)
+        self.assertNotIn("inputs.authorize_charges", self.workflow)
+        self.assertIn("CONFIRM_PROJECT: photointel", gate)
+        guard = (ROOT / "infra/gcp/release.sh").read_text(encoding="utf-8")
+        self.assertIn("MIGRATION_MODE=verify", guard)
+        self.assertNotIn("DATABASE_READY", guard)
+        self.assertNotIn("manage.py migrate", self.workflow, "No automatic database migrations")
 
     def test_migration_is_opt_in_and_requires_database_safety_evidence(self) -> None:
         migrate = self.stage("migrate_database")
