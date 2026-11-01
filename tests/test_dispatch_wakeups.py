@@ -54,7 +54,7 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
             return False
 
         async def scalar(self, statement):
-            assert "icloud_discovery" in str(statement)
+            assert "job_type" in str(statement)
             events.append("check")
             return pending
 
