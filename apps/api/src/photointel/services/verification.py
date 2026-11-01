@@ -67,9 +67,25 @@ async def require_import_gates(session: AsyncSession, requested: int) -> None:
     }
     pending = [key for key in required if states[key] != "passed"]
     if pending:
+        info = [
+            {"id": key, "name": GATES[key][0], "requirement": GATES[key][2],
+             "status": states[key]}
+            for key in pending
+        ]
+        names = ", ".join(f"{gate['id']} ({gate['name']})" for gate in info)
         raise AppError(
-            ErrorCode.INVALID_REQUEST,
-            "Validação necessária antes deste lote: " + ", ".join(pending),
+            ErrorCode.VERIFICATION_REQUIRED,
+            "Importação ainda não autorizada: falta validar " + names +
+            ". Abra Preparação e validação, execute os testes exigidos "
+            "e registre a evidência para o release instalado.",
             409,
-            {"required_gates": pending},
+            {
+                "reason": "RELEASE_VERIFICATION_PENDING",
+                "required_gates": pending,
+                "gates": info,
+                "action": {
+                    "label": "Abrir Preparação e validação",
+                    "href": "/setup",
+                },
+            },
         )
