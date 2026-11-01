@@ -16,6 +16,7 @@ from sqlalchemy import text
 from photointel.config import get_settings
 from photointel.database import SessionLocal, engine
 from photointel.errors import AppError, ErrorCode, error_response
+from photointel.observability import correlation_context
 from photointel.storage import S3Storage, get_storage
 
 logger = logging.getLogger("photointel.api")
@@ -118,6 +119,8 @@ def create_app() -> FastAPI:
             )
         except (ValueError, AttributeError):
             request.state.correlation_id = str(uuid4())
+        # Inherit the trusted edge UUID into jobs enqueued in this request.
+        correlation_context.set(request.state.correlation_id)
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 length = int(request.headers.get("content-length", "0"))
