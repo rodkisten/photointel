@@ -23,8 +23,7 @@ describe('release-bound operational readiness', () => {
         {id: 'modal', label: 'Modal', state: 'not_configured', reason: 'Sem credenciais configuradas'},
       ], spending: {enabled: false, gpu_enabled: false}, next_action: {label: 'Configurar Modal', href: '/settings'}});
       if (path === '/v1/verification/gates') return Response.json({items: [
-        {id: 'A', name: 'Fixtures locais', status: 'not_verified', reason: 'Sem evidência para esta release'},
-        {id: 'F', name: 'Backfill de produção', status: 'blocked', reason: 'Gates anteriores pendentes'},
+        {id: 'F', name: 'Importações acima de 1.000 fotos', status: 'not_verified', reason: 'Autorize escala'},
       ], full_backfill_unlocked: false});
       return Response.json({git_sha: sha, api_version: '1.1.0', models: {}, test_results: [], ci_run_ids: []});
     });
@@ -32,9 +31,10 @@ describe('release-bound operational readiness', () => {
     mount(<SetupPage />);
     expect(await screen.findByText('Consulta de saúde executada')).toBeVisible();
     expect(screen.getByText(/GPU desativada.*outros custos/)).toBeVisible();
-    await screen.findByText('Fixtures locais');
+    await screen.findByText('Importações acima de 1.000 fotos');
     const buttons = screen.getAllByRole('button', {name: 'Registrar verificação'});
-    expect(buttons[1]).toBeDisabled();
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toBeEnabled();
     const user = userEvent.setup();
     await user.click(buttons[0]);
     const dialog = screen.getByRole('dialog');
@@ -45,7 +45,7 @@ describe('release-bound operational readiness', () => {
     await user.click(within(dialog).getByRole('checkbox'));
     await user.click(save);
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/v1/verification/gates', expect.objectContaining({
-      method: 'PATCH', body: JSON.stringify({gate_id: 'A', status: 'passed', evidence: ['reports/current.json'],
+      method: 'PATCH', body: JSON.stringify({gate_id: 'F', status: 'passed', evidence: ['reports/current.json'],
         notes: '', release_sha: sha, operator_attestation: true}),
     })));
   });
