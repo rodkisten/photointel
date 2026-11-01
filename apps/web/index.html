@@ -11,6 +11,29 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Photo Intelligence Cloud</title>
+    <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY",
+    authDomain: "photointel-firebase.firebaseapp.com",
+    projectId: "photointel-firebase",
+    storageBucket: "photointel-firebase.firebasestorage.app",
+    messagingSenderId: "723658488603",
+    appId: "1:723658488603:web:64c64e34743b9aabe431be",
+    measurementId: "G-RE93MWG6FN"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
   </head>
   <body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
 </html>
