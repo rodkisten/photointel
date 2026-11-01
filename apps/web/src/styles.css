@@ -2910,3 +2910,27 @@ input.input, select.input, textarea.input {
 .notice.warning li { margin-block: var(--space-2); }
 .notice.warning li small { display: block; margin-top: var(--space-1); color: var(--text-muted); }
 .notice.warning .button { display: inline-flex; margin-top: var(--space-3); }
+
+
+/* Per-photo repair state: never hide the queue's actual failure behind 409. */
+.preview-repair-state {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--gray-8);
+  border-radius: var(--radius-md);
+  background: var(--gray-3);
+  color: var(--text-primary);
+  min-width: 0;
+}
+.preview-repair-state > strong { font-size: var(--text-12); line-height: 1.5; }
+.preview-repair-state dl {
+  display: grid;
+  grid-template-columns: minmax(90px, 38%) minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+  font-size: var(--text-11);
+}
+.preview-repair-state dt { color: var(--text-muted); }
+.preview-repair-state dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.preview-repair-state p { margin: 0; font-size: var(--text-11); color: var(--text-secondary); }
