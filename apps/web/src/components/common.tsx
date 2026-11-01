@@ -1,7 +1,9 @@
 import { AlertCircle, Camera, Check, RefreshCw, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { DiagnosticActions } from './error-boundary';
-import { diagnosticFor } from '../lib/diagnostics';
+import { diagnosticFor, reportDiagnostic } from '../lib/diagnostics';
+import type { Diagnostic } from '../lib/diagnostics';
+import { responseError } from '../api/error';
 import { ApiError, apiUrl } from '../api/client';
 import { statusLabel, text } from '../lib/format';
 import { useUi } from '../lib/store';
@@ -59,7 +61,9 @@ export function Toast() {
   if (!toast) return null;
   return <div className={`toast toast-${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
     {toast.kind === 'error' ? <AlertCircle size={17} /> : <Check size={17} />}
-    <span>{toast.text}</span><button onClick={dismiss} aria-label="Dispensar aviso"><X size={16} /></button>
+    <div className="toast-message"><span>{toast.text}</span>
+      {toast.kind === 'error' && toast.incident && <DiagnosticActions incident={toast.incident} />}
+    </div><button onClick={dismiss} aria-label="Dispensar aviso"><X size={16} /></button>
   </div>;
 }
 export function PrivateImage({ src, alt, className, onClick, priority = false }: {
@@ -68,15 +72,60 @@ export function PrivateImage({ src, alt, className, onClick, priority = false }:
 }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => { setFailed(false); setAttempt(0); }, [src]);
+  const [variant, setVariant] = useState(0);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [incident, setIncident] = useState<Diagnostic | null>(null);
+  const candidates = useMemo(() => {
+    if (!src) return [];
+    const result = [src];
+    const match = src.match(/^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)$/i);
+    if (match) {
+      if (match[2] === 'preview_large') result.push(match[1] + 'thumbnail_medium');
+      result.push(match[1] + 'thumbnail_small');
+    }
+    return result;
+  }, [src]);
+  useEffect(() => {
+    setFailed(false); setVariant(0); setAttempt(0); setIncident(null);
+  }, [src]);
+  const current = candidates[Math.min(variant, candidates.length - 1)];
+  async function diagnose(event: React.MouseEvent) {
+    event.stopPropagation();
+    setDiagnosing(true);
+    try {
+      if (!current) throw new ApiError('Prévia ainda não gerada', 404,
+        'PREVIEW_NOT_GENERATED', undefined, { source: 'gcp' });
+      const response = await fetch(apiUrl(current), {
+        method: 'GET', credentials: 'include', cache: 'no-store',
+        headers: { Range: 'bytes=0-0' },
+      });
+      if (!response.ok) throw await responseError(response, current, 'GET');
+      // A valid HTTP response with invalid browser image bytes is not an API 404.
+      throw new ApiError('Prévia retornada, mas o navegador não conseguiu decodificá-la',
+        response.status, 'MEDIA_RENDER_FAILED',
+        response.headers.get('X-Correlation-ID') ?? undefined,
+        { source: 'gcp', method: 'GET', path: current });
+    } catch (error) {
+      setIncident(reportDiagnostic(error, 'api'));
+    } finally { setDiagnosing(false); }
+  }
   if (!src || failed) return <div className={`image-unavailable ${className ?? ''}`}>
-    <Camera size={22} /><span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
-    {src && <button onClick={(event) => { event.stopPropagation(); setFailed(false);
-      setAttempt((value) => value + 1); }}>Recarregar</button>}</div>;
-  return <img key={`${src}-${attempt}`} src={apiUrl(attempt ? `${src}?retry=${attempt}` : src)} crossOrigin="use-credentials"
-    alt={alt} className={className} loading={priority ? 'eager' : 'lazy'}
-    decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)}
+    <Camera size={22} />
+    <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
+    {src && <button type="button" onClick={(event) => { event.stopPropagation();
+      setFailed(false); setVariant(0); setIncident(null);
+      setAttempt((value) => value + 1); }}>Recarregar</button>}
+    <button type="button" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
+      {diagnosing ? 'Consultando…' : 'Ver erro'}</button>
+    {incident && <div className="preview-diagnostic" onClick={(event) => event.stopPropagation()}>
+      <strong>{incident.code}</strong><DiagnosticActions incident={incident} />
+    </div>}
+  </div>;
+  const url = attempt ? `${current}${current.includes('?') ? '&' : '?'}retry=${attempt}` : current;
+  return <img key={`${url}-${variant}`} src={apiUrl(url)}
+    crossOrigin="use-credentials" alt={alt} className={className}
+    loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer"
+    onError={() => { if (variant + 1 < candidates.length) setVariant((n) => n + 1);
+      else setFailed(true); }}
     onClick={onClick} draggable={false} />;
 }
-
-

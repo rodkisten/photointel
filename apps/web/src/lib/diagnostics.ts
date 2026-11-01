@@ -88,3 +88,11 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
     ...(incident.rayId ? ['Cloudflare Ray: ' + incident.rayId] : []),
   ].join('\n');
 }
+
+/** A Cloud Run job is executed in GCP, not the Cloudflare edge. */
+export function jobLogsUrl(jobType: string): string {
+  const jobName = jobType === 'icloud_discovery' ? 'photointel-discover' : 'photointel-worker';
+  const query = `resource.type="cloud_run_job" AND resource.labels.job_name="${jobName}"`;
+  return 'https://console.cloud.google.com/logs/query;query=' +
+    encodeURIComponent(query) + '?project=photointel';
+}

@@ -1,6 +1,7 @@
 /** Same-origin requests; Cloudflare Access cookies never enter application storage. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUi } from '../lib/store';
+import { reportDiagnostic } from '../lib/diagnostics';
 import { ApiError, responseError } from './error';
 export { ApiError } from './error';
 
@@ -39,7 +40,7 @@ export function useAction<T = unknown>(path?: string, method = 'POST') {
       return request<T>(url ?? path!, json(method, body));
     },
     onSuccess: () => { void client.invalidateQueries(); },
-    onError: (error) => notify(error.toString(), 'error'),
+    onError: (error) => notify(error.toString(), 'error', reportDiagnostic(error, 'api')),
   });
 }
 
