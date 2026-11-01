@@ -66,11 +66,15 @@ export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagno
   return incident;
 }
 
+/** Official Logs Explorer deep link: query and duration are path parameters. */
+function gcpLogsUrl(query: string): string {
+  return 'https://console.cloud.google.com/logs/query;query=' +
+    encodeURIComponent(query) + ';duration=P7D?project=photointel';
+}
+
 export function diagnosticLogsUrl(incident: Diagnostic): string {
   if (incident.source === 'gcp') {
-    const query = 'SEARCH("' + incident.id + '")';
-    return 'https://console.cloud.google.com/logs/query;query=' +
-      encodeURIComponent(query) + '?project=photointel';
+    return gcpLogsUrl('SEARCH("' + incident.id + '")');
   }
   // Without an account ID, route to the official Workers page and let the
   // operator select PhotoIntel > Observability and filter correlation_id.
@@ -89,10 +93,13 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
   ].join('\n');
 }
 
-/** A Cloud Run job is executed in GCP, not the Cloudflare edge. */
-export function jobLogsUrl(jobType: string): string {
+/** Worker/job IDs are emitted as safe structured fields by the Python runner. */
+export function jobLogsUrl(jobType: string, jobId?: string, correlationId?: string): string {
   const jobName = jobType === 'icloud_discovery' ? 'photointel-discover' : 'photointel-worker';
-  const query = `resource.type="cloud_run_job" AND resource.labels.job_name="${jobName}"`;
-  return 'https://console.cloud.google.com/logs/query;query=' +
-    encodeURIComponent(query) + '?project=photointel';
+  const ids = [jobId, correlationId].filter((id): id is string => Boolean(id && UUID.test(id)));
+  const filter = ids.length ? '\\n(' + ids.map((id, index) =>
+    (index === 0 ? 'jsonPayload.job_id="' : 'jsonPayload.correlation_id="') + id + '"'
+  ).join(' OR ') + ')' : '';
+  const query = 'resource.type="cloud_run_job"\\nresource.labels.job_name="' + jobName + '"' + filter;
+  return gcpLogsUrl(query);
 }
