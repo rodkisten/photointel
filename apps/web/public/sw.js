@@ -1,5 +1,5 @@
 /* Photo Intelligence Cloud - cache do PWA + Firebase Cloud Messaging 13.1.0 */
-/* global firebase, importScripts */
+/* global firebase */
 
 // Registre o clique ANTES dos imports para evitar que o FCM substitua o handler.
 self.addEventListener('notificationclick', (event) => {
