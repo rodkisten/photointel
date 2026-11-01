@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -112,7 +112,7 @@ def create_app() -> FastAPI:
         # Never log caller-controlled arbitrary strings or expose credentials.
         incoming_correlation = request.headers.get("x-correlation-id", "")
         try:
-            parsed_correlation = str(__import__("uuid").UUID(incoming_correlation))
+            parsed_correlation = str(UUID(incoming_correlation))
             request.state.correlation_id = (
                 parsed_correlation if incoming_correlation == parsed_correlation else str(uuid4())
             )
