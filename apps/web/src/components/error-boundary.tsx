@@ -29,7 +29,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, _info: ErrorInfo) {
+  componentDidCatch(error: Error) {
     this.setState({ incident: reportDiagnostic(error, 'render') });
   }
 
