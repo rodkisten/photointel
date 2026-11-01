@@ -1,5 +1,14 @@
 name: "🍎 iCloud Setup"
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/gcp/icloud_preflight.py'
+      - 'infra/gcp/tests/test_icloud_setup.py'
+      - 'infra/scripts/icloud_terminal.py'
+      - 'apps/api/src/photointel/services/icloud_admin.py'
+      - 'apps/api/src/photointel/services/session_store.py'
+      - '.github/workflows/icloud-setup.yml'
   workflow_dispatch:
 permissions:
   contents: read

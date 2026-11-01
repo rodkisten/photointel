@@ -1,6 +1,15 @@
 name: "🩺 Diagnose Cloud Run"
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/gcp/diagnose_api_connectivity.py'
+      - 'infra/gcp/diagnose_startup.py'
+      - 'infra/gcp/release.sh'
+      - 'apps/api/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/gcp-health.yml'
   workflow_dispatch:
 
 permissions: {contents: read}

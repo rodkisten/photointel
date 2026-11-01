@@ -1,6 +1,14 @@
 name: "🧱 Setup GCP"
 run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · ${{ inputs.confirm_project || 'photointel' }}"
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/gcp/bootstrap.sh'
+      - 'infra/gcp/**'
+      - 'infra/docker/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/gcp-bootstrap.yml'
   workflow_dispatch:
     inputs:
       mode:
@@ -28,8 +36,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  push-check:
+    name: "🧪 GCP bootstrap plan (offline)"
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - run: |
+          bash -n infra/gcp/bootstrap.sh
+          python3 infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json
   bootstrap:
-    if: github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.mode == 'plan' || inputs.authorize_charges == true)
     name: "🧱 ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     environment: production

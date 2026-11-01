@@ -2,8 +2,17 @@ name: "🗃️ Migrate Neon"
 run-name: "🗃️ Neon · ${{ inputs.migration_mode }} · ${{ inputs.confirm_project }}"
 
 # Same migration implementation and safeguards as the migrate stage of Deploy.
-# This workflow never runs from a push or from the Deploy "all" stage.
+# Pushes validate migration scripts offline; applying database changes always requires manual dispatch.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/migrations/**'
+      - 'infra/gcp/release.sh'
+      - 'infra/gcp/tests/test_migration*'
+      - 'apps/api/src/photointel/models/**'
+      - 'apps/api/src/photointel/models.py'
+      - '.github/workflows/gcp-migrate.yml'
   workflow_dispatch:
     inputs:
       migration_mode:
@@ -57,10 +66,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  push-check:
+    name: "🧪 Neon migration scripts (offline)"
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - run: |
+          bash -n infra/gcp/release.sh
+          bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
     name: "🗃️ Neon · ${{ inputs.migration_mode }}"
     if: >-
-      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
       (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose' ||
        (inputs.migration_mode == 'apply' && inputs.authorize_charges == true))
     runs-on: ubuntu-latest

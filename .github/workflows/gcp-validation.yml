@@ -15,6 +15,10 @@ on:
       - cloudbuild.yaml
       - .github/workflows/gcp*.yml
       - .github/workflows/zip.yml
+      - infra/scripts/prepare_workflow_env.py
+      - infra/scripts/cloudflare_setup.py
+      - infra/cloudflare/cloud-run-proxy/**
+      - .github/workflows/deploy-worker.yml
   push:
     branches: [main]
     paths:
@@ -31,6 +35,10 @@ on:
       - cloudbuild.yaml
       - .github/workflows/gcp*.yml
       - .github/workflows/zip.yml
+      - infra/scripts/prepare_workflow_env.py
+      - infra/scripts/cloudflare_setup.py
+      - infra/cloudflare/cloud-run-proxy/**
+      - .github/workflows/deploy-worker.yml
   workflow_dispatch:
     inputs:
       upload_evidence:
