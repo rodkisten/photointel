@@ -17,6 +17,7 @@ from photointel.config import get_settings
 from photointel.database import SessionLocal, engine
 from photointel.errors import AppError, ErrorCode, error_response
 from photointel.observability import correlation_context
+from photointel.sentry_observability import capture_exception, configure_sentry
 from photointel.storage import S3Storage, get_storage
 
 logger = logging.getLogger("photointel.api")
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI) -> Any:
     from photointel.logging import configure_logging
 
     configure_logging(settings.log_level)
+    configure_sentry('photointel-api')
     logger.info("api_started", extra={"environment": settings.app_env})
     yield
     await engine.dispose()
@@ -60,12 +62,22 @@ def create_app() -> FastAPI:
             "If-Range",
             "Range",
             "X-Correlation-ID",
+            "Sentry-Trace",
+            "Baggage",
         ],
-        expose_headers=["ETag", "Content-Length", "Content-Range", "Accept-Ranges", "X-Correlation-ID"],
+        expose_headers=[
+            "ETag", "Content-Length", "Content-Range", "Accept-Ranges",
+            "X-Correlation-ID", "X-Sentry-Event-ID",
+        ],
     )
 
     @app.exception_handler(AppError)
     async def application_error(request: Request, exc: AppError) -> JSONResponse:
+        if exc.status_code >= 500:
+            request.state.sentry_event_id = capture_exception(
+                exc, correlation_id=request.state.correlation_id,
+                error_code=exc.code,
+            )
         return error_response(request, exc)
 
     @app.exception_handler(RequestValidationError)
@@ -89,6 +101,10 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        request.state.sentry_event_id = capture_exception(
+            exc, correlation_id=request.state.correlation_id,
+            error_code="INTERNAL_ERROR",
+        )
         logger.error(
             "request_failed",
             extra={
@@ -193,6 +209,9 @@ def create_app() -> FastAPI:
                 },
             )
         response.headers["X-Correlation-ID"] = request.state.correlation_id
+        event_id = getattr(request.state, "sentry_event_id", None)
+        if event_id:
+            response.headers["X-Sentry-Event-ID"] = event_id
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         if request.url.path.startswith("/v1"):
