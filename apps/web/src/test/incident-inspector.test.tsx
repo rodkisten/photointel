@@ -59,6 +59,26 @@ describe('incident inspector', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+
+  it('handles primitive and null API error details without breaking React', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({
+      correlation_id: correlationId, entries: [], count: 0, note: '',
+    })));
+    for (const details of [42, 'legacy error', false, null]) {
+      const error = new ApiError('Validação necessária antes deste lote', 409,
+        'INVALID_REQUEST', correlationId, { source: 'gcp', details });
+      const view = render(<><DiagnosticActions incident={diagnosticFor(error, 'api')} error={error} />
+        <IncidentInspector /></>);
+      await user.click(screen.getByRole('button', { name: 'Inspecionar erro' }));
+      expect(screen.getByRole('dialog', { name: 'Diagnóstico da ocorrência' })).toBeVisible();
+      expect(screen.getByText('Validação necessária antes deste lote')).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Voltar' }));
+      view.unmount();
+      useUi.setState({ inspector: null });
+    }
+  });
+
   it('keeps server-provided diagnostics even when the Cloud Logging API is unavailable', async () => {
     const user = userEvent.setup();
     const error = new ApiError('Lote já está ocupado', 409, 'INVALID_REQUEST',
