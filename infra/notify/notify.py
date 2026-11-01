@@ -38,7 +38,7 @@ def credentials() -> tuple[str, str] | None:
 def send(endpoint: str, device: str, token: str, payload: dict, *, extra: dict | None = None, method: str = "POST") -> dict:
     path_id = urllib.parse.quote(device, safe="")
     query = urllib.parse.urlencode({"token": token, **(extra or {})})
-    target = f"{BASE_URL}/{endpoint}/{path_id}?{query}"
+    target = f"{BASE_URL}/{endpoint}/{path_id}?{query}&groupType=github-actions&iconUrl=https://photos.migos.club/icon-192.png"
     request = urllib.request.Request(
         target, method=method,
         headers={"Content-Type": "application/json", "User-Agent": "photointel-github-actions/1"},
