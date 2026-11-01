@@ -266,6 +266,9 @@ def create_app() -> FastAPI:
     from photointel.routers.operations import router as operations
 
     app.include_router(catalog, prefix="/v1")
+    from photointel.routers.observability import router as observability
+
+    app.include_router(observability, prefix="/v1")
     app.include_router(operations, prefix="/v1")
     from photointel.routers.bridge import router as bridge
 
