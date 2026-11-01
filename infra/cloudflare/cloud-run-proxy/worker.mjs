@@ -61,7 +61,7 @@ function failure(status, message, extra = {}) {
 async function dispatch(request, env, fetchOrigin, correlationId) {
   const incoming = new URL(request.url);
   const log = (level, event, route, status, durationMs = 0) =>
-    log(level, event, route, status, durationMs, correlationId);
+    important(level, event, route, status, durationMs, correlationId);
   let config;
   try { config = configuration(env, incoming.pathname.startsWith('/v1/')); }
   catch {
