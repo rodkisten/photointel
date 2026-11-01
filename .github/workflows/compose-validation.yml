@@ -3,7 +3,20 @@ name: "🐳 Compose"
 on:
   workflow_dispatch:
   push:
-    branches: [validation/compose]
+    branches: [main]
+    paths:
+      - 'infra/docker/**'
+      - 'infra/migrations/**'
+      - 'infra/scripts/compose.sh'
+      - 'infra/scripts/validate-compose.py'
+      - 'infra/scripts/setup-env.py'
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'Makefile'
+      - '.github/workflows/compose-validation.yml'
 
 permissions:
   contents: read

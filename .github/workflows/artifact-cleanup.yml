@@ -1,5 +1,9 @@
 name: "🧹 Artifact Cleanup"
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/artifact-cleanup.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -63,6 +67,11 @@ jobs:
               keep: kept.map(a => ({id:a.id,name:a.name,run:a.workflow_run.id,bytes:a.size_in_bytes})),
               deleteCount: targets.length,
             }));
+            // On push, check the retention plan without deleting any artifacts.
+            if (context.eventName !== 'workflow_dispatch') {
+              core.info('Read-only push validation: no artifacts will be deleted.');
+              return;
+            }
             let deleted = 0, bytes = 0;
             const failures = [];
             for (const artifact of targets) {

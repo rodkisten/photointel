@@ -3,7 +3,17 @@ name: "🏗️ Architectures"
 on:
   workflow_dispatch:
   push:
-    branches: [validation/container-architectures]
+    branches: [main]
+    paths:
+      - 'infra/docker/**'
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'gpu/**'
+      - 'bridges/**'
+      - 'packages/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/container-architectures.yml'
 
 permissions:
   contents: read
