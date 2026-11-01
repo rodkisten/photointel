@@ -17,7 +17,11 @@ from photointel.config import get_settings
 from photointel.database import SessionLocal, engine
 from photointel.errors import AppError, ErrorCode, error_response
 from photointel.observability import correlation_context
-from photointel.sentry_observability import capture_exception, configure_sentry
+from photointel.sentry_observability import (
+    capture_exception,
+    configure_sentry,
+    request_trace_scope,
+)
 from photointel.storage import S3Storage, get_storage
 
 logger = logging.getLogger("photointel.api")
@@ -195,7 +199,8 @@ def create_app() -> FastAPI:
                 ]
                 for key in expired:
                     _requests.pop(key, None)
-        response = await call_next(request)
+        with request_trace_scope(request.headers):
+            response = await call_next(request)
         if response.status_code >= 400:
             # GCP Logs Explorer can always find the correlation ID of an API error.
             # Never emit private URLs, query strings, request bodies or JWTs.
