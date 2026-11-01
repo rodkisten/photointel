@@ -650,7 +650,9 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
                 ),
                 busy=True,
             )
-            logger.warning("worker_job_deferred", jobs=len(job_ids), reason="database_contention")
+            logger.warning(
+                "worker_job_deferred", jobs=len(job_ids), reason="database_contention"
+            )
             return
         # Capture the *real traceback* before persisting a sanitized job failure.
         # Retried attempts retain separate event IDs in job.progress.
