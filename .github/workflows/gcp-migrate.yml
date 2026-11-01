@@ -73,9 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - run: |
-          bash -n infra/gcp/release.sh
-          bash infra/gcp/tests/test_migration_runtime.sh
+      - run: bash -n infra/gcp/release.sh && bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
     name: "🗃️ Neon · ${{ inputs.migration_mode }}"
     if: >-

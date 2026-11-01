@@ -91,9 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - run: |
-          bash -n infra/gcp/release.sh
-          python3 infra/gcp/manage.py render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
+      - run: bash -n infra/gcp/release.sh && python3 infra/gcp/manage.py render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.authorize_charges == true || (inputs.action == 'migrate' && (inputs.migration_mode == 'plan' || inputs.migration_mode == 'diagnose')))
