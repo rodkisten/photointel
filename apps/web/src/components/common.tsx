@@ -67,6 +67,17 @@ export function Toast() {
     </div><button onClick={dismiss} aria-label="Dispensar aviso"><X size={16} /></button>
   </div>;
 }
+type PreviewState = {
+  status: 'ready' | 'processing' | 'queued' | 'failed' | 'source_pending' | 'preview_missing';
+  ingestion_status: string;
+  available_variants: string[];
+  message: string;
+  job: { id: string; type: string; status: string; attempts: number;
+    max_attempts: number; error_code: string | null; scheduled_at: string | null;
+    created_at: string | null } | null;
+  worker_dispatch: { status: string; error_code: string | null } | null;
+};
+
 export function PrivateImage({ src, alt, className, onClick, priority = false, assetId }: {
   src: string | null | undefined; alt: string; className?: string;
   onClick?: () => void; priority?: boolean; assetId?: string;
@@ -76,22 +87,48 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   const [variant, setVariant] = useState(0);
   const [diagnosing, setDiagnosing] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [previewState, setPreviewState] = useState<PreviewState | null>(null);
+  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
+  const [overrideSrc, setOverrideSrc] = useState<string | null>(null);
   const [incident, setIncident] = useState<Diagnostic | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const candidates = useMemo(() => {
-    if (!src) return [];
-    const result = [src];
-    const match = src.match(/^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)$/i);
+    const effective = overrideSrc ?? src;
+    if (!effective) return [];
+    const result = [effective];
+    const match = effective.match(/^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)$/i);
     if (match) {
       if (match[2] === 'preview_large') result.push(match[1] + 'thumbnail_medium');
       result.push(match[1] + 'thumbnail_small');
     }
     return result;
-  }, [src]);
+  }, [src, overrideSrc]);
   useEffect(() => {
     setFailed(false); setVariant(0); setAttempt(0); setIncident(null);
+    setOverrideSrc(null); setPreviewState(null); setPreviewMessage(null);
   }, [src]);
   const current = candidates[Math.min(variant, candidates.length - 1)];
+  useEffect(() => {
+    if (!actionsOpen || !assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const state = await request<PreviewState>(`/v1/jobs/assets/${assetId}/preview`);
+        if (cancelled) return;
+        setPreviewState(state);
+        if (state.status === 'ready') {
+          setOverrideSrc(`/v1/assets/${assetId}/media/thumbnail_medium`);
+          setFailed(false); setVariant(0); setAttempt((n) => n + 1);
+        }
+      } catch (error) {
+        if (!cancelled) setIncident(reportDiagnostic(error, 'api'));
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 8000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [actionsOpen, assetId]);
+
   async function diagnose(event: MouseEvent) {
     event.stopPropagation();
     setDiagnosing(true);
@@ -132,15 +169,18 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     if (!assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
     setRepairing(true);
     try {
-      await request('/v1/jobs/reindex', json('POST', {
-        asset_ids: [assetId], limit: 1, job_types: ['thumbnail_generate'],
-      }));
-      useUi.getState().notify('Reprocessamento da prévia enfileirado.');
+      const result = await request<{ created: boolean; status: string; message: string }>(
+        `/v1/jobs/assets/${assetId}/preview/repair`, json('POST'));
+      setPreviewMessage(result.message);
       setIncident(null);
-    } catch (error) { setIncident(reportDiagnostic(error, 'api')); }
-    finally { setRepairing(false); }
+      const state = await request<PreviewState>(`/v1/jobs/assets/${assetId}/preview`);
+      setPreviewState(state);
+    } catch (error) {
+      setPreviewMessage(null);
+      setIncident(reportDiagnostic(error, 'api'));
+    } finally { setRepairing(false); }
   }
-  if (!src || failed) return <div className={`image-unavailable ${className ?? ''}`}>
+  if (!(overrideSrc ?? src) || failed) return <div className={`image-unavailable ${className ?? ''}`}>
     <Camera size={16} aria-hidden="true" />
     <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
     <button type="button" className="preview-action-button" aria-label="Ações da prévia"
@@ -160,9 +200,27 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
             <RefreshCw size={15}/>{repairing ? 'Enfileirando…' : 'Solicitar reparo da prévia'}</Button>}
           {src && <Button variant="ghost" disabled={diagnosing} onClick={(event) => void diagnose(event)}>
             {diagnosing ? 'Consultando…' : 'Inspecionar erro de mídia'}</Button>}
+          {previewState && <div className="preview-repair-state" role="status">
+            <strong>{previewState.message}</strong>
+            <dl>
+              <dt>Importação</dt><dd>{previewState.ingestion_status}</dd>
+              {previewState.job && <>
+                <dt>Job</dt><dd>{previewState.job.type} · {previewState.job.status}</dd>
+                <dt>Tentativas</dt><dd>{previewState.job.attempts}/{previewState.job.max_attempts}</dd>
+                {previewState.job.error_code && <>
+                  <dt>Última falha</dt><dd>{previewState.job.error_code}</dd></>}
+                {previewState.job.scheduled_at && <>
+                  <dt>Agendado</dt><dd>{new Date(previewState.job.scheduled_at).toLocaleString('pt-BR')}</dd></>}
+              </>}
+              {previewState.worker_dispatch && <>
+                <dt>Despacho do worker</dt><dd>{previewState.worker_dispatch.status}
+                  {previewState.worker_dispatch.error_code && ` · ${previewState.worker_dispatch.error_code}`}</dd></>}
+            </dl>
+            {previewMessage && <p>{previewMessage}</p>}
+          </div>}
           {incident && <div className="preview-diagnostic"><strong>{incident.code}</strong>
             <DiagnosticActions incident={incident} /></div>}
-          <p className="muted">O reparo usa a fila durável. Evite repetir pedidos enquanto um job estiver aguardando.</p>
+          <p className="muted">O reparo desperta um job existente ou cria somente a etapa faltante. O status é atualizado automaticamente enquanto este painel estiver aberto.</p>
         </div>
       </Dialog>
     </div>
