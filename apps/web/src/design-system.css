@@ -181,7 +181,6 @@
   --color-hover: var(--surface-hover);
   --color-danger: var(--state-danger-text);
   --radius-card: var(--radius-md);
-  --shadow-drawer: var(--shadow-drawer);
 }
 
 /* Override these two root values at runtime, e.g. document.documentElement.style.
