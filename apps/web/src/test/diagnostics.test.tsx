@@ -37,7 +37,7 @@ describe('whole-app diagnostics', () => {
     const body = JSON.stringify(JSON.parse(String(options.body)));
     expect(body).toContain(incident.id);
     expect(body).not.toContain('PRIVATE_SECRET_IN_MESSAGE');
-    expect(Object.keys(JSON.parse(options.body)).sort()).toEqual(['code', 'id', 'phase']);
+    expect(Object.keys(JSON.parse(String(options.body))).sort()).toEqual(['code', 'id', 'phase']);
   });
 
   it('shows recovery actions rather than a blank screen after a React render exception', () => {
