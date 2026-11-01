@@ -47,12 +47,12 @@ test.beforeAll(async ({ request }) => {
 test('v1.1 setup shows persisted unverified gates without unlocking a real backfill', async ({ page, request }) => {
   const gates = await get<Gates>(request, '/v1/verification/gates');
   expect(gates.full_backfill_unlocked).toBe(false);
-  expect(gates.items).toHaveLength(6);
+  expect(gates.items).toHaveLength(1);
   expect(gates.items.every((gate) => gate.status !== 'passed')).toBeTruthy();
   await page.goto('/setup');
   await expect(page.getByRole('heading', { level: 1, name: 'Preparação e validação' })).toBeVisible();
-  const section = page.getByRole('region', { name: 'Gates de verificação', exact: true });
-  await expect(section.getByText('Backfill completo bloqueado.', { exact: false })).toBeVisible();
+  const section = page.getByRole('region', { name: 'Autorização para importações grandes', exact: true });
+  await expect(section.getByText('Importações de até 1.000 fotos não exigem gates.', { exact: false })).toBeVisible();
   await expect(section.locator('.gate-item')).toHaveCount(gates.items.length);
   for (const gate of gates.items) {
     const item = section.locator('.gate-item').filter({
@@ -91,7 +91,7 @@ test('v1.1 overview uses real diagnostics and links to setup at 370px', async ({
   const spending = setup.spending.enabled ? 'Processamento com gasto habilitado.' :
     'Processamento com gasto desabilitado.';
   await expect(panel.getByText(spending, { exact: false })).toBeVisible();
-  const setupLink = panel.getByRole('link', { name: 'Ver gates e release', exact: false });
+  const setupLink = panel.getByRole('link', { name: 'Ver diagnóstico e release', exact: false });
   await expect(setupLink).toHaveAttribute('href', '/setup');
   if (setup.next_action) {
     await expect(panel.getByRole('link', { name: 'Continuar', exact: false }))
