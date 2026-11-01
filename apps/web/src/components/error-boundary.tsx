@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw } from 'lucide-react';
-import { diagnosticClipboardText, diagnosticFor, diagnosticLogsUrl, reportDiagnostic,
+import { diagnosticClipboardText, diagnosticFor, diagnosticLogsQuery, diagnosticLogsUrl, reportDiagnostic,
   type Diagnostic } from '../lib/diagnostics';
 import { sentryEventUrl } from '../lib/sentry';
 
@@ -18,6 +18,15 @@ export function DiagnosticActions({ incident }: { incident: Diagnostic }) {
       <ExternalLink size={14} />Ver ocorrência no Sentry</a>}
     <a href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
       <ExternalLink size={14} />{label}</a>
+    {incident.source === 'gcp' && <>
+      <button type="button" onClick={() => {
+        void navigator.clipboard.writeText(diagnosticLogsQuery(incident)).catch(() => {
+          console.warn('[PhotoIntel] Não foi possível copiar o filtro do GCP');
+        });
+      }}><ClipboardCopy size={14} />Copiar filtro do GCP</button>
+      <small>Se o Google Cloud abrir com a pesquisa incompleta no iPhone,
+        cole o filtro copiado no Logs Explorer e execute a consulta.</small>
+    </>}
     {incident.source === 'cloudflare' &&
       <small>Abra o Worker photointel → Observability e pesquise pelo correlation_id.</small>}
   </div>;
