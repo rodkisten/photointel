@@ -80,7 +80,7 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       return failure(403, 'Origin not allowed');
     }
     const length = Number(request.headers.get('Content-Length'));
-    if (!Number.isInteger(length) || length < 1 || length > 1024) {
+    if ((request.headers.has('Content-Length') && (!Number.isInteger(length) || length < 1 || length > 1024))) {
       return failure(413, 'Invalid diagnostics size');
     }
     try {
@@ -91,7 +91,7 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       if (!item || typeof item !== 'object' ||
           !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id ?? '') ||
           !phases.has(item.phase) ||
-          !/^[A-Z_]{1,48}$/.test(item.code ?? '')) {
+          !/^[A-Z0-9_]{1,48}$/.test(item.code ?? '')) {
         return failure(400, 'Invalid diagnostics');
       }
       console.error({ service: 'photointel', event: 'client_error',
