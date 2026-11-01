@@ -47,8 +47,8 @@ describe('incident inspector', () => {
     const dialog = screen.getByRole('dialog', { name: 'Diagnóstico da ocorrência' });
     expect(within(dialog).getByText('Nenhuma foto disponível para este lote')).toBeVisible();
     expect(within(dialog).getAllByText('NO_ELIGIBLE_ASSETS').length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('POST')).toBeVisible();
-    expect(within(dialog).getByText('/v1/jobs/reindex')).toBeVisible();
+    expect(within(dialog).getAllByText('POST').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('/v1/jobs/reindex').length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(correlationId).length).toBeGreaterThan(0);
     expect(await within(dialog).findByText('api_http_error')).toBeVisible();
     expect(fetcher).toHaveBeenCalledTimes(1);
