@@ -3,9 +3,9 @@
 set -Eeuo pipefail
 MODE="${BOOTSTRAP_MODE:-plan}"
 CONFIG="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
-[[ "$MODE" == "plan" || "$MODE" == "apply" ]] || { echo "::error::Invalid mode" >&2; exit 2; }
+[[ "$MODE" == "plan" || "$MODE" == "apply" || "$MODE" == "permissions" ]] || { echo "::error::Invalid mode" >&2; exit 2; }
 command -v jq >/dev/null || { echo "::error::jq is required" >&2; exit 2; }
-if [[ "$MODE" == apply ]]; then command -v gcloud >/dev/null || { echo "::error::gcloud is required for apply" >&2; exit 2; }; fi
+if [[ "$MODE" != plan ]]; then command -v gcloud >/dev/null || { echo "::error::gcloud is required for IAM/apply" >&2; exit 2; }; fi
 PROJECT="$(jq -er '.project_id' "$CONFIG")"
 REGION="$(jq -er '.region' "$CONFIG")"
 REPO="$(jq -er '.repository' "$CONFIG")"
@@ -20,7 +20,7 @@ BOOTSTRAP="serviceAccount:photointel-bootstrap@$PROJECT.iam.gserviceaccount.com"
 APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
 gcp() { gcloud "$@" "--project=$PROJECT" --quiet; }
-change() { if [[ "$MODE" == "apply" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
+change() { if [[ "$MODE" != "plan" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
 # Return 0=exists, 1=missing, 2=other error; never confuse IAM denial with absence.
 exists() {
   local err; err="$(mktemp)"
@@ -62,8 +62,30 @@ while IFS= read -r key; do
   [[ "$name" =~ ^[a-z][a-z0-9-]{0,254}$ ]] || exit 2
   WORKFLOW_NAMES["$key"]="$name"
 done < <(jq -r '(.workflow_secrets // {}) | keys[]' "$CONFIG")
+reconcile_secret_access() {
+  for key in "${KEYS[@]}"; do
+    name="${SECRET_NAMES[$key]}"
+    for role in api jobs migrate; do
+      case "$role:$key" in
+        api:MIGRATION_DATABASE_URL|api:ICLOUD_SESSION_KEY|jobs:MIGRATION_DATABASE_URL|jobs:SENTRY_API_TOKEN) continue ;;
+        migrate:*) if [[ "$key" != DATABASE_URL && "$key" != MIGRATION_DATABASE_URL ]]; then continue; fi ;;
+      esac
+      change secrets add-iam-policy-binding "$name" "--member=serviceAccount:photointel-$role@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+    done
+  done
+  for key in "${!WORKFLOW_NAMES[@]}"; do
+    change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+  done
+}
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
-if [[ "$MODE" == apply ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
+if [[ "$MODE" == permissions ]]; then
+  # Only add narrowly scoped secret IAM bindings. Do not provision infrastructure,
+  # change workload identity providers, build images or touch database schemas.
+  reconcile_secret_access
+  log "✅ Secret Manager runtime/workflow IAM grants reconciled; no resources created."
+  exit 0
+fi
+if [[ "$MODE" != plan ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
   log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
   exit 0
@@ -102,19 +124,7 @@ for key in "${!WORKFLOW_NAMES[@]}"; do
 done
 ensure "Staging bucket $BUCKET" storage buckets describe "$BUCKET" @@CREATE@@ storage buckets create "$BUCKET" "--location=$REGION" --uniform-bucket-level-access --public-access-prevention
 log "Staging bucket location: $(gcp storage buckets describe "$BUCKET" --format='value(location)'); no relocation"
-for key in "${KEYS[@]}"; do
-  name="${SECRET_NAMES[$key]}"
-  for role in api jobs migrate; do
-    case "$role:$key" in
-      api:MIGRATION_DATABASE_URL|api:ICLOUD_SESSION_KEY|jobs:MIGRATION_DATABASE_URL|jobs:SENTRY_API_TOKEN) continue ;;
-      migrate:*) if [[ "$key" != DATABASE_URL && "$key" != MIGRATION_DATABASE_URL ]]; then continue; fi ;;
-    esac
-    change secrets add-iam-policy-binding "$name" "--member=serviceAccount:photointel-$role@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None --format=none
-  done
-done
-for key in "${!WORKFLOW_NAMES[@]}"; do
-  change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
-done
+reconcile_secret_access
 # The terminal bootstrap preflight checks OAuth version existence/state without
 # ever reading credential payloads. Metadata-only viewer is scoped to these
 # two secret containers and is distinct from secretAccessor.

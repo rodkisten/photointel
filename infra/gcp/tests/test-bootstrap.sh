@@ -86,5 +86,27 @@ fi
 if grep -q 'providers update-oidc' "$GCLOUD_TRACE"; then
   echo "ERROR: attempted WIF update after permission denial" >&2; exit 1
 fi
-echo "Bootstrap offline tests passed: plan, idempotence and IAM denial."
+# Targeted IAM repair must update only secret-level bindings; no provisioning.
+jq '.secrets.SENTRY_DSN = {"name":"photointel-sentry-dsn","version":"1"} |
+    .secrets.SENTRY_API_TOKEN = {"name":"photointel-sentry-api-token","version":"1"} |
+    .workflow_secrets.SENTRY_AUTH_TOKEN = {"name":"photointel-sentry-build-token","version":"1"}' \
+    "$ROOT/infra/gcp/config.example.json" > "$TMP/config-sentry.json"
+: > "$GCLOUD_TRACE"
+GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTRAP_MODE=permissions \
+    bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/permissions"
+grep -F 'secrets add-iam-policy-binding photointel-sentry-dsn' "$GCLOUD_TRACE" |
+    grep -F 'photointel-jobs@replace-project-id.iam.gserviceaccount.com' |
+    grep -Fq 'roles/secretmanager.secretAccessor'
+grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
+    grep -Fq 'photointel-api@replace-project-id.iam.gserviceaccount.com'
+if grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
+    grep -Fq 'photointel-jobs@'; then
+    echo "ERROR: private Sentry API token granted to worker identity" >&2; exit 1
+fi
+grep -F 'secrets add-iam-policy-binding photointel-sentry-build-token' "$GCLOUD_TRACE" |
+    grep -Fq 'photointel-deployer@replace-project-id.iam.gserviceaccount.com'
+if grep -Eq 'services enable|artifacts |storage |projects |iam service-accounts |secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
+    echo "ERROR: IAM-only mode attempted broader provisioning" >&2; exit 1
+fi
+echo "Bootstrap offline tests passed: plan, idempotence, IAM-only repair and denial."
 
