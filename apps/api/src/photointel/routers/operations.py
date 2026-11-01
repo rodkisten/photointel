@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
@@ -457,6 +458,17 @@ async def repair_preview(
             "Consulte as falhas de ingestão antes de repetir.",
             409, {"reason": "MEDIA_SOURCE_BLOCKED"},
         )
+    settings = await effective_settings(session)
+    if (
+        settings.execution_platform == "cloud_run"
+        and os.environ.get("GCP_JOB_DISPATCH_ENABLED", "false").lower() != "true"
+    ):
+        raise AppError(
+            ErrorCode.STORAGE_UNAVAILABLE,
+            "Despacho do Cloud Run desativado. Verifique a configuração "
+            "GCP_JOB_DISPATCH_ENABLED e o Scheduler do worker.",
+            503, {"reason": "WORKER_DISPATCH_DISABLED"},
+        )
     job = await session.scalar(
         select(Job).where(
             Job.asset_id == asset_id,
@@ -507,7 +519,6 @@ async def repair_preview(
             priority=5,
         )
         created = True
-    settings = await effective_settings(session)
     # A worker that is already running needs no duplicate Cloud Run execution.
     # Queued/retrying work receives a deduplicated wakeup, including repeated taps.
     if (settings.execution_platform == "cloud_run"
@@ -521,10 +532,17 @@ async def repair_preview(
     await session.commit()
     _schedule_cloud_dispatch(background_tasks, settings.execution_platform)
     background_tasks.add_task(safe_notify)
+    if job.status in ("running", "preparing"):
+        message = "O worker já está processando a foto; acompanhe a etapa atual."
+    elif settings.execution_platform == "cloud_run":
+        message = (
+            "Solicitação de worker registrada no outbox. "
+            "Acompanhe o despacho e as tentativas abaixo."
+        )
+    else:
+        message = "Etapa aguardando o worker local; nenhuma duplicata foi criada."
     return {"created": created, "job_id": str(job.id), "job_type": job.job_type,
-            "status": job.status,
-            "message": ("Reparo agendado." if created else
-                        "O processamento já está na fila; o worker foi acionado.")}
+            "status": job.status, "message": message}
 
 
 @router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])
