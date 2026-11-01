@@ -8,6 +8,7 @@ import time
 from collections import defaultdict, deque
 
 import httpx
+from google.auth.exceptions import GoogleAuthError
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -45,7 +46,7 @@ async def incident_log_summary(identifier: str) -> dict[str, object]:
         _reads.clear()
     try:
         entries = await read_incident(normalized)
-    except (httpx.HTTPError, ValueError, RuntimeError):
+    except (httpx.HTTPError, ValueError, RuntimeError, GoogleAuthError):
         # Never expose raw Google API errors or IAM identities to the browser.
         raise AppError(
             ErrorCode.STORAGE_UNAVAILABLE,
