@@ -30,6 +30,18 @@ jobs:
       - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
+      - name: "📱 Live · Início"
+        id: notify_live_start
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: start
+          total: "3"
+          github-token: ${{ github.token }}
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
       - name: "⚙ GCP Config"
         id: config
         uses: ./.github/actions/gcp-config
@@ -67,10 +79,10 @@ jobs:
       - name: "▶ ️  Execute command"
         id: notify_observed_003
         run: npm --prefix apps/web ci
-      - name: "▶ ️  Execute command"
+      - name: "🏗 Build do frontend"
         id: notify_observed_004
         run: npm --prefix apps/web run build
-      - name: "🔔 [NOTIFY] ▶ ️  Execute command"
+      - name: "📱 Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -80,24 +92,45 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "▶ ️  Execute command"
+          step: "🏗 Build do frontend"
+          label: "Build do frontend"
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "1"
+          total: "3"
           outcome: ${{ steps.notify_observed_004.outcome }}
       - name: "🧪 API error diagnostics"
         run: npm --prefix apps/web test -- src/test/api-security.test.tsx
 
       - name: "🧪 Worker relay + SPA"
+        id: worker_tests
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+      - name: "📱 Testes"
+        if: ${{ always() && (steps.worker_tests.outcome == 'success' || steps.worker_tests.outcome == 'failure' || steps.worker_tests.outcome == 'cancelled') }}
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: step
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: ${{ github.job }}
+          step: "🧪 Worker relay + SPA"
+          label: "Testes do Worker"
+          outcome: ${{ steps.worker_tests.outcome }}
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "2"
+          total: "3"
 
       - name: "▶ ️  Execute command"
         id: notify_observed_005
         run: cp infra/cloudflare/worker-headers apps/web/dist/_headers
-      - name: "▶ ️  Execute command"
+      - name: "🚀 Publicar Worker"
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
         run: python3 infra/scripts/prepare_workflow_env.py worker-deploy
 
-      - name: "🔔 [NOTIFY] ▶ ️  Execute command"
+      - name: "📱 Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -107,7 +140,11 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
-          step: "▶ ️  Execute command"
+          step: "🚀 Publicar Worker"
+          label: "Publicação"
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "3"
+          total: "3"
           outcome: ${{ steps.notify_observed_006.outcome }}
 
       - name: "🧹 Config"
@@ -127,7 +164,8 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
           outcome: ${{ job.status }}
-          completed: "1"
-          total: "1"
+          activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
+          completed: "3"
+          total: "3"
 
 
