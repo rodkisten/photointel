@@ -106,6 +106,33 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     return config
 
 
+def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, Any]:
+    """Quarantine obsolete Telegram env fields without exposing inline tokens.
+
+    TELEGRAM_JOB_EVENTS_ENABLED is derived by manage.environment from the
+    presence of the Secret Manager reference and the endpoint/chat.
+    Never accept a plaintext Telegram credential as Cloud Run env or as a
+    replacement for a Secret Manager reference.
+    """
+    extras = config.get("extra_environment")
+    if not isinstance(extras, dict):
+        return config
+    if "TELEGRAM_JOB_EVENTS_ENABLED" in extras:
+        extras.pop("TELEGRAM_JOB_EVENTS_ENABLED")
+        print(
+            "::warning::EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED ignored: "
+            "enabled state is computed from configured secret references and destination."
+        )
+    if "TELEGRAM_NOTIFICATION_API_TOKEN" in extras:
+        extras.pop("TELEGRAM_NOTIFICATION_API_TOKEN")
+        print(
+            "::warning::EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN ignored "
+            "(never passed to Cloud Run). Use "
+            "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME and __VERSION instead."
+        )
+    return config
+
+
 def validate_references(config: dict[str, Any]) -> None:
     references = config.get("secrets")
     if not isinstance(references, dict):
@@ -243,9 +270,9 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
         entries = {key: payload.pop(key, "") for key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF}
         if any(not isinstance(item, str) for item in entries.values()):
             fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
-        return payload, entries
+        return normalize_legacy_notification_fields(payload), entries
     entries = checked_dotenv()
-    return decode_config(entries), entries
+    return normalize_legacy_notification_fields(decode_config(entries)), entries
 
 
 def main() -> None:
