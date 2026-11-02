@@ -270,6 +270,49 @@ manual já foi realizado.
   comentários, e o editor mostra os números das linhas. Chaves repetidas
   com valores diferentes continuam sendo recusadas.
 
+## Secret Manager no painel
+
+Na aba **Secrets**, o painel lê as referências existentes em
+`production/GCP_CONFIG_ENV` e mostra somente as chaves `MANAGE_*` da
+seção `WORKFLOW_SECRETS`. Nenhum Secret Manager recebe acesso amplo de
+projeto. Execute **🧱 Setup GCP → permissions** na `main` para atribuir
+à identidade `photointel-manage`, em cada secret referenciado, as
+permissões `roles/secretmanager.secretAccessor` e
+`roles/secretmanager.secretVersionAdder`. Isso **não** concede acesso
+a secrets do banco de dados, exclusão de versões nem alteração de IAM.
+
+O fluxo mobile é: **escolher secret → ver versão referenciada →
+ver trecho mascarado sob demanda → inserir novo valor → confirmar**.
+O trecho do valor é composto por apenas **três caracteres iniciais**,
+um bloco de máscara e **três finais**. Os outros bytes nunca chegam
+ao navegador. O Secret Manager retorna a versão integral somente ao
+Worker autenticado, via token GCP de curta duração.
+
+Ao confirmar, o Manage cria uma nova versão sem destruir as antigas,
+atualiza somente a referência `__VERSION` em `GCP_CONFIG_ENV` e,
+se autorizado, solicita os workflows calculados pelo planejamento.
+O arquivo `.env` preserva comentários, quebras de linha, chaves
+repetidas idênticas e demais valores. A atualização usa o hash de
+configuração para detectar outras sessões; se a versão GCP for criada
+mas o GitHub for alterado concorrentemente, o painel informa o número
+da versão criada para permitir recuperação manual sem sobrescrever
+alterações. **A versão adicionada não está necessariamente em uso** até
+que o deploy respectivo conclua.
+
+O formulário não aceita quebras de linha nem arquivos, pois os secrets
+de integração do Manage são credenciais de linha única. Os valores
+integrais nunca são enviados para Sentry ou logs e não são armazenados
+no frontend. Somente a listagem de referências exige o PAT GitHub;
+visualizar um trecho ou criar a versão exige WIF e IAM no GCP.
+
+## Estrutura modular do frontend
+
+`src/App.tsx` é só o shell de navegação. Telas em `src/pages/`,
+componentes comuns em `src/components/` e o editor de Secret Manager
+em `src/features/secrets/` (lista, cartão da versão, formulário,
+orquestração e tipos). O backend do editor fica separado entre
+`src/routes/secrets.ts` e `src/secret-manager.ts`.
+
 ## Local development
 
     cd apps/manage
