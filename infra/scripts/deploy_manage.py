@@ -192,10 +192,10 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf8") as handle:
-            handle.write("### Manage credential preflight (read-only)\\n\\n")
+            handle.write("### Manage credential preflight (read-only)\n\n")
             for outcome in outcomes:
-                handle.write("- " + outcome + "\\n")
-            handle.write("\\nNo secret values were logged. The privileged deploy token stays out of the Worker.\\n")
+                handle.write("- " + outcome + "\n")
+            handle.write("\nNo secret values were logged. The privileged deploy token stays out of the Worker.\n")
 
     # These identifiers are not credentials. Use the dedicated provider
     # provisioned by GCP bootstrap instead of silently disabling GCP integration.
