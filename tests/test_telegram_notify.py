@@ -42,7 +42,7 @@ def test_all_statuses_receive_markdown_and_deep_links(status, monkeypatch):
         job, event, batch, {"queued": 10, "running": 4, "completed": 5, "failed": 1}
     )
     assert "PhotoIntel" in text
-    assert "10/20" in text
+    assert "6/20" in text
     assert "Reindex\\_\\<2026\\>" not in text  # MarkdownV2: <> are harmless literals
     assert "Reindex\\_\\<" not in text
     assert "Reindex\\_" in text
