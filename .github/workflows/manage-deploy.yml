@@ -65,6 +65,10 @@ jobs:
         run: |
           npm --prefix apps/manage run typecheck
           npm --prefix apps/manage test
+      - name: "🔎 Configure Manage Sentry browser DSN"
+        env:
+          CONFIRM_PROJECT: photointel
+        run: python3 infra/scripts/deploy_manage.py browser-env
       - name: "🏗 Build management assets"
         if: ${{ inputs.mode != 'plan' }}
         run: npm --prefix apps/manage run build
