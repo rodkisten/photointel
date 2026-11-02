@@ -1028,6 +1028,25 @@ function ConfigEditor() {
 }
 function SystemInfo({ meta }: { meta: Meta }) {
   const [selectedJob, setSelectedJob] = useState('');
+  const credentials = useQuery({
+    queryKey: ['manage-credential-diagnostics'],
+    queryFn: () => api<{
+      github_secret_version: string | null;
+      checked_at: string;
+      checks: Array<{
+        provider: 'github' | 'cloudflare';
+        check: string;
+        ok: boolean;
+        status: number;
+        reason: string;
+        hint: string;
+        accepted_permissions?: string;
+      }>;
+    }>('/diagnostics'),
+    enabled: false,
+    retry: false,
+    staleTime: 0,
+  });
   const health = useQuery({
     queryKey: ['overview'],
     queryFn: () => api<{ providers: string[]; provider_events?: Array<string | undefined>; correlation_id?: string }>('/overview'),
@@ -1135,6 +1154,54 @@ function SystemInfo({ meta }: { meta: Meta }) {
               <Badge tone={ok ? 'success' : 'warning'}>{ok ? 'OK' : verified ? 'Erro' : 'Pendente'}</Badge>
             </div>
           ))}
+        </Card>
+      </Section>
+      <Section title="Diagnóstico de credenciais" detail="O próprio Worker testa os secrets instalados, sem expor ou receber tokens do navegador">
+        <Card className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-400">
+              GitHub: repositório, Actions e variável de ambiente; Cloudflare: Workers
+            </p>
+            <Button variant="outline" size="sm" disabled={credentials.isFetching}
+              onClick={() => void credentials.refetch()}>
+              {credentials.isFetching ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
+              Testar credenciais
+            </Button>
+          </div>
+          {credentials.error && <IssueBanner error={credentials.error} />}
+          {credentials.data && (
+            <>
+              <p className="text-xs text-slate-500">
+                GitHub · Secret Manager versão {credentials.data.github_secret_version || 'desconhecida'} ·
+                Testado em {date(credentials.data.checked_at)}
+              </p>
+              <div className="divide-y divide-[#282a2e]">
+                {credentials.data.checks.map((item) => (
+                  <div key={item.provider + item.check} className="space-y-1 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{item.check}</p>
+                      <Badge tone={item.ok ? 'success' : 'danger'}>
+                        {item.ok ? 'Acesso OK' : item.status ? 'HTTP ' + item.status : 'Falha'}
+                      </Badge>
+                    </div>
+                    {!item.ok && <p className="text-xs leading-5 text-rose-200">{item.hint}</p>}
+                    {item.accepted_permissions && (
+                      <p className="break-words font-mono text-xs text-slate-400">
+                        Permissões exigidas: {item.accepted_permissions}
+                      </p>
+                    )}
+                    {!item.ok && (
+                      <p className="text-[11px] text-slate-600">Diagnóstico: {item.reason}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs leading-5 text-slate-500">
+                Teste somente de leitura. A versão indica a referência usada no último deploy,
+                não confirma o conteúdo do token. Nenhuma credencial é retornada.
+              </p>
+            </>
+          )}
         </Card>
       </Section>
       <Section
