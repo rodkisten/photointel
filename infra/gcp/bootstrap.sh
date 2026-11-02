@@ -17,6 +17,10 @@ BUILDER="serviceAccount:photointel-builder@$PROJECT.iam.gserviceaccount.com"
 DEPLOYER="serviceAccount:photointel-deployer@$PROJECT.iam.gserviceaccount.com"
 # The Terminal build runs as this administrative WIF identity (not deployer).
 BOOTSTRAP="serviceAccount:photointel-bootstrap@$PROJECT.iam.gserviceaccount.com"
+# Dedicated, read-only identity for the separate Cloudflare Manage Worker.
+MANAGE_ID="photointel-manage"
+MANAGE_EMAIL="$MANAGE_ID@$PROJECT.iam.gserviceaccount.com"
+MANAGE="serviceAccount:$MANAGE_EMAIL"
 APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
 gcp() { gcloud "$@" "--project=$PROJECT" --quiet; }
@@ -83,18 +87,35 @@ reconcile_diagnostics_access() {
     "--member=serviceAccount:photointel-api@$PROJECT.iam.gserviceaccount.com" \
     --role=roles/logging.viewer --condition=None --format=none
 }
+ensure_manage_identity() {
+  # Exists is checked before creation, and auth/permission denial fails closed.
+  ensure "Manage service account $MANAGE_EMAIL" \
+    iam service-accounts describe "$MANAGE_EMAIL" \
+    @@CREATE@@ iam service-accounts create "$MANAGE_ID" \
+    "--display-name=PhotoIntel Manage (read-only)"
+}
+reconcile_manage_access() {
+  # Inventory, executions, bounded logs and scheduler listings only.
+  # Never grant run.invoker/run.admin, IAM admin, Secret Manager or tokenCreator.
+  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+    change projects add-iam-policy-binding "$PROJECT" \
+      "--member=$MANAGE" "--role=$role" --condition=None --format=none
+  done
+}
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == permissions ]]; then
-  # Only add narrowly scoped secret IAM bindings. Do not provision infrastructure,
-  # change workload identity providers, build images or touch database schemas.
+  # IAM repair may create only the dedicated Manage service account if missing.
+  # Do not provision general infrastructure, change WIF providers or touch data.
+  ensure_manage_identity
   reconcile_secret_access
   reconcile_diagnostics_access
-  log "✅ Secret Manager + read-only Cloud Logging IAM reconciled; no resources created."
+  reconcile_manage_access
+  log "✅ Secret Manager and diagnostic IAM reconciled; Manage read-only identity ready."
   exit 0
 fi
 if [[ "$MODE" != plan ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
-  log "No mutations. Will reconcile APIs, Docker repository, six service accounts, $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
+  log "No mutations. Will reconcile APIs, Docker repository, seven service accounts (including read-only Manage), $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
   exit 0
 fi
 enabled="$(gcp services list --enabled --format='value(config.name)')"
@@ -118,7 +139,7 @@ done
 ensure "Docker repository $REPO" artifacts repositories describe "$REPO" "--location=$REGION" @@CREATE@@ artifacts repositories create "$REPO" "--location=$REGION" --repository-format=docker "--description=Private PhotoIntel images"
 format="$(gcp artifacts repositories describe "$REPO" "--location=$REGION" --format='value(format)')"
 [[ "$format" == DOCKER ]] || { echo "::error::Repository is not Docker: $format" >&2; exit 1; }
-for role in api jobs migrate scheduler builder deployer; do
+for role in api jobs migrate scheduler builder deployer manage; do
   id="photointel-$role"; email="$id@$PROJECT.iam.gserviceaccount.com"
   ensure "Service account $email" iam service-accounts describe "$email" @@CREATE@@ iam service-accounts create "$id" "--display-name=PhotoIntel $role"
 done
@@ -133,6 +154,7 @@ ensure "Staging bucket $BUCKET" storage buckets describe "$BUCKET" @@CREATE@@ st
 log "Staging bucket location: $(gcp storage buckets describe "$BUCKET" --format='value(location)'); no relocation"
 reconcile_secret_access
 reconcile_diagnostics_access
+reconcile_manage_access
 # The terminal bootstrap preflight checks OAuth version existence/state without
 # ever reading credential payloads. Metadata-only viewer is scoped to these
 # two secret containers and is distinct from secretAccessor.
@@ -159,6 +181,6 @@ done
 change iam service-accounts add-iam-policy-binding "photointel-migrate@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountTokenCreator --condition=None --format=none
 log "Completed: no resources deleted and no secret values created."
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
-  printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 6\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + WORKFLOW_COUNT))" >> "$GITHUB_STEP_SUMMARY"
+  printf '### Bootstrap GCP completed\n\n- Project: %s\n- Repository: %s (%s)\n- Service accounts: 7\n- Secret containers: %s\n' "$PROJECT" "$REPO" "$REGION" "$((${#KEYS[@]} + WORKFLOW_COUNT))" >> "$GITHUB_STEP_SUMMARY"
 fi
 
