@@ -31,8 +31,6 @@ function parseDotenv(raw: string): Record<string, string> {
     const match = /^(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
     if (!match) throw new Error('Linha .env não reconhecida; não é seguro aplicar automaticamente.');
     const name = match[1];
-    if (Object.prototype.hasOwnProperty.call(result, name))
-      throw new Error('Variável .env duplicada; não é seguro aplicar automaticamente.');
     let value = match[2];
     if ((value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))) {
@@ -40,9 +38,29 @@ function parseDotenv(raw: string): Record<string, string> {
     } else {
       value = value.replace(/\s+#.*$/, '').trimEnd();
     }
-    result[name] = value.startsWith('json:') ? JSON.stringify(JSON.parse(value.slice(5))) : value;
+    const parsed = value.startsWith('json:') ? JSON.stringify(JSON.parse(value.slice(5))) : value;
+    // An identical repeated line is harmless. Preserve original lines and comments.
+    // Never silently choose between conflicting values.
+    if (Object.prototype.hasOwnProperty.call(result, name) && result[name] !== parsed)
+      throw new Error('Variável .env duplicada com valores diferentes: ' + name);
+    result[name] = parsed;
   }
   return result;
+}
+
+/** Inspect repeated dotenv keys without rewriting the user's comments or lines. */
+export function findDuplicateConfigKeys(raw: string): Array<{ key: string; lines: number[] }> {
+  if (raw.trim().startsWith('{')) return [];
+  const seen = new Map<string, number[]>();
+  raw.split(/\r?\n/).forEach((line, index) => {
+    const match = /^(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=/.exec(line.trim());
+    if (!match) return;
+    const lines = seen.get(match[1]) || [];
+    lines.push(index + 1);
+    seen.set(match[1], lines);
+  });
+  return [...seen.entries()].filter(([, lines]) => lines.length > 1)
+    .map(([key, lines]) => ({ key, lines }));
 }
 
 export function parseConfiguration(raw: string): Record<string, string> {
