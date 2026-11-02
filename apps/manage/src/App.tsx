@@ -778,6 +778,13 @@ function LogViewer() {
               ))}
           {source === 'sentry' && (
             <div className="divide-y divide-[#282a2e]">
+              {data.read_enabled === false && (
+                <div className="space-y-2 p-4 text-sm text-slate-300">
+                  <p>O DSN envia as exceções sem token adicional. A leitura de issues dentro
+                    do painel exige o token de leitura opcional.</p>
+                  <External href={data.dashboard_url}>Abrir todos os erros no Sentry</External>
+                </div>
+              )}
               {(data.items as Issue[]).length ? (
                 (data.items as Issue[]).map((item) => (
                   <div key={item.id} className="px-4 py-3">
@@ -794,11 +801,11 @@ function LogViewer() {
                     </div>
                   </div>
                 ))
-              ) : (
+              ) : data.read_enabled !== false ? (
                 <div className="p-6">
                   <Empty title="Nenhum issue aberto" />
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </Card>
