@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Preview, repair Secret Manager IAM only, or reconcile all infrastructure"
+        description: "Preview, repair IAM and Manage identity, or reconcile all infrastructure"
         type: choice
         required: true
         default: plan
@@ -36,6 +36,7 @@ jobs:
         with: {persist-credentials: false}
       - run: |
           bash -n infra/gcp/bootstrap.sh
+          bash infra/gcp/tests/test-bootstrap.sh
           python3 infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json
   bootstrap:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
