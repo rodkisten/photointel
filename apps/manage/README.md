@@ -32,6 +32,14 @@ configured. It **never** displays simulated or guessed GCP/Cloudflare status.
    permission. Use a dedicated credential, not the ephemeral GITHUB_TOKEN.
 2. Add to the existing **production Environment variable** GCP_CONFIG_ENV:
 
+   Under extra_environment, add a distinct **administrator-only** allowlist.
+   This never inherits PhotoIntel photo-viewer privileges:
+
+       "MANAGE_ACCESS_ALLOWED_EMAILS": "[\"admin@example.com\"]"
+
+   Replace the example address with your authorized operator address(es).
+   The first deployment fails closed if this list is missing.
+
    JSON form, merged into existing workflow_secrets:
 
        "MANAGE_GITHUB_API_TOKEN": {
@@ -58,11 +66,11 @@ configured. It **never** displays simulated or guessed GCP/Cloudflare status.
 4. GitHub Actions → **🚀 Manage · Publish** → mode **plan**.
    The plan inventories the intended separate Access application.
 5. Select mode **apply**. The job builds apps/manage, creates/reconciles the
-   independent Access app photointel-manage with the existing configured
-   ACCESS_ALLOWED_EMAILS, obtains its real audience, deploys the standalone
+   independent Access app photointel-manage using ONLY the dedicated
+   MANAGE_ACCESS_ALLOWED_EMAILS admin list, obtains its real audience, deploys the standalone
    Worker at photos-manage.migos.club and sets Worker secrets via stdin.
 6. After verifying login, set production Environment variable
-   MANAGE_ENABLED=true if you want this independent Worker automatically
+   MANAGE_ENABLED=true **as a repository Actions variable** if you want this independent Worker automatically
    published whenever its own files change on main.
 
 The existing photos.migos.club worker, access policies, Cloud Run deploys,
