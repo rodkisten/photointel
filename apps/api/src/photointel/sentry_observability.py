@@ -19,6 +19,34 @@ _ORG = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 _BAGGAGE = re.compile(r"^[\x20-\x7e]{1,2048}$")
 
 
+# Keep actionable exception messages without uploading private media names,
+# signed provider URLs, filesystem locations or credentials.
+_PRIVATE_URL = re.compile(r"(?i)\b(?:https?|ftp|s3|gs)://[^\s\x22'<>]+")
+_PRIVATE_KV = re.compile(
+    r"(?i)\b(authorization|password|passwd|secret|api[_-]?key|"
+    r"access[_-]?token|refresh[_-]?token|token|cookie)\s*[:=]\s*[^\s,;]+"
+)
+_BEARER = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/-]+")
+_JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b")
+_EMAIL = re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
+_LOCAL_PATH = re.compile(r"(?<!\w)/(?:[A-Za-z0-9_.-]+/){1,}[A-Za-z0-9_.-]+")
+_MEDIA_FILENAME = re.compile(r"(?i)\b[^\s/\\]+[.](?:heic|heif|jpe?g|png|webp|avif|mov|mp4)\b")
+
+
+def _safe_exception_text(value: Any) -> str:
+    if value is None:
+        return ""
+    message = str(value).replace("\x00", "")
+    message = _PRIVATE_URL.sub("[URL redigida]", message)
+    message = _PRIVATE_KV.sub(r"\1=[redigido]", message)
+    message = _BEARER.sub("Bearer [redigido]", message)
+    message = _JWT.sub("[token redigido]", message)
+    message = _EMAIL.sub("[email redigido]", message)
+    message = _LOCAL_PATH.sub("[caminho redigido]", message)
+    message = _MEDIA_FILENAME.sub("[arquivo redigido]", message)
+    return message[:2048]
+
+
 def event_id(value: Any) -> str | None:
     if not isinstance(value, str) or not _HEX_EVENT.fullmatch(value.lower()):
         return None
@@ -36,15 +64,27 @@ def _scrub(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
         and len(value) <= 128
     }
     for item in event.get("exception", {}).get("values", []):
-        # Retain exception class and frame positions, never raw provider messages.
-        item["value"] = str(item.get("type", "RuntimeError"))
+        # Preserve the actual failure reason and chained exceptions safely.
+        item["value"] = _safe_exception_text(item.get("value")) or str(
+            item.get("type") or "RuntimeError"
+        )
         for frame in item.get("stacktrace", {}).get("frames", []):
+            if isinstance(frame.get("filename"), str):
+                frame["filename"] = frame["filename"].split("?", 1)[0].split("#", 1)[0]
             frame.pop("vars", None)
             frame.pop("pre_context", None)
             frame.pop("post_context", None)
             frame.pop("context_line", None)
             frame.pop("abs_path", None)
-    event.pop("message", None)
+    # SDK log entries also need sanitization, not blind exception suppression.
+    if "message" in event:
+        event["message"] = _safe_exception_text(event["message"])
+    if isinstance(event.get("logentry"), dict):
+        event["logentry"] = {
+            key: _safe_exception_text(value)
+            for key, value in event["logentry"].items()
+            if key in {"message", "formatted"}
+        }
     # Keep only anonymous distributed-trace fields, never SDK device contexts.
     contexts = event.get("contexts")
     trace = contexts.get("trace") if isinstance(contexts, dict) else None
