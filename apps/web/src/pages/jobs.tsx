@@ -2,6 +2,7 @@ import { Activity, ChevronDown, Cpu, FileSearch, Info, Pause, Play, Plus,
   ExternalLink, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiUrl, useAction, useApi } from '../api/client';
 import type { Capabilities, Info as InfoData, Job, Page } from '../api/types';
 import { DetailList, Empty, ErrorState, PageHeader, Skeleton, Status } from '../components/common';
@@ -35,7 +36,10 @@ export function JobsPage() {
   const costs = useApi<InfoData>('/v1/system/costs', 30_000);
   const system = useApi<InfoData>('/v1/system/status', 30_000);
   const cap = useApi<Capabilities>('/v1/system/capabilities');
-  const gpu = ['operational', 'test_only'].includes(cap.data?.gpu_inference?.state ?? '');
+  const gpu = ['operational', 'available', 'test_only'].includes(
+    cap.data?.gpu_inference?.state ?? '');
+  const embeddingsReady = ['operational', 'available', 'test_only'].includes(
+    cap.data?.embedding_inference?.state ?? '');
   useEffect(() => {
     if (!('EventSource' in window)) return;
     let eventId = ''; let source: EventSource | undefined;
@@ -109,6 +113,7 @@ export function JobsPage() {
     {query.error ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : query.isPending ? <Skeleton /> :
       !query.data.items.length ? <Empty title="Fila tranquila" description="Jobs aparecerão após uma importação ou processamento manual." /> :
       <section className="panel"><div className="panel-title"><h2>Jobs persistidos</h2><span className="muted">Máximo de 60 por página</span></div>
+        <div className="jobs-panel-scroll" role="region" aria-label="Lista de jobs persistidos" tabIndex={0}>
         {query.data.items.map((item) => <div className="job-row" key={item.id}>
           <button className="job-name" onClick={() => setJob(item)} style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}>
             <span className="job-icon"><Activity size={15} /></span><span><strong>{jobNames[item.job_type] ?? item.job_type}</strong>
@@ -122,21 +127,27 @@ export function JobsPage() {
               onClick={() => action.mutate({ url: `/v1/jobs/${item.id}/cancel` })}><X size={14} /></Button>}
             <Button variant="ghost" size="icon" aria-label="Inspecionar job" onClick={() => setJob(item)}><ChevronDown size={14} /></Button></div>
         </div>)}{query.data.next_cursor && <div className="form-actions"><Button variant="outline"
-          onClick={() => setCursor(query.data!.next_cursor!)}>Próxima página</Button></div>}</section>}
+          onClick={() => setCursor(query.data!.next_cursor!)}>Próxima página</Button></div>}
+        </div></section>}
     <div className="two-columns" style={{ marginTop: 20 }}><section className="panel"><div className="panel-title"><h2>Ritmo e estimativas</h2></div>
-      <DetailList data={{ throughput: `${number(stats.data?.jobs_per_second_last_hour)} jobs/s`,
+      <DetailList data={{ throughput: `${typeof stats.data?.jobs_per_second_last_5min === 'number'
+        ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 5 }).format(
+          stats.data.jobs_per_second_last_5min) : '—'} jobs/s`,
+        jobs_hour: number(stats.data?.jobs_completed_last_hour),
         average: `${number(stats.data?.average_job_duration_seconds)} s`,
         remaining: stats.data?.estimated_remaining_seconds == null ? 'Sem amostra suficiente' :
           `${number(Number(stats.data.estimated_remaining_seconds) / 60)} min (estimativa)`,
         gpu: `${number(costs.data?.gpu_runtime_ms)} ms`, transferred: costs.data?.bytes_transferred,
         cost: `USD ${number(costs.data?.estimated_monthly_cost)} / mês (estimativa)`,
-      }} labels={{ throughput:'Última hora',average:'Tempo médio',remaining:'Tempo restante',gpu:'Runtime GPU',transferred:'Bytes transferidos',cost:'Custo' }} />
+      }} labels={{ throughput:'Últimos 5 minutos', jobs_hour:'Concluídos na última hora',average:'Tempo médio',remaining:'Tempo restante',gpu:'Runtime GPU',transferred:'Bytes transferidos',cost:'Custo' }} />
       <p className="field-help">Estimativas da aplicação não limitam a cobrança do provedor.</p></section>
       <section className="panel"><div className="panel-title"><h2>Workers</h2></div>
+        <div className="jobs-workers-scroll" role="region" tabIndex={0} aria-label="Lista de workers">
         {items(system.data?.workers).length ? items(system.data?.workers).map((worker) => <div className="row-item" key={text(worker.id)}>
           <div><strong>{text(worker.id)}</strong><p>Último heartbeat: {date(worker.last_seen, true)}</p></div>
           <Status value={worker.healthy ? 'operational' : 'unavailable'} /></div>) :
-          <p className="muted">Nenhum worker registrado. Inicie o serviço worker e verifique o banco.</p>}</section></div>
+          <p className="muted">Nenhum worker registrado. Inicie o serviço worker e verifique o banco.</p>}
+        </div></section></div>
     <Dialog open={job !== null} onOpenChange={(open) => !open && setJob(null)} title="Inspeção do job">
       {job && <><Status value={job.status} /><DetailList data={{ id: job.id, type: jobNames[job.job_type],
         worker: job.worker_id, attempts: `${job.attempts}/${job.maximum_attempts}`, scheduled: date(job.scheduled_at,true),
@@ -166,9 +177,16 @@ export function JobsPage() {
         value={limit} onChange={(e) => setLimit(Number(e.target.value))} /></label>
         {['joytag_inference','embedding_inference','duplicate_analysis','quality_analysis','thumbnail_generate'].map((kind) =>
           <label className="checkbox-field" key={kind}><span>{jobNames[kind]}
-            {kind.endsWith('_inference') && !gpu && <small>GPU indisponível ou não configurada</small>}</span>
-            <input type="checkbox" checked={kinds.includes(kind)} disabled={kind.endsWith('_inference') && !gpu}
+            {kind.endsWith('_inference') && !gpu && <small>Adapter de inferência não configurado</small>}</span>
+            <input type="checkbox" checked={kinds.includes(kind)}
+              disabled={kind === 'embedding_inference' ? !embeddingsReady :
+                kind.endsWith('_inference') && !gpu}
               onChange={(e) => setKinds(e.target.checked ? [...kinds,kind] : kinds.filter((value) => value !== kind))} /></label>)}
+        {!embeddingsReady && <p className="field-help">
+          Para habilitar embeddings SigLIP 2, configure a inferência em
+          {' '}<Link to="/settings" onClick={() => setReindex(false)}>Configurações</Link>.
+          O primeiro processamento requer um adapter válido e respeita o orçamento.
+        </p>}
         {limit > 100 && <label className="checkbox-field"><span>Confirmo reprocessar mais de 100 fotos</span>
           <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /></label>}
         <div className="notice"><Info size={14} />Estimativas e limites são verificados pelo servidor antes de criar os jobs.</div>
