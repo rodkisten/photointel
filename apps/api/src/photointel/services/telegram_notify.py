@@ -57,6 +57,13 @@ def credentials() -> tuple[str, str, str] | None:
     return endpoint, token, chat
 
 
+
+def notification_scope(job: Job) -> str:
+    """One persistent Telegram bubble for a batch or independent job."""
+    return ("photointel:batch:" + str(job.batch_id) if job.batch_id
+            else "photointel:job:" + str(job.id))
+
+
 def md(value: object) -> str:
     specials = "\\_*[]()~" + chr(96) + ">#+-=|{}.!"
     return "".join("\\" + c if c in specials else c for c in str(value))
@@ -117,6 +124,9 @@ def format_message(
     counts: dict[str, int] | None = None, grouped_events: int = 1,
 ) -> tuple[str, list[list[dict[str, str]]]]:
     icon, label = STATUS[event.status]
+    # A later successful sibling must not hide a still-failed batch.
+    if counts and counts.get("failed", 0) > 0 and event.status not in ERROR_STATES:
+        icon, label = "⚠️", "Lote com falhas"
     payload = event.payload if isinstance(event.payload, dict) else {}
     details = job.error_details if isinstance(job.error_details, dict) else {}
     sentry = event_id(payload.get("sentry_event_id") or details.get("sentry_event_id"))
@@ -262,8 +272,7 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 # A single Telegram bubble per logical batch (or standalone job).
                 # Every transition, even failures/retries, edits that same bubble.
                 # Event IDs are monotonic: late requests cannot revert a final state.
-                key = ("photointel:batch:" + str(job.batch_id) if job.batch_id
-                       else "photointel:job:" + str(job.id))
+                key = notification_scope(job)
                 if key not in grouped and len(grouped) >= 6:
                     break
                 previous = grouped.get(key)
