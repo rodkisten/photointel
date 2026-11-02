@@ -4,7 +4,13 @@ import { ApiError } from '../api/error';
 import { AppErrorBoundary, DiagnosticActions } from '../components/error-boundary';
 import { Toast } from '../components/common';
 import { useUi } from '../lib/store';
-import { diagnosticFor, diagnosticLogsQuery, diagnosticLogsUrl, jobLogsUrl, reportDiagnostic } from '../lib/diagnostics';
+import {
+  diagnosticFor,
+  diagnosticLogsQuery,
+  diagnosticLogsUrl,
+  jobLogsUrl,
+  reportDiagnostic,
+} from '../lib/diagnostics';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,8 +32,11 @@ describe('whole-app diagnostics', () => {
   });
   it('preserves Cloud Run correlation IDs in a filterable GCP logs link', () => {
     const id = 'b663f9ee-1699-4b2c-b157-ff5573f0316f';
-    const error = new ApiError('Falha na API', 503, 'DATABASE_UNAVAILABLE', id,
-      { source: 'gcp', method: 'GET', path: '/v1/assets' });
+    const error = new ApiError('Falha na API', 503, 'DATABASE_UNAVAILABLE', id, {
+      source: 'gcp',
+      method: 'GET',
+      path: '/v1/assets',
+    });
     const incident = diagnosticFor(error, 'api');
     expect(incident.id).toBe(id);
     expect(incident.source).toBe('gcp');
@@ -36,8 +45,10 @@ describe('whole-app diagnostics', () => {
     expect(diagnosticLogsQuery(incident)).toContain('resource.labels.service_name="photointel-api"');
     render(<DiagnosticActions incident={incident} />);
     expect(screen.getByText(id)).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Ver logs no GCP' }))
-      .toHaveAttribute('href', expect.stringContaining('project=photointel'));
+    expect(screen.getByRole('link', { name: 'Ver logs no GCP' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('project=photointel'),
+    );
     expect(screen.getByRole('button', { name: 'Copiar filtro do GCP' })).toBeVisible();
   });
 
@@ -60,7 +71,10 @@ describe('whole-app diagnostics', () => {
   });
 
   it('adds a Cloudflare console link to even a generic error toast', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
     vi.spyOn(console, 'error').mockImplementation(() => {});
     useUi.getState().notify('Falha inesperada', 'error');
     render(<Toast />);
@@ -69,10 +83,19 @@ describe('whole-app diagnostics', () => {
   });
 
   it('shows recovery actions rather than a blank screen after a React render exception', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 204 })),
+    );
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    function Crash(): never { throw new Error('Simulated rendering failure'); }
-    render(<AppErrorBoundary><Crash /></AppErrorBoundary>);
+    function Crash(): never {
+      throw new Error('Simulated rendering failure');
+    }
+    render(
+      <AppErrorBoundary>
+        <Crash />
+      </AppErrorBoundary>,
+    );
     expect(screen.getByRole('alert')).toHaveTextContent('Não foi possível exibir esta página');
     expect(screen.getByRole('button', { name: /Recarregar o aplicativo/ })).toBeVisible();
     expect(screen.getByRole('link', { name: 'Ver logs no Cloudflare' })).toBeVisible();

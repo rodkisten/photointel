@@ -15,8 +15,10 @@ export function initSentry() {
     defaultIntegrations: false,
     integrations: [Sentry.browserTracingIntegration()],
     tracesSampleRate: 0.1,
-    tracePropagationTargets: [/^\/v1\//, new RegExp('^' +
-      window.location.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/v1/')],
+    tracePropagationTargets: [
+      /^\/v1\//,
+      new RegExp('^' + window.location.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/v1/'),
+    ],
     beforeSend(event) {
       delete event.request;
       delete event.user;
@@ -40,14 +42,21 @@ export function initSentry() {
 }
 
 export function captureBrowserException(
-  error: unknown, id: string, phase: string, category: string,
+  error: unknown,
+  id: string,
+  phase: string,
+  category: string,
 ): string | undefined {
   if (!Sentry.isEnabled()) return undefined;
   const original = error instanceof Error ? error : new Error('Unknown browser exception');
   // Only the method, never the URL or request body, can affect network grouping.
-  const method = error instanceof Error && 'method' in error &&
-    typeof error.method === 'string' && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(error.method)
-    ? error.method : 'OTHER';
+  const method =
+    error instanceof Error &&
+    'method' in error &&
+    typeof error.method === 'string' &&
+    /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(error.method)
+      ? error.method
+      : 'OTHER';
   const event = Sentry.captureException(original, {
     tags: { correlation_id: id, phase, service: 'photointel-web', error_kind: category },
     ...(category === 'api.network' ? { fingerprint: ['photointel', 'api.network', method] } : {}),

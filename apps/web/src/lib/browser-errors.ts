@@ -4,9 +4,7 @@ export function classifyBrowserError(event: Event): Error | null {
   if (target instanceof HTMLLinkElement) {
     // Optional remote typography may be blocked offline or by Safari privacy
     // settings. It already has a system-font fallback and is not an app crash.
-    if (target.rel === 'stylesheet' && target.href.startsWith(
-      'https://fonts.googleapis.com/'
-    )) return null;
+    if (target.rel === 'stylesheet' && target.href.startsWith('https://fonts.googleapis.com/')) return null;
     const error = new Error('Falha no CSS essencial do aplicativo');
     error.name = 'ApplicationStylesheetLoadError';
     return error;
@@ -24,4 +22,3 @@ export function classifyBrowserError(event: Event): Error | null {
   error.name = 'OpaqueBrowserRuntimeError';
   return error;
 }
-

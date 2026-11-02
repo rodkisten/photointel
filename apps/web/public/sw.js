@@ -7,11 +7,7 @@ self.addEventListener('notificationclick', (event) => {
 
   const notificationData = event.notification.data || {};
   const message = notificationData.FCM_MSG || {};
-  const requestedUrl =
-    notificationData.url ||
-    message.fcmOptions?.link ||
-    message.data?.url ||
-    '/';
+  const requestedUrl = notificationData.url || message.fcmOptions?.link || message.data?.url || '/';
 
   let targetUrl;
   try {
@@ -23,28 +19,31 @@ self.addEventListener('notificationclick', (event) => {
     targetUrl = new URL('/', self.location.origin);
   }
 
-  event.waitUntil((async () => {
-    const existingWindows = await self.clients.matchAll({
-      type: 'window',
-      includeUncontrolled: true,
-    });
+  event.waitUntil(
+    (async () => {
+      const existingWindows = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      });
 
-    for (const client of existingWindows) {
-      if (new URL(client.url).origin !== targetUrl.origin) continue;
+      for (const client of existingWindows) {
+        if (new URL(client.url).origin !== targetUrl.origin) continue;
 
-      try {
-        const navigated = client.url !== targetUrl.href && typeof client.navigate === 'function'
-          ? await client.navigate(targetUrl.href)
-          : client;
-        await (navigated || client).focus();
-        return;
-      } catch (error) {
-        console.warn('[PhotoIntel SW] Falha ao reutilizar janela:', error);
+        try {
+          const navigated =
+            client.url !== targetUrl.href && typeof client.navigate === 'function'
+              ? await client.navigate(targetUrl.href)
+              : client;
+          await (navigated || client).focus();
+          return;
+        } catch (error) {
+          console.warn('[PhotoIntel SW] Falha ao reutilizar janela:', error);
+        }
       }
-    }
 
-    await self.clients.openWindow(targetUrl.href);
-  })());
+      await self.clients.openWindow(targetUrl.href);
+    })(),
+  );
 });
 
 // Firebase SDK compat funciona em um service worker classico, sem bundler.
@@ -88,9 +87,12 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(
-    keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key)),
-  )).then(() => self.clients.claim()));
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener('message', (event) => {
@@ -101,10 +103,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin || !SHELL_ASSETS.includes(url.pathname)) return;
   // Network-first refreshes public icons; offline fallback only for these static files.
-  event.respondWith(fetch(event.request, { cache: 'no-store' }).then((response) => {
-    if (response.ok) void caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, response.clone()));
-    return response;
-  }).catch(async () => (await caches.match(event.request)) || Response.error()));
+  event.respondWith(
+    fetch(event.request, { cache: 'no-store' })
+      .then((response) => {
+        if (response.ok)
+          void caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, response.clone()));
+        return response;
+      })
+      .catch(async () => (await caches.match(event.request)) || Response.error()),
+  );
 });
-
-

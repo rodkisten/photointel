@@ -5,9 +5,14 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 type Asset = {
-  id: string; filename: string; width: number; height: number;
-  captured_at: string | null; filesize: number;
-  thumbnail_url: string; resources?: { resource_type: string; media_url: string }[];
+  id: string;
+  filename: string;
+  width: number;
+  height: number;
+  captured_at: string | null;
+  filesize: number;
+  thumbnail_url: string;
+  resources?: { resource_type: string; media_url: string }[];
   tags?: { canonical_key: string; origin: string; user_status: string }[];
 };
 type SearchResult = {
@@ -16,8 +21,7 @@ type SearchResult = {
 };
 
 const api = (process.env.API_PROXY_TARGET ?? 'http://127.0.0.1:8000').replace(/\/$/, '');
-const strictApi = (process.env.AUTH_REJECTION_API_URL ?? 'http://127.0.0.1:8001')
-  .replace(/\/$/, '');
+const strictApi = (process.env.AUTH_REJECTION_API_URL ?? 'http://127.0.0.1:8001').replace(/\/$/, '');
 const origin = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:4173';
 let fixtures: Asset[] = [];
 let ingestionJob: string | undefined;
@@ -68,18 +72,20 @@ test('02 browses actual seeded thumbnails through authorized media URLs', async 
   await expect(tile).toBeVisible();
   const image = tile.getByRole('img');
   await expect(image).toHaveAttribute('src', /\/v1\/assets\/.+\/media\/thumbnail_/);
-  await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.naturalWidth))
-    .toBeGreaterThan(0);
+  await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Grade ampla', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Grade ampla', exact: true }))
-    .toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Grade ampla', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });
 
 test('03 opens details with metadata, provenance and keyboard navigation', async ({ page }) => {
   const viewer = await openFixture(page);
   await expect(viewer.getByText('Dimensões', { exact: true })).toBeVisible();
-  await expect(viewer.getByText(`${fixtures[0].width} × ${fixtures[0].height}`, { exact: true }))
-    .toBeVisible();
+  await expect(
+    viewer.getByText(`${fixtures[0].width} × ${fixtures[0].height}`, { exact: true }),
+  ).toBeVisible();
   await expect(viewer.getByRole('heading', { name: 'Inteligência e procedência' })).toBeVisible();
   const closeInformation = viewer.getByRole('button', { name: 'Fechar informações', exact: true });
   if (await closeInformation.isVisible()) await closeInformation.click();
@@ -93,7 +99,8 @@ test('03 opens details with metadata, provenance and keyboard navigation', async
 test('04 searches a seeded import tag using the structured API and filter UI', async ({ page, request }) => {
   const result = await post(request, '/v1/search', {
     filter: { op: 'tag', value: 'landscape', confidence: 0.5, origin: 'import' },
-    sort: 'captured_desc', limit: 90,
+    sort: 'captured_desc',
+    limit: 90,
   });
   const matches: SearchResult = await result.json();
   expect(matches.items.length).toBeGreaterThan(0);
@@ -107,13 +114,18 @@ test('04 searches a seeded import tag using the structured API and filter UI', a
   expect(filter.children[0].children[0].value).toBe('landscape');
 });
 
-test('05 performs Portuguese semantic retrieval with the explicit test embedding adapter', async ({ page }) => {
+test('05 performs Portuguese semantic retrieval with the explicit test embedding adapter', async ({
+  page,
+}) => {
   await page.goto('/search');
   await page.getByLabel('Busca semântica em português').fill('Paisagem com montanhas ao pôr do sol');
   await expect(page.getByRole('button', { name: 'Buscar', exact: true })).toBeEnabled();
-  const responsePromise = page.waitForResponse((response) =>
-    response.url().endsWith('/v1/search') && response.request().method() === 'POST' &&
-    response.request().postDataJSON().query === 'Paisagem com montanhas ao pôr do sol');
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/v1/search') &&
+      response.request().method() === 'POST' &&
+      response.request().postDataJSON().query === 'Paisagem com montanhas ao pôr do sol',
+  );
   await page.getByRole('button', { name: 'Buscar', exact: true }).click();
   const response = await responsePromise;
   expect(response.ok()).toBeTruthy();
@@ -122,8 +134,9 @@ test('05 performs Portuguese semantic retrieval with the explicit test embedding
   expect(result.explanation.ranking_strategy).toBe('cosine_distance_then_uuid');
   expect(result.explanation.model_revision).toBeTruthy();
   for (const item of result.items) expect(Number.isFinite(item.ranking?.semantic_similarity)).toBe(true);
-  await expect(page.getByText('Sua frase é interpretada por embeddings SigLIP 2.', { exact: false }))
-    .toBeVisible();
+  await expect(
+    page.getByText('Sua frase é interpretada por embeddings SigLIP 2.', { exact: false }),
+  ).toBeVisible();
 });
 
 test('06 applies date, dimensions, size and nested boolean conditions', async ({ page }) => {
@@ -136,8 +149,9 @@ test('06 applies date, dimensions, size and nested boolean conditions', async ({
   await page.getByRole('button', { name: 'Grupo aninhado', exact: true }).click();
   await page.getByLabel('Operador do grupo nível 2').selectOption('not');
   await page.getByLabel('Tipo da regra').nth(1).selectOption('screenshots');
-  const responsePromise = page.waitForResponse((response) =>
-    response.url().endsWith('/v1/search') && response.request().postDataJSON()?.filter);
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/search') && response.request().postDataJSON()?.filter,
+  );
   await page.getByRole('button', { name: 'Aplicar filtros exatos', exact: true }).click();
   const response = await responsePromise;
   expect(response.ok()).toBeTruthy();
@@ -149,10 +163,12 @@ test('06 applies date, dimensions, size and nested boolean conditions', async ({
     expect(item.captured_at).not.toBeNull();
   }
   const filter = JSON.parse(new URL(page.url()).searchParams.get('filter') ?? '{}');
-  expect(filter.children).toEqual(expect.arrayContaining([
-    expect.objectContaining({ op: 'date', minimum: '2019-01-01', maximum: '2025-12-31' }),
-    expect.objectContaining({ op: 'number', key: 'width', value: 900 }),
-  ]));
+  expect(filter.children).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ op: 'date', minimum: '2019-01-01', maximum: '2025-12-31' }),
+      expect.objectContaining({ op: 'number', key: 'width', value: 900 }),
+    ]),
+  );
 });
 
 test('07 persists a manual keyword with user provenance', async ({ page, request }) => {
@@ -163,9 +179,11 @@ test('07 persists a manual keyword with user provenance', async ({ page, request
   await expect(viewer.getByText(keyword, { exact: true })).toBeVisible();
   const response = await request.get(`${api}/v1/assets/${fixtures[0].id}`);
   const detail: Asset = await response.json();
-  expect(detail.tags).toEqual(expect.arrayContaining([
-    expect.objectContaining({ canonical_key: keyword, origin: 'user', user_status: 'approved' }),
-  ]));
+  expect(detail.tags).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ canonical_key: keyword, origin: 'user', user_status: 'approved' }),
+    ]),
+  );
   await page.reload();
   const information = page.getByRole('dialog').getByRole('button', { name: 'Informações', exact: true });
   if (await information.isVisible()) await information.click();
@@ -179,8 +197,9 @@ test('08 creates a persistent album, adds photos and browses its collection', as
   const dialog = page.getByRole('dialog', { name: 'Criar álbum', exact: true });
   await dialog.getByLabel('Nome', { exact: true }).fill(name);
   await dialog.getByLabel('Descrição').fill('Coleção de arte sintética para teste.');
-  const responsePromise = page.waitForResponse((response) =>
-    response.url().endsWith('/v1/albums') && response.request().method() === 'POST');
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/albums') && response.request().method() === 'POST',
+  );
   await dialog.getByRole('button', { name: 'Criar álbum', exact: true }).click();
   const created = await (await responsePromise).json();
   await post(request, `/v1/albums/${created.id}/assets`, { asset_ids: [fixtures[0].id] });
@@ -200,8 +219,9 @@ test('09 reviews exact duplicates and quality factors without deletion controls'
   expect(await group.locator('.duplicate-photo').count()).toBeGreaterThanOrEqual(2);
   await expect(group.getByText('Nitidez', { exact: true }).first()).toBeVisible();
   await group.getByRole('button', { name: 'Selecionar grupo' }).click();
-  const checked = await group.getByRole('checkbox').evaluateAll((nodes) =>
-    nodes.every((node) => (node as HTMLInputElement).checked));
+  const checked = await group
+    .getByRole('checkbox')
+    .evaluateAll((nodes) => nodes.every((node) => (node as HTMLInputElement).checked));
   expect(checked).toBe(true);
   await expect(page.getByRole('button', { name: /excluir|delete|apagar/i })).toHaveCount(0);
 });
@@ -210,8 +230,9 @@ test('10 starts a bounded fixture ingestion from the mobile administration page'
   await page.goto('/icloud');
   await page.getByLabel('Fonte', { exact: true }).selectOption('fixture');
   await page.getByLabel('Limite desta execução', { exact: false }).fill('4');
-  const responsePromise = page.waitForResponse((response) =>
-    response.url().endsWith('/v1/ingestion/start') && response.request().method() === 'POST');
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/v1/ingestion/start') && response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Importar fixtures locais', exact: true }).click();
   const response = await responsePromise;
   expect(response.status()).toBe(202);
@@ -227,13 +248,18 @@ test('11 observes durable ingestion completion and persisted job state', async (
     const created = await post(request, '/v1/ingestion/start', { source: 'fixture', limit: 4 });
     ingestionJob = (await created.json()).job_id;
   }
-  await expect.poll(async () => {
-    const response = await request.get(`${api}/v1/jobs/${ingestionJob}`);
-    expect(response.ok()).toBeTruthy();
-    const job = await response.json();
-    if (job.status === 'failed') throw new Error(`Fixture ingestion failed: ${job.error_code}`);
-    return job.status;
-  }, { timeout: 60_000, intervals: [250, 500, 1000] }).toBe('completed');
+  await expect
+    .poll(
+      async () => {
+        const response = await request.get(`${api}/v1/jobs/${ingestionJob}`);
+        expect(response.ok()).toBeTruthy();
+        const job = await response.json();
+        if (job.status === 'failed') throw new Error(`Fixture ingestion failed: ${job.error_code}`);
+        return job.status;
+      },
+      { timeout: 60_000, intervals: [250, 500, 1000] },
+    )
+    .toBe('completed');
   let listRequests = 0;
   page.on('request', (request) => {
     if (new URL(request.url()).pathname === '/v1/jobs') listRequests++;
@@ -258,20 +284,32 @@ test.describe('Read-only Apple Bridge protocol', () => {
     // Hook cleanup runs while this request fixture is still alive. A test timeout
     // must report its original failing action, rather than a closed-context error.
     const response = await request.post(`${api}/v1/apple-sync/devices/${deviceId}/revoke`, {
-      data: {}, headers: { Origin: origin }, timeout: 5_000,
+      data: {},
+      headers: { Origin: origin },
+      timeout: 5_000,
     });
     expect(response.ok(), `Revoke test Bridge device: ${response.status()}`).toBeTruthy();
   });
 
-  test('12 enrolls a read-only Bridge and previews an approved mapping without Apple writes', async ({ page, request }) => {
+  test('12 enrolls a read-only Bridge and previews an approved mapping without Apple writes', async ({
+    page,
+    request,
+  }) => {
     const { device, credential } = await test.step('Enroll a read-only test device', async () => {
       const code = await (await post(request, '/v1/apple-sync/enrollment', {})).json();
       const name = `Pyto E2E ${Date.now()}`;
       const enrollment = await post(request, '/v1/bridge/enroll', {
-        code: code.code, name, capabilities: {
-          level: 'read_only', photokit_read: true, keywords_read: true,
-          keywords_write: false, authorization: 'authorized', platform: 'test-ios',
-          adapter: 'test-readonly', reason: 'Inventário controlado de teste; sem hardware PhotoKit.',
+        code: code.code,
+        name,
+        capabilities: {
+          level: 'read_only',
+          photokit_read: true,
+          keywords_read: true,
+          keywords_write: false,
+          authorization: 'authorized',
+          platform: 'test-ios',
+          adapter: 'test-readonly',
+          reason: 'Inventário controlado de teste; sem hardware PhotoKit.',
         },
       });
       const enrolled = await enrollment.json();
@@ -280,26 +318,39 @@ test.describe('Read-only Apple Bridge protocol', () => {
     });
     await test.step('Upload inventory and explicitly verify the asset mapping', async () => {
       const manifestResponse = await request.post(`${api}/v1/bridge/manifest`, {
-        headers: { Authorization: `Bearer ${credential}` }, data: {
-          items: [{ local_identifier: `test-${fixtures[0].id}`, filename: fixtures[0].filename,
-            captured_at: fixtures[0].captured_at, width: fixtures[0].width,
-            height: fixtures[0].height, media_type: 'image', keywords: ['palavra existente'] }],
-          checkpoint: 'e2e-1', complete: true,
+        headers: { Authorization: `Bearer ${credential}` },
+        data: {
+          items: [
+            {
+              local_identifier: `test-${fixtures[0].id}`,
+              filename: fixtures[0].filename,
+              captured_at: fixtures[0].captured_at,
+              width: fixtures[0].width,
+              height: fixtures[0].height,
+              media_type: 'image',
+              keywords: ['palavra existente'],
+            },
+          ],
+          checkpoint: 'e2e-1',
+          complete: true,
         },
       });
       expect(manifestResponse.ok()).toBeTruthy();
       const inventory = await manifestResponse.json();
       await post(request, '/v1/apple-sync/mappings/confirm', {
-        asset_id: fixtures[0].id, snapshot_id: inventory.items[0].snapshot_id, confirm: true,
+        asset_id: fixtures[0].id,
+        snapshot_id: inventory.items[0].snapshot_id,
+        confirm: true,
       });
     });
     await test.step('Preview the keyword delta in the authenticated application', async () => {
       await page.goto(`/bridge?asset=${fixtures[0].id}`);
-      await page.getByRole('combobox', { name: 'Dispositivo', exact: true })
-        .selectOption(device.id);
+      await page.getByRole('combobox', { name: 'Dispositivo', exact: true }).selectOption(device.id);
       await page.getByLabel('Adicionar keywords, separadas por vírgula').fill('viagem aprovada');
-      const previewPromise = page.waitForResponse((response) =>
-        response.url().endsWith('/v1/apple-sync/preview') && response.request().method() === 'POST');
+      const previewPromise = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/v1/apple-sync/preview') && response.request().method() === 'POST',
+      );
       await page.getByRole('button', { name: 'Ver prévia segura', exact: true }).click();
       const previewResponse = await previewPromise;
       expect(previewResponse.ok()).toBeTruthy();
@@ -308,12 +359,13 @@ test.describe('Read-only Apple Bridge protocol', () => {
       expect(preview.capability).toBe('read_only');
       expect(preview.before).toContain('palavra existente');
       expect(preview.add).toContain('viagem aprovada');
-      await expect(page.getByText('Indisponível; operação ficará pendente', { exact: true }))
-        .toBeVisible();
+      await expect(page.getByText('Indisponível; operação ficará pendente', { exact: true })).toBeVisible();
     });
     await test.step('Persist a pending approval, then cancel without Apple writes', async () => {
-      const operationPromise = page.waitForResponse((response) =>
-        response.url().endsWith('/v1/apple-sync/operations') && response.request().method() === 'POST');
+      const operationPromise = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/v1/apple-sync/operations') && response.request().method() === 'POST',
+      );
       await page.getByRole('button', { name: 'Criar operação para aprovação', exact: true }).click();
       const operationResponse = await operationPromise;
       expect(operationResponse.status()).toBe(201);
@@ -329,7 +381,9 @@ test.describe('Read-only Apple Bridge protocol', () => {
   });
 });
 
-test('13 rejects unauthenticated application and Bridge requests and foreign origins', async ({ request }) => {
+test('13 rejects unauthenticated application and Bridge requests and foreign origins', async ({
+  request,
+}) => {
   const response = await request.get(`${strictApi}/v1/assets`);
   expect(response.status()).toBe(401);
   const forged = await request.get(`${strictApi}/v1/assets`, {
@@ -339,7 +393,8 @@ test('13 rejects unauthenticated application and Bridge requests and foreign ori
   const unauthorizedBridge = await request.get(`${api}/v1/bridge/operations`);
   expect(unauthorizedBridge.status()).toBe(401);
   const crossSite = await request.post(`${api}/v1/albums`, {
-    headers: { Origin: 'https://untrusted.example.invalid' }, data: { name: 'Forbidden' },
+    headers: { Origin: 'https://untrusted.example.invalid' },
+    data: { name: 'Forbidden' },
   });
   expect(crossSite.status()).toBe(403);
 });
@@ -357,7 +412,10 @@ test('14 protects private media and hides non-existent resources', async ({ requ
   expect(arbitraryVariant.status()).toBe(422);
 });
 
-test('15 supports a 375px viewport, safe navigation and an installable manifest', async ({ page, request }) => {
+test('15 supports a 375px viewport, safe navigation and an installable manifest', async ({
+  page,
+  request,
+}) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/library');
   await expect(page.getByRole('navigation', { name: 'Navegação móvel' })).toBeVisible();

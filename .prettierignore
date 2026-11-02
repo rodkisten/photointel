@@ -1,0 +1,27 @@
+# One root configuration for apps/web, apps/manage and the Cloudflare relay.
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.next/
+**/playwright-report/
+**/test-results/
+**/package-lock.json
+**/pnpm-lock.yaml
+**/yarn.lock
+**/*.min.js
+**/*.min.css
+
+# Generated API contracts should not be re-written by format-on-save.
+apps/web/src/api/schema.d.ts
+apps/web/src/api/generated-client.ts
+
+# Static binaries and assets are never part of source formatting.
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.webp
+**/*.gif
+**/*.svg
+**/*.woff
+**/*.woff2

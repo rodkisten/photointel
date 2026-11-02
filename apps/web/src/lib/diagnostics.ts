@@ -27,8 +27,7 @@ function newId(): string {
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16),
-    hex.slice(16, 20), hex.slice(20)].join('-');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
 }
 
 export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnostic {
@@ -41,9 +40,18 @@ export function diagnosticFor(error: unknown, phase: DiagnosticPhase): Diagnosti
     phase,
     category: api ? (api.code === 'NETWORK_ERROR' ? 'api.network' : 'api.http') : `frontend.${phase}`,
     source: api?.source ?? 'cloudflare',
-    code: api?.code && /^[A-Z0-9_]{1,48}$/.test(api.code) ? api.code :
-      (phase === 'resource' ? 'RESOURCE_LOAD_FAILURE' : phase === 'bootstrap' ? 'BOOT_FAILURE' :
-        phase === 'api' ? 'API_ERROR' : name === 'ChunkLoadError' ? 'CHUNK_LOAD_FAILURE' : 'CLIENT_FAILURE'),
+    code:
+      api?.code && /^[A-Z0-9_]{1,48}$/.test(api.code)
+        ? api.code
+        : phase === 'resource'
+          ? 'RESOURCE_LOAD_FAILURE'
+          : phase === 'bootstrap'
+            ? 'BOOT_FAILURE'
+            : phase === 'api'
+              ? 'API_ERROR'
+              : name === 'ChunkLoadError'
+                ? 'CHUNK_LOAD_FAILURE'
+                : 'CLIENT_FAILURE',
     status: api?.status,
     message: error instanceof Error ? error.message : 'Falha inesperada na aplicação',
     rayId: api?.rayId,
@@ -64,8 +72,13 @@ export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagno
   }
   if (error instanceof Error) diagnosed.set(error, incident);
   console.error('[PhotoIntel diagnostic]', {
-    correlation_id: incident.id, source: incident.source, phase: incident.phase,
-    category: incident.category, code: incident.code, status: incident.status, error,
+    correlation_id: incident.id,
+    source: incident.source,
+    phase: incident.phase,
+    category: incident.category,
+    code: incident.code,
+    status: incident.status,
+    error,
   });
   // API exceptions already have an origin correlation ID; client-side errors
   // need a sanitized entry in Cloudflare Workers Logs to become searchable.
@@ -81,22 +94,28 @@ export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagno
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: incident.id, phase: incident.phase, code: incident.code }),
       }).catch(() => undefined);
-    } catch { /* Diagnostics must never crash the application. */ }
+    } catch {
+      /* Diagnostics must never crash the application. */
+    }
   }
   return incident;
 }
 
 /** Official Logs Explorer deep link: query and duration are path parameters. */
 function gcpLogsUrl(query: string): string {
-  return 'https://console.cloud.google.com/logs/query;query=' +
-    encodeURIComponent(query) + ';duration=P7D?project=photointel';
+  return (
+    'https://console.cloud.google.com/logs/query;query=' +
+    encodeURIComponent(query) +
+    ';duration=P7D?project=photointel'
+  );
 }
 
 /** Copyable Logs Explorer query: avoids WebKit/in-app browsers dropping the
  * semicolon URL parameters or trimming encoded parentheses on redirect. */
 export function diagnosticLogsQuery(incident: Diagnostic): string {
   const id = UUID.test(incident.id) ? incident.id : '';
-  return ['resource.type="cloud_run_revision"',
+  return [
+    'resource.type="cloud_run_revision"',
     'resource.labels.service_name="photointel-api"',
     ...(id ? ['SEARCH("' + id + '")'] : ['severity>=WARNING']),
   ].join('\n');
@@ -129,9 +148,15 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
 export function jobLogsUrl(jobType: string, jobId?: string, correlationId?: string): string {
   const jobName = jobType === 'icloud_discovery' ? 'photointel-discover' : 'photointel-worker';
   const ids = [jobId, correlationId].filter((id): id is string => Boolean(id && UUID.test(id)));
-  const filter = ids.length ? '\n(' + ids.map((id, index) =>
-    (index === 0 ? 'jsonPayload.job_id="' : 'jsonPayload.correlation_id="') + id + '"'
-  ).join(' OR ') + ')' : '';
+  const filter = ids.length
+    ? '\n(' +
+      ids
+        .map(
+          (id, index) => (index === 0 ? 'jsonPayload.job_id="' : 'jsonPayload.correlation_id="') + id + '"',
+        )
+        .join(' OR ') +
+      ')'
+    : '';
   const query = 'resource.type="cloud_run_job"\nresource.labels.job_name="' + jobName + '"' + filter;
   return gcpLogsUrl(query);
 }
