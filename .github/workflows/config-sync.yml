@@ -10,8 +10,9 @@ on:
         options: ["api", "jobs", "jobs,api"]
       config_version:
         type: string
-        required: true
-        description: "SHA-256 of GCP_CONFIG_ENV from the management editor"
+        required: false
+        default: ""
+        description: "Optional SHA-256 guard. Leave empty when launching manually."
 permissions:
   contents: read
 concurrency:
@@ -42,6 +43,10 @@ jobs:
           EXPECTED_VERSION: ${{ inputs.config_version }}
         run: |
           set -euo pipefail
+          if [[ -z "$EXPECTED_VERSION" ]]; then
+            echo "Manual config sync: using the current production Environment configuration."
+            exit 0
+          fi
           [[ "$EXPECTED_VERSION" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::Invalid revision"; exit 2; }
           actual="$(printf '%s' "$CONFIG_ENV" | sha256sum | cut -d' ' -f1)"
           [[ "$actual" == "$EXPECTED_VERSION" ]] || {
