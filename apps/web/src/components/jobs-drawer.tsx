@@ -1,7 +1,7 @@
 import { Activity, ArrowUpRight, ChevronDown, ChevronUp, Maximize2, Minimize2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type TouchEvent } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { apiUrl, useApi } from '../api/client';
 import type { Info, Job, Page } from '../api/types';
 import { Status } from './common';
@@ -32,8 +32,10 @@ function batchSummary(batch: Info) {
 /** A persistent, non-modal mobile sheet. Its drag handle has three snap heights. */
 export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   const client = useQueryClient();
-  const jobs = useApi<Page<Job>>('/v1/jobs/activity?limit=24', 15_000);
-  const batches = useApi<Page<Info>>('/v1/job-batches?limit=8', 15_000);
+  const location = useLocation();
+  // SSE keeps the badge live; a longer safety poll avoids duplicate reads.
+  const jobs = useApi<Page<Job>>('/v1/jobs/activity?limit=24', 30_000);
+  const batches = useApi<Page<Info>>('/v1/job-batches?limit=8', 30_000);
   const [size, setSize] = useState<Size>(savedSize);
   const touch = useRef<number | null>(null);
   const activeJobs = (jobs.data?.items ?? []).filter((job) => ACTIVE.has(job.status));
@@ -50,7 +52,8 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   }
 
   useEffect(() => {
-    if (!('EventSource' in window)) return;
+    // The processing page already owns one SSE listener for the same events.
+    if (location.pathname === '/jobs' || !('EventSource' in window)) return;
     let source: EventSource | null = null;
     let reconnect: ReturnType<typeof setTimeout> | undefined;
     let refresh: ReturnType<typeof setTimeout> | undefined;
@@ -86,7 +89,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
     };
     connect();
     return () => { stopped = true; source?.close(); clearTimeout(reconnect); clearTimeout(refresh); };
-  }, [client]);
+  }, [client, location.pathname]);
 
   const onTouchStart = (event: TouchEvent) => {
     touch.current = event.touches[0]?.clientY ?? null;
