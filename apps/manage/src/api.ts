@@ -287,16 +287,17 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
   if (method === 'GET' && path === '/api/gcp/telegram') {
     // Inspect Cloud Run env metadata only. Never access or return token values,
     // chat destination, secret resource IDs or original URLs.
-    const service = (await gcp(
-      env,
-      identity,
-      gcpBase(env) + '/services/photointel-api',
-    )) as {
-      template?: { containers?: Array<{ env?: Array<{
-        name?: string; value?: string;
-        valueSource?: { secretKeyRef?: unknown };
-        valueFrom?: { secretKeyRef?: unknown };
-      }> }> };
+    const service = (await gcp(env, identity, gcpBase(env) + '/services/photointel-api')) as {
+      template?: {
+        containers?: Array<{
+          env?: Array<{
+            name?: string;
+            value?: string;
+            valueSource?: { secretKeyRef?: unknown };
+            valueFrom?: { secretKeyRef?: unknown };
+          }>;
+        }>;
+      };
     };
     const settings = service.template?.containers?.flatMap((c) => c.env || []) || [];
     const byName = new Map(settings.map((entry) => [entry.name, entry]));
@@ -311,9 +312,10 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       destinationConfigured: destination,
       tokenBound,
       ready: enabled && endpoint && destination && tokenBound,
-      explanation: enabled && endpoint && destination && tokenBound
-        ? 'Configuração Cloud Run presente; verifique o Relay e as entregas reais para confirmar o envio.'
-        : 'Telegram não está completamente configurado na revisão do Cloud Run; confira GCP_CONFIG_ENV e o Secret Manager.',
+      explanation:
+        enabled && endpoint && destination && tokenBound
+          ? 'Configuração Cloud Run presente; verifique o Relay e as entregas reais para confirmar o envio.'
+          : 'Telegram não está completamente configurado na revisão do Cloud Run; confira GCP_CONFIG_ENV e o Secret Manager.',
     });
   }
   if (method === 'GET' && path === '/api/gcp/services') {
