@@ -95,9 +95,9 @@ class TelegramActionTests(unittest.TestCase):
             }), encoding="utf8")
             gcloud = tmp / "gcloud"
             marker = tmp / "secret-was-read"
-            gcloud.write_text('#!/bin/sh\\ntouch "$GOOGLE_READ_MARKER"\\nexit 99\\n', encoding="utf8")
+            gcloud.write_text('#!/bin/sh\ntouch "$GOOGLE_READ_MARKER"\nexit 99\n', encoding="utf8")
             curl = tmp / "curl"
-            curl.write_text('#!/bin/sh\\ncat > "$CAPTURE"\\nprintf \'{"ok":true}\\n\'\\n', encoding="utf8")
+            curl.write_text('#!/bin/sh\ncat > "$CAPTURE"\nprintf \'{"ok":true}\n\'\n', encoding="utf8")
             gcloud.chmod(0o755)
             curl.chmod(0o755)
             capture = tmp / "payload.json"
