@@ -153,6 +153,51 @@ describe('persisted operations and navigation', () => {
     errorSpy.mockRestore();
   });
 
+  it('audits missing previews and retries only the selected photograph', async () => {
+    const user = userEvent.setup();
+    const original = fetcher.getMockImplementation()!;
+    const assetId = 'd0566c60-1a28-4bfa-84f1-1ed84907af00';
+    fetcher.mockImplementation(async (input, init) => {
+      const path = String(input);
+      if (path.startsWith('/v1/jobs/previews/audit')) {
+        return Response.json({
+          total_assets: 1000,
+          total_issues: 1,
+          verification: 'catalog_metadata',
+          next_cursor: null,
+          items: [{
+            asset_id: assetId, filename: 'foto-sem-miniatura.jpg',
+            ingestion_status: 'completed', missing_variants: ['thumbnail_medium', 'preview_large'],
+            available_variants: ['thumbnail_small'], invalid_variants: [],
+            status: 'missing', repairable: true, job: null,
+          }],
+        });
+      }
+      if (path === `/v1/jobs/assets/${assetId}/preview/repair`) {
+        return Response.json({ created: true, message: 'Trabalho adicionado à fila' });
+      }
+      return original(input, init);
+    });
+    mount();
+    await user.click(screen.getByRole('button', { name: 'Buscar prévias com falha' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Auditoria de thumbnails e previews' });
+    expect(await within(dialog).findByText('foto-sem-miniatura.jpg')).toBeVisible();
+    expect(within(dialog).getByText(/Miniatura média · Prévia grande/)).toBeVisible();
+    expect(within(dialog).getByText('1.000')).toBeVisible();
+    expect(fetcher).toHaveBeenCalledWith(
+      '/v1/jobs/previews/audit?limit=30', expect.anything(),
+    );
+    await user.click(within(dialog).getByRole('button', {
+      name: 'Reparar prévias de foto-sem-miniatura.jpg',
+    }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith(
+      `/v1/jobs/assets/${assetId}/preview/repair`,
+      expect.objectContaining({ method: 'POST' }),
+    ));
+    expect(within(dialog).getByRole('button', { name: 'Reparar prévias de foto-sem-miniatura.jpg' }))
+      .toHaveTextContent('Solicitado');
+  });
+
   it('opens the accessible mobile navigation and reaches a real page', async () => {
     const user = userEvent.setup();
     mount(<App />, '/albums');

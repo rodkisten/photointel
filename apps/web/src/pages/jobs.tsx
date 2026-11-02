@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, Cpu, Info, Pause, Play, Plus,
+import { Activity, ChevronDown, Cpu, FileSearch, Info, Pause, Play, Plus,
   ExternalLink, RefreshCw, RotateCcw, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -7,6 +7,7 @@ import type { Capabilities, Info as InfoData, Job, Page } from '../api/types';
 import { DetailList, Empty, ErrorState, PageHeader, Skeleton, Status } from '../components/common';
 import { Button } from '../components/ui/button';
 import { Dialog } from '../components/ui/dialog';
+import { PreviewAuditDialog } from '../components/preview-audit';
 import { date, items, number, obj, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { jobLogsUrl } from '../lib/diagnostics';
@@ -22,6 +23,7 @@ const jobNames: Record<string, string> = {
 export function JobsPage() {
   const [status, setStatus] = useState(''); const [cursor, setCursor] = useState('');
   const [job, setJob] = useState<Job | null>(null); const [reindex, setReindex] = useState(false);
+  const [previewAudit, setPreviewAudit] = useState(false);
   const [limit, setLimit] = useState(100); const [confirm, setConfirm] = useState(false);
   const [batchError, setBatchError] = useState<Error | null>(null);
   const [kinds, setKinds] = useState(['duplicate_analysis', 'quality_analysis']);
@@ -71,7 +73,10 @@ export function JobsPage() {
   const counts = obj(stats.data?.job_counts);
   return <><PageHeader eyebrow="Operação contínua" title="Centro de processamento"
     description="Cada etapa persistida, com retomada segura e erros que podem ser inspecionados."
-    actions={<Button onClick={() => { setBatchError(null); setReindex(true); }}><Plus size={14} />Processar lote</Button>} />
+    actions={<><Button variant="outline" onClick={() => setPreviewAudit(true)}>
+      <FileSearch size={14} />Buscar prévias com falha</Button>
+      <Button onClick={() => { setBatchError(null); setReindex(true); }}>
+        <Plus size={14} />Processar lote</Button></>} />
     <div className="metrics">{[
       ['Na fila', stats.data?.pending_processing], ['Em execução', counts.running ?? 0],
       ['Concluídos', counts.completed ?? 0], ['Falhas finais', counts.failed ?? 0],
@@ -154,6 +159,7 @@ export function JobsPage() {
             Jobs antigos podem não ter identificadores nos logs.</small>
         </div></div>}</>}
     </Dialog>
+    {previewAudit && <PreviewAuditDialog onClose={() => setPreviewAudit(false)} />}
     <Dialog open={reindex} onOpenChange={setReindex} title="Processar um lote"
       description="A IA só executa com adapter configurado e limites de custo aprovados. Nenhuma imagem é apagada.">
       <div className="stack"><label className="field">Limite de fotografias<input type="number" min="1" max="10000"
