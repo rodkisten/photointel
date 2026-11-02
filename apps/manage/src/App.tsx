@@ -950,9 +950,10 @@ function ConfigEditor() {
               </Button>
             </div>
             <p className="text-xs leading-5 text-slate-500">
-              O painel edita a variável do GitHub, não um secret. Referências do Secret Manager podem ser
-              editadas, mas valores secretos nunca devem ser colocados aqui. Mudanças de runtime atualizam
-              Cloud Run sem reconstruir Docker; frontend e Manage são publicados quando necessário.
+              O painel edita uma variável do GitHub, não um secret. O Telegram aceita token diretamente
+              no .env, mas o valor poderá ser visto por quem tem acesso às variáveis do repositório e à configuração
+              do Cloud Run. Prefira um GitHub Environment Secret ou Secret Manager se precisar de sigilo forte.
+              Alterações de runtime sincronizam sem reconstruir Docker.
             </p>
             {update.error && <IssueBanner error={update.error} />}
             {lastSave && (
@@ -1126,7 +1127,7 @@ function SystemInfo({ meta }: { meta: Meta }) {
                   ['Ativação', telegram.data?.enabled],
                   ['Endpoint', telegram.data?.endpointConfigured],
                   ['Destino', telegram.data?.destinationConfigured],
-                  ['Secret Manager', telegram.data?.tokenBound],
+                  ['Token configurado', telegram.data?.tokenBound],
                 ] as Array<[string, boolean | undefined]>
               ).map(([label, ready]) => (
                 <div key={label} className="rounded-lg bg-white/[.035] px-3 py-2">
