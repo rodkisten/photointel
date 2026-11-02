@@ -500,10 +500,14 @@ export async function api(
     });
   }
   if (method === 'GET' && path === '/api/sentry/issues') {
-    if (!env.SENTRY_ORG || !env.SENTRY_API_TOKEN)
-      throw new ApiError(503, 'SENTRY', 'Configure SENTRY_ORG e SENTRY_API_TOKEN');
+    if (!env.SENTRY_ORG)
+      return json({ items: [], read_enabled: false, dashboard_url: null });
     if (!/^[a-z0-9-]{1,64}$/.test(env.SENTRY_ORG))
       throw new ApiError(503, 'SENTRY_ORG', 'Organização inválida');
+    const dashboardUrl = 'https://' + env.SENTRY_ORG + '.sentry.io/issues/';
+    // Ingestion via SENTRY_DSN works independently of this optional read token.
+    if (!env.SENTRY_API_TOKEN)
+      return json({ items: [], read_enabled: false, dashboard_url: dashboardUrl });
     const items = await provider(
       'https://sentry.io/api/0/organizations/' +
         env.SENTRY_ORG +
@@ -511,6 +515,8 @@ export async function api(
       env.SENTRY_API_TOKEN,
     );
     return json({
+      read_enabled: true,
+      dashboard_url: dashboardUrl,
       items: (Array.isArray(items) ? items : []).map((x) => ({
         id: x.id,
         title: redact(x.title).slice(0, 180),
