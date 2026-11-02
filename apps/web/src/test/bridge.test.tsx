@@ -14,24 +14,43 @@ it('labels a populated device selector and previews a read-only keyword delta', 
   const fetcher = vi.fn<typeof fetch>();
   fetcher.mockImplementation(async (input) => {
     const path = String(input);
-    if (path === '/v1/apple-sync/status') return Response.json({ devices: [{
-      id: deviceId, name: 'iPhone de teste', revoked_at: null,
-      capabilities: { level: 'read_only', keywords_write: false },
-    }] });
-    if (path === '/v1/apple-sync/preview') return Response.json({
-      before: ['palavra existente'], add: ['viagem'], remove: [],
-      managed_keywords: [], mapping_status: 'verified',
-      capability: 'read_only', write_available: false,
-    });
+    if (path === '/v1/apple-sync/status')
+      return Response.json({
+        devices: [
+          {
+            id: deviceId,
+            name: 'iPhone de teste',
+            revoked_at: null,
+            capabilities: { level: 'read_only', keywords_write: false },
+          },
+        ],
+      });
+    if (path === '/v1/apple-sync/preview')
+      return Response.json({
+        before: ['palavra existente'],
+        add: ['viagem'],
+        remove: [],
+        managed_keywords: [],
+        mapping_status: 'verified',
+        capability: 'read_only',
+        write_available: false,
+      });
     return Response.json({ items: [], next_cursor: null });
   });
   vi.stubGlobal('fetch', fetcher);
-  const client = new QueryClient({ defaultOptions: {
-    queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
-  } });
-  render(<QueryClientProvider client={client}>
-    <MemoryRouter initialEntries={[`/bridge?asset=${assetId}`]}><BridgePage /></MemoryRouter>
-  </QueryClientProvider>);
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/bridge?asset=${assetId}`]}>
+        <BridgePage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
   const user = userEvent.setup();
   const selector = await screen.findByRole('combobox', { name: 'Dispositivo' });
   await screen.findByRole('option', { name: 'iPhone de teste' });
@@ -40,14 +59,24 @@ it('labels a populated device selector and previews a read-only keyword delta', 
   await user.selectOptions(selector, deviceId);
   await user.type(screen.getByLabelText('Adicionar keywords, separadas por vírgula'), 'viagem');
   await user.click(screen.getByRole('button', { name: 'Ver prévia segura' }));
-  await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/v1/apple-sync/preview',
-    expect.objectContaining({ method: 'POST', body: JSON.stringify({
-      asset_id: assetId, target_device_id: deviceId, add: ['viagem'], remove: [],
-      approve_removals: false, single_asset_test: false, source: 'user',
-    }) }),
-  ));
+  await waitFor(() =>
+    expect(fetcher).toHaveBeenCalledWith(
+      '/v1/apple-sync/preview',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          asset_id: assetId,
+          target_device_id: deviceId,
+          add: ['viagem'],
+          remove: [],
+          approve_removals: false,
+          single_asset_test: false,
+          source: 'user',
+        }),
+      }),
+    ),
+  );
   expect(await screen.findByText('Indisponível; operação ficará pendente')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Criar operação para aprovação' })).toBeEnabled();
-  expect(fetcher.mock.calls.some(([input]) => String(input).endsWith('/apple-sync/operations')))
-    .toBe(false);
+  expect(fetcher.mock.calls.some(([input]) => String(input).endsWith('/apple-sync/operations'))).toBe(false);
 });

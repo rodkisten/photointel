@@ -1,8 +1,16 @@
 /** Unified React asset server + fixed-origin API relay. The API validates signed JWTs. */
 const REQUEST_HEADERS = [
-  'accept', 'content-type', 'authorization', 'cf-access-jwt-assertion',
-  'origin', 'if-none-match', 'if-range', 'range', 'last-event-id',
-  'sentry-trace', 'baggage',
+  'accept',
+  'content-type',
+  'authorization',
+  'cf-access-jwt-assertion',
+  'origin',
+  'if-none-match',
+  'if-range',
+  'range',
+  'last-event-id',
+  'sentry-trace',
+  'baggage',
 ];
 const METHODS = new Set(['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']);
 
@@ -12,18 +20,32 @@ const incidents = new Map();
 function important(level, event, route, status, durationMs = 0, correlationId = null) {
   // Every edge failure must be searchable by its own correlation ID.
   if (level === 'error' && correlationId) {
-    console.error({ service: 'photointel', event, route, status,
-      duration_ms: Math.max(0, Math.round(durationMs)), correlation_id: correlationId });
+    console.error({
+      service: 'photointel',
+      event,
+      route,
+      status,
+      duration_ms: Math.max(0, Math.round(durationMs)),
+      correlation_id: correlationId,
+    });
     return;
   }
   const now = Date.now();
   const key = `${event}:${route}:${status}`;
   const prior = incidents.get(key);
-  if (prior && now - prior.at < 60000) { prior.suppressed++; return; }
+  if (prior && now - prior.at < 60000) {
+    prior.suppressed++;
+    return;
+  }
   incidents.set(key, { at: now, suppressed: 0 });
-  console[level]({ service: 'photointel', event, route, status,
+  console[level]({
+    service: 'photointel',
+    event,
+    route,
+    status,
     duration_ms: Math.max(0, Math.round(durationMs)),
-    suppressed_since_last: prior?.suppressed ?? 0 });
+    suppressed_since_last: prior?.suppressed ?? 0,
+  });
 }
 function routeGroup(path) {
   if (path.startsWith('/v1/')) return '/v1/*';
@@ -35,15 +57,29 @@ function routeGroup(path) {
 function configuration(env, requireUpstream = true) {
   // Static UI and login must work even if Cloud Run is not configured or unhealthy.
   const frontend = new URL(env.FRONTEND_ORIGIN);
-  if (frontend.protocol !== 'https:' || frontend.pathname !== '/' ||
-      frontend.username || frontend.password || frontend.search || frontend.hash || frontend.port) {
+  if (
+    frontend.protocol !== 'https:' ||
+    frontend.pathname !== '/' ||
+    frontend.username ||
+    frontend.password ||
+    frontend.search ||
+    frontend.hash ||
+    frontend.port
+  ) {
     throw new Error('Invalid frontend origin');
   }
   if (!requireUpstream) return { frontend: frontend.origin, origin: null };
   const origin = new URL(env.CLOUD_RUN_ORIGIN);
-  if (origin.protocol !== 'https:' || !origin.hostname.endsWith('.run.app') ||
-      origin.username || origin.password || origin.pathname !== '/' ||
-      origin.search || origin.hash || origin.port) {
+  if (
+    origin.protocol !== 'https:' ||
+    !origin.hostname.endsWith('.run.app') ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash ||
+    origin.port
+  ) {
     throw new Error('Invalid fixed upstream origin');
   }
   return { frontend: frontend.origin, origin: origin.origin };
@@ -53,8 +89,10 @@ function failure(status, message, extra = {}) {
   return new Response(JSON.stringify({ error: { message } }), {
     status,
     headers: {
-      'Content-Type': 'application/json', 'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff', ...extra,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      ...extra,
     },
   });
 }
@@ -76,14 +114,20 @@ Ver logs no Cloudflare</a>
 <p>Abra o Worker photointel, Observability, e filtre pelo correlation_id.</p>
 <button type="button" onclick="location.reload()">Tentar novamente</button>
 </main></body></html>`;
-  return new Response(html, { status, headers: {
-    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-  } });
+  return new Response(html, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 function isNavigation(request, pathname) {
-  return request.headers.get('Accept')?.includes('text/html') ||
-    (!pathname.startsWith('/assets/') && !/\.[a-z0-9]{1,8}$/i.test(pathname));
+  return (
+    request.headers.get('Accept')?.includes('text/html') ||
+    (!pathname.startsWith('/assets/') && !/\.[a-z0-9]{1,8}$/i.test(pathname))
+  );
 }
 
 async function dispatch(request, env, fetchOrigin, correlationId) {
@@ -91,8 +135,9 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
   const log = (level, event, route, status, durationMs = 0) =>
     important(level, event, route, status, durationMs, correlationId);
   let config;
-  try { config = configuration(env, incoming.pathname.startsWith('/v1/')); }
-  catch {
+  try {
+    config = configuration(env, incoming.pathname.startsWith('/v1/'));
+  } catch {
     log('error', 'routing_config_invalid', 'configuration', 503);
     return failure(503, 'Routing not configured');
   }
@@ -103,12 +148,14 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     if (incoming.origin !== config.frontend || request.method !== 'POST') {
       return failure(404, 'Route unavailable');
     }
-    if (request.headers.get('Origin') !== config.frontend ||
-        !/^application\/json(?:;|$)/i.test(request.headers.get('Content-Type') ?? '')) {
+    if (
+      request.headers.get('Origin') !== config.frontend ||
+      !/^application\/json(?:;|$)/i.test(request.headers.get('Content-Type') ?? '')
+    ) {
       return failure(403, 'Origin not allowed');
     }
     const length = Number(request.headers.get('Content-Length'));
-    if ((request.headers.has('Content-Length') && (!Number.isInteger(length) || length < 1 || length > 1024))) {
+    if (request.headers.has('Content-Length') && (!Number.isInteger(length) || length < 1 || length > 1024)) {
       return failure(413, 'Invalid diagnostics size');
     }
     try {
@@ -116,14 +163,23 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       if (raw.length > 1024) return failure(413, 'Invalid diagnostics size');
       const item = JSON.parse(raw);
       const phases = new Set(['bootstrap', 'render', 'runtime', 'promise', 'api', 'resource', 'worker']);
-      if (!item || typeof item !== 'object' ||
-          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id ?? '') ||
-          !phases.has(item.phase) ||
-          !/^[A-Z0-9_]{1,48}$/.test(item.code ?? '')) {
+      if (
+        !item ||
+        typeof item !== 'object' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id ?? '') ||
+        !phases.has(item.phase) ||
+        !/^[A-Z0-9_]{1,48}$/.test(item.code ?? '')
+      ) {
         return failure(400, 'Invalid diagnostics');
       }
-      console.error({ service: 'photointel', event: 'client_error',
-        correlation_id: item.id, phase: item.phase, code: item.code, source: 'browser' });
+      console.error({
+        service: 'photointel',
+        event: 'client_error',
+        correlation_id: item.id,
+        phase: item.phase,
+        code: item.code,
+        source: 'browser',
+      });
       return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
     } catch {
       return failure(400, 'Invalid diagnostics');
@@ -133,20 +189,27 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     if (incoming.origin !== config.frontend || request.method !== 'GET') {
       return failure(404, 'Route unavailable');
     }
-    return new Response(JSON.stringify({
-      release: /^[a-f0-9]{40}$/.test(env.RELEASE_SHA ?? '') ? env.RELEASE_SHA : null,
-    }), { headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store, max-age=0',
-      'CDN-Cache-Control': 'no-store',
-    } });
+    return new Response(
+      JSON.stringify({
+        release: /^[a-f0-9]{40}$/.test(env.RELEASE_SHA ?? '') ? env.RELEASE_SHA : null,
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store, max-age=0',
+          'CDN-Cache-Control': 'no-store',
+        },
+      },
+    );
   }
   if (incoming.pathname === '/auth/login') {
     if (incoming.origin !== config.frontend || request.method !== 'GET') {
       return failure(404, 'Route unavailable');
     }
-    if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(env.ACCESS_TEAM_DOMAIN ?? '') ||
-        !/^[A-Za-z0-9_-]{1,256}$/.test(env.ACCESS_AUDIENCE ?? '')) {
+    if (
+      !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(env.ACCESS_TEAM_DOMAIN ?? '') ||
+      !/^[A-Za-z0-9_-]{1,256}$/.test(env.ACCESS_AUDIENCE ?? '')
+    ) {
       log('error', 'access_login_config_missing', 'authentication', 503);
       return failure(503, 'Cloudflare Access login not configured');
     }
@@ -154,10 +217,14 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     login.pathname = '/cdn-cgi/access/login/' + new URL(config.frontend).hostname;
     login.searchParams.set('kid', env.ACCESS_AUDIENCE);
     login.searchParams.set('redirect_url', config.frontend + '/');
-    return new Response(null, { status: 302, headers: {
-      Location: login.href, 'Cache-Control': 'private, no-store',
-      'Referrer-Policy': 'no-referrer',
-    } });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: login.href,
+        'Cache-Control': 'private, no-store',
+        'Referrer-Policy': 'no-referrer',
+      },
+    });
   }
 
   // One Worker, two services: React static assets on the frontend hostname
@@ -167,16 +234,14 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     if (incoming.pathname === '/v1' || incoming.pathname.startsWith('/v1')) {
       return failure(404, 'Route unavailable');
     }
-    if (
-      incoming.origin !== config.frontend ||
-      !['GET', 'HEAD'].includes(request.method)
-    ) {
+    if (incoming.origin !== config.frontend || !['GET', 'HEAD'].includes(request.method)) {
       return failure(404, 'Route unavailable');
     }
     if (!env.ASSETS || typeof env.ASSETS.fetch !== 'function') {
       log('error', 'frontend_assets_binding_missing', routeGroup(incoming.pathname), 503);
       return isNavigation(request, incoming.pathname)
-        ? frontendFailure(503, correlationId) : failure(503, 'Frontend assets not deployed');
+        ? frontendFailure(503, correlationId)
+        : failure(503, 'Frontend assets not deployed');
     }
     const started = Date.now();
     try {
@@ -190,20 +255,25 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
         return frontendFailure(response.status, correlationId);
       }
       const headers = new Headers(response.headers);
-      if (isNavigation(request, incoming.pathname) ||
-          ['/index.html', '/sw.js', '/manifest.webmanifest', '/fcm.js'].includes(incoming.pathname)) {
+      if (
+        isNavigation(request, incoming.pathname) ||
+        ['/index.html', '/sw.js', '/manifest.webmanifest', '/fcm.js'].includes(incoming.pathname)
+      ) {
         headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
         headers.set('CDN-Cache-Control', 'no-store');
         headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
         headers.set('Pragma', 'no-cache');
       }
       return new Response(response.body, {
-        status: response.status, statusText: response.statusText, headers,
+        status: response.status,
+        statusText: response.statusText,
+        headers,
       });
     } catch {
       log('error', 'frontend_assets_unreachable', routeGroup(incoming.pathname), 503, Date.now() - started);
       return isNavigation(request, incoming.pathname)
-        ? frontendFailure(503, correlationId) : failure(503, 'Frontend temporarily unavailable');
+        ? frontendFailure(503, correlationId)
+        : failure(503, 'Frontend temporarily unavailable');
     }
   }
   if (!METHODS.has(request.method)) {
@@ -219,8 +289,10 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
         'Access-Control-Allow-Origin': config.frontend,
         'Access-Control-Allow-Credentials': 'true',
         'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cf-Access-Jwt-Assertion,If-None-Match,If-Range,Range,Last-Event-ID',
-        'Vary': 'Origin', 'Cache-Control': 'private, no-store',
+        'Access-Control-Allow-Headers':
+          'Content-Type,Authorization,Cf-Access-Jwt-Assertion,If-None-Match,If-Range,Range,Last-Event-ID',
+        Vary: 'Origin',
+        'Cache-Control': 'private, no-store',
       },
     });
   }
@@ -231,8 +303,10 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
   if (!assertion && incoming.origin === config.frontend) {
     const cookie = request.headers.get('Cookie') ?? '';
     if (cookie.length <= 32768) {
-      const matches = cookie.split(';').map(part => part.trim())
-        .filter(part => part.startsWith('CF_Authorization='));
+      const matches = cookie
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part.startsWith('CF_Authorization='));
       if (matches.length === 1) {
         const value = matches[0].slice('CF_Authorization='.length);
         if (/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) {
@@ -255,8 +329,10 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     headers.delete('sentry-trace');
   }
   const baggage = headers.get('baggage');
-  if (baggage && (baggage.length > 2048 ||
-      !baggage.split(',').every(item => item.trim().startsWith('sentry-')))) {
+  if (
+    baggage &&
+    (baggage.length > 2048 || !baggage.split(',').every((item) => item.trim().startsWith('sentry-')))
+  ) {
     headers.delete('baggage');
   }
   headers.set('Cf-Access-Jwt-Assertion', assertion);
@@ -266,7 +342,10 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
   target.pathname = incoming.pathname;
   target.search = incoming.search;
   const upstream = new Request(target, {
-    method: request.method, headers, body: request.body, redirect: 'manual',
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: 'manual',
     duplex: 'half',
   });
   const started = Date.now();
@@ -299,7 +378,9 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
       outgoing.set('X-PhotoIntel-Auth', 'upstream-rejected');
     }
     return new Response(response.body, {
-      status: response.status, statusText: response.statusText, headers: outgoing,
+      status: response.status,
+      statusText: response.statusText,
+      headers: outgoing,
     });
   } catch {
     log('error', 'upstream_unreachable', '/v1/*', 502, Date.now() - started);
@@ -316,24 +397,38 @@ function captureEdgeFailure(env, correlationId, status, ctx) {
   let dsn;
   try {
     dsn = new URL(env.SENTRY_DSN);
-    if (dsn.protocol !== 'https:' || !/^\\d+$/.test(dsn.pathname.slice(1)) ||
-        !dsn.username || dsn.password || !dsn.hostname.endsWith('.sentry.io')) return null;
-  } catch { return null; }
+    if (
+      dsn.protocol !== 'https:' ||
+      !/^\\d+$/.test(dsn.pathname.slice(1)) ||
+      !dsn.username ||
+      dsn.password ||
+      !dsn.hostname.endsWith('.sentry.io')
+    )
+      return null;
+  } catch {
+    return null;
+  }
   const projectId = dsn.pathname.slice(1);
   const eventId = crypto.randomUUID().replaceAll('-', '');
   const endpoint = dsn.origin + '/api/' + projectId + '/envelope/';
   const stamp = new Date().toISOString();
-  const payload = [
-    JSON.stringify({ event_id: eventId, dsn: env.SENTRY_DSN, sent_at: stamp }),
-    JSON.stringify({ type: 'event' }),
-    JSON.stringify({
-      event_id: eventId, timestamp: stamp, platform: 'javascript',
-      level: 'error', environment: 'production', release: env.RELEASE_SHA || undefined,
-      exception: { values: [{ type: 'CloudflareWorkerFailure', value: 'HTTP ' + status }] },
-      tags: { service: 'photointel-cloudflare', correlation_id: correlationId },
-    }),
-  ].join('\n') + '\n';
-  const pending = fetch(endpoint, { method: 'POST',
+  const payload =
+    [
+      JSON.stringify({ event_id: eventId, dsn: env.SENTRY_DSN, sent_at: stamp }),
+      JSON.stringify({ type: 'event' }),
+      JSON.stringify({
+        event_id: eventId,
+        timestamp: stamp,
+        platform: 'javascript',
+        level: 'error',
+        environment: 'production',
+        release: env.RELEASE_SHA || undefined,
+        exception: { values: [{ type: 'CloudflareWorkerFailure', value: 'HTTP ' + status }] },
+        tags: { service: 'photointel-cloudflare', correlation_id: correlationId },
+      }),
+    ].join('\n') + '\n';
+  const pending = fetch(endpoint, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/x-sentry-envelope' },
     body: payload,
   }).catch(() => undefined);
@@ -354,21 +449,25 @@ export async function handle(request, env, fetchOrigin = fetch, ctx = null) {
   if (!headers.has('X-Correlation-ID')) headers.set('X-Correlation-ID', correlationId);
   if (!headers.has('X-PhotoIntel-Source')) headers.set('X-PhotoIntel-Source', 'cloudflare');
   // The origin itself owns its Sentry exceptions. Only capture edge-side 5xx.
-  if (response.status >= 500 && headers.get('X-PhotoIntel-Source') === 'cloudflare' &&
-      !headers.has('X-Sentry-Event-ID')) {
+  if (
+    response.status >= 500 &&
+    headers.get('X-PhotoIntel-Source') === 'cloudflare' &&
+    !headers.has('X-Sentry-Event-ID')
+  ) {
     const edgeEvent = captureEdgeFailure(env, correlationId, response.status, ctx);
     if (edgeEvent) headers.set('X-Sentry-Event-ID', edgeEvent);
   }
   const ray = request.headers.get('cf-ray');
   if (ray && /^[a-z0-9-]{8,64}$/i.test(ray)) headers.set('X-Cloudflare-Ray', ray);
   return new Response(response.body, {
-    status: response.status, statusText: response.statusText, headers,
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
 export default {
-  fetch(request, env, ctx) { return handle(request, env, fetch, ctx); },
+  fetch(request, env, ctx) {
+    return handle(request, env, fetch, ctx);
+  },
 };
-
-
-

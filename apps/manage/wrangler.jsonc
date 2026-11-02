@@ -7,21 +7,19 @@
   "preview_urls": false,
   "observability": {
     "enabled": true,
-    "logs": {"enabled": true, "invocation_logs": false}
+    "logs": { "enabled": true, "invocation_logs": false },
   },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "run_worker_first": true,
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
-  "routes": [
-    {"pattern": "photos-manage.migos.club", "custom_domain": true}
-  ],
+  "routes": [{ "pattern": "photos-manage.migos.club", "custom_domain": true }],
   "vars": {
     "GITHUB_REPO": "rodkisten/photointel",
     "GITHUB_ENVIRONMENT": "production",
     "GCP_PROJECT_ID": "photointel",
-    "GCP_REGION": "us-central1"
-  }
+    "GCP_REGION": "us-central1",
+  },
 }

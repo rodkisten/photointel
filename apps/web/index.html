@@ -20,48 +20,114 @@
 
     <title>Photo Intelligence Cloud</title>
     <style>
-      #boot-splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;
-        justify-content:center;flex-direction:column;gap:16px;background:#090909;color:#f5f5f5;
-        font:500 17px/1.5 Geist,system-ui,sans-serif;letter-spacing:-.02em}
-      #boot-splash .splash-mark{width:58px;height:58px;border:1px solid #383838;
-        border-radius:16px;background:linear-gradient(145deg,#232323,#101010);
-        display:grid;place-items:center;position:relative;margin-bottom:8px}
-      #boot-splash .splash-orbit{position:absolute;width:31px;height:31px;border:2px solid #ededed;
-        border-radius:50%;transform:rotate(-35deg) scaleX(.8)}
-      #boot-splash .splash-core{width:11px;height:11px;background:#fff;border-radius:50%}
-      #boot-splash .splash-caption{font-size:10px;color:#777;letter-spacing:.22em}
-      #boot-splash .splash-loader{width:108px;height:2px;overflow:hidden;background:#303030;
-        border-radius:10px;margin-top:16px;position:relative}
-      #boot-splash .splash-loader:before{content:"";position:absolute;inset:0;width:38%;
-        background:#eee;animation:splash-progress 1.5s ease-in-out infinite}
-      @keyframes splash-progress{0%{transform:translateX(-120%)}100%{transform:translateX(370%)}}
-      @media(prefers-reduced-motion:reduce){#boot-splash .splash-loader:before{animation:none;width:65%}}
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 16px;
+        background: #090909;
+        color: #f5f5f5;
+        font:
+          500 17px/1.5 Geist,
+          system-ui,
+          sans-serif;
+        letter-spacing: -0.02em;
+      }
+      #boot-splash .splash-mark {
+        width: 58px;
+        height: 58px;
+        border: 1px solid #383838;
+        border-radius: 16px;
+        background: linear-gradient(145deg, #232323, #101010);
+        display: grid;
+        place-items: center;
+        position: relative;
+        margin-bottom: 8px;
+      }
+      #boot-splash .splash-orbit {
+        position: absolute;
+        width: 31px;
+        height: 31px;
+        border: 2px solid #ededed;
+        border-radius: 50%;
+        transform: rotate(-35deg) scaleX(0.8);
+      }
+      #boot-splash .splash-core {
+        width: 11px;
+        height: 11px;
+        background: #fff;
+        border-radius: 50%;
+      }
+      #boot-splash .splash-caption {
+        font-size: 10px;
+        color: #777;
+        letter-spacing: 0.22em;
+      }
+      #boot-splash .splash-loader {
+        width: 108px;
+        height: 2px;
+        overflow: hidden;
+        background: #303030;
+        border-radius: 10px;
+        margin-top: 16px;
+        position: relative;
+      }
+      #boot-splash .splash-loader:before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        width: 38%;
+        background: #eee;
+        animation: splash-progress 1.5s ease-in-out infinite;
+      }
+      @keyframes splash-progress {
+        0% {
+          transform: translateX(-120%);
+        }
+        100% {
+          transform: translateX(370%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash .splash-loader:before {
+          animation: none;
+          width: 65%;
+        }
+      }
     </style>
 
     <script>
       // Runs before Vite/Firebase modules, so even a failed JS bundle can show a diagnosis.
       (() => {
         let bootstrapFailure = false;
-        window.addEventListener("error", (event) => {
-          if (event.target instanceof HTMLScriptElement ||
-              event.target instanceof HTMLLinkElement) {
-            bootstrapFailure = true;
-          }
-        }, true);
+        window.addEventListener(
+          'error',
+          (event) => {
+            if (event.target instanceof HTMLScriptElement || event.target instanceof HTMLLinkElement) {
+              bootstrapFailure = true;
+            }
+          },
+          true,
+        );
 
-        window.addEventListener("load", () => {
+        window.addEventListener('load', () => {
           setTimeout(() => {
-            const root = document.getElementById("root");
+            const root = document.getElementById('root');
             if (!root || root.children.length > 0) return;
 
             const id = crypto.randomUUID();
-            const code = bootstrapFailure ? "RESOURCE_LOAD_FAILURE" : "BOOT_FAILURE";
-            document.getElementById("boot-splash")?.remove();
-            const panel = document.createElement("section");
-            panel.setAttribute("role", "alert");
-            panel.setAttribute("data-photointel-error", "");
-            panel.style.cssText = "min-height:100dvh;padding:48px 20px;background:#101112;color:#eceeed;" +
-              "font:15px/1.65 system-ui,sans-serif;display:grid;place-items:center";
+            const code = bootstrapFailure ? 'RESOURCE_LOAD_FAILURE' : 'BOOT_FAILURE';
+            document.getElementById('boot-splash')?.remove();
+            const panel = document.createElement('section');
+            panel.setAttribute('role', 'alert');
+            panel.setAttribute('data-photointel-error', '');
+            panel.style.cssText =
+              'min-height:100dvh;padding:48px 20px;background:#101112;color:#eceeed;' +
+              'font:15px/1.65 system-ui,sans-serif;display:grid;place-items:center';
             panel.innerHTML = `
               <div style="max-width:570px;width:100%;padding:30px;border:1px solid #343936;
                           border-radius:20px;background:#181a19">
@@ -81,32 +147,35 @@
             } else {
               document.body.appendChild(panel);
             }
-            document.getElementById("photointel-boot-id").textContent = id;
-            document.getElementById("photointel-boot-code").textContent = "Tipo: " + code;
-            document.getElementById("photointel-boot-reload").onclick = () => {
+            document.getElementById('photointel-boot-id').textContent = id;
+            document.getElementById('photointel-boot-code').textContent = 'Tipo: ' + code;
+            document.getElementById('photointel-boot-reload').onclick = () => {
               const url = new URL(location.href);
-              url.searchParams.set("__refresh", String(Date.now()));
+              url.searchParams.set('__refresh', String(Date.now()));
               location.replace(url.href);
             };
-            document.getElementById("photointel-boot-copy").onclick = () => {
+            document.getElementById('photointel-boot-copy').onclick = () => {
               void navigator.clipboard.writeText(id).catch(() => undefined);
             };
             // Only a minimal whitelisted event reaches Cloudflare logs.
-            void fetch("/__diagnostics/client-errors", {
-              method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id, phase: "bootstrap", code }),
+            void fetch('/__diagnostics/client-errors', {
+              method: 'POST',
+              credentials: 'same-origin',
+              cache: 'no-store',
+              keepalive: true,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id, phase: 'bootstrap', code }),
             }).catch(() => undefined);
           }, 5000);
         });
       })();
     </script>
-
-
   </head>
   <body>
     <div id="boot-splash" role="status" aria-label="Iniciando PhotoIntel">
-      <div class="splash-mark" aria-hidden="true"><span class="splash-orbit"></span><span class="splash-core"></span></div>
+      <div class="splash-mark" aria-hidden="true">
+        <span class="splash-orbit"></span><span class="splash-core"></span>
+      </div>
       <strong>PhotoIntel</strong><span class="splash-caption">PRIVATE PHOTO CLOUD</span>
       <span class="splash-loader" aria-hidden="true"></span>
     </div>

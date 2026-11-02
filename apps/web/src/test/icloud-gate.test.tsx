@@ -5,35 +5,57 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ICloudPage } from '../pages/icloud';
 
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function mount() {
-  const client = new QueryClient({ defaultOptions: {
-    queries: { retry: false, gcTime: 0 }, mutations: { retry: false },
-  } });
-  return render(<QueryClientProvider client={client}>
-    <MemoryRouter><ICloudPage /></MemoryRouter>
-  </QueryClientProvider>);
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <ICloudPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
 }
 
 function mockApi({ profile = 'limited', catalog = 1000 } = {}) {
   const fetcher = vi.fn<typeof fetch>(async (input) => {
     const path = String(input);
-    if (path === '/v1/verification/gates') return Response.json({
-      full_backfill_unlocked: false,
-      items: [{
-        id: 'F', name: 'Importações acima de 1.000 fotos', status: 'not_verified',
-        reason: 'Autorize escala após verificar capacidade e custos.',
-        requirements: ['Teste lote pequeno'], evidence: [], verified_at: null,
-      }],
-    });
-    if (path === '/v1/ingestion/status') return Response.json({
-      enabled: true, default_import_limit: 100, import_limit: 100,
-      hard_import_limit: 10000, maximum_authorized_import_limit: 2000,
-      verification_gates_enforced: true,
-      catalog_asset_limit: catalog, database_profile: profile,
-      authentication: { state: 'valid' },
-    });
+    if (path === '/v1/verification/gates')
+      return Response.json({
+        full_backfill_unlocked: false,
+        items: [
+          {
+            id: 'F',
+            name: 'Importações acima de 1.000 fotos',
+            status: 'not_verified',
+            reason: 'Autorize escala após verificar capacidade e custos.',
+            requirements: ['Teste lote pequeno'],
+            evidence: [],
+            verified_at: null,
+          },
+        ],
+      });
+    if (path === '/v1/ingestion/status')
+      return Response.json({
+        enabled: true,
+        default_import_limit: 100,
+        import_limit: 100,
+        hard_import_limit: 10000,
+        maximum_authorized_import_limit: 2000,
+        verification_gates_enforced: true,
+        catalog_asset_limit: catalog,
+        database_profile: profile,
+        authentication: { state: 'valid' },
+      });
     if (path === '/v1/settings') return Response.json({ app_env: 'production' });
     if (path === '/v1/ingestion/start') return Response.json({ job_id: 'ok' });
     return Response.json({ items: [], next_cursor: null });
@@ -54,8 +76,12 @@ describe('simplified iCloud scale approval UX', () => {
     expect(start).toBeEnabled();
     expect(screen.queryByText('Autorização necessária acima de 1.000 fotos')).toBeNull();
     await user.click(start);
-    await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/v1/ingestion/start',
-      expect.objectContaining({ method: 'POST' })));
+    await waitFor(() =>
+      expect(fetcher).toHaveBeenCalledWith(
+        '/v1/ingestion/start',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
   });
 
   it('requires scale evidence only when a continuous target exceeds 1000', async () => {
@@ -71,8 +97,10 @@ describe('simplified iCloud scale approval UX', () => {
     await user.clear(target);
     await user.type(target, '1001');
     expect(await screen.findByText('Autorização necessária acima de 1.000 fotos')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Autorizar importações grandes' }))
-      .toHaveAttribute('href', '/setup');
+    expect(screen.getByRole('link', { name: 'Autorizar importações grandes' })).toHaveAttribute(
+      'href',
+      '/setup',
+    );
     expect(screen.getByRole('button', { name: 'Importar até 100 fotografias' })).toBeDisabled();
   });
 });

@@ -1,42 +1,86 @@
 import { Component, type ReactNode } from 'react';
 import { AlertTriangle, ClipboardCopy, ExternalLink, RefreshCw, ScanSearch } from 'lucide-react';
-import { diagnosticClipboardText, diagnosticFor, diagnosticLogsQuery, diagnosticLogsUrl, reportDiagnostic,
-  type Diagnostic } from '../lib/diagnostics';
+import {
+  diagnosticClipboardText,
+  diagnosticFor,
+  diagnosticLogsQuery,
+  diagnosticLogsUrl,
+  reportDiagnostic,
+  type Diagnostic,
+} from '../lib/diagnostics';
 import { sentryEventUrl } from '../lib/sentry';
 import { useUi } from '../lib/store';
 
 export function DiagnosticActions({ incident, error }: { incident: Diagnostic; error?: Error }) {
   const label = incident.source === 'gcp' ? 'Ver logs no GCP' : 'Ver logs no Cloudflare';
-  return <div className="diagnostic-actions">
-    <span className="diagnostic-id">Correlation ID: <code>{incident.id}</code></span>
-    <button type="button" onClick={() => useUi.getState().inspect(incident, error)}>
-      <ScanSearch size={14} />Inspecionar erro</button>
-    <button type="button" onClick={() => {
-      void navigator.clipboard.writeText(diagnosticClipboardText(incident)).catch(() => {
-        console.warn('[PhotoIntel] Área de transferência indisponível');
-      });
-    }}><ClipboardCopy size={14} />Copiar diagnóstico</button>
-    {incident.eventId && sentryEventUrl(incident.eventId) && <a
-      href={sentryEventUrl(incident.eventId)} target="_blank" rel="noopener noreferrer">
-      <ExternalLink size={14} />Ver ocorrência no Sentry</a>}
-    <a className="diagnostic-external" href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
-      <ExternalLink size={14} />{label}</a>
-    {incident.source === 'gcp' && <>
-      <button type="button" onClick={() => {
-        void navigator.clipboard.writeText(diagnosticLogsQuery(incident)).catch(() => {
-          console.warn('[PhotoIntel] Não foi possível copiar o filtro do GCP');
-        });
-      }}><ClipboardCopy size={14} />Copiar filtro do GCP</button>
-      <small>Se o Google Cloud abrir com a pesquisa incompleta no iPhone,
-        cole o filtro copiado no Logs Explorer e execute a consulta.</small>
-    </>}
-    {incident.source === 'cloudflare' &&
-      <small>Abra o Worker photointel → Observability e pesquise pelo correlation_id.</small>}
-  </div>;
+  return (
+    <div className="diagnostic-actions">
+      <span className="diagnostic-id">
+        Correlation ID: <code>{incident.id}</code>
+      </span>
+      <button type="button" onClick={() => useUi.getState().inspect(incident, error)}>
+        <ScanSearch size={14} />
+        Inspecionar erro
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(diagnosticClipboardText(incident)).catch(() => {
+            console.warn('[PhotoIntel] Área de transferência indisponível');
+          });
+        }}
+      >
+        <ClipboardCopy size={14} />
+        Copiar diagnóstico
+      </button>
+      {incident.eventId && sentryEventUrl(incident.eventId) && (
+        <a href={sentryEventUrl(incident.eventId)} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={14} />
+          Ver ocorrência no Sentry
+        </a>
+      )}
+      <a
+        className="diagnostic-external"
+        href={diagnosticLogsUrl(incident)}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <ExternalLink size={14} />
+        {label}
+      </a>
+      {incident.source === 'gcp' && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(diagnosticLogsQuery(incident)).catch(() => {
+                console.warn('[PhotoIntel] Não foi possível copiar o filtro do GCP');
+              });
+            }}
+          >
+            <ClipboardCopy size={14} />
+            Copiar filtro do GCP
+          </button>
+          <small>
+            Se o Google Cloud abrir com a pesquisa incompleta no iPhone, cole o filtro copiado no Logs
+            Explorer e execute a consulta.
+          </small>
+        </>
+      )}
+      {incident.source === 'cloudflare' && (
+        <small>Abra o Worker photointel → Observability e pesquise pelo correlation_id.</small>
+      )}
+    </div>
+  );
 }
 
-interface Props { children: ReactNode }
-interface State { error: Error | null; incident: Diagnostic | null }
+interface Props {
+  children: ReactNode;
+}
+interface State {
+  error: Error | null;
+  incident: Diagnostic | null;
+}
 
 export class AppErrorBoundary extends Component<Props, State> {
   state: State = { error: null, incident: null };
@@ -53,21 +97,23 @@ export class AppErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.error) return this.props.children;
     const incident = this.state.incident ?? diagnosticFor(this.state.error, 'render');
-    return <main className="crash-screen" role="alert" data-photointel-error>
-      <div className="crash-card">
-        <AlertTriangle size={30} aria-hidden="true" />
-        <p className="eyebrow">Photo Intelligence Cloud</p>
-        <h1>Não foi possível exibir esta página</h1>
-        <p>A aplicação encontrou um erro inesperado. Os dados originais não foram alterados.</p>
-        <details>
-          <summary>Detalhes técnicos</summary>
-          <pre>{this.state.error.toString()}</pre>
-        </details>
-        <DiagnosticActions incident={incident} />
-        <button type="button" className="crash-retry" onClick={() => window.location.reload()}>
-          <RefreshCw size={16} /> Recarregar o aplicativo
-        </button>
-      </div>
-    </main>;
+    return (
+      <main className="crash-screen" role="alert" data-photointel-error>
+        <div className="crash-card">
+          <AlertTriangle size={30} aria-hidden="true" />
+          <p className="eyebrow">Photo Intelligence Cloud</p>
+          <h1>Não foi possível exibir esta página</h1>
+          <p>A aplicação encontrou um erro inesperado. Os dados originais não foram alterados.</p>
+          <details>
+            <summary>Detalhes técnicos</summary>
+            <pre>{this.state.error.toString()}</pre>
+          </details>
+          <DiagnosticActions incident={incident} />
+          <button type="button" className="crash-retry" onClick={() => window.location.reload()}>
+            <RefreshCw size={16} /> Recarregar o aplicativo
+          </button>
+        </div>
+      </main>
+    );
   }
 }

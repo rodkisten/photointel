@@ -15,10 +15,14 @@ import './styles.css';
 
 const client = new QueryClient({
   queryCache: new QueryCache({
-    onError: (error) => { reportDiagnostic(error, 'api'); },
+    onError: (error) => {
+      reportDiagnostic(error, 'api');
+    },
   }),
   mutationCache: new MutationCache({
-    onError: (error) => { reportDiagnostic(error, 'api'); },
+    onError: (error) => {
+      reportDiagnostic(error, 'api');
+    },
   }),
   defaultOptions: {
     queries: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true },
@@ -35,13 +39,20 @@ function reportNonFatal(error: unknown, phase: 'runtime' | 'promise' | 'resource
 
 // Only static, allowlisted categories enter Sentry. Never attach the script URL,
 // error message, photo metadata, cross-origin stack, or arbitrary resource paths.
-window.addEventListener('error', (event) => {
-  const error = classifyBrowserError(event);
-  if (!error) return;
-  reportNonFatal(error,
-    event.target instanceof HTMLScriptElement || event.target instanceof HTMLLinkElement
-      ? 'resource' : 'runtime');
-}, true);
+window.addEventListener(
+  'error',
+  (event) => {
+    const error = classifyBrowserError(event);
+    if (!error) return;
+    reportNonFatal(
+      error,
+      event.target instanceof HTMLScriptElement || event.target instanceof HTMLLinkElement
+        ? 'resource'
+        : 'runtime',
+    );
+  },
+  true,
+);
 
 window.addEventListener('unhandledrejection', (event) => {
   reportNonFatal(event.reason, 'promise');
@@ -55,7 +66,9 @@ if (!root) {
     <React.StrictMode>
       <AppErrorBoundary>
         <QueryClientProvider client={client}>
-          <BrowserRouter><App /></BrowserRouter>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
         </QueryClientProvider>
       </AppErrorBoundary>
       <IncidentInspector />
@@ -65,7 +78,8 @@ if (!root) {
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+    void navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
       .catch((error) => reportNonFatal(error, 'worker'));
   });
 }

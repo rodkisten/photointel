@@ -12,16 +12,26 @@ describe('album identity independent of list pagination', () => {
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const raw = input instanceof Request ? input.url : String(input);
       const path = new URL(raw, window.location.origin).pathname;
-      if (path === `/v1/albums/${id}`) return Response.json({id, name: 'Álbum fora da primeira página',
-        description: 'Detalhe carregado por identidade', sort_order: 'captured_desc', asset_count: 0});
-      return Response.json({items: [], next_cursor: null, explanation: {}});
+      if (path === `/v1/albums/${id}`)
+        return Response.json({
+          id,
+          name: 'Álbum fora da primeira página',
+          description: 'Detalhe carregado por identidade',
+          sort_order: 'captured_desc',
+          asset_count: 0,
+        });
+      return Response.json({ items: [], next_cursor: null, explanation: {} });
     });
     vi.stubGlobal('fetch', fetcher);
-    const client = new QueryClient({defaultOptions: {queries: {retry: false, gcTime: 0}}});
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/albums?album=${id}`]}>
-      <AlbumsPage />
-    </MemoryRouter></QueryClientProvider>);
-    expect(await screen.findByRole('heading', {name: 'Álbum fora da primeira página'})).toBeVisible();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[`/albums?album=${id}`]}>
+          <AlbumsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole('heading', { name: 'Álbum fora da primeira página' })).toBeVisible();
     expect(screen.getByText('Detalhe carregado por identidade')).toBeVisible();
     expect(fetcher).toHaveBeenCalledWith(`/v1/albums/${id}`, expect.any(Object));
   });

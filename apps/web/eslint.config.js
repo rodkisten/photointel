@@ -19,7 +19,9 @@ export default tseslint.config(
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
-    rules: { ...reactHooks.configs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }] },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+    },
   },
 );
