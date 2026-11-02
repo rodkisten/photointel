@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "photointel-manage",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": {"enabled": true, "invocation_logs": false}
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {"pattern": "photos-manage.migos.club", "custom_domain": true}
+  ],
+  "vars": {
+    "GITHUB_REPO": "rodkisten/photointel",
+    "GITHUB_ENVIRONMENT": "production",
+    "GCP_PROJECT_ID": "photointel",
+    "GCP_REGION": "us-central1"
+  }
+}
