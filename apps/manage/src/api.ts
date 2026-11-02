@@ -268,7 +268,7 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       },
     });
     const result = (data as { result?: Record<string, unknown> }).result;
-    const events = list(result, 'events');
+    const events = list(result?.events, 'events');
     return json({
       items: events.map((x) => ({
         id: x.$metadata?.id,
