@@ -13,7 +13,7 @@ describe('automatic configuration impact planner', () => {
       '# Sentry for Manage\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club';
     const next = before + '\nMANAGE_SENTRY_DSN=https://0123456789abcdef@o1.ingest.sentry.io/456';
     const repeated = findDuplicateConfigKeys(before);
-    expect(repeated).toEqual([{ key: 'EXTRA_ENVIRONMENT__SENTRY_ORG', lines: [4, 6] }]);
+    expect(repeated).toEqual([{ key: 'EXTRA_ENVIRONMENT__SENTRY_ORG', lines: [5, 7] }]);
     const plan = planConfigChange(before, next);
     expect(plan.targets).toEqual(['manage']);
     expect(plan.blocked).toBe(false);
