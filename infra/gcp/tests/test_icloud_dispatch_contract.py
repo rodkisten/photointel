@@ -46,18 +46,12 @@ class ICloudDispatchContractTests(unittest.TestCase):
         start = source.index("async def start_ingestion(")
         end = source.index("async def set_ingestion_pause(", start)
         handler = source[start:end]
-        self.assertLess(
-            handler.index("if existing:"),
-            handler.index("await require_import_gates("),
-        )
-        self.assertLess(
-            handler.index('return {"job_id": existing'),
-            handler.index("await require_import_gates("),
-        )
-        self.assertLess(
-            handler.index("await require_import_gates("),
-            handler.index("batch = JobBatch("),
-        )
+        # A specific newly authorized full backfill may have an earlier gate,
+        # but waking an *already queued* job must not rerun the general gate.
+        fresh_import_gate = handler.rindex("await require_import_gates(")
+        self.assertLess(handler.index("if existing:"), fresh_import_gate)
+        self.assertLess(handler.index('return {"job_id": existing'), fresh_import_gate)
+        self.assertLess(fresh_import_gate, handler.index("batch = JobBatch("))
 
     def test_finite_discovery_wakes_worker_without_scheduler_or_gpu(self) -> None:
         source = RUNNER.read_text(encoding="utf-8")
