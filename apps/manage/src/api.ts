@@ -257,14 +257,18 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       order: 'desc',
       parameters: {
         datasets: ['cloudflare-workers'],
-        ...(search ? {
-          filters: [{
-            key: '$metadata.message',
-            operation: 'includes',
-            type: 'string',
-            value: search,
-          }],
-        } : {}),
+        ...(search
+          ? {
+              filters: [
+                {
+                  key: '$metadata.message',
+                  operation: 'includes',
+                  type: 'string',
+                  value: search,
+                },
+              ],
+            }
+          : {}),
       },
     });
     const result = (data as { result?: Record<string, unknown> }).result;

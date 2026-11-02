@@ -984,13 +984,15 @@ function SystemInfo({ meta }: { meta: Meta }) {
     <div className="space-y-5">
       <Section title="Acesso e integrações" detail="Identidade verificada pelo Cloudflare Access">
         <Card className="divide-y divide-[#282a2e]">
-          {([
-            ['Usuário autenticado', meta.email, true, true],
-            ['GitHub', ...check(0), true],
-            ['Cloudflare', ...check(1), true],
-            ['Google Cloud', ...check(2), true],
-            ['Sentry', meta.sentry ? 'Configurado (não verificado)' : 'Token ausente', false, false],
-          ] as Array<[string, string, boolean, boolean]>).map(([name, detail, ok, verified]) => (
+          {(
+            [
+              ['Usuário autenticado', meta.email, true, true],
+              ['GitHub', ...check(0), true],
+              ['Cloudflare', ...check(1), true],
+              ['Google Cloud', ...check(2), true],
+              ['Sentry', meta.sentry ? 'Configurado (não verificado)' : 'Token ausente', false, false],
+            ] as Array<[string, string, boolean, boolean]>
+          ).map(([name, detail, ok, verified]) => (
             <div key={name} className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{name}</p>
