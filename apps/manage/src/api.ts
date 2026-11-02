@@ -197,7 +197,7 @@ export async function api(request:Request,env:Env,identity:Identity):Promise<Res
     const data=await gcp(env,identity,
       "https://cloudscheduler.googleapis.com/v1/projects/"+project+
       "/locations/"+region+"/jobs?pageSize=60");
-    return json({items:list(data,"jobs").filter(x=>String(x.name).split("/").pop().startsWith("photointel-"))
+    return json({items:list(data,"jobs").filter(x=>(String(x.name).split("/").pop()||"").startsWith("photointel-"))
       .map(x=>({name:x.name,state:x.state,schedule:x.schedule,timeZone:x.timeZone,
         lastAttemptTime:x.lastAttemptTime,status:x.status?.code??null}))});
   }
