@@ -68,6 +68,7 @@ jobs:
           apps/api/src/photointel/services/worker.py
           apps/api/src/photointel/services/jobs.py
           apps/api/src/photointel/services/discovery.py
+          apps/api/src/photointel/routers/preview_audit.py
           tests/test_backend_contention.py
           tests/integration/test_discovery_pipeline_v11.py
       - name: "🧪 Worker, sessions and correlation"
@@ -85,4 +86,26 @@ jobs:
       - name: "🧪 iCloud lease integration"
         run: >
           uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
-          -k contention_does_not_consume_manifest_attempts
+          -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit'
+
+  preview-web:
+    name: "🌐 Preview audit UI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "📦 Node 22"
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: "📦 Install web dependencies"
+        run: npm --prefix apps/web ci
+      - name: "🔎 TypeScript"
+        run: npm --prefix apps/web run typecheck
+      - name: "🧪 Preview audit UI"
+        run: npm --prefix apps/web test -- src/test/operations.test.tsx
