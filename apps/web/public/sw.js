@@ -54,7 +54,7 @@ try {
   console.warn('[PhotoIntel SW] Firebase SDK unavailable; offline mode remains active.', error);
 }
 
-if (typeof firebase !== 'undefined') {
+if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function') {
   firebase.initializeApp({
     apiKey: 'AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY',
     authDomain: 'photointel-firebase.firebaseapp.com',
