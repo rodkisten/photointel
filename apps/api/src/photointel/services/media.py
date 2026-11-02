@@ -219,7 +219,9 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
             )
         except (KeyError, OSError, ValueError):
             continue
-        if avif.tell():
+        # Retain an alternate only when it materially improves transfer size.
+        # Some tiny or already compressed photographs get *larger* in AVIF.
+        if avif.tell() and avif.tell() < len(output.getbuffer()) * 0.95:
             variants.append(
                 DerivedImage(
                     f"{variant}_avif",
