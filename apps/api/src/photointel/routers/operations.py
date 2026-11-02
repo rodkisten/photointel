@@ -1079,6 +1079,12 @@ async def statistics(session: Session) -> dict[str, Any]:
             )
         )
     ).one()
+    recent_five_minutes = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.status == "completed",
+            Job.finished_at >= datetime.now(UTC) - timedelta(minutes=5),
+        )
+    ) or 0
     last_sync = await session.scalar(
         select(func.max(IngestionRun.finished_at)).where(
             IngestionRun.status == "completed"
@@ -1096,7 +1102,9 @@ async def statistics(session: Session) -> dict[str, Any]:
         "pending_processing": pending,
         "failed_jobs": job_counts.get("failed", 0),
         "last_icloud_sync": last_sync,
-        "jobs_per_second_last_hour": timing[1] / 3600,
+        "jobs_per_second_last_hour": (timing[1] or 0) / 3600,
+        "jobs_per_second_last_5min": recent_five_minutes / 300,
+        "jobs_completed_last_hour": timing[1] or 0,
         "average_job_duration_seconds": avg_duration,
         "estimated_remaining_seconds": pending * avg_duration if avg_duration else None,
         "estimate_notice": "Estimativa baseada nos jobs concluídos; não é garantia.",
