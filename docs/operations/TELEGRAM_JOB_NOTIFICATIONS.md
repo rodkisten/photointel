@@ -66,7 +66,10 @@ extra_environment because it is a protected generated variable.
 2. **Deploy the updated relay FIRST**, applying its D1 migration
    `0010_editable_notifications.sql` with `npm run db:migrate:remote` and
    publishing the Worker with the current secrets. PhotoIntel requires relay
-   response fields `notification_key` and `message_id` for an upsert ACK.
+   `GET /notifications/capabilities` returning `editable-v1`, followed by
+   response fields `notification_key` and `message_id` for each upsert ACK.
+   The probe fails closed **before sending** if the deployed relay is older,
+   protecting Telegram from duplicate messages during a rollout.
 3. Apply the existing GCP deployment process to update API and job worker
    environments. No SQL migration is required for PhotoIntel.
 4. Start a small legitimate job, confirm enqueued/running/completed messages
