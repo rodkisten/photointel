@@ -30,7 +30,7 @@ function withIncidentHeaders(response: Response, correlationId: string, eventId?
 }
 
 export default {
-  async fetch(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, context?: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
     const path = new URL(request.url).pathname;
     const route = routeGroup(path);
     const method = request.method.toUpperCase();
