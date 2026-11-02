@@ -24,6 +24,22 @@ describe('responsive private media', () => {
     expect(image).toHaveAttribute('loading', 'eager');
   });
 
+  it('keeps version tokens on every variant, blur and fallback URL', () => {
+    const version = '?v=0123456789abcdef';
+    const { container } = render(<PrivateImage assetId={id} alt="Versioned"
+      priority src={prefix + 'preview_large' + version} />);
+    let image = screen.getByRole('img', { name: 'Versioned' });
+    expect(image.getAttribute('srcset')).toContain('thumbnail_small?v=0123456789abcdef 240w');
+    expect(image.getAttribute('srcset')).toContain('thumbnail_medium?v=0123456789abcdef 640w');
+    expect(image.getAttribute('srcset')).toContain('preview_large?v=0123456789abcdef 1600w');
+    expect(container.querySelector('.private-image-frame')?.getAttribute('style'))
+      .toContain('thumbnail_small?v=0123456789abcdef');
+    fireEvent.error(image);
+    image = screen.getByRole('img', { name: 'Versioned' });
+    expect(image).toHaveAttribute('src', prefix + 'thumbnail_medium' + version);
+    expect(image.getAttribute('srcset')).toBeNull();
+  });
+
   it('retains a fallback without an srcSet loop after an image error', () => {
     render(<PrivateImage assetId={id} alt="Foto"
       priority src={prefix + 'preview_large'} />);
