@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planConfigChange } from './config-reconcile';
+import { findDuplicateConfigKeys, planConfigChange } from './config-reconcile';
 
 const BASE = [
   'PROJECT_ID=photointel',
@@ -8,6 +8,25 @@ const BASE = [
 ].join('\n');
 
 describe('automatic configuration impact planner', () => {
+  it('preserves harmless repeated dotenv values and their comment lines', () => {
+    const before = BASE + '\n# Sentry for UI\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' +
+      '# Sentry for Manage\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club';
+    const next = before + '\nMANAGE_SENTRY_DSN=https://0123456789abcdef@o1.ingest.sentry.io/456';
+    const repeated = findDuplicateConfigKeys(before);
+    expect(repeated).toEqual([{ key: 'EXTRA_ENVIRONMENT__SENTRY_ORG', lines: [4, 6] }]);
+    const plan = planConfigChange(before, next);
+    expect(plan.targets).toEqual(['manage']);
+    expect(plan.blocked).toBe(false);
+    expect(before).toContain('# Sentry for UI');
+    expect(before).toContain('# Sentry for Manage');
+  });
+
+  it('rejects conflicting duplicate values rather than silently overwriting', () => {
+    const conflicted = BASE + '\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' +
+      'EXTRA_ENVIRONMENT__SENTRY_ORG=other-org';
+    expect(() => planConfigChange(BASE, conflicted)).toThrow(/duplicada/);
+  });
+
   it('dispatches config-only sync for top-level Telegram .env values', () => {
     const next = BASE + '\nTELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890';
     const plan = planConfigChange(BASE, next);
