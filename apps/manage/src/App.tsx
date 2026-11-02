@@ -35,7 +35,7 @@ import {
 import { Badge, Button, Card, Input, Section, Select, Textarea } from './components/ui';
 import { api, send } from './lib/client';
 import { sentryIssueSearch } from './lib/sentry';
-import { planConfigChange } from './config-reconcile';
+import { findDuplicateConfigKeys, planConfigChange } from './config-reconcile';
 import type { ConfigPlan } from './config-reconcile';
 import { cn, date, human, state } from './lib/utils';
 import './style.css';
@@ -857,6 +857,7 @@ function ConfigEditor() {
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
+  const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
     if (!q.data || !dirty) return null;
@@ -900,6 +901,14 @@ function ConfigEditor() {
               aria-label="Editar GCP_CONFIG_ENV"
               className="min-h-[360px] resize-y text-[13px]"
             />
+            {duplicates.length > 0 && (
+              <p className="text-xs leading-5 text-amber-300">
+                Chaves repetidas: {duplicates.map((item) =>
+                  item.key + ' (linhas ' + item.lines.join(', ') + ')').join('; ')}.
+                Valores idênticos são preservados; valores conflitantes impedem o salvamento.
+                Nenhum comentário ou linha será excluído automaticamente.
+              </p>
+            )}
             {validation && <p className="text-xs text-red-300">{validation}</p>}
             {preview?.error && <p className="text-xs text-red-300">{preview.error}</p>}
             {preview?.plan && (
