@@ -185,3 +185,19 @@ async def test_capability_probe_rejects_legacy_relay_before_sending():
         async with httpx.AsyncClient(follow_redirects=False) as client:
             with pytest.raises(httpx.HTTPStatusError):
                 await telegram.require_editable_relay(client, (endpoint, "T" * 32, "42"))
+
+
+def test_failed_job_context_survives_later_successful_sibling():
+    failed_job, failed_event, batch = example("failed")
+    success_job, success_event, _ = example("completed")
+    success_job.batch_id = batch.id
+    message, buttons = telegram.format_message(
+        success_job, success_event, batch,
+        {"completed": 1, "failed": 1},
+        latest_failure=(failed_job, failed_event),
+    )
+    assert "Lote com falhas" in message
+    assert "MEDIA_DECODE_FAILED" in message
+    assert str(failed_job.id) in message
+    assert buttons[1][0]["url"].endswith("a" * 32)
+    assert str(failed_job.id) in buttons[-1][0]["url"]
