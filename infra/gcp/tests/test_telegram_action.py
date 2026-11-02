@@ -127,7 +127,14 @@ class TelegramActionTests(unittest.TestCase):
             self.assertFalse(marker.exists(), "Inline token must not trigger a GCP secret read")
             self.assertTrue(capture.exists(), "Telegram request must be issued")
             self.assertEqual(json.loads(capture.read_text())["chat_id"], "-10012345")
-            self.assertNotIn("FAKE_INLINE_TOKEN_FOR_TESTS", result.stdout + result.stderr)
+            # GitHub's ::add-mask:: command intentionally contains the raw
+            # value; the runner redacts it before storing logs. No other log
+            # line may contain any part of the fake token.
+            safe_lines = [
+                line for line in (result.stdout + result.stderr).splitlines()
+                if not line.startswith("::add-mask::")
+            ]
+            self.assertNotIn("FAKE_INLINE_TOKEN_FOR_TESTS", "\\n".join(safe_lines))
 
     def test_missing_secret_reports_skipped_without_contacting_relay(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
