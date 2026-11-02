@@ -165,6 +165,10 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             "ACCESS_ALLOWED_EMAILS": json.dumps(emails),
             "GITHUB_REPO": "rodkisten/photointel",
             "GITHUB_ENVIRONMENT": "production",
+            # Non-secret evidence of which pinned version last populated the
+            # runtime GITHUB_API_TOKEN. Does not reveal any token material.
+            "GITHUB_TOKEN_SECRET_VERSION":
+                str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"]),
             "GCP_PROJECT_ID": "photointel",
             "GCP_REGION": config.get("region", "us-central1"),
             **({"CLOUDFLARE_ACCOUNT_ID": cf_account}),
