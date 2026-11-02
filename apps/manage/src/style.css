@@ -1,0 +1,19 @@
+@import "tailwindcss";
+:root { font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  color:#f6f6f7;background:#0d0e10;font-synthesis:none;-webkit-font-smoothing:antialiased; }
+html { background:#0d0e10; scroll-padding-top:84px; }
+body { min-width:320px;margin:0; }
+button,select,input,textarea { font:inherit; }
+button { cursor:pointer; }
+button:disabled { cursor:not-allowed; }
+.field-label { display:block; margin:0 0 7px;color:#a6a8ae;font-size:12px;font-weight:500;text-transform:capitalize; }
+.logbox,.logline { white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; }
+.logbox {border:1px solid #2e3036;background:#101114;color:#cbd5e1;border-radius:9px;padding:12px; }
+.logline { color:#c4c6ca; }
+::-webkit-scrollbar { width:7px;height:7px; }
+::-webkit-scrollbar-thumb { background:#34363a;border-radius:6px; }
+::selection { background:#555b65; }
+@media(max-width:767px){
+  input,textarea,select{font-size:16px;}
+  .logbox,.logline {font-size:12px;}
+}
