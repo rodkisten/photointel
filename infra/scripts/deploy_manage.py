@@ -56,12 +56,22 @@ def probe_installed_credential(label: str, url: str, token: str) -> str:
     except HTTPError as exc:
         status = exc.code
         permissions = exc.headers.get("X-Accepted-GitHub-Permissions", "")
-        exc.close()
+        try:
+            parsed = json.loads(exc.read(2048))
+            errors = parsed.get("errors", []) if isinstance(parsed, dict) else []
+            code = errors[0].get("code") if isinstance(errors, list) and errors and isinstance(errors[0], dict) else None
+            provider_code = code if isinstance(code, int) and code in (9106, 10000) else None
+        except (ValueError, OSError, TypeError):
+            provider_code = None
+        finally:
+            exc.close()
     except (URLError, TimeoutError, OSError):
         return label + ": network/timeout"
     if not re.fullmatch(r"[a-z_=,; -]{0,180}", permissions, flags=re.IGNORECASE):
         permissions = ""
     suffix = " (required: " + permissions + ")" if permissions else ""
+    if "provider_code" in locals() and provider_code:
+        suffix += " (Cloudflare authentication code " + str(provider_code) + ")"
     return label + ": HTTP " + str(status) + suffix
 
 
@@ -159,26 +169,33 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     # GitHub connector's own identity). Continue publishing diagnostic UI even
     # when the provider denies the token, so the operator can inspect it.
     pat_version = str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"])
-    github_probe = probe_installed_credential(
-        "GitHub PAT version " + pat_version + " / Actions",
-        "https://api.github.com/repos/rodkisten/photointel/actions/runs?per_page=1",
-        gh_token,
-    )
-    cf_probe = probe_installed_credential(
-        "Cloudflare Manage runtime token / Workers",
-        "https://api.cloudflare.com/client/v4/accounts/" + cf_account + "/workers/scripts",
-        cf_token,
-    )
-    for outcome in (github_probe, cf_probe):
+    gh_base = "https://api.github.com/repos/rodkisten/photointel"
+    cf_base = "https://api.cloudflare.com/client/v4/accounts/" + cf_account + "/workers/scripts"
+    # Read the already-existing deployment credential only for comparison. It
+    # is NEVER installed as the runtime token, even if that token is invalid.
+    cf_deploy_token = secret_value(config, "CLOUDFLARE_API_TOKEN")
+    outcomes = [
+        probe_installed_credential("GitHub PAT v" + pat_version + " / Repository", gh_base, gh_token),
+        probe_installed_credential("GitHub PAT v" + pat_version + " / Actions runs",
+                                   gh_base + "/actions/runs?per_page=1", gh_token),
+        probe_installed_credential("GitHub PAT v" + pat_version + " / Actions workflows",
+                                   gh_base + "/actions/workflows?per_page=1", gh_token),
+        probe_installed_credential("GitHub PAT v" + pat_version + " / Environment variable",
+                                   gh_base + "/environments/production/variables/GCP_CONFIG_ENV", gh_token),
+        probe_installed_credential("Cloudflare Manage runtime token / Workers", cf_base, cf_token),
+        probe_installed_credential("Cloudflare deployment token / Workers (comparison only)",
+                                   cf_base, cf_deploy_token),
+    ]
+    for outcome in outcomes:
         print(("::notice::" if "HTTP 200" in outcome else "::warning::") +
               "Manage credential preflight: " + outcome)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf8") as handle:
-            handle.write("### Manage credential preflight (read-only)\n\n")
-            for outcome in (github_probe, cf_probe):
-                handle.write("- " + outcome + "\n")
-            handle.write("\nNo secret values were logged.\n")
+            handle.write("### Manage credential preflight (read-only)\\n\\n")
+            for outcome in outcomes:
+                handle.write("- " + outcome + "\\n")
+            handle.write("\\nNo secret values were logged. The privileged deploy token stays out of the Worker.\\n")
 
     # These identifiers are not credentials. Use the dedicated provider
     # provisioned by GCP bootstrap instead of silently disabling GCP integration.
@@ -231,7 +248,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         },
     }
     env = os.environ.copy()
-    env.update(CLOUDFLARE_API_TOKEN=secret_value(config, "CLOUDFLARE_API_TOKEN"),
+    env.update(CLOUDFLARE_API_TOKEN=cf_deploy_token,
                CLOUDFLARE_ACCOUNT_ID=cf_account, WRANGLER_SEND_METRICS="false")
     temp_path: Path | None = None
     try:
