@@ -18,6 +18,7 @@ on:
       - 'infra/gcp/manage.py'
       - 'tests/test_job_notify.py'
       - 'infra/gcp/tests/test_notify.py'
+      - 'infra/gcp/tests/test_telegram_action.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/notify-validation.yml'
@@ -36,6 +37,7 @@ on:
       - 'infra/gcp/manage.py'
       - 'tests/test_job_notify.py'
       - 'infra/gcp/tests/test_notify.py'
+      - 'infra/gcp/tests/test_telegram_action.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/notify-validation.yml'
@@ -77,6 +79,7 @@ jobs:
         run: |
           uv run --no-sync pytest -q tests/test_job_notify.py tests/test_sentry_observability.py tests/test_job_observability.py
           python3 -m unittest discover -s infra/gcp/tests -p test_notify.py -v
+          python3 -m unittest discover -s infra/gcp/tests -p test_telegram_action.py -v
       - name: "🔍 Lint"
         run: >-
           uv run --no-sync ruff check
