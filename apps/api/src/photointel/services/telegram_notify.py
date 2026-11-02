@@ -165,11 +165,14 @@ def format_message(
 async def deliver(
     client: httpx.AsyncClient, config: tuple[str, str, str],
     message: str, links: list[list[dict[str, str]]],
+    notification_key: str | None = None, sequence: int | None = None,
 ) -> None:
     url, token, chat = config
     response = await client.post(
         url, headers={"Authorization": "Bearer " + token},
-        json={"body": message, "chat_id": chat, "parse_mode": "MarkdownV2", "buttons": links},
+        json={"body": message, "chat_id": chat, "parse_mode": "MarkdownV2", "buttons": links,
+              **({"notification_key": notification_key, "sequence": sequence}
+                 if notification_key is not None and sequence is not None else {})},
     )
     if not response.is_success:
         trace_id = response.headers.get("X-Relay-Trace-Id", "")
@@ -256,13 +259,11 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 if event.status not in STATES:
                     advanced = event.id
                     continue
-                # Per-job failures/retries, per-batch rollups for routine events.
-                scope = (str(job.id) if event.status in ERROR_STATES or not job.batch_id
-                         else str(job.batch_id))
-                key = scope + ":" + event.status
-                if event.status in ERROR_STATES:
-                    # Every failed attempt has its own exact Sentry event.
-                    key += ":" + str(event.id)
+                # A single Telegram bubble per logical batch (or standalone job).
+                # Every transition, even failures/retries, edits that same bubble.
+                # Event IDs are monotonic: late requests cannot revert a final state.
+                key = ("photointel:batch:" + str(job.batch_id) if job.batch_id
+                       else "photointel:job:" + str(job.id))
                 if key not in grouped and len(grouped) >= 6:
                     break
                 previous = grouped.get(key)
@@ -285,9 +286,9 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 message, links = format_message(
                     job, event, batches.get(job.batch_id), counts.get(job.batch_id), count,
                 )
-                await deliver(client, config, message, links)
-                # Commit a per-event marker before advancing the global cursor.
-                # Retries after another group fails do not resend prior messages.
+                await deliver(client, config, message, links, key, event.id)
+                # Commit the batch/job marker before advancing the global cursor.
+                # Retries do not resend messages already acknowledged by the relay.
                 await record_sent(key, event.id)
         return {"status": "completed", "events": len(rows), "messages": len(grouped)}
     except asyncio.CancelledError:
