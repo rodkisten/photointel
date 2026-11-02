@@ -26,6 +26,7 @@ from photointel.models import (
     AssetTag,
     AuditEvent,
     BridgeDevice,
+    DiscoveryManifest,
     DispatchOutbox,
     Embedding,
     InferenceRun,
