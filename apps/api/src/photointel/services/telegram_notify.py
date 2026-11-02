@@ -172,6 +172,29 @@ def format_message(
     return "\n".join(lines), safe_urls(job, sentry if event.status in ERROR_STATES else None, correlation)
 
 
+
+async def require_editable_relay(
+    client: httpx.AsyncClient, config: tuple[str, str, str],
+) -> None:
+    """Fail closed before sending anything to an old /notifications/send relay.
+
+    Legacy senders silently ignore notification_key and would spam the chat
+    on every retry. A capability probe avoids all such side effects.
+    """
+    endpoint, token, _ = config
+    capability_url = endpoint.removesuffix("/send") + "/capabilities"
+    response = await client.get(
+        capability_url, headers={"Authorization": "Bearer " + token},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if (not isinstance(payload, dict) or payload.get("ok") is not True
+            or payload.get("version") != "editable-v1"
+            or not isinstance(payload.get("features"), list)
+            or "upsert_notification_key" not in payload["features"]):
+        raise ValueError("Telegram relay is not compatible with editable notifications")
+
+
 async def deliver(
     client: httpx.AsyncClient, config: tuple[str, str, str],
     message: str, links: list[list[dict[str, str]]],
@@ -298,6 +321,8 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False,
         ) as client:
+            if grouped:
+                await require_editable_relay(client, config)
             for key, (event, job, count) in grouped.items():
                 if await was_sent(key, event.id):
                     continue
