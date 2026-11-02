@@ -8,6 +8,7 @@ export type ConfigPlan = {
   changed: string[];
   targets: ConfigTarget[];
   manual: string[];
+  blocked: boolean;
   workflows: Array<{ file: string; label: string; inputs: Record<string, string> }>;
 };
 
@@ -57,15 +58,18 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
     .sort();
   const targets = new Set<ConfigTarget>();
   const manual = new Set<string>();
+  let blocked = false;
   const add = (...items: ConfigTarget[]) => items.forEach((target) => targets.add(target));
   for (const key of changed) {
     const normalized = key.replaceAll('__', '.').toLowerCase();
     if (/^(?:gcp_(?:bootstrap_)?(?:workload_identity_provider|service_account)|bootstrap_)/.test(key.toLowerCase())) {
       manual.add('Identidade GitHub/GCP: requer revisão do Workload Identity Federation.');
+      blocked = true;
       continue;
     }
     if (/^(?:project_id|region|repository|image|release_git_sha|release_branch)$/.test(normalized)) {
       manual.add('Projeto, região ou imagem Docker: alteração de infraestrutura exige deploy manual.');
+      blocked = true;
       continue;
     }
     if (/^(?:scheduler_timezone|discovery_schedule|worker_schedule|maintenance_schedule)$/.test(normalized)) {
@@ -76,14 +80,20 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       if (/^workflow_secrets\.manage_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('manage');
       else if (/^workflow_secrets\.cloudflare_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('worker', 'manage');
       else manual.add('Referências de credenciais de workflow: verificar IAM/Secret Manager manualmente.');
-      if (/(?:\.name|\.version)$/.test(normalized))
-        manual.add('Versões e novos containers de secrets devem existir antes de publicar.');
+      if (/\.name$/.test(normalized)) {
+        manual.add('Novos containers de credenciais de workflow exigem IAM antes de publicar.');
+        blocked = true;
+      } else if (/\.version$/.test(normalized)) {
+        manual.add('Confirme que a versão do secret já existe no Secret Manager.');
+      }
       continue;
     }
     if (normalized.startsWith('secrets.')) {
       add('api', 'jobs');
-      if (/\.name$/.test(normalized))
+      if (/\.name$/.test(normalized)) {
         manual.add('Novo nome de segredo: executar Setup GCP → permissions antes da sincronização.');
+        blocked = true;
+      }
       if (/migration_database_url/.test(normalized))
         manual.add('Credencial de migração: verificar manualmente; migrações nunca são automáticas.');
       continue;
@@ -94,8 +104,10 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       add('api', 'jobs');
       if (field.startsWith('vite_') || field.startsWith('worker_')) add('worker');
       if (field.startsWith('manage_') || field === 'sentry_org') add('manage');
-      if (field === 'manage_access_allowed_emails')
+      if (field === 'manage_access_allowed_emails') {
         manual.add('Allowlist Manage: executar Setup GCP → permissions para atualizar a federação WIF.');
+        blocked = true;
+      }
       continue;
     }
     if (/^workflows\./.test(normalized)) {
@@ -119,6 +131,7 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       // Unsupported/unknown schema field: save is allowed, but avoid guessing an
       // automatic deployment that could mutate unrelated services.
       manual.add('Campo não classificado (' + key.slice(0, 100) + '): revisão manual necessária.');
+      blocked = true;
     }
   }
   const ordered: ConfigTarget[] = ['jobs', 'api', 'worker', 'manage'];
@@ -137,5 +150,5 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
     workflows.push({ file: 'deploy-worker.yml', label: 'Cloudflare · frontend e Worker', inputs: {} });
   if (targets.has('manage'))
     workflows.push({ file: 'manage-deploy.yml', label: 'Manage · publicar painel', inputs: { mode: 'apply' } });
-  return { changed, targets: selected, manual: [...manual], workflows };
+  return { changed, targets: selected, manual: [...manual], blocked, workflows };
 }
