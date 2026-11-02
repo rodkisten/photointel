@@ -920,6 +920,18 @@ function ConfigEditor() {
 }
 function SystemInfo({ meta }: { meta: Meta }) {
   const [selectedJob, setSelectedJob] = useState('');
+  const health = useQuery({
+    queryKey: ['overview'],
+    queryFn: () => api<{ providers: string[] }>('/overview'),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const check = (index: number): [string, boolean] => {
+    if (health.isPending) return ['Verificando acesso…', false];
+    if (health.error) return ['Falha ao consultar as integrações', false];
+    const outcome = health.data?.providers[index] || 'Indisponível';
+    return outcome === 'ok' ? ['API verificada', true] : [outcome, false];
+  };
   const gcp = useQuery({
     queryKey: ['gcp-jobs'],
     queryFn: () => api<{ items: { name: string; updateTime: string }[] }>('/gcp/jobs'),
@@ -972,19 +984,19 @@ function SystemInfo({ meta }: { meta: Meta }) {
     <div className="space-y-5">
       <Section title="Acesso e integrações" detail="Identidade verificada pelo Cloudflare Access">
         <Card className="divide-y divide-[#282a2e]">
-          {[
-            ['Usuário autenticado', meta.email, true],
-            ['GitHub', meta.repo, true],
-            ['Cloudflare', meta.cloudflare ? 'API conectável' : 'Token ausente', meta.cloudflare],
-            ['Google Cloud', meta.gcp ? 'WIF configurada' : 'WIF não configurada', meta.gcp],
-            ['Sentry', meta.sentry ? 'API configurada' : 'Token ausente', meta.sentry],
-          ].map(([name, detail, ok]) => (
-            <div key={String(name)} className="flex items-center justify-between gap-2 px-4 py-3">
+          {([
+            ['Usuário autenticado', meta.email, true, true],
+            ['GitHub', ...check(0), true],
+            ['Cloudflare', ...check(1), true],
+            ['Google Cloud', ...check(2), true],
+            ['Sentry', meta.sentry ? 'Configurado (não verificado)' : 'Token ausente', false, false],
+          ] as Array<[string, string, boolean, boolean]>).map(([name, detail, ok, verified]) => (
+            <div key={name} className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{name}</p>
-                <p className="truncate text-xs text-slate-500">{String(detail)}</p>
+                <p className="break-words text-xs text-slate-500">{detail}</p>
               </div>
-              <Badge tone={ok ? 'success' : 'warning'}>{ok ? 'OK' : 'Pendente'}</Badge>
+              <Badge tone={ok ? 'success' : 'warning'}>{ok ? 'OK' : verified ? 'Erro' : 'Pendente'}</Badge>
             </div>
           ))}
         </Card>
