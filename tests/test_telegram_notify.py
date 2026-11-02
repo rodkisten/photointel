@@ -1,13 +1,14 @@
 """Telegram job notifications: formatting, redaction and transport, without external services."""
-from uuid import uuid4
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import httpx
 import pytest
 import respx
 
 from photointel.models import Job, JobBatch, JobEvent
-from photointel.services import job_notify, telegram_notify as telegram
+from photointel.services import job_notify
+from photointel.services import telegram_notify as telegram
 
 
 def example(status: str = "failed") -> tuple[Job, JobEvent, JobBatch]:
