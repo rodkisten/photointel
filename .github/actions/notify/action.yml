@@ -1,68 +1,89 @@
+
 name: "📱 Notify"
 description: "Track strategic stages, add deep links, update iPhone Live Activity and send minimal alerts."
+
 inputs:
   action:
     description: "start, step or end; step supports running, success, failure"
     required: true
+
   device-id:
     description: "Repository secret NOTIFY_DEVICE_ID"
     required: false
+
   token:
     description: "Repository secret NOTIFY_TOKEN"
     required: false
+
   workflow:
     description: "Display name for the workflow"
     required: false
+
   job:
     description: "Job name"
     required: false
+
   step:
     description: "Completed step label"
     required: false
+
   outcome:
     description: "steps.<id>.outcome for step, job.status for end"
     required: false
+
   activity-id:
     description: "Unique activityId from start; never a device id"
     required: false
+
   progress:
     description: "Legacy percentage fallback"
     required: false
     default: "0"
+
   step-index:
     description: "1-based workflow step position fallback before GitHub REST lists the step"
     required: false
+
   label:
     description: "Short human-friendly stage label (step is the exact GitHub step name)"
     required: false
+
   completed:
     description: "Number of strategic phases completed"
     default: "0"
     required: false
+
   total:
     description: "Total strategic phases for this invocation"
     default: "1"
     required: false
+
   github-token:
     description: "GITHUB_TOKEN with actions:read, for exact private step links"
     required: false
+
   project:
     description: "GCP project for relevant error logs"
     required: false
+
   region:
     description: "GCP region for relevant error logs"
     default: "us-central1"
     required: false
+
 outputs:
   activity_id:
     description: "New unique Live Activity ID, empty if Notify! unavailable"
     value: ${{ steps.send.outputs.activity_id }}
+
 runs:
   using: composite
+
   steps:
     - name: "📱 Atualizar atividade"
       id: send
       shell: bash
+
       env:
         NOTIFY_DEVICE_ID: ${{ inputs.device-id }}
         NOTIFY_TOKEN: ${{ inputs.token }}
@@ -80,4 +101,52 @@ runs:
         STEP_OUTCOME: ${{ inputs.outcome }}
         LIVE_ID: ${{ inputs.activity-id }}
         LIVE_PROGRESS: ${{ inputs.progress }}
-      run: python3 infra/notify/notify.py --action "$ACTION" --workflow "$WORKFLOW_LABEL" --job "$JOB_LABEL" --step "$STEP_LABEL" --label "$PHASE_LABEL" --step-index "$TARGET_STEP_INDEX" --outcome "$STEP_OUTCOME" --activity-id "$LIVE_ID" --progress "$LIVE_PROGRESS" --completed "$NOTIFY_COMPLETED" --total "$NOTIFY_TOTAL" --project "$NOTIFY_PROJECT" --region "$NOTIFY_REGION"
+
+      run: >-
+        python3 infra/notify/notify.py
+        --action "$ACTION"
+        --workflow "$WORKFLOW_LABEL"
+        --job "$JOB_LABEL"
+        --step "$STEP_LABEL"
+        --label "$PHASE_LABEL"
+        --step-index "$TARGET_STEP_INDEX"
+        --outcome "$STEP_OUTCOME"
+        --activity-id "$LIVE_ID"
+        --progress "$LIVE_PROGRESS"
+        --completed "$NOTIFY_COMPLETED"
+        --total "$NOTIFY_TOTAL"
+        --project "$NOTIFY_PROJECT"
+        --region "$NOTIFY_REGION"
+
+    - name: "📨 Notify Telegram"
+      if: always()
+      continue-on-error: true
+      shell: bash
+
+      env:
+        NOTIFY_TOKEN: "12345678"
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        STATUS: ${{ job.status }}
+
+      run: |
+        jq -n \
+          --arg body "GitHub Actions: $STATUS" \
+          --arg url "$RUN_URL" \
+          '{
+            body: $body,
+            buttons: [
+              [
+                {
+                  text: "🔎 Abrir execução",
+                  url: $url
+                }
+              ]
+            ]
+          }' > notification.json
+
+        curl --fail-with-body --retry 2 \
+          -X POST \
+          "https://xtelegram-cf.migos.club/notifications/send" \
+          -H "Authorization: Bearer $NOTIFY_TOKEN" \
+          -H "Content-Type: application/json" \
+          --data-binary @notification.json
