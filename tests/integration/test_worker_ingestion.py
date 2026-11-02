@@ -124,9 +124,21 @@ async def test_fixture_import_has_durable_jobs_private_variants_and_no_duplicate
             )
         ).all()
     )
-    assert len(resources) == 8
+    # Four required WebP resources per asset plus optional smaller AVIF
+    # renditions when the Pillow wheel supports encoding the format.
+    assert len(resources) >= 8
+    for asset_id in {row.asset_id for row in resources}:
+        assert {
+            "thumbnail_small", "thumbnail_medium", "preview_large", "inference_input"
+        }.issubset({
+            row.resource_type for row in resources if row.asset_id == asset_id
+        })
     assert all(
         row.status == "available" and storage.exists(row.object_key) for row in resources
+    )
+    assert all(
+        row.mime_type == "image/avif" and row.object_key.endswith(".avif")
+        for row in resources if row.resource_type.endswith("_avif")
     )
     count = await session.scalar(
         select(func.count())
