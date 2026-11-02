@@ -47,6 +47,10 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         raise SetupError("Management requires project photointel and a nonempty email allowlist")
     api = client(config)
     apps = api.pages(api.base + "/access/apps")
+    domains = api.pages(api.base + "/workers/domains")
+    occupied = [d for d in domains if d.get("hostname") == DOMAIN]
+    if any(d.get("service") != WORKER_NAME for d in occupied):
+        raise SetupError("The management hostname is already bound to a different Worker; refusing to replace it")
     idps = api.pages(api.base + "/access/identity_providers")
     otp = [x for x in idps if x.get("type") == "onetimepin"]
     if not otp and apply:
@@ -126,14 +130,14 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             temp_path = Path(out.name)
             temp_path.chmod(0o600)
             json.dump(wrangler, out)
-        run(["npx", "wrangler@4", "deploy", "--config", str(temp_path)], env=env)
+        run(["npx", "--yes", "wrangler@4", "deploy", "--config", str(temp_path)], env=env)
         secrets = {"GITHUB_API_TOKEN": gh_token,
                    "CLOUDFLARE_API_TOKEN": cf_token}
         if "MANAGE_SENTRY_API_TOKEN" in config.get("workflow_secrets", {}):
             secrets["SENTRY_API_TOKEN"] = secret_value(config, "MANAGE_SENTRY_API_TOKEN")
         # stdin avoids storing secrets in arguments, config files or CLI logs.
         for name, value in secrets.items():
-            run(["npx", "wrangler@4", "secret", "put", name,
+            run(["npx", "--yes", "wrangler@4", "secret", "put", name,
                  "--name", WORKER_NAME], env=env, stdin=value + "\n")
     finally:
         if temp_path:
