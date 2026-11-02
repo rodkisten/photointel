@@ -98,10 +98,13 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     const effective = overrideSrc ?? src;
     if (!effective) return [];
     const result = [effective];
-    const match = effective.match(/^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)$/i);
+    const match = effective.match(
+      /^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)(\?[^#]*)?$/i
+    );
     if (match) {
-      if (match[2] === 'preview_large') result.push(match[1] + 'thumbnail_medium');
-      result.push(match[1] + 'thumbnail_small');
+      const query = match[3] ?? '';
+      if (match[2] === 'preview_large') result.push(match[1] + 'thumbnail_medium' + query);
+      result.push(match[1] + 'thumbnail_small' + query);
     }
     return result;
   }, [src, overrideSrc]);
@@ -234,22 +237,27 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     </div>
   </div>;
   const url = attempt ? `${current}${current.includes('?') ? '&' : '?'}retry=${attempt}` : current;
-  const base = (overrideSrc ?? src)?.match(
-    /^(\/v1\/assets\/[0-9a-f-]{36}\/media\/)(?:thumbnail_small|thumbnail_medium|preview_large)(?:\?.*)?$/i
-  )?.[1];
-  // Standard variant names are content-negotiated by the API: AVIF is served
-  // when available and supported by the browser, otherwise WebP/JPEG.
-  // Grids intentionally omit preview_large to minimize transfer on small tiles.
+  const sourceMatch = (overrideSrc ?? src)?.match(
+    /^(\/v1\/assets\/[0-9a-f-]{36}\/media\/)(?:thumbnail_small|thumbnail_medium|preview_large)(\?[^#]*)?$/i
+  );
+  const base = sourceMatch?.[1];
+  const sourceQuery = sourceMatch?.[2] ?? '';
+  // Preserve the revision query on *every* srcSet candidate. Without it,
+  // responsive images silently bypass the cache key and may load stale pixels.
+  const variantUrl = (name: string) => apiUrl(
+    `${base}${name}${sourceQuery}${attempt ? `${sourceQuery ? '&' : '?'}retry=${attempt}` : ''}`
+  );
+  // Grids intentionally omit preview_large; the viewer can request 1600w.
   const responsive = base && variant === 0 ? [
-    `${apiUrl(base + 'thumbnail_small')} 240w`,
-    `${apiUrl(base + 'thumbnail_medium')} 640w`,
-    ...(priority ? [`${apiUrl(base + 'preview_large')} 1600w`] : []),
+    `${variantUrl('thumbnail_small')} 240w`,
+    `${variantUrl('thumbnail_medium')} 640w`,
+    ...(priority ? [`${variantUrl('preview_large')} 1600w`] : []),
   ].join(', ') : undefined;
   const imageSizes = sizes ?? (priority ? '(max-width: 720px) 100vw, 70vw' :
     '(max-width: 600px) 33vw, (max-width: 1200px) 20vw, 14vw');
-  const blurred = assetId && /^[a-f0-9-]{36}$/i.test(assetId) ?
-    apiUrl(`/v1/assets/${assetId}/media/thumbnail_small`) :
-    base ? apiUrl(base + 'thumbnail_small') : null;
+  const blurred = base ? variantUrl('thumbnail_small') :
+    assetId && /^[a-f0-9-]{36}$/i.test(assetId) ?
+      apiUrl(`/v1/assets/${assetId}/media/thumbnail_small`) : null;
   return <span className={`private-image-frame ${loaded ? 'image-ready' : ''} ${className ?? ''}`}
     style={blurred ? { '--private-placeholder': `url("${blurred}")` } as React.CSSProperties : undefined}>
     <img key={`${url}-${variant}`} src={apiUrl(url)}

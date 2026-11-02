@@ -73,6 +73,9 @@ jobs:
           apps/api/src/photointel/services/media.py
           tests/test_responsive_media.py
           tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
+          apps/api/src/photointel/serializers.py
+          apps/api/src/photointel/routers/operations.py
           tests/test_backend_contention.py
           tests/integration/test_discovery_pipeline_v11.py
       - name: "🧪 Worker, sessions and correlation"
@@ -83,6 +86,7 @@ jobs:
           tests/test_job_observability.py
           tests/test_responsive_media.py
           tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
       - name: "🗄️ Enable PostgreSQL extensions"
         run: >
           PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel

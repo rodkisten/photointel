@@ -26,6 +26,7 @@ from photointel.models import (
     AssetTag,
     AuditEvent,
     BridgeDevice,
+    DiscoveryManifest,
     DispatchOutbox,
     Embedding,
     InferenceRun,
@@ -116,6 +117,7 @@ async def job_events(
     async def stream() -> Any:
         nonlocal position
         last_ping = time.monotonic()
+        quiet_cycles = 0
         # Close and reconnect periodically, so JWT expiration/rotation is revalidated.
         deadline = time.monotonic() + 240
         while time.monotonic() < deadline and not await request.is_disconnected():
@@ -128,6 +130,7 @@ async def job_events(
                         .limit(200)
                     )
                 ).all()
+            quiet_cycles = 0 if events else min(quiet_cycles + 1, 4)
             for event in events:
                 position = event.id
                 payload = {
@@ -140,7 +143,9 @@ async def job_events(
             if time.monotonic() - last_ping > 15:
                 yield ": heartbeat\n\n"
                 last_ping = time.monotonic()
-            await asyncio.sleep(1)
+            # Activity remains near-real-time; idle tabs poll the shared
+            # database less often, reducing reads and billable CPU.
+            await asyncio.sleep(1 if events else 1 + quiet_cycles)
         yield "event: reconnect\ndata: {}\n\n"
 
     return StreamingResponse(
