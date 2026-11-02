@@ -9,7 +9,7 @@ import { jobLogsUrl } from '../lib/diagnostics';
 import { sentryEventUrl } from '../lib/sentry';
 
 type Size = 'closed' | 'mini' | 'half' | 'full';
-const STORAGE_KEY = 'photointel:jobs-drawer:v1';
+const STORAGE_KEY = 'photointel:jobs-drawer:v2';
 const ACTIVE = new Set(['queued', 'preparing', 'running', 'retrying']);
 const terminal = new Set(['completed', 'failed', 'cancelled']);
 
@@ -35,7 +35,6 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   const jobs = useApi<Page<Job>>('/v1/jobs/activity?limit=24', 15_000);
   const batches = useApi<Page<Info>>('/v1/job-batches?limit=8', 15_000);
   const [size, setSize] = useState<Size>(savedSize);
-  const snapshots = useRef<Map<string, string> | null>(null);
   const touch = useRef<number | null>(null);
   const activeJobs = (jobs.data?.items ?? []).filter((job) => ACTIVE.has(job.status));
   const activeBatches = (batches.data?.items ?? []).filter((batch) => ACTIVE.has(String(batch.status)));
@@ -49,22 +48,6 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
     setSize(next);
     try { window.localStorage.setItem(STORAGE_KEY, next); } catch { /* Safari private mode */ }
   }
-
-  useEffect(() => {
-    if (!jobs.data) return;
-    const current = new Map(jobs.data.items.map((job) => [job.id, job.status]));
-    if (snapshots.current) {
-      const enqueued = jobs.data.items.some((job) =>
-        ACTIVE.has(job.status) && (!snapshots.current!.has(job.id) ||
-          (job.status === 'queued' && terminal.has(snapshots.current!.get(job.id) ?? ''))));
-      if (enqueued) resize(size === 'closed' ? 'mini' : size);
-    } else if (jobs.data.items.some((job) => ACTIVE.has(job.status))) {
-      resize(size === 'closed' ? 'mini' : size);
-    }
-    snapshots.current = current;
-    // Changes are inspected only when the backend snapshot changes, not when the user resizes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs.data]);
 
   useEffect(() => {
     if (!('EventSource' in window)) return;
@@ -118,12 +101,16 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   };
 
   if (hidden) return null;
-  if (size === 'closed') return activeJobs.length ? <button type="button"
+  if (size === 'closed') return <button type="button"
     className="jobs-drawer-toggle" onClick={() => resize('mini')}
-    aria-label={`Mostrar ${activeJobs.length} jobs ativos`}>
+    aria-label={`Abrir monitor de jobs: ${activeJobs.length} ativos`}>
     <Activity size={17} className={activeJobs.some((job) => job.status === 'running') ?
-      'job-running-icon' : ''} /><span>{activeJobs.length} jobs</span><ChevronUp size={15}/>
-  </button> : null;
+      'job-running-icon' : ''} />
+    <span>{activeJobs.length ? `${activeJobs.length} jobs` : 'Jobs'}</span>
+    {progress && <span className="jobs-toggle-progress" aria-label={`Progresso: ${progress.percent}%`}>
+      <span style={{ width: `${progress.percent}%` }} /></span>}
+    <ChevronUp size={15}/>
+  </button>;
   return <section className={'jobs-drawer jobs-drawer-' + size} aria-label="Monitor de jobs"
     aria-live="off" data-testid="jobs-drawer">
     <button type="button" className="jobs-drawer-grip" aria-label="Arraste para ajustar o painel de jobs"
