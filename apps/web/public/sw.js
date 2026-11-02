@@ -87,7 +87,11 @@ if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function')
 const SW_BUILD = '__PHOTOINTEL_SW_VERSION__';
 const SHELL_CACHE = 'photointel-shell-' + SW_BUILD;
 const ASSET_CACHE = 'photointel-static-v3';
-const PUBLIC_CDN = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://www.gstatic.com'];
+const PUBLIC_CDN = [
+  'https://fonts.googleapis.com',
+  'https://fonts.gstatic.com',
+  'https://www.gstatic.com',
+];
 const PRECACHE = /*__PHOTOINTEL_PRECACHE__*/ [];
 const PRIVATE = /^\/(?:v1(?:\/|$)|auth(?:\/|$)|__|cdn-cgi(?:\/|$)|api(?:\/|$)|\.)/;
 const HASHED = /^\/assets\/[\w./-]+[-.][a-zA-Z0-9_-]{8,}\.(?:js|mjs|css|woff2?|png|svg|webp|avif)$/;
@@ -158,16 +162,18 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) {
     if (!PUBLIC_CDN.includes(url.origin)) return;
-    event.respondWith((async () => {
-      const cache = await caches.open(ASSET_CACHE);
-      const hit = await cache.match(req);
-      if (hit) return hit;
-      const response = await fetch(req);
-      if ((response.ok || response.type === 'opaque') && !response.redirected) {
-        event.waitUntil(cache.put(req, response.clone()));
-      }
-      return response;
-    })());
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(ASSET_CACHE);
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const response = await fetch(req);
+        if ((response.ok || response.type === 'opaque') && !response.redirected) {
+          event.waitUntil(cache.put(req, response.clone()));
+        }
+        return response;
+      })(),
+    );
     return;
   }
   if (PRIVATE.test(url.pathname)) return;
