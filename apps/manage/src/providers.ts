@@ -157,6 +157,20 @@ export function validateConfig(value: string): void {
     throw new ApiError(422, 'CONFIG_SIZE', 'Valor precisa ter de 1 a 120.000 caracteres');
   if (/(?:github_pat_|ghp_|-----BEGIN PRIVATE KEY-----)/.test(value))
     throw new ApiError(422, 'INLINE_SECRET', 'Guarde credenciais no Secret Manager');
+  // Do not allow a future save to reintroduce the legacy Telegram fields
+  // that formerly caused production GCP config preparation to fail.
+  if (/^\s*(?:EXTRA_ENVIRONMENT__)?TELEGRAM_NOTIFICATION_API_TOKEN\s*=/m.test(value))
+    throw new ApiError(
+      422,
+      'TELEGRAM_INLINE_SECRET',
+      'Remova TELEGRAM_NOTIFICATION_API_TOKEN do .env e use SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME/VERSION.',
+    );
+  if (/^\s*EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED\s*=/m.test(value))
+    throw new ApiError(
+      422,
+      'TELEGRAM_COMPUTED',
+      'Remova EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED: o backend calcula esse campo automaticamente.',
+    );
   if (value.trim().startsWith('{')) {
     let config: unknown;
     try {
@@ -167,6 +181,15 @@ export function validateConfig(value: string): void {
     if (!config || typeof config !== 'object' || Array.isArray(config))
       throw new ApiError(422, 'CONFIG_JSON', 'Esperado objeto JSON');
     const data = config as Record<string, unknown>;
+    const extra = data.extra_environment;
+    if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+      if ('TELEGRAM_NOTIFICATION_API_TOKEN' in extra)
+        throw new ApiError(422, 'TELEGRAM_INLINE_SECRET',
+          'Token Telegram não pode ficar em extra_environment: use o Secret Manager.');
+      if ('TELEGRAM_JOB_EVENTS_ENABLED' in extra)
+        throw new ApiError(422, 'TELEGRAM_COMPUTED',
+          'TELEGRAM_JOB_EVENTS_ENABLED é gerado automaticamente. Remova o override.');
+    }
     if (
       data.project_id !== 'photointel' ||
       typeof data.region !== 'string' ||
