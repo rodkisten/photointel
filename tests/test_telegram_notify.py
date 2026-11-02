@@ -99,6 +99,7 @@ async def test_relay_delivery_uses_bearer_and_rejects_error_without_redirects():
         request = route.calls.last.request
         assert request.headers["authorization"] == "Bearer " + "T" * 32
         assert b"MarkdownV2" in request.content
+        assert b'"notification_key"' not in request.content  # legacy caller remains compatible
 
     with respx.mock(assert_all_mocked=True) as mock:
         mock.post(endpoint).mock(return_value=httpx.Response(502, json={"ok": False}))
@@ -122,3 +123,28 @@ async def test_disabled_telegram_never_uses_database_or_network(monkeypatch):
     monkeypatch.setattr(telegram, "claim_cursor", AsyncMock(side_effect=AssertionError))
     assert await telegram.drain() == {"status": "disabled", "events": 0}
     await telegram.safe_notify()
+
+
+@pytest.mark.asyncio
+async def test_editable_batch_notification_sends_stable_key_and_sequence():
+    endpoint = "https://relay.example/notifications/send"
+    with respx.mock(assert_all_mocked=True) as mock:
+        route = mock.post(endpoint).mock(return_value=httpx.Response(
+            200, json={"ok": True, "message_id": 123, "edited": True},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            await telegram.deliver(
+                client, (endpoint, "T" * 32, "-100123:73"),
+                "*running*", [], "photointel:batch:123456", 45,
+            )
+        request = route.calls.last.request
+        assert b'"notification_key":"photointel:batch:123456"' in request.content
+        assert b'"sequence":45' in request.content
+        assert request.headers["authorization"] == "Bearer " + "T" * 32
+
+
+def test_editable_scope_per_batch_or_standalone_job():
+    job, event, batch = example("running")
+    assert telegram.notification_scope(job) == "photointel:batch:" + str(batch.id)
+    job.batch_id = None
+    assert telegram.notification_scope(job) == "photointel:job:" + str(job.id)
