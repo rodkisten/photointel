@@ -7,9 +7,10 @@ The sender is server-to-server; never put the bearer token in frontend builds.
 ## What gets sent
 
 - 📥 queued, 🛠 preparing, 🔄 running, ⚠️ retrying, ✅ completed, ❌ failed, 🛑 cancelled.
-- Batch transitions are grouped to avoid one Telegram message per photo. The
-  notification shows live job counts and completion fraction for the batch.
-- Failed/retrying job attempts get **individual** technical messages:
+- **One Telegram message per batch or standalone job**. Transitions update that
+  same bubble by D1-backed `notification_key` and monotonic `JobEvent.id`.
+  The notification shows live job counts and completion fraction for the batch.
+- Failed/retrying job attempts update the existing batch/job bubble with technical diagnostics:
   error code, exception class, attempts, job UUID, correlation UUID, exact Sentry
   event ID and available sanitized stack frames (file/line/function).
 - Each status has links for **PhotoIntel Jobs** and **GCP Logs Explorer**. Failures
@@ -62,9 +63,13 @@ extra_environment because it is a protected generated variable.
 1. Configure the Google Secret Manager secret version with the **same token**
    used by xtelegram. The API and job workers need secretAccessor permissions
    on that secret. Run the established GCP setup grant path.
-2. Apply the existing GCP deployment process to update API and job worker
+2. **Deploy the updated relay FIRST**, applying its D1 migration
+   `0010_editable_notifications.sql` with `npm run db:migrate:remote` and
+   publishing the Worker with the current secrets. PhotoIntel requires relay
+   response fields `notification_key` and `message_id` for an upsert ACK.
+3. Apply the existing GCP deployment process to update API and job worker
    environments. No SQL migration is required for PhotoIntel.
-3. Start a small legitimate job, confirm enqueued/running/completed messages
+4. Start a small legitimate job, confirm enqueued/running/completed messages
    in Telegram. Induce only a non-sensitive staging failure to verify
    Sentry/GCP links and redaction.
 
@@ -84,8 +89,15 @@ printing request headers or provider response bodies.
 - The notification sender is non-blocking with respect to the durable job
   outcome, though delivery is awaited for a bounded interval during the
   post-commit drain. A provider outage never changes the job state.
-- For high-volume batches, ordinary transitions are consolidated per batch
-  while failures and retry attempts remain job-specific.
+- For high-volume batches, every state change updates the same batch bubble.
+  A still-failed job keeps the batch labeled as having errors even if another
+  job has completed subsequently. Individual error metadata is kept in Sentry
+  and GCP Logs, linked from the message where available.
 - The GCP button searches structured Cloud Run job logs for job/correlation IDs.
   Sentry is the source of truth for complete exception events; Telegram contains
   a sanitized Markdown summary, not raw or potentially sensitive provider text.
+
+The GitHub Actions Notify composite action also supplies the stable key
+`workflow:<owner>/<repo>:<run_id>` and a sequence derived from run attempt
+and step. The signed GitHub webhook uses the **same key**, so start/progress/end
+and webhook events share one bubble and stale events cannot revert its state.
