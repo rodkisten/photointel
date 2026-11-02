@@ -123,7 +123,9 @@ runs:
         --region "$NOTIFY_REGION"
 
     - name: "📨 Notify Telegram"
-      if: ${{ always() && inputs.telegram-token != '' }}
+      # Credentials can come from an explicit input OR the existing GCP_CONFIG_ENV
+      # Secret Manager reference once the workflow has authenticated to Google.
+      if: ${{ always() }}
       continue-on-error: true
       shell: bash
 
@@ -144,6 +146,33 @@ runs:
 
       run: |
         set -euo pipefail
+        ENDPOINT="https://xtelegram-cf.migos.club/notifications/send"
+        CHAT=""
+        if [[ -f "${GCP_CONFIG_FILE:-infra/gcp/config.local.json}" ]]; then
+          config="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
+          ENDPOINT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_URL // "https://xtelegram-cf.migos.club/notifications/send"' "$config")"
+          CHAT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_CHAT_ID // ""' "$config")"
+          if [[ -z "$TELEGRAM_TOKEN" ]] && command -v gcloud >/dev/null 2>&1; then
+            secret="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.name // empty' "$config")"
+            version="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.version // empty' "$config")"
+            if [[ -n "$secret" && "$version" =~ ^[0-9]+$ ]]; then
+              TELEGRAM_TOKEN="$(gcloud secrets versions access "$version" --secret="$secret" --project=photointel --quiet 2>/dev/null)" || TELEGRAM_TOKEN=""
+            fi
+          fi
+        fi
+        if [[ -z "$TELEGRAM_TOKEN" ]]; then
+          echo "::notice::Telegram skipped: configure TELEGRAM_NOTIFICATION_API_TOKEN as GitHub Actions secret, or a Secret Manager reference accessible after GCP WIF login."
+          exit 0
+        fi
+        echo "::add-mask::$TELEGRAM_TOKEN"
+        if [[ "$ENDPOINT" != "https://xtelegram-cf.migos.club/notifications/send" ]]; then
+          echo "::error::Unexpected Telegram relay endpoint; refusing to send"
+          exit 1
+        fi
+        if [[ -n "$CHAT" && ! "$CHAT" =~ ^(-?[0-9]+(:[1-9][0-9]*)?|@[A-Za-z0-9_]{1,64})$ ]]; then
+          echo "::error::Invalid Telegram chat destination"
+          exit 1
+        fi
 
         jq -n \
           --arg action "$ACTION" \
@@ -158,6 +187,7 @@ runs:
           --arg run_id "$RUN_ID" \
           --arg run_attempt "$RUN_ATTEMPT" \
           --arg repository "$REPOSITORY" \
+          --arg chat "$CHAT" \
           '
           def clean:
             gsub("^\\s+|\\s+$"; "");
@@ -257,7 +287,7 @@ runs:
              end)
           ) as $sequence |
 
-          {
+          ({
             body: $body,
             notification_key: ("workflow:" + $repository + ":" + $run_id),
             sequence: $sequence,
@@ -269,7 +299,7 @@ runs:
                 }
               ]
             ]
-          }
+          } + (if $chat != "" then {chat_id: $chat} else {} end))
           ' |
           curl \
             --fail-with-body \
@@ -277,7 +307,7 @@ runs:
             --show-error \
             --retry 2 \
             -X POST \
-            "https://xtelegram-cf.migos.club/notifications/send" \
+            "$ENDPOINT" \
             -H "Authorization: Bearer $TELEGRAM_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @-
