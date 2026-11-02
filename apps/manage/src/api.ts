@@ -364,7 +364,7 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     const token = byName.get('TELEGRAM_NOTIFICATION_API_TOKEN');
     // Never return a token, only whether it is present in the deployed env.
     const tokenBound = Boolean(
-      (typeof token?.value === 'string' && token.value.length >= 12) ||
+      (typeof token?.value === 'string' && token.value.length > 0) ||
       token?.valueSource?.secretKeyRef ||
       token?.valueFrom?.secretKeyRef,
     );
