@@ -52,7 +52,7 @@ export function SecretVersionForm({ secret, busy, onSave }: {
       title={`Criar nova versão de ${secret.key}?`}
       description={`O Google Secret Manager criará uma nova versão de ${secret.name}. A referência no GitHub será alterada de v${secret.version} para a nova versão. A alteração pode exigir uma nova publicação.`}
       label="Criar versão" busy={busy}
-      onConfirm={() => { onSave(draft, autoApply); setDraft(''); setVisible(false); }}
+      onConfirm={() => onSave(draft, autoApply)}
     />
   </Card>;
 }
