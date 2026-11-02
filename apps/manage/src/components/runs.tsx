@@ -11,6 +11,7 @@ import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from './shared';
 import { ConfirmDialog } from './confirm-dialog';
+import { JsonView } from './json-view';
 export function RunRow({ run, onSelect }: { run: Run; onSelect: (id: number) => void }) {
   const status = run.conclusion || run.status;
   return (
@@ -128,9 +129,8 @@ export function RunDetail({ id, onBack }: { id: number; onBack: () => void }) {
                     ) : logs.error ? (
                       <IssueBanner error={logs.error} />
                     ) : (
-                      <pre className="logbox max-h-[430px] overflow-auto">
-                        {logs.data?.text || 'Nenhum log disponível'}
-                      </pre>
+                      <JsonView data={logs.data?.text || 'Nenhum log disponível'} title="Logs do job"
+                        defaultExpandDepth={1} maxHeight={430} />
                     )}
                   </div>
                 )}

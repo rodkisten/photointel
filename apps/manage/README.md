@@ -313,6 +313,33 @@ em `src/features/secrets/` (lista, cartão da versão, formulário,
 orquestração e tipos). O backend do editor fica separado entre
 `src/routes/secrets.ts` e `src/secret-manager.ts`.
 
+## JSON View, ScrollArea e CodeMirror 6
+
+O visualizador comum `src/components/json-view.tsx` segue os padrões
+documentados no **Geist JSON View**: árvore recolhível, chaves e valores
+com coloração por tipo, `defaultExpandDepth`, pesquisa por texto literal
+com `highlightPattern`, navegação por botões acessíveis e cópia do dado.
+É uma implementação local do padrão visual e interativo, não um pacote
+proprietário importado do site da Vercel. JSON válido é interpretado como
+objeto ou array; outros logs são apresentados como texto sem perder conteúdo.
+A árvore evita abrir automaticamente mais de 1.200 propriedades por nó.
+
+`src/components/scroll-area.tsx` implementa ScrollArea do shadcn/Radix
+com scrollbars vertical e horizontal. É compartilhado por logs GitHub,
+Cloudflare, GCP, Sentry e estruturas JSON.
+
+O editor do Environment GitHub, em
+`src/components/codemirror-env-editor.tsx`, usa **CodeMirror 6** com
+`@codemirror/lang-json` e modo de tokens dotenv. Seleciona o modo pelo
+conteúdo de `GCP_CONFIG_ENV`, oferece highlighting, busca e lint JSON.
+O editor não normaliza linhas, strings, comentários nem quebras no dotenv.
+O backend continua usando validação, optimistic hash e planejamento
+de deploy antes de salvar. A fonte do editor usa 16px para evitar zoom
+automático ao focar no iOS.
+
+Os componentes usam dependências instaladas e travadas no
+`apps/manage/package-lock.json`, sem ESM/CDN externo.
+
 ## Local development
 
     cd apps/manage
