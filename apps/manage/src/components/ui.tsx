@@ -13,11 +13,18 @@ const variants = cva(
         ghost: 'text-slate-300 hover:bg-[#202227] hover:text-white',
         destructive: 'bg-red-950 text-red-200 hover:bg-red-900',
       },
-      size: { default: 'h-10 px-4 text-sm', sm: 'h-9 px-3 text-xs', icon: 'h-10 w-10', lg: 'h-11 px-5' },
+      size: { 
+        default: 'h-10 px-4 text-sm', 
+        xsm: 'h-7 px-1 text-[10px]', 
+        sm: 'h-9 px-3 text-xs', 
+        icon: 'h-10 w-10', 
+        lg: 'h-11 px-5' 
+      },
     },
     defaultVariants: { variant: 'default', size: 'default' },
   },
 );
+
 export function Button({
   asChild = false,
   variant,
