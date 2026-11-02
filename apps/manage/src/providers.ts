@@ -162,8 +162,8 @@ export function validateConfig(value: string): void {
   const inlineTelegram = value.match(
     /^\s*(?:EXTRA_ENVIRONMENT__)?TELEGRAM_NOTIFICATION_API_TOKEN\s*=\s*(.*)$/m,
   )?.[1]?.trim().replace(/^["']|["']$/g, '');
-  if (inlineTelegram !== undefined && inlineTelegram.length < 12)
-    throw new ApiError(422, 'TELEGRAM_TOKEN_SIZE', 'O token do Telegram deve conter pelo menos 12 caracteres.');
+  if (inlineTelegram !== undefined && inlineTelegram.length === 0)
+    throw new ApiError(422, 'TELEGRAM_TOKEN_SIZE', 'O token do Telegram não pode estar vazio.');
   if (value.trim().startsWith('{')) {
     let config: unknown;
     try {
@@ -178,7 +178,7 @@ export function validateConfig(value: string): void {
     if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
       if ('TELEGRAM_NOTIFICATION_API_TOKEN' in extra) {
         const token = (extra as Record<string, unknown>).TELEGRAM_NOTIFICATION_API_TOKEN;
-        if (typeof token !== 'string' || token.length < 12 || token.length > 8192)
+        if (typeof token !== 'string' || token.length === 0 || token.length > 8192)
           throw new ApiError(422, 'TELEGRAM_TOKEN_SIZE', 'Token Telegram inválido.');
       }
     }
