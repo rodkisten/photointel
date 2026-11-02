@@ -140,3 +140,39 @@ def test_transient_network_failure_does_not_request_reauthentication(exception_n
 
     code, _ = classify_icloud_failure(exception_name)
     assert failure_category(code) == "transient_network_error"
+
+
+
+def test_icloud_representation_falls_back_only_to_allowed_non_original_sizes() -> None:
+    from pyicloud_ipd.version_size import AssetVersionSize
+
+    medium, thumb, original = (
+        AssetVersionSize.MEDIUM,
+        AssetVersionSize.THUMB,
+        AssetVersionSize.ORIGINAL,
+    )
+    thumb_resource = SimpleNamespace(size=95000)
+    medium_resource = SimpleNamespace(size=180000)
+    original_resource = SimpleNamespace(size=9000000)
+    settings = Settings(
+        _env_file=None, download_representation="medium",
+        allow_original_fallback=False,
+    )
+    adapter = ICloudAdapter(settings)
+    assert adapter.representation(SimpleNamespace(versions={thumb: thumb_resource})) is thumb_resource
+    assert adapter.representation(SimpleNamespace(versions={
+        medium: medium_resource, thumb: thumb_resource,
+    })) is medium_resource
+    assert adapter.representation(SimpleNamespace(versions={original: original_resource})) is None
+    thumbnail_adapter = ICloudAdapter(settings.model_copy(update={
+        "download_representation": "thumb"
+    }))
+    assert thumbnail_adapter.representation(SimpleNamespace(
+        versions={medium: medium_resource}
+    )) is medium_resource
+    approved = ICloudAdapter(settings.model_copy(update={
+        "allow_original_fallback": True
+    }))
+    assert approved.representation(SimpleNamespace(
+        versions={original: original_resource}
+    )) is original_resource
