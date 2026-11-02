@@ -108,10 +108,12 @@ A ação valida `GCP_CONFIG_ENV` e executa `bash infra/gcp/bootstrap.sh`. Em `pl
 
 - APIs: calcula as APIs ausentes; habilita apenas as ausentes.
 - Artifact Registry Docker: verifica existência e formato; **não** recria repositório existente.
-- Seis service accounts: cria apenas ausentes.
+- Sete service accounts: cria apenas ausentes, incluindo `photointel-manage` (somente leitura de Cloud Run, logs e Scheduler).
 - Secret Manager: cria apenas *containers* de secret inexistentes, **sem** versões ou valores.
 - GCS: cria bucket privado somente se ausente; não tenta mover um bucket existente na multirregião `US`.
 - IAM: reaplica `add-iam-policy-binding`; o Google não cria concessões duplicadas para o mesmo membro/papel. Corrige vinculações que ainda faltam. Cada concessão declara `--condition=None` para compatibilidade com políticas IAM do projeto que já possuem bindings condicionais, sem remover ou modificar condições existentes. Essas novas concessões são **incondicionais**, como definido na matriz de acesso do bootstrap.
+- `mode=permissions`: além de reparar Secret Manager e diagnóstico da API, cria somente a conta `photointel-manage` caso esteja ausente e reconcilia `roles/run.viewer`, `roles/logging.viewer` e `roles/cloudscheduler.viewer` nela. Não altera providers WIF, buckets, deploys ou recursos do Cloud Run.
+- A autorização para a identidade federada do Cloudflare Access impersonar essa conta exige um provider WIF configurado separadamente e um binding restrito de `roles/iam.workloadIdentityUser`; criar a service account não concede acesso externo automaticamente.
 - **Não** deleta recursos, imagens, dados privados, versões de secrets nem revisões Cloud Run. Não ativa cobrança automaticamente: isso depende dos termos e configuração do projeto e de `apply` explicitamente autorizado.
 - `plan` não faz inventário detalhado de diferenças no GCP; imprime um **resumo de alterações possíveis**. `apply` inspeciona e altera conforme necessário. Uma falha de IAM não é interpretada como “recurso não existe”.
 - IAM bindings adicionados são reconciliados, mas políticas inesperadas de acesso **não são removidas**. Faça auditoria de IAM separadamente.
