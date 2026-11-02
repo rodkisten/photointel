@@ -171,6 +171,7 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
         "overexposed_fraction": round(float(np.mean(gray > 243)), 4),
         "file_bytes": path.stat().st_size,
         "compression": "source_codec_dependent",
+        "preview_codec_revision": "webp-avif-v1",
         "heuristic": True,
         "explanation": (
             "Índice heurístico = 50% resolução (24 MP), 30% nitidez (Laplaciano / 1000), "
@@ -756,6 +757,12 @@ async def rebuild_from_preview(
             asset.representation_revision,
             job_fences=job_fences,
         )
+        # A retained WebP preview is sufficient for progressive optimization.
+        # The original content revision and EXIF are not altered.
+        asset.quality = {
+            **(asset.quality or {}),
+            "preview_codec_revision": "webp-avif-v1",
+        }
     else:
         asset = await _current_asset(
             session, asset, expected_content, expected_revision, job_fences
