@@ -4,6 +4,23 @@ import * as Sentry from '@sentry/react';
 const EVENT = /^[a-f0-9]{32}$/i;
 const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 
+/** Redact private values, not the diagnostic message itself. */
+export function safeSentryMessage(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\b(?:https?|ftp|s3|gs):\/\/[^\s"'<>]+/gi, '[URL redigida]')
+    .replace(
+      /\b(authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token|cookie)\s*[:=]\s*[^\s,;]+/gi,
+      '$1=[redigido]',
+    )
+    .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [redigido]')
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token redigido]')
+    .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, '[email redigido]')
+    .replace(/(^|[\s(])\/(?:[A-Za-z0-9_.-]+\/){1,}[A-Za-z0-9_.-]+/g, '$1[caminho redigido]')
+    .replace(/\b[^\s/\\]+\.(?:heic|heif|jpe?g|png|webp|avif|mov|mp4)\b/gi, '[arquivo redigido]')
+    .slice(0, 2048);
+}
+
 export function initSentry() {
   if (!dsn) return;
   Sentry.init({
@@ -13,7 +30,7 @@ export function initSentry() {
     sendDefaultPii: false,
     attachStacktrace: true,
     defaultIntegrations: false,
-    integrations: [Sentry.browserTracingIntegration()],
+    integrations: [Sentry.browserTracingIntegration(), Sentry.linkedErrorsIntegration()],
     tracesSampleRate: 0.1,
     tracePropagationTargets: [
       /^\/v1\//,
@@ -25,10 +42,13 @@ export function initSentry() {
       delete event.breadcrumbs;
       delete event.extra;
       delete event.contexts;
-      // Suppress potentially private exception messages and frame context.
+      if (event.message) event.message = safeSentryMessage(event.message);
+      if (event.logentry) delete event.logentry;
+      // Keep meaningful exception text while scrubbing all private inputs.
       for (const item of event.exception?.values ?? []) {
-        item.value = item.type || 'ApplicationError';
+        item.value = safeSentryMessage(item.value) || item.type || 'ApplicationError';
         for (const frame of item.stacktrace?.frames ?? []) {
+          if (frame.filename) frame.filename = frame.filename.split(/[?#]/, 1)[0];
           delete frame.context_line;
           delete frame.pre_context;
           delete frame.post_context;

@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from photointel.sentry_observability import (
     _scrub,
+    _safe_exception_text,
     event_id,
     sentry_organization,
 )
@@ -84,3 +85,26 @@ async def test_exact_sentry_event_resolver(monkeypatch: pytest.MonkeyPatch) -> N
 def test_sentry_slug_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SENTRY_ORG", "invalid/../org")
     assert sentry_organization() is None
+
+
+def test_exception_reasons_survive_scrubbing_without_private_values() -> None:
+    message = "ProcessedMedia.quality expected dict, got int"
+    event = {
+        "exception": {
+            "values": [
+                {"type": "TypeError", "value": message, "stacktrace": {"frames": []}},
+                {"type": "AppError", "value": "Falha no upload (HTTP 503)", "stacktrace": {"frames": []}},
+            ]
+        },
+    }
+    result = _scrub(event, {})
+    assert result["exception"]["values"][0]["value"] == message
+    assert result["exception"]["values"][1]["value"] == "Falha no upload (HTTP 503)"
+    private = (
+        "Request https://example.com/image?token=private failed "
+        "password=SECRET for someone@example.com in /home/rod/photos/private.heic"
+    )
+    safe = _safe_exception_text(private)
+    for secret in ("https://example.com", "password=SECRET", "someone@example.com", "/home/rod", "private.heic"):
+        assert secret not in safe
+    assert "failed" in safe
