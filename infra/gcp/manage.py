@@ -2,7 +2,9 @@
 """Reproducible Google Cloud operations; default is an offline, reviewable plan.
 
 No shell interpolation and no account/resource mutation without two explicit flags.
-Configuration contains secret *references*, never secret values.
+Configuration normally contains Secret Manager references. An explicit Telegram
+relay .env token is supported for users who accept GitHub variable/Cloud Run
+environment exposure; it is never printed or included in frontend builds.
 """
 
 from __future__ import annotations
@@ -246,7 +248,7 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
     extra = config.get("extra_environment", {})
     if not isinstance(extra, dict) or any(
         not re.fullmatch(r"[A-Z][A-Z0-9_]{0,99}", key)
-        or key in PROTECTED_ENV | SECRET_FIELDS
+        or (key in PROTECTED_ENV | SECRET_FIELDS and key != "TELEGRAM_NOTIFICATION_API_TOKEN")
         or not isinstance(value, str)
         or len(value) > 8192
         for key, value in extra.items()
@@ -254,12 +256,19 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
         raise ConfigurationError("Invalid extra environment; credentials require secrets")
     if any(
         re.search(r"PASSWORD|CREDENTIAL|SECRET|TOKEN|PRIVATE_KEY", key)
-        and key != "ACCESS_BRIDGE_SERVICE_TOKENS"
+        and key not in {"ACCESS_BRIDGE_SERVICE_TOKENS", "TELEGRAM_NOTIFICATION_API_TOKEN"}
         for key in extra
     ):
         raise ConfigurationError(
             "Secret-looking environment values must use Secret Manager"
         )
+    if "TELEGRAM_NOTIFICATION_API_TOKEN" in extra:
+        inline = extra["TELEGRAM_NOTIFICATION_API_TOKEN"]
+        if not 12 <= len(inline) <= 8192 or inline.strip() != inline or any(
+            c in inline for c in ("\n", "\r", "\x00")
+        ):
+            raise ConfigurationError("Invalid inline Telegram relay token: use a nonempty single-line credential")
+    # Do not loosen validation for any other secret field.
     if "ACCESS_BRIDGE_SERVICE_TOKENS" in extra:
         try:
             identifiers = json.loads(extra["ACCESS_BRIDGE_SERVICE_TOKENS"])
@@ -358,12 +367,18 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
         ).lower(),
         "TELEGRAM_JOB_EVENTS_ENABLED": str(
             mode != "migrate"
-            and "TELEGRAM_NOTIFICATION_API_TOKEN" in config["secrets"]
+            and (
+                bool(config.get("extra_environment", {}).get("TELEGRAM_NOTIFICATION_API_TOKEN"))
+                or "TELEGRAM_NOTIFICATION_API_TOKEN" in config["secrets"]
+            )
             and bool(config.get("extra_environment", {}).get("TELEGRAM_NOTIFICATION_URL"))
             and bool(config.get("extra_environment", {}).get("TELEGRAM_NOTIFICATION_CHAT_ID"))
         ).lower(),
     }
     values.update(config.get("extra_environment", {}))
+    if mode == "migrate":
+        # Migration tasks must never receive notification credentials.
+        values.pop("TELEGRAM_NOTIFICATION_API_TOKEN", None)
     entries: list[dict[str, Any]] = [
         {"name": name, "value": value} for name, value in sorted(values.items())
     ]
@@ -374,6 +389,9 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     if mode == "migrate":
         allowed = {"DATABASE_URL", "MIGRATION_DATABASE_URL"}
     for key, reference in sorted(config["secrets"].items()):
+        # Inline .env has precedence; never emit duplicate env names.
+        if key == "TELEGRAM_NOTIFICATION_API_TOKEN" and key in values:
+            continue
         if key in allowed:
             entries.append(
                 {
