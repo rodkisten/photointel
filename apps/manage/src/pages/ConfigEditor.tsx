@@ -12,6 +12,7 @@ import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
+import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
 export function ConfigEditor() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -87,16 +88,12 @@ export function ConfigEditor() {
               <Badge tone={dirty ? 'warning' : 'success'}>{dirty ? 'Não salvo' : 'Sincronizado'}</Badge>
               <span className="text-xs text-slate-500">Editado {date(q.data?.updated_at)}</span>
             </div>
-            <Textarea
-              value={editor}
-              onChange={(e) => setEditor(e.target.value)}
-              rows={19}
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-              aria-label="Editar GCP_CONFIG_ENV"
-              className="min-h-[360px] resize-y text-[13px]"
-            />
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>CodeMirror 6 · {detectEnvironmentFormat(editor) === 'json' ? 'JSON' : 'dotenv'}</span>
+              <span>{editor.split(/\r?\n/).length} linhas · comentários preservados</span>
+            </div>
+            <CodeMirrorEnvEditor value={editor} onChange={setEditor}
+              format={detectEnvironmentFormat(editor)} ariaLabel="Editar GCP_CONFIG_ENV" />
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
                 Chaves repetidas: {duplicates.map((item) =>
