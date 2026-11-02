@@ -9,7 +9,39 @@
     <meta name="referrer" content="no-referrer" />
 
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="PhotoIntel" />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1125x2436.png"
+      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1170x2532.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1179x2556.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1206x2622.png"
+      media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1290x2796.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash-1320x2868.png"
+      media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,7 +50,7 @@
       rel="stylesheet"
     />
 
-    <title>Photo Intelligence Cloud</title>
+    <title>PhotoIntel · Private Photo Cloud</title>
     <style>
       #boot-splash {
         position: fixed;
@@ -38,29 +70,17 @@
         letter-spacing: -0.02em;
       }
       #boot-splash .splash-mark {
-        width: 58px;
-        height: 58px;
-        border: 1px solid #383838;
-        border-radius: 16px;
-        background: linear-gradient(145deg, #232323, #101010);
+        width: 120px;
+        height: 120px;
         display: grid;
         place-items: center;
-        position: relative;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
       }
-      #boot-splash .splash-orbit {
-        position: absolute;
-        width: 31px;
-        height: 31px;
-        border: 2px solid #ededed;
-        border-radius: 50%;
-        transform: rotate(-35deg) scaleX(0.8);
-      }
-      #boot-splash .splash-core {
-        width: 11px;
-        height: 11px;
-        background: #fff;
-        border-radius: 50%;
+      #boot-splash .splash-mark img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
       #boot-splash .splash-caption {
         font-size: 10px;
@@ -174,9 +194,9 @@
   <body>
     <div id="boot-splash" role="status" aria-label="Iniciando PhotoIntel">
       <div class="splash-mark" aria-hidden="true">
-        <span class="splash-orbit"></span><span class="splash-core"></span>
+        <img src="/mark.svg" alt="" width="120" height="120" />
       </div>
-      <strong>PhotoIntel</strong><span class="splash-caption">PRIVATE PHOTO CLOUD</span>
+      <strong>PhotoIntel</strong><span class="splash-caption">PRIVATE INTELLIGENT PHOTOS</span>
       <span class="splash-loader" aria-hidden="true"></span>
     </div>
     <div id="root"></div>

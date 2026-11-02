@@ -4,8 +4,11 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/generate-brand.mjs",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "node scripts/generate-brand.mjs",
     "build": "tsc -b && vite build",
+    "postbuild": "node scripts/inject-precache.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
@@ -13,7 +16,8 @@
     "test:e2e": "playwright test",
     "generate:api": "openapi-typescript ../../packages/contracts/openapi.json -o src/api/schema.d.ts",
     "format": "npm --prefix ../.. run format:web",
-    "format:check": "npm --prefix ../.. run format:check:web"
+    "format:check": "npm --prefix ../.. run format:check:web",
+    "test:pwa": "node --test scripts/offline-sw.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

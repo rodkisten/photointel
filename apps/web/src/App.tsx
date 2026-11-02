@@ -1,7 +1,6 @@
 import {
   Activity,
   Album,
-  Aperture,
   ChevronRight,
   Cloud,
   Copy,
@@ -54,6 +53,17 @@ function Shell() {
   const [menu, setMenu] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [offline, setOffline] = useState(!navigator.onLine);
+  useEffect(() => {
+    const online = () => setOffline(false);
+    const disconnected = () => setOffline(true);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', disconnected);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', disconnected);
+    };
+  }, []);
   const location = useLocation();
   const { data, isError } = useApi<Info>('/v1/system/status', 30_000);
   const current = navigation.find((item) => item.to === location.pathname);
@@ -99,10 +109,10 @@ function Shell() {
       <aside className="sidebar">
         <NavLink className="brand" to="/">
           <span className="brand-icon">
-            <Aperture size={23} />
+            <img src="/mark.svg" alt="" width={30} height={30} />
           </span>
           <span>
-            Photo Intelligence<small>PRIVATE CLOUD · v1.1</small>
+            PhotoIntel<small>PRIVATE INTELLIGENT PHOTOS</small>
           </span>
         </NavLink>
         <nav aria-label="Navegação principal">
@@ -124,7 +134,7 @@ function Shell() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            <Aperture size={17} />
+            <img className="breadcrumb-logo" src="/mark.svg" alt="" width={25} height={25} />
             <span>Workspace pessoal</span>
             <ChevronRight size={13} />
             <strong>{current?.label ?? 'Biblioteca'}</strong>
@@ -133,7 +143,7 @@ function Shell() {
             type="button"
             className={`app-update-button ${updateAvailable ? 'is-available' : ''}`}
             onClick={() => void updateApp()}
-            disabled={updating}
+            disabled={updating || offline}
             aria-label={
               updateAvailable
                 ? 'Nova versão disponível. Atualizar aplicativo'
@@ -145,14 +155,16 @@ function Shell() {
             <span>{updating ? 'Atualizando' : updateAvailable ? 'Nova versão' : 'Atualizar'}</span>
           </button>
           <div className="connection">
-            <span className={data ? 'connection-dot online' : 'connection-dot'} />
-            {data
-              ? data.environment === 'production'
-                ? 'Privado e conectado'
-                : 'Ambiente local'
-              : isError
-                ? 'Sem conexão com a API'
-                : 'Conectando à API'}
+            <span className={data && !offline ? 'connection-dot online' : 'connection-dot'} />
+            {offline
+              ? 'Offline · recursos locais disponíveis'
+              : data
+                ? data.environment === 'production'
+                  ? 'Privado e conectado'
+                  : 'Ambiente local'
+                : isError
+                  ? 'Sem conexão com a API'
+                  : 'Conectando à API'}
           </div>
         </header>
         <main id="main" tabIndex={-1}>

@@ -48,6 +48,8 @@ jobs:
         run: npm --prefix apps/web run typecheck
       - name: "🧪 UI tests"
         run: npm --prefix apps/web test
+      - name: "🧪 Offline service worker tests"
+        run: npm --prefix apps/web run test:pwa
       - name: "🧪 Cloudflare Worker tests"
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
       - name: "📦 Vite production build"
