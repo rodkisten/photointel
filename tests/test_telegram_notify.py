@@ -164,3 +164,24 @@ async def test_rejects_old_relay_response_without_edit_ack():
                     client, (endpoint, "T" * 32, "42"), "*running*", [],
                     "photointel:batch:123456", 101,
                 )
+
+
+@pytest.mark.asyncio
+async def test_capability_probe_rejects_legacy_relay_before_sending():
+    endpoint = "https://relay.example/notifications/send"
+    capabilities = "https://relay.example/notifications/capabilities"
+    with respx.mock(assert_all_mocked=True) as mock:
+        route = mock.get(capabilities).mock(return_value=httpx.Response(
+            200, json={"ok": True, "version": "editable-v1",
+                       "features": ["upsert_notification_key"]},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            await telegram.require_editable_relay(client, (endpoint, "T" * 32, "42"))
+        assert route.called
+        assert route.calls.last.request.headers["authorization"] == "Bearer " + "T" * 32
+
+    with respx.mock(assert_all_mocked=True) as mock:
+        mock.get(capabilities).mock(return_value=httpx.Response(404))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await telegram.require_editable_relay(client, (endpoint, "T" * 32, "42"))
