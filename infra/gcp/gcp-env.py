@@ -114,6 +114,22 @@ def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, An
     Never accept a plaintext Telegram credential as Cloud Run env or as a
     replacement for a Secret Manager reference.
     """
+    # Older hand-written dotenv files also contained these TOP-LEVEL keys.
+    # The renderer never consumes them; drop them before redacted previews so
+    # even partial secret contents are not included in logs.
+    for obsolete in (
+        "telegram_job_events_enabled",
+        "telegram_notification_api_token",
+        "telegram_notification_url",
+        "telegram_notification_chat_id",
+    ):
+        if obsolete in config:
+            config.pop(obsolete)
+            print(
+                f"::warning::Top-level ${obsolete.upper()} ignored. "
+                "Use EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_URL/CHAT_ID and "
+                "a Secret Manager NAME/VERSION reference for the token."
+            )
     extras = config.get("extra_environment")
     if not isinstance(extras, dict):
         return config
