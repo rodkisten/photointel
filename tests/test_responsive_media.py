@@ -4,7 +4,6 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-
 from photointel.config import Settings
 from photointel.services.media import decode_media
 from PIL import Image
