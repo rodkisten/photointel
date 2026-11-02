@@ -139,6 +139,36 @@ provider. Do not set a generic GitHub WIF provider here.
 Cloud Logging queries remain bounded to project `photointel`, limited
 resource types, and 5–240 minute windows. Sensitive messages are sanitized.
 
+## Automação de mudanças no ambiente
+
+Na aba **Ambiente**, o editor de `GCP_CONFIG_ENV` (JSON ou dotenv) compara
+campos estruturais antes de salvar. A opção **Aplicar automaticamente as
+alterações ao salvar** vem ativada, mas pode ser desmarcada.
+
+O backend salva com proteção por versão SHA-256 e, depois de uma gravação
+confirmada no GitHub, solicita apenas os workflows aplicáveis:
+
+| Alteração | Workflow | Efeito |
+| --- | --- | --- |
+| Env do Cloud Run, configuração da API e parâmetros de jobs | `config-sync.yml` | Reconfigura apenas API e/ou jobs preservando a imagem e SHA já em produção. Não faz Docker build nem migração. |
+| `VITE_*`, origem do frontend ou parâmetros do Worker | `deploy-worker.yml` | Recompila e publica o frontend/Worker. |
+| Configuração do Manage e tokens de integração do painel | `manage-deploy.yml` | Recompila e publica exclusivamente o Manage. |
+| Agendamento Cloud Scheduler | Revisão manual | Evita que alterações automáticas pausem jobs de produção. |
+| Identidade/infraestrutura ou novo nome de secret | Revisão administrativa | Não aciona bootstrap privilegiado automaticamente. |
+| Somente formatação | Nenhum | Evita execuções inúteis. |
+
+Quando a API GitHub aceita o dispatch, o painel informa **Solicitado**,
+não **Concluído**. Falha ao solicitar um workflow não desfaz o valor já salvo
+no Environment: o painel retorna o erro e oferece link para o Actions.
+O fluxo `config-sync.yml` verifica o hash do Environment no início: se
+outro usuário editou a variável depois, interrompe para não aplicar
+uma versão obsoleta. A identidade GCP continua via WIF sem chaves.
+
+**Escopo:** o gatilho automático vale para alterações salvas na aba
+Ambiente do Manage. Mudanças diretamente em GitHub Settings, via CLI ou
+em versões do Secret Manager não produzem evento `push` e devem ser
+aplicadas pelos workflows correspondentes.
+
 ## Sentry
 
 Add extra_environment.SENTRY_ORG (public Sentry organization slug) and
