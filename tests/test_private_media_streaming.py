@@ -201,7 +201,11 @@ async def test_media_http_authorizes_before_conditional_and_releases_transaction
         full = await client.get(url)
         assert full.status_code == 200
         assert full.content == b"private-body"
-        assert full.headers["cache-control"] == "private, no-store"
+        assert full.headers["cache-control"] == "private, max-age=300, must-revalidate"
+        assert full.headers["cdn-cache-control"] == "no-store"
+        assert full.headers["cloudflare-cdn-cache-control"] == "no-store"
+        assert "Cookie" in full.headers["vary"]
+        assert "Accept" in full.headers["vary"]
         etag = full.headers["etag"]
         ranged = await client.get(url, headers={"Range": "bytes=0-6"})
         assert ranged.status_code == 206
@@ -337,3 +341,4 @@ async def test_media_negotiates_avif_and_varies_cache_by_accept(
         assert "asset_resources.resource_type IN" in sql
         assert "ORDER BY CASE" in sql
         assert "asset_resources.revision" in sql
+        assert "JOIN assets" in sql
