@@ -2,7 +2,7 @@
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 
 const output = fileURLToPath(new URL('../public/', import.meta.url));
 mkdirSync(output, { recursive: true });

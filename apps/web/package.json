@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "generate:api": "openapi-typescript ../../packages/contracts/openapi.json -o src/api/schema.d.ts",
     "format": "npm --prefix ../.. run format:web",
-    "format:check": "npm --prefix ../.. run format:check:web"
+    "format:check": "npm --prefix ../.. run format:check:web",
+    "test:pwa": "node --test scripts/offline-sw.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
