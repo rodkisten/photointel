@@ -182,8 +182,14 @@ async def claim_cursor() -> tuple[str, int] | None:
     async with SessionLocal() as session, session.begin():
         row = await session.get(Setting, CURSOR, with_for_update=True)
         if row is None:
-            latest = await session.scalar(select(func.max(JobEvent.id))) or 0
-            row = Setting(key=CURSOR, value={"cursor": int(latest)})
+            latest = int(await session.scalar(select(func.max(JobEvent.id))) or 0)
+            recent = await session.scalar(select(func.min(JobEvent.id)).where(
+                JobEvent.created_at >= now - timedelta(minutes=2)
+            ))
+            # Include the first job that triggered activation, but avoid
+            # delivering an unbounded backlog of historic events.
+            start = max(0, latest - 40, int(recent) - 1) if recent else latest
+            row = Setting(key=CURSOR, value={"cursor": start})
             session.add(row)
             await session.flush()
         prior = dict(row.value or {})
@@ -273,7 +279,10 @@ async def safe_notify() -> None:
         _last_attempt = asyncio.get_running_loop().time()
         try:
             async with asyncio.timeout(38):
-                await drain()
+                for _ in range(4):
+                    result = await drain()
+                    if result.get("status") != "completed" or not result.get("events"):
+                        break
         except Exception as exc:
             LOG.warning("telegram_notification_attempt_failed",
                         extra={"exception_type": type(exc).__name__})
