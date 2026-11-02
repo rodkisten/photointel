@@ -27,6 +27,9 @@ case "$*" in
   "storage buckets describe "*"--format=value(location)"*) echo US; exit 0 ;;
   "iam service-accounts describe "*)
     if [[ "${FAKE_PERMISSION_DENIED:-false}" == true ]]; then echo 'PERMISSION_DENIED: Permission denied' >&2; exit 1; fi
+    if [[ "${FAKE_MANAGE_MISSING:-false}" == true && "$*" == *"photointel-manage@"* ]]; then
+      echo 'NOT_FOUND: Manage service account does not exist' >&2; exit 1
+    fi
     exit 0 ;;
   *) exit 0 ;;
 esac
@@ -48,6 +51,16 @@ for attempt in 1 2; do
   fi
   grep -Fq -- "--attribute-condition=$EXPECTED_WIF_CONDITION" "$GCLOUD_TRACE"
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
+  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+    grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
+      grep -F -- "--member=serviceAccount:photointel-manage@replace-project-id.iam.gserviceaccount.com" |
+      grep -Fq -- "--role=$role"
+  done
+  if grep -F "projects add-iam-policy-binding" "$GCLOUD_TRACE" |
+      grep -F "photointel-manage@" |
+      grep -Ev -- "--role=roles/(run.viewer|logging.viewer|cloudscheduler.viewer)" >/dev/null; then
+    echo "ERROR: Manage service account received an unexpected IAM role" >&2; exit 1
+  fi
   for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
     grep -F -- "--role=$role" "$GCLOUD_TRACE" | grep -q -- '--member=serviceAccount:photointel-bootstrap@'
   done
@@ -86,7 +99,7 @@ fi
 if grep -q 'providers update-oidc' "$GCLOUD_TRACE"; then
   echo "ERROR: attempted WIF update after permission denial" >&2; exit 1
 fi
-# Targeted IAM repair must update only secret-level bindings; no provisioning.
+# Targeted IAM repair may create only the Manage SA; other resources stay unchanged.
 jq '.secrets.SENTRY_DSN = {"name":"photointel-sentry-dsn","version":"1"} |
     .secrets.SENTRY_API_TOKEN = {"name":"photointel-sentry-api-token","version":"1"} |
     .workflow_secrets.SENTRY_AUTH_TOKEN = {"name":"photointel-sentry-build-token","version":"1"}' \
@@ -108,11 +121,30 @@ grep -F 'secrets add-iam-policy-binding photointel-sentry-build-token' "$GCLOUD_
 grep -F 'projects add-iam-policy-binding replace-project-id' "$GCLOUD_TRACE" |
     grep -F -- '--member=serviceAccount:photointel-api@replace-project-id.iam.gserviceaccount.com' |
     grep -Fq -- '--role=roles/logging.viewer'
-if grep -Eq 'services enable|artifacts |storage |iam service-accounts |secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
+if grep -Eq 'services enable|artifacts |storage |iam service-accounts (add-iam-policy-binding|create)|secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
     echo "ERROR: IAM-only mode attempted broader provisioning" >&2; exit 1
 fi
-if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 1 ]]; then
-    echo "ERROR: IAM-only mode changed unexpected project policies" >&2; exit 1
+for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+  grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
+    grep -Fq -- "--member=serviceAccount:photointel-manage@replace-project-id.iam.gserviceaccount.com --role=$role"
+done
+if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 4 ]]; then
+  echo "ERROR: IAM-only mode changed unexpected project policies" >&2; exit 1
 fi
-echo "Bootstrap offline tests passed: plan, idempotence, IAM-only repair and denial."
+: > "$GCLOUD_TRACE"
+FAKE_MANAGE_MISSING=true GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTRAP_MODE=permissions \
+  bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/manage-missing"
+grep -F "iam service-accounts create photointel-manage" "$GCLOUD_TRACE" |
+  grep -Fq -- "--display-name=PhotoIntel Manage (read-only)"
+if grep -F "iam service-accounts create " "$GCLOUD_TRACE" | grep -v "photointel-manage" >/dev/null; then
+  echo "ERROR: IAM-only mode created unrelated service accounts" >&2; exit 1
+fi
+: > "$GCLOUD_TRACE"
+if FAKE_PERMISSION_DENIED=true BOOTSTRAP_MODE=permissions bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/manage-denied" 2>&1; then
+  echo "ERROR: IAM-only mode suppressed SA permission denied" >&2; exit 1
+fi
+if grep -q "iam service-accounts create" "$GCLOUD_TRACE"; then
+  echo "ERROR: IAM-only mode created SA after inspection failed" >&2; exit 1
+fi
+echo "Bootstrap offline tests passed: plan, idempotence, Manage read-only grants/creation, IAM repair and denial."
 
