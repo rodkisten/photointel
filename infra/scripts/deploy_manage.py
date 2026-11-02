@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from cloudflare_setup import client, policy, reconcile_app, SetupError
 from prepare_workflow_env import read_config, secret_value
@@ -38,8 +39,45 @@ def run(args: list[str], *, env: dict[str, str], stdin: str | None = None) -> No
                          "dashboard deploy logs and your API permissions.")
 
 
+def public_sentry_settings(config: dict) -> tuple[str, str]:
+    """Validate a public ingest DSN; no Sentry API token is required."""
+    extra = config.get("extra_environment") or {}
+    dsn = str(extra.get("MANAGE_SENTRY_DSN") or "").strip()
+    org = str(extra.get("SENTRY_ORG") or "").strip()
+    if org and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", org):
+        raise SetupError("Invalid Sentry organization slug for Manage")
+    if dsn:
+        parsed = urlsplit(dsn)
+        if (parsed.scheme != "https" or not parsed.username or parsed.password
+                or not re.fullmatch(r"[A-Fa-f0-9]{12,64}", parsed.username)
+                or not parsed.hostname or not parsed.hostname.endswith(".sentry.io")
+                or not re.fullmatch(r"/[0-9]+/?", parsed.path)
+                or parsed.query or parsed.fragment):
+            raise SetupError("MANAGE_SENTRY_DSN must be a valid public Sentry HTTPS ingest DSN")
+    return dsn, org
+
+
+def export_browser_sentry(config: dict) -> None:
+    """Provide the same public DSN to Vite without a separate secret or token."""
+    dsn, org = public_sentry_settings(config)
+    output = os.environ.get("GITHUB_ENV")
+    if not output:
+        raise SetupError("GITHUB_ENV unavailable for browser Sentry config")
+    with open(output, "a", encoding="utf8") as handle:
+        if dsn:
+            handle.write("VITE_MANAGE_SENTRY_DSN=" + dsn + "\n")
+        if org:
+            handle.write("VITE_MANAGE_SENTRY_ORG=" + org + "\n")
+        sha = os.environ.get("GITHUB_SHA", "")
+        if re.fullmatch(r"[a-f0-9]{40}", sha):
+            handle.write("VITE_MANAGE_RELEASE=" + sha + "\n")
+    print("Manage browser Sentry ingest:", "configured" if dsn else "disabled")
+
+
+
 def publish(config: dict, *, apply: bool) -> dict[str, object]:
     extra = config.get("extra_environment", {})
+    sentry_dsn, sentry_org = public_sentry_settings(config)
     raw_emails = extra.get("MANAGE_ACCESS_ALLOWED_EMAILS", "")
     try:
         emails = json.loads(raw_emails)
@@ -132,7 +170,8 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             **({"CLOUDFLARE_ACCOUNT_ID": cf_account}),
             **({"GCP_WIF_AUDIENCE": wif} if wif else {}),
             **({"GCP_IMPERSONATE_SERVICE_ACCOUNT": impersonate} if impersonate else {}),
-            **({"SENTRY_ORG": extra["SENTRY_ORG"]} if extra.get("SENTRY_ORG") else {}),
+            **({"SENTRY_ORG": sentry_org} if sentry_org else {}),
+            **({"SENTRY_DSN": sentry_dsn} if sentry_dsn else {}),
         },
     }
     env = os.environ.copy()
@@ -164,13 +203,16 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply"):
-            raise SetupError("Use: deploy_manage.py plan|apply")
-        result = publish(read_config(), apply=sys.argv[1] == "apply")
-        summary = os.environ.get("GITHUB_STEP_SUMMARY")
-        if summary:
-            with open(summary, "a", encoding="utf8") as f:
-                f.write("### PhotoIntel Manage\n\n" + json.dumps(result, indent=2) + "\n")
+        if len(sys.argv) != 2 or sys.argv[1] not in ("plan", "apply", "browser-env"):
+            raise SetupError("Use: deploy_manage.py plan|apply|browser-env")
+        if sys.argv[1] == "browser-env":
+            export_browser_sentry(read_config())
+        else:
+            result = publish(read_config(), apply=sys.argv[1] == "apply")
+            summary = os.environ.get("GITHUB_STEP_SUMMARY")
+            if summary:
+                with open(summary, "a", encoding="utf8") as f:
+                    f.write("### PhotoIntel Manage\n\n" + json.dumps(result, indent=2) + "\n")
     except (SetupError, ValueError) as exc:
         print("Manage deploy failed: " + str(exc), file=sys.stderr)
         sys.exit(1)

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from './components/ui';
 import { api, send } from './lib/client';
+import { sentryIssueSearch } from './lib/sentry';
 import { planConfigChange } from './config-reconcile';
 import type { ConfigPlan } from './config-reconcile';
 import { cn, date, human, state } from './lib/utils';
@@ -47,6 +48,8 @@ type Meta = {
   gcp: boolean;
   cloudflare: boolean;
   sentry: boolean;
+  sentry_reader?: boolean;
+  sentry_org?: string;
 };
 type Run = {
   id: number;
@@ -137,7 +140,8 @@ function Empty({ title, detail }: { title: string; detail?: string }) {
   );
 }
 function IssueBanner({ error }: { error: unknown }) {
-  const e = error as { message?: string; code?: string };
+  const e = error as { message?: string; code?: string; correlationId?: string; sentryEventId?: string };
+  const sentryUrl = sentryIssueSearch(e.correlationId);
   return (
     <div
       role="alert"
@@ -147,6 +151,12 @@ function IssueBanner({ error }: { error: unknown }) {
       <div>
         {e.message || 'Serviço temporariamente indisponível'}
         {e.code && <p className="mt-1 text-xs opacity-65">{e.code}</p>}
+        {e.correlationId && <p className="mt-1 break-all text-xs opacity-70">ID: {e.correlationId}</p>}
+        {sentryUrl && e.sentryEventId && (
+          <a href={sentryUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs underline">
+            Ver erro no Sentry
+          </a>
+        )}
       </div>
     </div>
   );
@@ -768,6 +778,13 @@ function LogViewer() {
               ))}
           {source === 'sentry' && (
             <div className="divide-y divide-[#282a2e]">
+              {data.read_enabled === false && (
+                <div className="space-y-2 p-4 text-sm text-slate-300">
+                  <p>O DSN envia as exceções sem token adicional. A leitura de issues dentro
+                    do painel exige o token de leitura opcional.</p>
+                  <External href={data.dashboard_url}>Abrir todos os erros no Sentry</External>
+                </div>
+              )}
               {(data.items as Issue[]).length ? (
                 (data.items as Issue[]).map((item) => (
                   <div key={item.id} className="px-4 py-3">
@@ -784,11 +801,11 @@ function LogViewer() {
                     </div>
                   </div>
                 ))
-              ) : (
+              ) : data.read_enabled !== false ? (
                 <div className="p-6">
                   <Empty title="Nenhum issue aberto" />
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </Card>
@@ -1013,7 +1030,7 @@ function SystemInfo({ meta }: { meta: Meta }) {
   const [selectedJob, setSelectedJob] = useState('');
   const health = useQuery({
     queryKey: ['overview'],
-    queryFn: () => api<{ providers: string[] }>('/overview'),
+    queryFn: () => api<{ providers: string[]; provider_events?: Array<string | undefined>; correlation_id?: string }>('/overview'),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -1094,13 +1111,26 @@ function SystemInfo({ meta }: { meta: Meta }) {
               ['GitHub', ...check(0), true],
               ['Cloudflare', ...check(1), true],
               ['Google Cloud', ...check(2), true],
-              ['Sentry', meta.sentry ? 'Configurado (não verificado)' : 'Token ausente', false, false],
+              ['Sentry · envio', meta.sentry ? 'DSN configurado · capturas habilitadas' : 'DSN não configurado', meta.sentry, true],
+              ['Sentry · leitura', meta.sentry_reader ? 'Token de leitura configurado' : 'Token de leitura opcional ausente', Boolean(meta.sentry_reader), false],
             ] as Array<[string, string, boolean, boolean]>
           ).map(([name, detail, ok, verified]) => (
             <div key={name} className="flex items-center justify-between gap-2 px-4 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">{name}</p>
                 <p className="break-words text-xs text-slate-500">{detail}</p>
+                {['GitHub', 'Cloudflare', 'Google Cloud'].includes(name) &&
+                  health.data?.provider_events?.[['GitHub', 'Cloudflare', 'Google Cloud'].indexOf(name)] && (
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="text-rose-300">Evento Sentry gerado</span>
+                      {sentryIssueSearch(health.data?.correlation_id) && (
+                        <External href={sentryIssueSearch(health.data?.correlation_id)}>Ver exceção</External>
+                      )}
+                      <span className="text-slate-600">
+                        {health.data?.provider_events?.[['GitHub', 'Cloudflare', 'Google Cloud'].indexOf(name)]}
+                      </span>
+                    </div>
+                  )}
               </div>
               <Badge tone={ok ? 'success' : 'warning'}>{ok ? 'OK' : verified ? 'Erro' : 'Pendente'}</Badge>
             </div>

@@ -23,7 +23,13 @@ function list(data: unknown, key: string): Item[] {
   const v = data as Record<string, unknown>;
   return Array.isArray(v?.[key]) ? (v[key] as Item[]) : [];
 }
-export async function api(request: Request, env: Env, identity: Identity): Promise<Response> {
+export async function api(
+  request: Request,
+  env: Env,
+  identity: Identity,
+  reportError?: (error: unknown, provider?: string) => string | undefined,
+  correlationId?: string,
+): Promise<Response> {
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
@@ -34,7 +40,9 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       project: env.GCP_PROJECT_ID || 'photointel',
       gcp: Boolean(env.GCP_WIF_AUDIENCE),
       cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
-      sentry: Boolean(env.SENTRY_API_TOKEN),
+      sentry: Boolean(env.SENTRY_DSN),
+      sentry_reader: Boolean(env.SENTRY_API_TOKEN),
+      sentry_org: env.SENTRY_ORG || null,
     });
   if (method === 'GET' && path === '/api/overview') {
     const tasks = await Promise.allSettled([
@@ -48,7 +56,16 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     const ghData = show(0),
       cfData = show(1),
       gcpData = show(2);
+    // Promise.allSettled is essential to keep the dashboard usable, but it
+    // must not swallow token/WIF failures without a Sentry occurrence.
+    const providerEvents = tasks.map((task, index) =>
+      task.status === 'rejected'
+        ? reportError?.(task.reason, ['github', 'cloudflare', 'gcp'][index])
+        : undefined,
+    );
     return json({
+      provider_events: providerEvents,
+      correlation_id: correlationId,
       runs: list(ghData, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
@@ -483,10 +500,14 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     });
   }
   if (method === 'GET' && path === '/api/sentry/issues') {
-    if (!env.SENTRY_ORG || !env.SENTRY_API_TOKEN)
-      throw new ApiError(503, 'SENTRY', 'Configure SENTRY_ORG e SENTRY_API_TOKEN');
+    if (!env.SENTRY_ORG)
+      return json({ items: [], read_enabled: false, dashboard_url: null });
     if (!/^[a-z0-9-]{1,64}$/.test(env.SENTRY_ORG))
       throw new ApiError(503, 'SENTRY_ORG', 'Organização inválida');
+    const dashboardUrl = 'https://' + env.SENTRY_ORG + '.sentry.io/issues/';
+    // Ingestion via SENTRY_DSN works independently of this optional read token.
+    if (!env.SENTRY_API_TOKEN)
+      return json({ items: [], read_enabled: false, dashboard_url: dashboardUrl });
     const items = await provider(
       'https://sentry.io/api/0/organizations/' +
         env.SENTRY_ORG +
@@ -494,6 +515,8 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       env.SENTRY_API_TOKEN,
     );
     return json({
+      read_enabled: true,
+      dashboard_url: dashboardUrl,
       items: (Array.isArray(items) ? items : []).map((x) => ({
         id: x.id,
         title: redact(x.title).slice(0, 180),

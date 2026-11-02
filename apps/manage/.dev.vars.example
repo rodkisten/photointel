@@ -11,3 +11,7 @@ GCP_WIF_AUDIENCE=//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/w
 GCP_IMPERSONATE_SERVICE_ACCOUNT=photointel-manage@photointel.iam.gserviceaccount.com
 SENTRY_ORG=YOUR_SENTRY_ORG
 SENTRY_API_TOKEN=YOUR_SENTRY_READ_ONLY_TOKEN
+
+# Only new value needed for the independent Manage error project.
+# Public ingest DSN (not an API token); source: Sentry > Project Settings > Client Keys.
+SENTRY_DSN=https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456

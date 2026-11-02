@@ -15,6 +15,8 @@ export interface Env {
   GCP_IMPERSONATE_SERVICE_ACCOUNT?: string;
   SENTRY_ORG?: string;
   SENTRY_API_TOKEN?: string;
+  /** Public DSN for the independent Manage Sentry project, not an API token. */
+  SENTRY_DSN?: string;
 }
 export type Identity = { email: string; jwt: string };
 export class ApiError extends Error {
@@ -24,6 +26,7 @@ export class ApiError extends Error {
     message: string,
   ) {
     super(message);
+    this.name = 'ManageApiError';
   }
 }
 export function json(value: unknown, status = 200): Response {
