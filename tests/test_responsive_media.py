@@ -4,10 +4,10 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from PIL import Image
 
 from photointel.config import Settings
 from photointel.services.media import decode_media
+from PIL import Image
 
 
 def _sample(tmp_path: Path) -> Path:
