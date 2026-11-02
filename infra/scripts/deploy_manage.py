@@ -39,12 +39,18 @@ def run(args: list[str], *, env: dict[str, str], stdin: str | None = None) -> No
 
 
 def publish(config: dict, *, apply: bool) -> dict[str, object]:
-    emails = config.get("access_allowed_emails")
+    extra = config.get("extra_environment", {})
+    raw_emails = extra.get("MANAGE_ACCESS_ALLOWED_EMAILS", "")
+    try:
+        emails = json.loads(raw_emails)
+    except (ValueError, TypeError):
+        emails = None
     if (config.get("project_id") != "photointel"
             or not isinstance(emails, list) or not emails
             or any(not isinstance(e, str) or not re.fullmatch(r"[^@\s]+@[^@\s]+", e)
                    for e in emails)):
-        raise SetupError("Management requires project photointel and a nonempty email allowlist")
+        raise SetupError("Configure a dedicated MANAGEMENT admin allowlist in "
+                         "extra_environment.MANAGE_ACCESS_ALLOWED_EMAILS as a JSON array")
     api = client(config)
     apps = api.pages(api.base + "/access/apps")
     domains = api.pages(api.base + "/workers/domains")
@@ -84,7 +90,6 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     if not re.fullmatch(r"[a-fA-F0-9]{32}", cf_account) or len(cf_token) < 20:
         raise SetupError("Invalid Cloudflare deployment credentials")
 
-    extra = config.get("extra_environment", {})
     wif = extra.get("MANAGE_GCP_WIF_AUDIENCE", "")
     impersonate = extra.get("MANAGE_GCP_IMPERSONATE_SERVICE_ACCOUNT", "")
     # Both optional and only used by the management Worker, never the
