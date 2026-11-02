@@ -59,10 +59,13 @@ configured. It **never** displays simulated or guessed GCP/Cloudflare status.
    secrets. Existing deploy machinery grants the GCP deployer accessor rights.
    Do not put token values in GCP_CONFIG_ENV.
 
-3. Run your existing GCP Bootstrap/Setup **apply** to ensure Secret Manager
-   permissions for those new workflow secret references. The deployment
-   account must be able to read the pinned versions. Provide the version bytes
-   separately in Secret Manager.
+3. Run **🧱 Setup GCP → permissions** to create the dedicated
+   `photointel-manage@photointel.iam.gserviceaccount.com` account if missing and
+   reconcile its read-only `roles/run.viewer`, `roles/logging.viewer` and
+   `roles/cloudscheduler.viewer` project bindings. This mode also reconciles
+   Secret Manager permissions for workflow secret references. Provide the
+   pinned secret versions separately in Secret Manager. An initial full GCP
+   bootstrap can instead use **apply**; it provisions the same Manage identity.
 4. GitHub Actions → **🚀 Manage · Publish** → mode **plan**.
    The plan inventories the intended separate Access application.
 5. Select mode **apply**. The job builds apps/manage, creates/reconciles the
@@ -94,14 +97,20 @@ Create a WIF pool/provider trusting the precise Access issuer
 https://YOUR-TEAM.cloudflareaccess.com and allowing **only** the management
 application's returned Access AUD. Restrict its attribute mapping and
 condition to the approved issuer/audience/email (and a dedicated subject),
-then grant the principal a dedicated reader service account with:
+The GCP bootstrap provisions the dedicated reader account and its
+project-level read-only roles:
 
-- roles/run.viewer
-- roles/logging.viewer
-- optional roles/cloudscheduler.viewer
+- `roles/run.viewer`
+- `roles/logging.viewer`
+- `roles/cloudscheduler.viewer`
 
-If using service-account impersonation, grant **only the selected WIF principal**
-roles/iam.workloadIdentityUser on the dedicated read-only service account.
+**The WIF provider and its trust configuration remain a separate prerequisite:**
+bootstrap does not automatically trust arbitrary external JWTs. Once the
+provider is configured to check the exact Cloudflare Access issuer, management
+application AUD and permitted subjects, grant **only those validated WIF
+principals** `roles/iam.workloadIdentityUser` on the dedicated Manage service
+account. Never grant this role to an entire shared pool or use a service
+account JSON key.
 
 Put the following **non-secret** entries in GCP_CONFIG_ENV extra_environment:
 
