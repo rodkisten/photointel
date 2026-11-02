@@ -171,9 +171,19 @@ async def deliver(
         url, headers={"Authorization": "Bearer " + token},
         json={"body": message, "chat_id": chat, "parse_mode": "MarkdownV2", "buttons": links},
     )
+    if not response.is_success:
+        trace_id = response.headers.get("X-Relay-Trace-Id", "")
+        LOG.warning("telegram_relay_http_error", extra={
+            "http_status": response.status_code,
+            "relay_trace_id": valid_correlation(trace_id),
+            "stage": "notifications/send",
+        })
     response.raise_for_status()
     result = response.json()
     if not isinstance(result, dict) or result.get("ok") is not True:
+        LOG.warning("telegram_relay_unacknowledged", extra={
+            "http_status": response.status_code, "stage": "notifications/send",
+        })
         raise ValueError("Telegram relay delivery was not acknowledged")
 
 
