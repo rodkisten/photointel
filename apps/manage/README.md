@@ -139,6 +139,43 @@ provider. Do not set a generic GitHub WIF provider here.
 Cloud Logging queries remain bounded to project `photointel`, limited
 resource types, and 5–240 minute windows. Sensitive messages are sanitized.
 
+## Telegram no .env (sem Secret Manager)
+
+O relay do Telegram pode usar as configurações diretamente no `GCP_CONFIG_ENV` em
+formato dotenv:
+
+```dotenv
+TELEGRAM_NOTIFICATION_API_TOKEN=cole_seu_token_aqui
+TELEGRAM_NOTIFICATION_URL=https://xtelegram-cf.migos.club/notifications/send
+TELEGRAM_NOTIFICATION_CHAT_ID=-1001234567890
+```
+
+Também são aceitas as variantes
+`EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN`,
+`EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_URL` e
+`EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_CHAT_ID`. Quando ambas as formas
+estiverem presentes, a versão `EXTRA_ENVIRONMENT__*` tem prioridade.
+
+- A configuração direta prevalece sobre
+  `SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME/VERSION`; **não consulta o
+  Secret Manager para este token** quando o valor inline estiver presente.
+- Tanto os jobs/API no Cloud Run quanto as notificações de GitHub Actions usam o
+  mesmo token e destino definidos no `.env`.
+- `TELEGRAM_JOB_EVENTS_ENABLED` é derivado automaticamente quando token, URL
+  e chat ID existem. Não precisa ser definido manualmente.
+- Não gera imagem Docker nova: ao salvar no Manage, é solicitada uma
+  sincronização da configuração de API/jobs reutilizando as imagens atuais.
+- Valores do token são mascarados no resumo do GCP e nunca enviados para o
+  frontend público ou retornados nos endpoints de saúde do painel.
+
+**Atenção:** `GCP_CONFIG_ENV` está hoje configurado como uma **Environment
+variable**, não como GitHub Actions Secret. Quem tiver permissão para ler essas
+variables, logs de preparação que exponham inputs ou definições de ambiente
+do Cloud Run poderá obter o token. Para um token sensível, prefira guardar o
+`.env` inteiro em um GitHub Environment Secret com outro mecanismo de edição
+ou manter a referência Secret Manager. A configuração direta é uma conveniência
+com esse custo de segurança.
+
 ## Automação de mudanças no ambiente
 
 Na aba **Ambiente**, o editor de `GCP_CONFIG_ENV` (JSON ou dotenv) compara
