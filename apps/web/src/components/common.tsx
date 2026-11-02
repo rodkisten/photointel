@@ -83,6 +83,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
   onClick?: () => void; priority?: boolean; assetId?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [variant, setVariant] = useState(0);
   const [diagnosing, setDiagnosing] = useState(false);
@@ -105,7 +106,7 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     return result;
   }, [src, overrideSrc]);
   useEffect(() => {
-    setFailed(false); setVariant(0); setAttempt(0); setIncident(null);
+    setFailed(false); setLoaded(false); setVariant(0); setAttempt(0); setIncident(null);
     setOverrideSrc(null); setPreviewState(null); setPreviewMessage(null); setLastError(null);
   }, [src]);
   const current = candidates[Math.min(variant, candidates.length - 1)];
@@ -233,10 +234,16 @@ export function PrivateImage({ src, alt, className, onClick, priority = false, a
     </div>
   </div>;
   const url = attempt ? `${current}${current.includes('?') ? '&' : '?'}retry=${attempt}` : current;
-  return <img key={`${url}-${variant}`} src={apiUrl(url)}
-    crossOrigin="use-credentials" alt={alt} className={className}
-    loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer"
-    onError={() => { if (variant + 1 < candidates.length) setVariant((n) => n + 1);
-      else setFailed(true); }}
-    onClick={onClick} draggable={false} />;
+  const blurred = assetId && /^[a-f0-9-]{36}$/i.test(assetId) ?
+    apiUrl(`/v1/assets/${assetId}/media/thumbnail_small`) : null;
+  return <span className={`private-image-frame ${loaded ? 'image-ready' : ''} ${className ?? ''}`}
+    style={blurred ? { '--private-placeholder': `url("${blurred}")` } as React.CSSProperties : undefined}>
+    <img key={`${url}-${variant}`} src={apiUrl(url)}
+      crossOrigin="use-credentials" alt={alt}
+      loading={priority ? 'eager' : 'lazy'} decoding="async" referrerPolicy="no-referrer"
+      onLoad={() => setLoaded(true)}
+      onError={() => { setLoaded(false); if (variant + 1 < candidates.length) setVariant((n) => n + 1);
+        else setFailed(true); }}
+      onClick={onClick} draggable={false} />
+  </span>;
 }
