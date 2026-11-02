@@ -118,11 +118,22 @@ reconcile_manage_federation() {
   fi
 }
 reconcile_manage_access() {
-  # Inventory, executions, bounded logs and scheduler listings only.
-  # Never grant run.invoker/run.admin, IAM admin, Secret Manager or tokenCreator.
+  # Project-wide viewer privileges exclude secrets and mutations.
+  # Never grant run.invoker/run.admin, IAM admin or tokenCreator.
   for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
     change projects add-iam-policy-binding "$PROJECT" \
       "--member=$MANAGE" "--role=$role" --condition=None --format=none
+  done
+  # Secret editing is granted per existing, explicitly referenced MANAGE_*
+  # workflow secret. No project-wide Secret Manager roles or data-plane keys.
+  # The Worker can read a small preview and ADD a new version, but cannot
+  # delete, disable, destroy, create containers, or edit IAM permissions.
+  for key in "${!WORKFLOW_NAMES[@]}"; do
+    [[ "$key" == MANAGE_* ]] || continue
+    for role in roles/secretmanager.secretAccessor roles/secretmanager.secretVersionAdder; do
+      change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" \
+        "--member=$MANAGE" "--role=$role" --condition=None --format=none
+    done
   done
 }
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
