@@ -83,8 +83,10 @@ Do not enable automatic deploy until the first manual apply succeeds.
 **Cloudflare privileges:** the deployment token needs the existing Workers
 Scripts and Access Apps/Policies management scopes and custom domain routing
 permission. The **runtime** Cloudflare token may be a separate read-only token
-with permissions for Workers Scripts Read, Workers Observability Read,
-Worker Domains Read. A missing runtime token does not block GitHub functionality.
+with permissions for Workers Scripts Read, Workers Observability Write
+(required for the telemetry query endpoint) and Worker Domains Read. Cloudflare
+returns a request error if the account ID or query payload does not match.
+A missing runtime token does not block GitHub functionality.
 
 ## Google Cloud without long-lived service account keys
 
