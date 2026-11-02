@@ -21,7 +21,7 @@ export const WORKFLOW_INPUTS: Record<string, Record<string, string[]>> = {
   'backend-smoke.yml': {},
 };
 /** Classify provider faults without returning remote response bodies or credentials. */
-function providerFault(url: string, status: number, body: string): ApiError {
+function providerFault(url: string, status: number, body: string, responseHeaders: Headers): ApiError {
   const host = new URL(url).hostname;
   let upstream = '';
   let numericCode = '';
@@ -52,14 +52,34 @@ function providerFault(url: string, status: number, body: string): ApiError {
       'GCP_IMPERSONATE_' + status,
       'GCP recusou a impersonação. Confira roles/iam.workloadIdentityUser no photointel-manage e o principal WIF exato.',
     );
-  if (host === 'api.github.com')
+  if (host === 'api.github.com') {
+    const permissions = (responseHeaders.get('X-Accepted-GitHub-Permissions') || '').trim();
+    const allowedPermissions = /^[a-z_]+=(?:read|write|admin)(?:(?:,|;)[ ]?[a-z_]+=(?:read|write|admin))*$/i.test(permissions)
+      ? permissions.slice(0, 180) : '';
+    let upstreamMessage = '';
+    try {
+      const parsed = JSON.parse(body) as { message?: unknown };
+      if (typeof parsed.message === 'string') upstreamMessage = parsed.message.toLowerCase();
+    } catch { /* untrusted provider body */ }
+    const classification = status === 401 || upstreamMessage.includes('bad credentials')
+      ? 'GitHub rejeitou a credencial instalada no Worker.'
+      : responseHeaders.has('X-GitHub-SSO')
+        ? 'GitHub exige autorização SSO para esta credencial.'
+        : upstreamMessage.includes('resource not accessible by personal access token') ||
+          upstreamMessage.includes('resource not accessible by integration')
+          ? 'O token foi reconhecido, mas falta acesso a esta operação ou a este repositório.'
+          : status === 403
+            ? 'GitHub recusou o acesso (403). Confirme permissões e visibilidade do repositório.'
+            : 'GitHub API recusou a operação (HTTP ' + status + ').';
     return new ApiError(
       503,
       'GITHUB_' + status,
-      status === 403
-        ? 'GitHub 403: confira o PAT fine-grained, acesso ao repositório e permissões Actions (read/write) e Environments (read/write).'
-        : 'GitHub API recusou a operação (HTTP ' + status + '). Confira o PAT do Manage.',
+      classification + (allowedPermissions ? ' Permissões exigidas: ' + allowedPermissions + '.' : ''),
     );
+  }
+  if (host === 'api.cloudflare.com' && numericCode === '9106')
+    return new ApiError(503, 'CLOUDFLARE_400_9106',
+      'Cloudflare não reconheceu a autenticação (9106). O token do Manage pode estar inválido, desatualizado ou sem header Authorization no provedor.');
   if (host === 'api.cloudflare.com')
     return new ApiError(
       503,
@@ -76,7 +96,7 @@ export async function provider(url: string, token: string, init: RequestInit = {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   headers.set('Content-Type', 'application/json');
-  if (token) headers.set('Authorization', 'Bearer ' + token);
+  if (token?.trim()) headers.set('Authorization', 'Bearer ' + token.trim());
   const response = await fetch(url, {
     ...init,
     headers,
@@ -89,7 +109,7 @@ export async function provider(url: string, token: string, init: RequestInit = {
       .text()
       .then((x) => x.slice(0, 4096))
       .catch(() => '');
-    throw providerFault(url, response.status, body);
+    throw providerFault(url, response.status, body, response.headers);
   }
   if (response.status === 204) return { ok: true };
   if (Number(response.headers.get('Content-Length') || 0) > 2_000_000)
