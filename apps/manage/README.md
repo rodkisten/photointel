@@ -206,12 +206,39 @@ Ambiente do Manage. Mudanças diretamente em GitHub Settings, via CLI ou
 em versões do Secret Manager não produzem evento `push` e devem ser
 aplicadas pelos workflows correspondentes.
 
-## Sentry
+## Sentry · Manage (one DSN, no new API token)
 
-Add extra_environment.SENTRY_ORG (public Sentry organization slug) and
-workflow_secrets.MANAGE_SENTRY_API_TOKEN to see up to 30 recent unresolved
-issues. Use a read-only Sentry token with org/project read permissions.
-The token is used only on the Worker; never add VITE_SENTRY_API_TOKEN.
+PhotoIntel Manage has an **independent Sentry project**, separate from PhotoIntel
+frontend and Python. Add **one public DSN** to the existing
+production `GCP_CONFIG_ENV` dotenv editor:
+
+```dotenv
+MANAGE_SENTRY_DSN=https://PUBLIC_KEY@o123.ingest.sentry.io/PROJECT_ID
+```
+
+The prefixed `EXTRA_ENVIRONMENT__MANAGE_SENTRY_DSN` spelling is also supported.
+In JSON, use `extra_environment.MANAGE_SENTRY_DSN`.
+Never replace the main PhotoIntel `SENTRY_DSN` or `VITE_SENTRY_DSN`.
+
+Save with auto-apply: **only Manage** is rebuilt and republished.
+The same DSN is sent to the independent Manage Cloudflare Worker
+(`SENTRY_DSN`) and injected into the Vite browser build
+(`VITE_MANAGE_SENTRY_DSN`). It is a public ingestion key, **not** an API token.
+It captures browser uncaught/render/promise errors and server-side Access,
+GitHub, GCP and Cloudflare failures, including failures swallowed by
+`Promise.allSettled`. The UI shows correlation IDs and event references;
+provider credentials and Cloudflare Access JWTs are not sent.
+
+The existing `extra_environment.SENTRY_ORG` is reused for links;
+`workflow_secrets.MANAGE_SENTRY_API_TOKEN` remains **optional** and is only
+needed to list unresolved issues in the Manage Logs tab. If that existing
+read-only token is absent, events still reach the new Sentry project, and you
+can open issues directly in the Sentry dashboard. Do not create
+`VITE_SENTRY_API_TOKEN` or expose read tokens in the browser.
+
+The initial `Manage · Publish → apply` can also activate a new DSN if
+automatic Manage publishing is disabled. A successful CI build is not proof of
+ingestion: verify a real new occurrence in Sentry after publication.
 
 ## Local development
 
