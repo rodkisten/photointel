@@ -23,7 +23,13 @@ function list(data: unknown, key: string): Item[] {
   const v = data as Record<string, unknown>;
   return Array.isArray(v?.[key]) ? (v[key] as Item[]) : [];
 }
-export async function api(request: Request, env: Env, identity: Identity): Promise<Response> {
+export async function api(
+  request: Request,
+  env: Env,
+  identity: Identity,
+  reportError?: (error: unknown, provider?: string) => string | undefined,
+  correlationId?: string,
+): Promise<Response> {
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
@@ -34,7 +40,9 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       project: env.GCP_PROJECT_ID || 'photointel',
       gcp: Boolean(env.GCP_WIF_AUDIENCE),
       cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
-      sentry: Boolean(env.SENTRY_API_TOKEN),
+      sentry: Boolean(env.SENTRY_DSN),
+      sentry_reader: Boolean(env.SENTRY_API_TOKEN),
+      sentry_org: env.SENTRY_ORG || null,
     });
   if (method === 'GET' && path === '/api/overview') {
     const tasks = await Promise.allSettled([
@@ -48,7 +56,16 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     const ghData = show(0),
       cfData = show(1),
       gcpData = show(2);
+    // Promise.allSettled is essential to keep the dashboard usable, but it
+    // must not swallow token/WIF failures without a Sentry occurrence.
+    const providerEvents = tasks.map((task, index) =>
+      task.status === 'rejected'
+        ? reportError?.(task.reason, ['github', 'cloudflare', 'gcp'][index])
+        : undefined,
+    );
     return json({
+      provider_events: providerEvents,
+      correlation_id: correlationId,
       runs: list(ghData, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
