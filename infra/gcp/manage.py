@@ -264,10 +264,10 @@ def validate(config: dict[str, Any], *, production: bool = False) -> dict[str, A
         )
     if "TELEGRAM_NOTIFICATION_API_TOKEN" in extra:
         inline = extra["TELEGRAM_NOTIFICATION_API_TOKEN"]
-        if not 12 <= len(inline) <= 8192 or inline.strip() != inline or any(
+        if not 1 <= len(inline) <= 8192 or any(
             c in inline for c in ("\n", "\r", "\x00")
         ):
-            raise ConfigurationError("Invalid inline Telegram relay token: use a nonempty single-line credential")
+            raise ConfigurationError("Invalid inline Telegram relay token: expected a nonempty single-line value")
     # Do not loosen validation for any other secret field.
     if "ACCESS_BRIDGE_SERVICE_TOKENS" in extra:
         try:
