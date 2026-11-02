@@ -2,7 +2,7 @@ import { Check, Grid2X2, Grid3X3, Image, LayoutGrid, LoaderCircle,
   Plus, Tag, X } from 'lucide-react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type TouchEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
 import { searchAssets } from '../api/generated-client';
@@ -18,7 +18,13 @@ export function Gallery({ search, compact = false, albumId }: {
   search: SearchRequest; compact?: boolean; albumId?: string;
 }) {
   const [params, setParams] = useSearchParams();
+  const viewerId = params.get('photo');
   const scroll = useRef<HTMLDivElement>(null);
+  const initialRow = useRef<number | null>(null);
+  const pullStart = useRef<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const restored = useRef(false);
   const [width, setWidth] = useState(800);
   const density = useUi((state) => state.density);
   const selected = useUi((state) => state.selected);
@@ -44,6 +50,12 @@ export function Gallery({ search, compact = false, albumId }: {
   const visible = virtualizer.getVirtualItems();
   const lastIndex = visible.at(-1)?.index ?? 0;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  if (initialRow.current === null) {
+    const matched = window.location.hash.match(/^#grid=(\d{1,6})$/);
+    initialRow.current = matched ? Math.min(20000, Number(matched[1])) : 0;
+  }
+  const savedRow = initialRow.current;
+  const restoreRequests = useRef(0);
   useEffect(() => { if (lastIndex >= rowCount - 3 && hasNextPage && !isFetchingNextPage)
     void fetchNextPage();
   }, [lastIndex, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage]);
@@ -53,12 +65,59 @@ export function Gallery({ search, compact = false, albumId }: {
     observer.observe(scroll.current); return () => observer.disconnect();
   }, []);
   useEffect(() => { virtualizer.measure(); }, [columns, virtualizer]);
-  useEffect(() => { scroll.current?.scrollTo({ top: 0 }); }, [search]);
-  const viewerId = params.get('photo');
+  useEffect(() => {
+    if (!restored.current) { restored.current = true; return; }
+    initialRow.current = 0; restoreRequests.current = 0;
+    scroll.current?.scrollTo({ top: 0 });
+    if (window.location.hash.startsWith('#grid=')) {
+      history.replaceState(history.state, '', window.location.pathname + window.location.search);
+    }
+  }, [search]);
+  useEffect(() => {
+    if (savedRow <= 0 || !query.data) return;
+    if (rowCount > savedRow || !hasNextPage) {
+      virtualizer.scrollToIndex(Math.min(savedRow, Math.max(0, rowCount - 1)), { align: 'start' });
+      initialRow.current = 0;
+    } else if (!isFetchingNextPage && restoreRequests.current < 50) {
+      restoreRequests.current += 1;
+      void fetchNextPage();
+    }
+  }, [savedRow, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage, query.data, virtualizer]);
+  useEffect(() => {
+    if (!query.data || !assets.length || initialRow.current !== 0 || viewerId) return;
+    const id = window.setTimeout(() => {
+      const row = Math.max(0, visible[0]?.index ?? 0);
+      if (window.location.hash === '' || window.location.hash.startsWith('#grid=')) {
+        history.replaceState(history.state, '', window.location.pathname +
+          window.location.search + '#grid=' + row);
+      }
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [lastIndex, query.data, assets.length, viewerId, visible.length]);
+
   function open(id: string | null) {
     const next = new URLSearchParams(params);
     if (id) next.set('photo', id); else next.delete('photo');
     setParams(next, { replace: true });
+  }
+  async function refreshGallery() {
+    setRefreshing(true);
+    try { await query.refetch(); }
+    finally { setRefreshing(false); setPullDistance(0); }
+  }
+  function onPullStart(event: TouchEvent<HTMLDivElement>) {
+    pullStart.current = event.touches.length === 1 &&
+      (scroll.current?.scrollTop ?? 1) <= 0 && !viewerId ?
+      event.touches[0].clientY : null;
+  }
+  function onPullMove(event: TouchEvent<HTMLDivElement>) {
+    if (pullStart.current === null || event.touches.length !== 1) return;
+    setPullDistance(Math.min(110, Math.max(0, event.touches[0].clientY - pullStart.current)));
+  }
+  function onPullEnd() {
+    if (pullDistance >= 65 && !refreshing) void refreshGallery();
+    else setPullDistance(0);
+    pullStart.current = null;
   }
   async function applyBulk() {
     if (bulk === 'tag' && keyword.trim()) {
@@ -106,7 +165,12 @@ export function Gallery({ search, compact = false, albumId }: {
         <Empty title="Seu próximo olhar começa aqui" description="Nenhuma fotografia corresponde a esta
           visualização. Ajuste os filtros ou importe um primeiro lote em Sincronização iCloud." /> :
         <div className={`gallery-scroll ${compact ? 'search-gallery' : ''}`} ref={scroll}
-          aria-label="Grade de fotografias" tabIndex={0}>
+          aria-label="Grade de fotografias" tabIndex={0}
+          onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}
+          onTouchCancel={() => { pullStart.current = null; setPullDistance(0); }}>
+          {(pullDistance > 16 || refreshing) && <div className="gallery-pull-indicator"
+            role="status">{refreshing ? 'Atualizando fotografias…' :
+              pullDistance >= 65 ? 'Solte para atualizar' : 'Puxe para atualizar'}</div>}
           <div className="virtual-grid" style={{ height: virtualizer.getTotalSize() }}>
             {visible.map((row) => {
               if (row.index >= rowCount) return <div className="load-more" key="load"

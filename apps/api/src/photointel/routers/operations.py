@@ -1079,6 +1079,12 @@ async def statistics(session: Session) -> dict[str, Any]:
             )
         )
     ).one()
+    recent_five_minutes = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.status == "completed",
+            Job.finished_at >= datetime.now(UTC) - timedelta(minutes=5),
+        )
+    ) or 0
     last_sync = await session.scalar(
         select(func.max(IngestionRun.finished_at)).where(
             IngestionRun.status == "completed"
@@ -1096,7 +1102,9 @@ async def statistics(session: Session) -> dict[str, Any]:
         "pending_processing": pending,
         "failed_jobs": job_counts.get("failed", 0),
         "last_icloud_sync": last_sync,
-        "jobs_per_second_last_hour": timing[1] / 3600,
+        "jobs_per_second_last_hour": (timing[1] or 0) / 3600,
+        "jobs_per_second_last_5min": recent_five_minutes / 300,
+        "jobs_completed_last_hour": timing[1] or 0,
         "average_job_duration_seconds": avg_duration,
         "estimated_remaining_seconds": pending * avg_duration if avg_duration else None,
         "estimate_notice": "Estimativa baseada nos jobs concluídos; não é garantia.",
@@ -1230,11 +1238,28 @@ async def capabilities(session: Session) -> dict[str, Any]:
     def capability(state: str, reason: str) -> dict[str, str]:
         return {"state": state, "reason": reason}
 
-    gpu_state = "not_configured" if not settings.gpu_enabled else "unavailable"
+    adapter_configured = (
+        settings.inference_backend == "cpu"
+        or (
+            settings.inference_backend == "test"
+            and settings.app_env == "test"
+        )
+        or (
+            settings.inference_backend == "modal"
+            and settings.modal_endpoint.startswith("https://")
+            and settings.modal_token is not None
+        )
+    )
+    gpu_state = (
+        "not_configured" if not settings.gpu_enabled else
+        "available" if adapter_configured else "unavailable"
+    )
     gpu_reason = (
-        "GPU desabilitada por padrão"
+        "Habilite inferência em Configurações para gerar embeddings"
         if not settings.gpu_enabled
-        else ("Adapter configurado; disponibilidade real confirmada por smoke test/jobs")
+        else "Adapter de inferência incompleto; configure o endpoint e as credenciais"
+        if not adapter_configured
+        else "Inferência configurada; a primeira execução verifica o modelo"
     )
     if settings.gpu_enabled and (joytag_ok or siglip_ok):
         gpu_state = "operational"
@@ -1267,6 +1292,12 @@ async def capabilities(session: Session) -> dict[str, Any]:
         "semantic_search": capability(
             "operational" if siglip_ok and settings.gpu_enabled else "not_configured",
             "Requer embeddings e adapter de texto do mesmo checkpoint",
+        ),
+        "embedding_inference": capability(
+            "operational" if siglip_ok and settings.gpu_enabled else
+            "available" if settings.gpu_enabled and adapter_configured else
+            "not_configured",
+            "SigLIP 2 usa o adapter configurado e respeita limites e orçamentos",
         ),
         "duplicate_detection": capability("operational", "SHA-256 e pHash; sem exclusão"),
         "quality_analysis": capability("operational", "Métricas técnicas heurísticas"),

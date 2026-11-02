@@ -2532,10 +2532,25 @@ select:focus-visible, textarea:focus-visible { outline-color: var(--text-primary
   .app-update-button span { display: none; }
   .bottom-nav { background: color-mix(in srgb, var(--surface-sidebar) 96%, transparent); border-top: 1px solid var(--gray-7); }
   .bottom-nav .active, .bottom-nav a.active { background: var(--gray-6); color: var(--text-primary); }
-  /* Safari zoom prevention: keep the actual font at 16px; no blurry transforms. */
-  input:not([type="checkbox"]):not([type="radio"]),
-  select, textarea {
-    font-size: max(16px, var(--text-16)) !important;
+  /* iOS Safari reads 16px at focus. Visual scale is applied to full-width
+     fields only, with compensating width to avoid horizontal overflow. */
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+    font-size: 16px !important;
+  }
+  .field > input:not([type="checkbox"]):not([type="radio"]),
+  .field > textarea, .field > select, input.input:not([type="checkbox"]),
+  textarea.input {
+    --input-visual-scale: .875;
+    transform: scale(var(--input-visual-scale));
+    transform-origin: left top;
+    width: calc(100% / var(--input-visual-scale));
+    max-width: none;
+    margin-bottom: calc(-1 * (1 - var(--input-visual-scale)) * 40px);
+  }
+  input[type="checkbox"], input[type="radio"] {
+    font-size: 16px;
+    transform: scale(1.07);
+    transform-origin: center;
   }
 }
 @media(prefers-reduced-motion:reduce) { .spinning { animation: none; } }
@@ -2934,3 +2949,92 @@ input.input, select.input, textarea.input {
 .preview-repair-state dt { color: var(--text-muted); }
 .preview-repair-state dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .preview-repair-state p { margin: 0; font-size: var(--text-11); color: var(--text-secondary); }
+
+
+/* Gallery navigation and media continuity. */
+.gallery-pull-indicator {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 28px; font-size: var(--text-12); color: var(--gray-14);
+}
+.gallery-scroll { touch-action: pan-y; }
+.private-image-frame {
+  display: block; position: relative; width: 100%; height: 100%;
+  overflow: hidden; isolation: isolate; background: var(--gray-5);
+}
+.private-image-frame::before {
+  content: ''; position: absolute; inset: -12px; z-index: -1;
+  background: var(--private-placeholder, linear-gradient(140deg, var(--gray-5), var(--gray-8)));
+  background-size: cover; background-position: center;
+  filter: blur(16px); transform: scale(1.08);
+}
+.private-image-frame > img {
+  display: block; width: 100%; height: 100%; object-fit: inherit;
+  transition: opacity .22s ease;
+}
+.private-image-frame:not(.image-ready) > img { opacity: 0; }
+.photo-tile .private-image-frame > img { object-fit: cover; }
+.viewer-image .private-image-frame > img { object-fit: contain; }
+.viewer-image .private-image-frame { display: flex; align-items: center; justify-content: center; }
+.viewer-image .private-image-frame::before { z-index: 0; opacity: .5; }
+.viewer-image .private-image-frame > img { position: relative; z-index: 1; }
+.viewer-image img { transition: opacity .2s ease, transform .16s ease; }
+
+/* Success is green while the remaining neutral theme stays achromatic. */
+.status-completed, .status-operational, .status-verified, .status-valid,
+.status-healthy, .status-passed, .status-downloaded {
+  color: var(--state-success-text);
+  border-color: var(--state-success-border);
+  background: var(--state-success-bg);
+}
+
+/* Jobs panel should remain a button above the mobile navigation until opened. */
+.jobs-drawer-toggle { min-height: 45px; }
+.jobs-toggle-progress {
+  display: block; width: 40px; height: 4px; border-radius: 5px;
+  overflow: hidden; background: var(--gray-9);
+}
+.jobs-toggle-progress > span {
+  display: block; height: 100%; background: var(--state-success-text);
+}
+.jobs-panel-scroll { max-height: min(470px, 52dvh); overflow-y: auto; overscroll-behavior-y: contain; }
+.jobs-workers-scroll { max-height: min(265px, 32dvh); overflow-y: auto; overscroll-behavior-y: contain; }
+.job-row { grid-template-columns: minmax(0,1fr) auto auto auto; }
+.job-row .job-actions { flex: none; display: inline-flex; align-items: center; flex-wrap: nowrap; }
+.job-row .job-actions > .button { flex-shrink: 0; }
+.job-name > span:last-child { min-width: 0; overflow: hidden; }
+.job-name small, .job-name strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 800px) {
+  .jobs-drawer { bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 4px); }
+  .jobs-drawer-toggle {
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 10px);
+    right: 12px; z-index: var(--z-drawer);
+    box-shadow: var(--shadow-drawer);
+  }
+  .job-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    column-gap: 7px;
+  }
+  .job-row > .job-duration { display: none; }
+  .job-row > .status { white-space: nowrap; }
+  .jobs-panel-scroll { max-height: 45dvh; }
+}
+
+/* Gesture-owned zoom surface. Prevent browser page zoom while two fingers
+   manipulate the photograph; retain touch events for swipe-down dismissal. */
+.viewer-image { touch-action: none; overflow: hidden; }
+.viewer-image .viewer-zoom-surface {
+  width: 100%; height: 100%; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  transform-origin: center center;
+  transition: transform 120ms ease-out;
+  will-change: transform;
+}
+.viewer-image .viewer-zoom-surface .private-image-frame {
+  display: flex; align-items: center; justify-content: center;
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+}
+.viewer-image.zoomed .viewer-zoom-surface img {
+  width: 100%; height: 100%; max-width: 100%; max-height: 100%;
+  object-fit: contain; cursor: zoom-out;
+}
