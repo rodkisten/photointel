@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "apps/manage/src/**"
+      - "apps/manage/README.md"
       - ".github/workflows/manage-format.yml"
   workflow_dispatch:
 
