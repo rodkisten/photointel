@@ -1115,7 +1115,7 @@ function SystemInfo({ meta }: { meta: Meta }) {
                 {['GitHub', 'Cloudflare', 'Google Cloud'].includes(name) &&
                   health.data?.provider_events?.[['GitHub', 'Cloudflare', 'Google Cloud'].indexOf(name)] && (
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-rose-300">Erro registrado no Sentry</span>
+                      <span className="text-rose-300">Evento Sentry gerado</span>
                       {sentryIssueSearch(health.data?.correlation_id) && (
                         <External href={sentryIssueSearch(health.data?.correlation_id)}>Ver exceção</External>
                       )}
