@@ -123,8 +123,8 @@ runs:
         --region "$NOTIFY_REGION"
 
     - name: "📨 Notify Telegram"
-      # Credentials can come from an explicit input OR the existing GCP_CONFIG_ENV
-      # Secret Manager reference once the workflow has authenticated to Google.
+      # Explicit input, then inline GCP_CONFIG_ENV token, then optional
+      # Secret Manager reference. No Google secret read when inline is present.
       if: ${{ always() }}
       continue-on-error: true
       shell: bash
@@ -152,6 +152,9 @@ runs:
           config="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
           ENDPOINT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_URL // "https://xtelegram-cf.migos.club/notifications/send"' "$config")"
           CHAT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_CHAT_ID // ""' "$config")"
+          if [[ -z "$TELEGRAM_TOKEN" ]]; then
+            TELEGRAM_TOKEN="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_API_TOKEN // empty' "$config")"
+          fi
           if [[ -z "$TELEGRAM_TOKEN" ]] && command -v gcloud >/dev/null 2>&1; then
             secret="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.name // empty' "$config")"
             version="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.version // empty' "$config")"
@@ -161,7 +164,7 @@ runs:
           fi
         fi
         if [[ -z "$TELEGRAM_TOKEN" ]]; then
-          echo "::notice::Telegram skipped: configure TELEGRAM_NOTIFICATION_API_TOKEN as GitHub Actions secret, or a Secret Manager reference accessible after GCP WIF login."
+          echo "::notice::Telegram skipped: set TELEGRAM_NOTIFICATION_API_TOKEN in GCP_CONFIG_ENV or configure a Secret Manager reference."
           exit 0
         fi
         echo "::add-mask::$TELEGRAM_TOKEN"
