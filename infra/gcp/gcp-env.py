@@ -107,50 +107,30 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
 
 
 def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, Any]:
-    """Quarantine obsolete Telegram env fields without exposing inline tokens.
+    """Accept Telegram relay settings directly from dotenv, without GCP Secret Manager.
 
-    TELEGRAM_JOB_EVENTS_ENABLED is derived by manage.environment from the
-    presence of the Secret Manager reference and the endpoint/chat.
-    Never accept a plaintext Telegram credential as Cloud Run env or as a
-    replacement for a Secret Manager reference.
+    A top-level TELEGRAM_* entry (decoded to lowercase) or the explicit
+    EXTRA_ENVIRONMENT__ prefix is supported. Runtime and workflow configuration
+    use the same canonical extra_environment keys. Never print credential values.
     """
-    # Older hand-written dotenv files also contained these TOP-LEVEL keys.
-    # The renderer never consumes them; drop them before redacted previews so
-    # even partial secret contents are not included in logs.
-    for obsolete in (
-        "telegram_job_events_enabled",
-        "telegram_notification_api_token",
-        "telegram_notification_url",
-        "telegram_notification_chat_id",
-    ):
-        if obsolete in config:
-            config.pop(obsolete)
-            print(
-                f"::warning::Top-level ${obsolete.upper()} ignored. "
-                "Use EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_URL/CHAT_ID and "
-                "a Secret Manager NAME/VERSION reference for the token."
-            )
-    extras = config.get("extra_environment")
+    extras = config.setdefault("extra_environment", {})
     if not isinstance(extras, dict):
         return config
+    for field in ("TELEGRAM_NOTIFICATION_API_TOKEN", "TELEGRAM_NOTIFICATION_URL",
+                  "TELEGRAM_NOTIFICATION_CHAT_ID"):
+        # Dotenv's top-level names are lowercased by decode_config. JSON may
+        # provide either spelling. The prefixed env key wins if both are set.
+        for root_key in (field.lower(), field):
+            if root_key not in config:
+                continue
+            raw = config.pop(root_key)
+            if field not in extras or not extras[field]:
+                extras[field] = raw
+    for legacy in ("telegram_job_events_enabled", "TELEGRAM_JOB_EVENTS_ENABLED"):
+        config.pop(legacy, None)
     if "TELEGRAM_JOB_EVENTS_ENABLED" in extras:
         extras.pop("TELEGRAM_JOB_EVENTS_ENABLED")
-        print(
-            "::warning::EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED ignored: "
-            "enabled state is computed from configured secret references and destination."
-        )
-    if "TELEGRAM_NOTIFICATION_API_TOKEN" in extras:
-        extras.pop("TELEGRAM_NOTIFICATION_API_TOKEN")
-        print(
-            "::warning::EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN ignored "
-            "(never passed to Cloud Run). Use "
-            "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME and __VERSION instead."
-        )
-        if "TELEGRAM_NOTIFICATION_API_TOKEN" not in config.get("secrets", {}):
-            print(
-                "::warning::Telegram job delivery remains disabled: "
-                "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME/VERSION not configured."
-            )
+        print("::notice::TELEGRAM_JOB_EVENTS_ENABLED is computed from the token and destination.")
     return config
 
 
@@ -251,6 +231,11 @@ def redact_preview(value: Any, path: tuple[str, ...] = ()) -> Any:
     if isinstance(value, list):
         return [redact_preview(item, path) for item in value]
     if isinstance(value, str):
+        # A short prefix/suffix still reveals part of an inline credential.
+        # Never echo even a fragment of secrets in Actions logs.
+        if path and re.search(r"TOKEN|PASSWORD|CREDENTIAL|PRIVATE_KEY|SECRET", path[-1], re.I):
+            if path[-1] not in {"version", "name"}:
+                return "<redacted>"
         if len(path) == 3 and path[0] == "secrets" and path[-1] == "version":
             return value
         return redact_string(value)
