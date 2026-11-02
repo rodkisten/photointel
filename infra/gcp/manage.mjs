@@ -40,12 +40,14 @@ const SECRET_FIELDS = new Set([
   'MODAL_TOKEN',
   'MODAL_PROXY_KEY',
   'MODAL_PROXY_SECRET',
+  'TELEGRAM_NOTIFICATION_API_TOKEN',
 ]);
 const API_SECRETS = difference(SECRET_FIELDS, new Set([
   'MIGRATION_DATABASE_URL', 'ICLOUD_SESSION_KEY',
 ]));
 const REQUIRED_SECRETS = difference(SECRET_FIELDS, new Set([
   'MODAL_TOKEN', 'MODAL_PROXY_KEY', 'MODAL_PROXY_SECRET',
+  'TELEGRAM_NOTIFICATION_API_TOKEN',
 ]));
 const SERVICES = [
   'run.googleapis.com',
@@ -75,6 +77,7 @@ const PROTECTED_ENV = new Set([
   'GCP_PROJECT_ID',
   'GCP_REGION',
   'GCP_JOB_DISPATCH_ENABLED',
+  'TELEGRAM_JOB_EVENTS_ENABLED',
   'EXECUTION_PLATFORM',
   'VERIFICATION_GATES_ENFORCED',
   'TEMP_DIRECTORY',
@@ -351,6 +354,11 @@ function environment(config, mode) {
     GCP_PROJECT_ID: config.project_id,
     GCP_REGION: config.region,
     GCP_JOB_DISPATCH_ENABLED: mode === 'migrate' ? 'false' : 'true',
+    TELEGRAM_JOB_EVENTS_ENABLED: String(
+      mode !== 'migrate' && Object.hasOwn(config.secrets, 'TELEGRAM_NOTIFICATION_API_TOKEN') &&
+      Boolean(config.extra_environment?.TELEGRAM_NOTIFICATION_URL) &&
+      Boolean(config.extra_environment?.TELEGRAM_NOTIFICATION_CHAT_ID)
+    ),
     ...config.extra_environment,
   };
   const entries = Object.entries(values)
