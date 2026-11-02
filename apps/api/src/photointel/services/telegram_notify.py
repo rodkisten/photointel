@@ -207,6 +207,22 @@ async def release_cursor(owner: str, cursor: int) -> None:
             row.value = {"cursor": max(cursor, int(row.value.get("cursor", 0)))}
 
 
+async def was_sent(key: str, event_id: int) -> bool:
+    async with SessionLocal() as session:
+        item = await session.get(Setting, "telegram:sent:" + key)
+        return bool(item and isinstance(item.value, dict)
+                    and int(item.value.get("event_id", 0)) >= event_id)
+
+
+async def record_sent(key: str, event_id: int) -> None:
+    async with SessionLocal() as session, session.begin():
+        item = await session.get(Setting, "telegram:sent:" + key, with_for_update=True)
+        if item is None:
+            session.add(Setting(key="telegram:sent:" + key, value={"event_id": event_id}))
+        else:
+            item.value = {"event_id": max(event_id, int((item.value or {}).get("event_id", 0)))}
+
+
 async def drain(*, limit: int = 90) -> dict[str, object]:
     """Independent leased cursor; failed delivery retries without touching jobs."""
     if not 1 <= limit <= 200:
@@ -234,6 +250,9 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 scope = (str(job.id) if event.status in ERROR_STATES or not job.batch_id
                          else str(job.batch_id))
                 key = scope + ":" + event.status
+                if event.status in ERROR_STATES:
+                    # Every failed attempt has its own exact Sentry event.
+                    key += ":" + str(event.id)
                 if key not in grouped and len(grouped) >= 6:
                     break
                 previous = grouped.get(key)
@@ -250,11 +269,16 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False,
         ) as client:
-            for event, job, count in grouped.values():
+            for key, (event, job, count) in grouped.items():
+                if await was_sent(key, event.id):
+                    continue
                 message, links = format_message(
                     job, event, batches.get(job.batch_id), counts.get(job.batch_id), count,
                 )
                 await deliver(client, config, message, links)
+                # Commit a per-event marker before advancing the global cursor.
+                # Retries after another group fails do not resend prior messages.
+                await record_sent(key, event.id)
         return {"status": "completed", "events": len(rows), "messages": len(grouped)}
     except asyncio.CancelledError:
         advanced = cursor
