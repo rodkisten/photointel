@@ -107,17 +107,16 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
 
 
 def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, Any]:
-    """Accept Telegram relay settings directly from dotenv, without GCP Secret Manager.
+    """Accept Telegram fields and the public Manage Sentry DSN as top-level dotenv keys.
 
-    A top-level TELEGRAM_* entry (decoded to lowercase) or the explicit
-    EXTRA_ENVIRONMENT__ prefix is supported. Runtime and workflow configuration
-    use the same canonical extra_environment keys. Never print credential values.
+    Top-level fields (decoded to lowercase) or the explicit EXTRA_ENVIRONMENT__
+    prefix are supported. Canonical values live in extra_environment.
     """
     extras = config.setdefault("extra_environment", {})
     if not isinstance(extras, dict):
         return config
     for field in ("TELEGRAM_NOTIFICATION_API_TOKEN", "TELEGRAM_NOTIFICATION_URL",
-                  "TELEGRAM_NOTIFICATION_CHAT_ID"):
+                  "TELEGRAM_NOTIFICATION_CHAT_ID", "MANAGE_SENTRY_DSN"):
         # Dotenv's top-level names are lowercased by decode_config. JSON may
         # provide either spelling. The prefixed env key wins if both are set.
         for root_key in (field.lower(), field):
