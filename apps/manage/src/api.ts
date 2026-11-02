@@ -246,17 +246,31 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     const minutes = Math.min(240, Math.max(5, Number(url.searchParams.get('minutes') || 30)));
     if (!Number.isFinite(minutes)) throw new ApiError(422, 'MINUTES', 'Período inválido');
     const now = Date.now();
+    // Cloudflare Observability query uses a top-level queryId and nested
+    // parameters (not a top-level datasets/needle/orderBy structure).
     const data = await cf(env, '/workers/observability/telemetry/query', 'POST', {
+      queryId: 'photointel-manage-logs',
       view: 'events',
-      datasets: ['cloudflare-workers'],
+      dry: true,
       timeframe: { from: now - minutes * 60_000, to: now },
       limit: 50,
-      orderBy: { value: 'timestamp', order: 'desc' },
-      ...(search ? { needle: { value: search, isRegex: false, matchCase: false } } : {}),
+      order: 'desc',
+      parameters: {
+        datasets: ['cloudflare-workers'],
+        ...(search ? {
+          filters: [{
+            key: '$metadata.message',
+            operation: 'includes',
+            type: 'string',
+            value: search,
+          }],
+        } : {}),
+      },
     });
     const result = (data as { result?: Record<string, unknown> }).result;
+    const events = list(result, 'events');
     return json({
-      items: list(result, 'events').map((x) => ({
+      items: events.map((x) => ({
         id: x.$metadata?.id,
         timestamp: x.timestamp,
         service: x.$metadata?.service || x.$workers?.scriptName,
