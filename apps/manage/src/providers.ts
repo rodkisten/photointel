@@ -10,7 +10,7 @@ export const WORKFLOW_INPUTS:Record<string,Record<string,string[]>>={
   },
   "cloudflare-setup.yml":{mode:["plan","apply"]},
   "gcp-health.yml":{},"deploy-worker.yml":{},
-  "gcp-migrate.yml":{},"gcp-validation.yml":{},
+  "gcp-migrate.yml":{migration_mode:["plan","apply","diagnose"],migration_database:["unselected","initial-empty","existing-with-backup"],migration_backup_prefix:[]},"gcp-validation.yml":{},
   "icloud-validation.yml":{},"backend-smoke.yml":{},
 };
 export async function provider(url:string,token:string,init:RequestInit={}):Promise<unknown>{
