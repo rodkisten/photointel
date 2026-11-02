@@ -198,6 +198,15 @@ async def deliver(
             "http_status": response.status_code, "stage": "notifications/send",
         })
         raise ValueError("Telegram relay delivery was not acknowledged")
+    if notification_key is not None and (
+        result.get("notification_key") != notification_key
+        or not isinstance(result.get("message_id"), int)
+        or result["message_id"] <= 0
+    ):
+        LOG.warning("telegram_relay_missing_upsert_ack", extra={
+            "stage": "notifications/send",
+        })
+        raise ValueError("Relay has not acknowledged editable notification")
 
 
 async def claim_cursor() -> tuple[str, int] | None:
