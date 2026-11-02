@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from './components/ui';
 import { api, send } from './lib/client';
+import { planConfigChange } from './config-reconcile';
+import type { ConfigPlan } from './config-reconcile';
 import { cn, date, human, state } from './lib/utils';
 import './style.css';
 
@@ -808,6 +810,13 @@ function ConfigEditor() {
   const [editor, setEditor] = useState('');
   const [version, setVersion] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [autoApply, setAutoApply] = useState(true);
+  const [lastSave, setLastSave] = useState<{
+    plan: ConfigPlan;
+    dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }>;
+    blocked?: boolean;
+    auto_apply?: boolean;
+  } | null>(null);
   useEffect(() => {
     if (q.data) {
       setEditor(q.data.value);
@@ -815,14 +824,31 @@ function ConfigEditor() {
     }
   }, [q.data]);
   const update = useMutation({
-    mutationFn: () => send<{ version: string }>('/config', { value: editor, version }, 'PUT'),
+    mutationFn: () =>
+      send<{
+        version: string;
+        plan: ConfigPlan;
+        dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }>;
+        blocked?: boolean;
+        auto_apply?: boolean;
+      }>('/config', { value: editor, version, auto_apply: autoApply }, 'PUT'),
     onSuccess: (r) => {
       setVersion(r.version);
+      setLastSave(r);
       setConfirm(false);
       void qc.invalidateQueries({ queryKey: ['config'] });
+      void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
   const dirty = Boolean(q.data && editor !== q.data.value);
+  const preview = useMemo(() => {
+    if (!q.data || !dirty) return null;
+    try {
+      return { plan: planConfigChange(q.data.value, editor), error: '' };
+    } catch {
+      return { plan: null, error: 'Não foi possível calcular o plano: confira o formato do .env.' };
+    }
+  }, [q.data, dirty, editor]);
   const validation = useMemo(() => {
     if (!editor.trim()) return 'Configuração vazia';
     if (editor.trim().startsWith('{'))
@@ -858,6 +884,33 @@ function ConfigEditor() {
               className="min-h-[360px] resize-y text-[13px]"
             />
             {validation && <p className="text-xs text-red-300">{validation}</p>}
+            {preview?.error && <p className="text-xs text-red-300">{preview.error}</p>}
+            {preview?.plan && (
+              <div className="rounded-lg border border-[#34363b] bg-white/[.025] p-3 text-xs">
+                <p className="font-semibold text-slate-200">
+                  {preview.plan.changed.length} variáveis alteradas
+                </p>
+                <p className="mt-1 text-slate-400">
+                  {preview.plan.workflows.length
+                    ? 'Ao salvar: ' + preview.plan.workflows.map((item) => item.label).join(' · ')
+                    : 'Nenhuma publicação automática necessária.'}
+                </p>
+                {preview.plan.manual.map((reason) => (
+                  <p key={reason} className="mt-2 text-amber-300">
+                    Atenção: {reason}
+                  </p>
+                ))}
+              </div>
+            )}
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={autoApply}
+                onChange={(event) => setAutoApply(event.target.checked)}
+                className="h-4 w-4 accent-white"
+              />
+              Aplicar automaticamente as alterações ao salvar
+            </label>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex gap-2">
                 <Button
@@ -890,7 +943,7 @@ function ConfigEditor() {
               <Button
                 size="sm"
                 onClick={() => setConfirm(true)}
-                disabled={!dirty || !!validation || update.isPending}
+                disabled={!dirty || !!validation || !!preview?.error || update.isPending}
               >
                 <Save size={15} />
                 Salvar variável
@@ -898,11 +951,44 @@ function ConfigEditor() {
             </div>
             <p className="text-xs leading-5 text-slate-500">
               O painel edita a variável do GitHub, não um secret. Referências do Secret Manager podem ser
-              editadas, mas valores secretos nunca devem ser colocados aqui. O salvamento não dispara deploy
-              automaticamente.
+              editadas, mas valores secretos nunca devem ser colocados aqui. Mudanças de runtime atualizam
+              Cloud Run sem reconstruir Docker; frontend e Manage são publicados quando necessário.
             </p>
             {update.error && <IssueBanner error={update.error} />}
-            {update.isSuccess && <Badge tone="success">Configuração salva no GitHub</Badge>}
+            {lastSave && (
+              <div className="space-y-2 rounded-lg border border-[#32353b] p-3 text-xs">
+                <Badge tone="success">Configuração salva no GitHub</Badge>
+                {lastSave.blocked && (
+                  <p className="text-amber-300">
+                    Publicação suspensa: é necessário revisar IAM ou infraestrutura antes de executar.
+                  </p>
+                )}
+                {!lastSave.auto_apply && (
+                  <p className="text-slate-400">Aplicação automática desativada neste salvamento.</p>
+                )}
+                {lastSave.dispatches.map((item) => (
+                  <p key={item.file} className={item.status === 'failed' ? 'text-red-300' : 'text-slate-300'}>
+                    {item.status === 'queued' ? '✓ Solicitado' : '✕ Falha ao solicitar'}: {item.label}
+                    {item.error ? ' · ' + item.error : ''}
+                    {' '}
+                    <a
+                      href={'https://github.com/rodkisten/photointel/actions/workflows/' + item.file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      Abrir Actions
+                    </a>
+                  </p>
+                ))}
+                {lastSave.plan.manual.map((reason) => (
+                  <p key={reason} className="text-amber-300">Revisão manual: {reason}</p>
+                ))}
+                {lastSave.plan.changed.length === 0 && (
+                  <p className="text-slate-400">Somente formatação alterada; nenhum workflow necessário.</p>
+                )}
+              </div>
+            )}
           </Card>
         )}
       </Section>
@@ -910,7 +996,11 @@ function ConfigEditor() {
         open={confirm}
         onOpenChange={setConfirm}
         title="Salvar configuração de produção?"
-        description="Isso substitui GCP_CONFIG_ENV no Environment production. A alteração impactará os próximos workflows. O backend verificará se a versão não mudou."
+        description={
+          autoApply
+            ? 'O GitHub Environment será salvo e os workflows necessários serão solicitados automaticamente. Alterações que exigem IAM ou migração permanecerão pendentes de revisão.'
+            : 'Isso salva GCP_CONFIG_ENV sem disparar workflows. Será necessário aplicar as alterações manualmente.'
+        }
         label="Salvar"
         onConfirm={() => update.mutate()}
         busy={update.isPending}
