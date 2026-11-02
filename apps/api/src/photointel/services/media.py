@@ -687,7 +687,7 @@ async def verify_media_stage(
                 "Não há prévia nem origem persistida. Refaça o download iCloud.",
                 409,
                 {"reason": "SOURCE_NOT_RETAINED"},
-            )
+            ) from None
         return await rebuild_from_preview(
             session, asset, settings, stage, job_fences=job_fences
         )
