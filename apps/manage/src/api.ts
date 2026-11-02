@@ -40,7 +40,7 @@ export async function api(request:Request,env:Env,identity:Identity):Promise<Res
   if(method==="GET" && path==="/api/workflows"){
     const data=await gh(env,"/actions/workflows?per_page=100");
     return json({items:list(data,"workflows").filter(x=>
-      Object.prototype.hasOwnProperty.call(WORKFLOW_INPUTS,(String(x.path||"").split("/").pop()||""))
+      Object.prototype.hasOwnProperty.call(WORKFLOW_INPUTS,(String(x.path||"").split("/").pop()||"")))
       .map(x=>({id:x.id,name:x.name,file:String(x.path).split("/").pop(),
         state:x.state,html_url:x.html_url,
         inputs:WORKFLOW_INPUTS[String(x.path).split("/").pop()||""]}))});
