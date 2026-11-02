@@ -21,6 +21,7 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
   const semanticReady = ['operational', 'test_only'].includes(semantic?.state ?? '');
   const [details, setDetails] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [scale, setScale] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [similar, setSimilar] = useState<SearchPage | null>(null);
   const [similarError, setSimilarError] = useState<Error | null>(null);
@@ -28,11 +29,12 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
   const edit = useAction(`/v1/assets/${id}/tags`, 'PATCH');
   const navigate = useNavigate();
   const touch = useRef<{ x: number; y: number } | null>(null);
+  const pinch = useRef<{ distance: number; scale: number } | null>(null);
   const index = assets.findIndex((asset) => asset.id === id);
   const previous = index > 0 ? assets[index - 1] : undefined;
   const next = index >= 0 ? assets[index + 1] : undefined;
   const asset = query.data;
-  useEffect(() => { setZoom(false); setSimilar(null); setSimilarError(null); setKeyword(''); }, [id]);
+  useEffect(() => { setZoom(false); setScale(1); setSimilar(null); setSimilarError(null); setKeyword(''); }, [id]);
   useEffect(() => {
     function keyboard(event: KeyboardEvent) {
       const target = event.target as HTMLElement;
@@ -54,6 +56,12 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
     catch (error) { setSimilarError(error as Error); }
     finally { setLoadingSimilar(false); }
   }
+  const pinchDistance = (first: React.Touch, second: React.Touch) =>
+    Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+  function toggleZoom() {
+    const next = scale > 1.02 ? 1 : 2;
+    setScale(next); setZoom(next > 1);
+  }
   const preview = asset?.resources.find((resource) => resource.resource_type === 'preview_large')?.media_url
     ?? asset?.thumbnail_url;
   return <Dialog open onOpenChange={(open) => !open && onClose()} title={asset?.filename ?? 'Fotografia'}
@@ -62,24 +70,59 @@ export function PhotoViewer({ id, assets, onNavigate, onClose }: {
       {query.isPending ? <Skeleton count={1} /> : query.error ?
         <ErrorState error={query.error} retry={() => void query.refetch()} /> :
         <div className={`viewer-image ${zoom ? 'zoomed' : ''}`}
-          onDoubleClick={() => setZoom(!zoom)}
-          onTouchStart={(event) => { const point = event.touches[0]; touch.current = {
-            x: point.clientX, y: point.clientY }; }}
-          onTouchEnd={(event) => { if (!touch.current || zoom) return;
-            const point = event.changedTouches[0]; const dx = point.clientX - touch.current.x;
+          onDoubleClick={toggleZoom}
+          onTouchStart={(event) => {
+            if (event.touches.length === 2) {
+              pinch.current = { distance: pinchDistance(event.touches[0], event.touches[1]), scale };
+              touch.current = null;
+            } else if (event.touches.length === 1) {
+              pinch.current = null;
+              touch.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+            }
+          }}
+          onTouchMove={(event) => {
+            if (event.touches.length !== 2) return;
+            if (!pinch.current) {
+              pinch.current = { distance: pinchDistance(event.touches[0], event.touches[1]), scale };
+            }
+            event.preventDefault();
+            const nextScale = Math.min(5, Math.max(1,
+              pinch.current.scale * pinchDistance(event.touches[0], event.touches[1]) /
+              Math.max(1, pinch.current.distance)));
+            setScale(nextScale); setZoom(nextScale > 1.02);
+            touch.current = null;
+          }}
+          onTouchEnd={(event) => {
+            if (pinch.current) {
+              if (event.touches.length < 2) pinch.current = null;
+              touch.current = null;
+              return;
+            }
+            if (!touch.current || scale > 1.02) { touch.current = null; return; }
+            const point = event.changedTouches[0];
+            const dx = point.clientX - touch.current.x;
             const dy = point.clientY - touch.current.y;
-            if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.8) {
-              if (dx < 0 && next) onNavigate(next.id); else if (dx > 0 && previous) onNavigate(previous.id);
-            } touch.current = null;
-          }}><PrivateImage src={preview} alt={asset?.filename ?? 'Fotografia'} assetId={id} priority /></div>}
+            touch.current = null;
+            if (dy > 100 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+              onClose();
+            } else if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+              if (dx < 0 && next) onNavigate(next.id);
+              else if (dx > 0 && previous) onNavigate(previous.id);
+            }
+          }}
+          onTouchCancel={() => { touch.current = null; pinch.current = null; }}>
+          <div className="viewer-zoom-surface" style={{ transform: `scale(${scale})` }}>
+            <PrivateImage src={preview} alt={asset?.filename ?? 'Fotografia'} assetId={id} priority />
+          </div>
+        </div>}
       {previous && <button className="viewer-arrow prev" aria-label="Fotografia anterior"
         onClick={() => onNavigate(previous.id)}><ChevronLeft size={20} /></button>}
       {next && <button className="viewer-arrow next" aria-label="Próxima fotografia"
         onClick={() => onNavigate(next.id)}><ChevronRight size={20} /></button>}
-      <div className="viewer-controls"><Button variant="ghost" size="icon" onClick={() => setZoom(!zoom)}
+      <div className="viewer-controls"><Button variant="ghost" size="icon" onClick={toggleZoom}
         aria-label={zoom ? 'Reduzir zoom' : 'Ampliar fotografia'}>{zoom ? <Minus size={17} /> : <Plus size={17} />}</Button>
         <span className="muted" style={{ fontSize: 10 }}>{index >= 0 ? `${index + 1} / ${assets.length} carregadas` : 'Visualização privada'}</span>
-        <Button variant="ghost" size="icon" onClick={() => setZoom(false)} aria-label="Ajustar à tela">
+        <Button variant="ghost" size="icon" onClick={() => { setZoom(false); setScale(1); }} aria-label="Ajustar à tela">
           <Maximize2 size={16} /></Button>
         <Button className="viewer-metadata-button" variant="outline" size="sm" onClick={() => setDetails(!details)}>
           <Info size={14} />Informações</Button></div></div>
