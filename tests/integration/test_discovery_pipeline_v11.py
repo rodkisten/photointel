@@ -916,3 +916,49 @@ async def test_contention_does_not_consume_manifest_attempts(
         manifest = (await session.scalars(select(DiscoveryManifest))).one()
         assert manifest.attempts == 0
         assert manifest.status != "downloading"
+
+
+
+async def test_catalog_preview_audit_finds_missing_and_invalid_variants(pipeline):
+    from photointel.routers.preview_audit import audit_previews
+
+    factory, settings, adapter, photos, _ = pipeline
+    adapter.photos = photos(3)
+    await discovery.discover_icloud(settings, 3, mode="backfill")
+    async with factory() as session:
+        assets = list((await session.scalars(select(Asset).order_by(Asset.id))).all())
+        incomplete, complete, awaiting_source = assets
+        incomplete.ingestion_status = "completed"
+        complete.ingestion_status = "completed"
+        for kind in ("thumbnail_small", "thumbnail_medium", "preview_large"):
+            session.add(AssetResource(
+                asset_id=complete.id,
+                resource_type=kind,
+                revision=complete.representation_revision,
+                object_key=f"synthetic/{kind}",
+                status="available",
+                byte_size=123,
+            ))
+        session.add(AssetResource(
+            asset_id=incomplete.id,
+            resource_type="thumbnail_medium",
+            revision=incomplete.representation_revision,
+            object_key="synthetic/invalid",
+            status="failed",
+            byte_size=0,
+        ))
+        await session.commit()
+
+    async with factory() as session:
+        report = await audit_previews(session, limit=30, cursor=None)
+        found = {item["asset_id"]: item for item in report["items"]}
+        assert report["total_assets"] == 3
+        assert report["total_issues"] == 1
+        assert str(incomplete.id) in found
+        assert str(complete.id) not in found
+        assert str(awaiting_source.id) not in found
+        assert found[str(incomplete.id)]["missing_variants"] == [
+            "thumbnail_small", "thumbnail_medium", "preview_large",
+        ]
+        assert found[str(incomplete.id)]["invalid_variants"] == ["thumbnail_medium"]
+        assert found[str(incomplete.id)]["repairable"] is True
