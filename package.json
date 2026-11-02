@@ -1,0 +1,16 @@
+{
+  "name": "photointel-tooling",
+  "private": true,
+  "description": "Shared formatting tooling for the PhotoIntel and PhotoIntel Manage frontends and Cloudflare Workers",
+  "scripts": {
+    "format": "prettier --write \"apps/{web,manage}/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\" \"infra/cloudflare/cloud-run-proxy/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\"",
+    "format:check": "prettier --check \"apps/{web,manage}/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\" \"infra/cloudflare/cloud-run-proxy/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\"",
+    "format:web": "prettier --write \"apps/web/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\" \"infra/cloudflare/cloud-run-proxy/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\"",
+    "format:manage": "prettier --write \"apps/manage/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\"",
+    "format:check:web": "prettier --check \"apps/web/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\" \"infra/cloudflare/cloud-run-proxy/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\"",
+    "format:check:manage": "prettier --check \"apps/manage/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\""
+  },
+  "devDependencies": {
+    "prettier": "3.6.2"
+  }
+}
