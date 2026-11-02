@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#0a0c11"/><g transform="translate(77 77) scale(.70)"><defs><linearGradient id="edge" x1="12%" y1="8%" x2="93%" y2="95%"><stop stop-color="#ded9ff"/><stop offset=".52" stop-color="#dddfe9"/><stop offset="1" stop-color="#66cbe0"/></linearGradient><linearGradient id="hills" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#c2b4f8"/><stop offset="1" stop-color="#7287cd"/></linearGradient></defs>
+<path d="M137 367h229c44 0 78-32 78-74 0-39-29-69-67-73-9-64-61-109-125-109-61 0-111 40-123 96-40 3-71 36-71 78 0 46 35 82 79 82Z" fill="#10151f" stroke="url(#edge)" stroke-width="22" stroke-linejoin="round"/>
+<rect x="159" y="216" width="196" height="130" rx="28" fill="#151b2a" stroke="#ececf4" stroke-width="14"/>
+<clipPath id="photo"><rect x="167" y="224" width="180" height="114" rx="21"/></clipPath><g clip-path="url(#photo)"><circle cx="213" cy="264" r="14" fill="#d6c5ff"/><path d="M167 335l57-58 43 37 45-52 51 63v24H167Z" fill="url(#hills)"/><path d="M168 346l68-46 44 32 41-29 38 43Z" fill="#465b90"/></g>
+<path d="M357 150c4 21 12 29 32 35-20 6-28 14-32 35-5-21-13-29-33-35 20-6 28-14 33-35Z" fill="#f3eaff"/>
+<path d="M374 116c31 8 53 30 60 61" fill="none" stroke="#ececf4" stroke-width="8" stroke-linecap="round" opacity=".85"/>
+<circle cx="375" cy="117" r="12" fill="#83dce7"/><circle cx="434" cy="177" r="10" fill="#a1a2f8"/></g></svg>
