@@ -62,6 +62,11 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
   const add = (...items: ConfigTarget[]) => items.forEach((target) => targets.add(target));
   for (const key of changed) {
     const normalized = key.replaceAll('__', '.').toLowerCase();
+    if (normalized === 'manage_sentry_dsn' || normalized === 'extra_environment.manage_sentry_dsn') {
+      // A Manage-only Sentry DSN never rebuilds the photo API, workers or images.
+      add('manage');
+      continue;
+    }
     if (/^(?:gcp_(?:bootstrap_)?(?:workload_identity_provider|service_account)|bootstrap_)/.test(key.toLowerCase())) {
       manual.add('Identidade GitHub/GCP: requer revisão do Workload Identity Federation.');
       blocked = true;
