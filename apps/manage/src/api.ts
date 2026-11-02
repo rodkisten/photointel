@@ -1,5 +1,6 @@
 import { ApiError, bodyJson, json, redact } from './auth';
 import { planConfigChange } from './config-reconcile';
+import { runManageDiagnostics } from './diagnostics';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -44,6 +45,8 @@ export async function api(
       sentry_reader: Boolean(env.SENTRY_API_TOKEN),
       sentry_org: env.SENTRY_ORG || null,
     });
+  if (method === 'GET' && path === '/api/diagnostics')
+    return json(await runManageDiagnostics(env));
   if (method === 'GET' && path === '/api/overview') {
     const tasks = await Promise.allSettled([
       gh(env, '/actions/runs?per_page=12'),
