@@ -1238,11 +1238,28 @@ async def capabilities(session: Session) -> dict[str, Any]:
     def capability(state: str, reason: str) -> dict[str, str]:
         return {"state": state, "reason": reason}
 
-    gpu_state = "not_configured" if not settings.gpu_enabled else "unavailable"
+    adapter_configured = (
+        settings.inference_backend == "cpu"
+        or (
+            settings.inference_backend == "test"
+            and settings.app_env == "test"
+        )
+        or (
+            settings.inference_backend == "modal"
+            and settings.modal_endpoint.startswith("https://")
+            and settings.modal_token is not None
+        )
+    )
+    gpu_state = (
+        "not_configured" if not settings.gpu_enabled else
+        "available" if adapter_configured else "unavailable"
+    )
     gpu_reason = (
-        "GPU desabilitada por padrão"
+        "Habilite inferência em Configurações para gerar embeddings"
         if not settings.gpu_enabled
-        else ("Adapter configurado; disponibilidade real confirmada por smoke test/jobs")
+        else "Adapter de inferência incompleto; configure o endpoint e as credenciais"
+        if not adapter_configured
+        else "Inferência configurada; a primeira execução verifica o modelo"
     )
     if settings.gpu_enabled and (joytag_ok or siglip_ok):
         gpu_state = "operational"
@@ -1275,6 +1292,12 @@ async def capabilities(session: Session) -> dict[str, Any]:
         "semantic_search": capability(
             "operational" if siglip_ok and settings.gpu_enabled else "not_configured",
             "Requer embeddings e adapter de texto do mesmo checkpoint",
+        ),
+        "embedding_inference": capability(
+            "operational" if siglip_ok and settings.gpu_enabled else
+            "available" if settings.gpu_enabled and adapter_configured else
+            "not_configured",
+            "SigLIP 2 usa o adapter configurado e respeita limites e orçamentos",
         ),
         "duplicate_detection": capability("operational", "SHA-256 e pHash; sem exclusão"),
         "quality_analysis": capability("operational", "Métricas técnicas heurísticas"),
