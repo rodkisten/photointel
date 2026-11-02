@@ -36,6 +36,7 @@ jobs:
         with: {persist-credentials: false}
       - run: |
           bash -n infra/gcp/bootstrap.sh
+          bash -n infra/gcp/bootstrap_manage_wif.sh
           bash infra/gcp/tests/test-bootstrap.sh
           python3 infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json
   bootstrap:
