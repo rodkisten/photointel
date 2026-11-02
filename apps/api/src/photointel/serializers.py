@@ -38,7 +38,7 @@ def asset_out(asset: Asset, ranking: dict[str, Any] | None = None) -> AssetOut:
         },
     )
     data["thumbnail_url"] = (
-        f"/v1/assets/{asset.id}/media/thumbnail_medium"
+        f"/v1/assets/{asset.id}/media/thumbnail_medium?v={asset.representation_revision[:16]}"
         if asset.ingestion_status == "completed" and asset.media_type != "video"
         else None
     )
@@ -53,7 +53,10 @@ def resource_out(resource: AssetResource) -> ResourceOut:
         if key != "media_url"
     }
     data["media_url"] = (
-        f"/v1/assets/{resource.asset_id}/media/{resource.resource_type}"
+        (
+            f"/v1/assets/{resource.asset_id}/media/{resource.resource_type}"
+            f"?v={resource.revision[:16]}"
+        )
         if resource.status in {"available", "completed"}
         and resource.resource_type != "inference_input"
         else None
