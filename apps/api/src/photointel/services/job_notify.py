@@ -247,6 +247,13 @@ async def drain_job_notifications(*, limit: int = 200) -> dict[str, int | str]:
 
 
 async def safe_notify() -> None:
+    """Deliver the two independent providers in parallel after job commits."""
+    from photointel.services.telegram_notify import safe_notify as telegram_notify
+
+    await asyncio.gather(_safe_iphone_notify(), telegram_notify())
+
+
+async def _safe_iphone_notify() -> None:
     """Never make API responses or worker jobs depend on Notify availability."""
     global _last_attempt
     if credentials() is None:

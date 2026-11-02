@@ -41,6 +41,7 @@ SECRET_FIELDS = {
     "NOTIFY_TOKEN",
     "SENTRY_DSN",
     "SENTRY_API_TOKEN",
+    "TELEGRAM_NOTIFICATION_API_TOKEN",
 }
 WORKFLOW_SECRET_FIELDS = {
     "CLOUDFLARE_API_TOKEN",
@@ -58,6 +59,7 @@ REQUIRED_SECRETS = SECRET_FIELDS - {
     "NOTIFY_TOKEN",
     "SENTRY_DSN",
     "SENTRY_API_TOKEN",
+    "TELEGRAM_NOTIFICATION_API_TOKEN",
 }
 SERVICES = (
     "run.googleapis.com",
@@ -89,6 +91,7 @@ PROTECTED_ENV = {
     "GCP_REGION",
     "GCP_JOB_DISPATCH_ENABLED",
     "NOTIFY_JOB_EVENTS_ENABLED",
+    "TELEGRAM_JOB_EVENTS_ENABLED",
     "EXECUTION_PLATFORM",
     "VERIFICATION_GATES_ENFORCED",
     "TEMP_DIRECTORY",
@@ -349,6 +352,12 @@ def environment(config: dict[str, Any], mode: str) -> list[dict[str, Any]]:
         "NOTIFY_JOB_EVENTS_ENABLED": str(
             mode != "migrate"
             and {"NOTIFY_DEVICE_ID", "NOTIFY_TOKEN"} <= config["secrets"].keys()
+        ).lower(),
+        "TELEGRAM_JOB_EVENTS_ENABLED": str(
+            mode != "migrate"
+            and "TELEGRAM_NOTIFICATION_API_TOKEN" in config["secrets"]
+            and bool(config.get("extra_environment", {}).get("TELEGRAM_NOTIFICATION_URL"))
+            and bool(config.get("extra_environment", {}).get("TELEGRAM_NOTIFICATION_CHAT_ID"))
         ).lower(),
     }
     values.update(config.get("extra_environment", {}))

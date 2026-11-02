@@ -6,6 +6,7 @@ import os
 import signal
 import socket
 import time
+import traceback
 from contextvars import Token
 from pathlib import Path
 from typing import Any
@@ -341,6 +342,15 @@ async def _fail_jobs(
         if busy
         else ErrorCode.INTERNAL_ERROR
     )
+    # Sanitize traceback before it is persisted or sent to Telegram.
+    # No exception values, source lines, local variables or asset metadata.
+    safe_frames = [
+        f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}"[:170]
+        for frame in traceback.extract_tb(exc.__traceback__)[-24:]
+    ]
+    safe_frames = [frame for frame in safe_frames if all(
+        char.isascii() and (char.isalnum() or char in "_./:-") for char in frame
+    )]
     async with SessionLocal() as session:
         changed: list[Job] = []
         for job_id, owner, token in fences:
@@ -372,6 +382,8 @@ async def _fail_jobs(
                 ),
                 "correlation_id": _job_correlation(job),
                 "job_id": str(job.id),
+                "exception_type": type(exc).__name__,
+                "traceback": safe_frames,
                 **({"sentry_event_id": sentry_event_id} if sentry_event_id else {}),
             }
             if sentry_event_id:
@@ -447,6 +459,8 @@ async def _fail_jobs(
                     status=job.status,
                     payload={
                         "error_code": str(code),
+                        "exception_type": type(exc).__name__,
+                        "traceback": safe_frames,
                         **(
                             {"sentry_event_id": sentry_event_id}
                             if sentry_event_id else {}
