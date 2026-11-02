@@ -971,6 +971,18 @@ function SystemInfo({ meta }: { meta: Meta }) {
       }>('/gcp/scheduler'),
     retry: false,
   });
+  const telegram = useQuery({
+    queryKey: ['gcp-telegram'],
+    queryFn: () => api<{
+      enabled: boolean;
+      endpointConfigured: boolean;
+      destinationConfigured: boolean;
+      tokenBound: boolean;
+      ready: boolean;
+      explanation: string;
+    }>('/gcp/telegram'),
+    retry: false,
+  });
   const workers = useQuery({
     queryKey: ['workers'],
     queryFn: () =>
@@ -1002,6 +1014,35 @@ function SystemInfo({ meta }: { meta: Meta }) {
             </div>
           ))}
         </Card>
+      </Section>
+      <Section
+        title="Notificações Telegram · Jobs"
+        detail="Verificação da configuração efetiva na revisão da API Cloud Run, sem expor segredos"
+      >
+        {telegram.isPending ? (
+          <Spinner />
+        ) : telegram.error ? (
+          <IssueBanner error={telegram.error} />
+        ) : (
+          <Card className="space-y-3 p-4">
+            <Badge tone={telegram.data?.ready ? 'success' : 'warning'}>
+              {telegram.data?.ready ? 'Configurado' : 'Configuração incompleta'}
+            </Badge>
+            <p className="text-sm text-slate-400">{telegram.data?.explanation}</p>
+            <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+              {([
+                ['Ativação', telegram.data?.enabled],
+                ['Endpoint', telegram.data?.endpointConfigured],
+                ['Destino', telegram.data?.destinationConfigured],
+                ['Secret Manager', telegram.data?.tokenBound],
+              ] as Array<[string, boolean | undefined]>).map(([label, ready]) => (
+                <div key={label} className="rounded-lg bg-white/[.035] px-3 py-2">
+                  {ready ? '✓' : '✕'} {label}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </Section>
       <Section title="Jobs Cloud Run">
         {gcp.isPending ? (
