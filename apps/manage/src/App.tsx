@@ -18,7 +18,7 @@ type Run={id:number;name:string;display_title?:string;status:string;conclusion?:
 type WF={id:number;name:string;file:string;state:string;html_url:string;inputs:Record<string,string[]>};
 type Job={id:number;name:string;status:string;conclusion?:string;html_url:string;
   started_at?:string;steps:{name:string;number:number;conclusion:string;status:string}[]};
-type CloudLog={timestamp:string;severity:string;service:string;message:string;insertId?:string};
+type CloudLog={timestamp:string;severity:string;service:string;resource?:string;message:string;insertId?:string};
 type CfLog={id:string;timestamp:number;service:string;severity:string;message:string;outcome:string};
 type Issue={id:string;title:string;level:string;count:string;lastSeen:string;permalink:string;culprit:string;project:string};
 const NAV:{id:Tab;label:string;icon:typeof Activity}[]=[
