@@ -22,10 +22,6 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/manage/package-lock.json
-      - name: "📦 Resolve updated lockfile for verification"
-        run: |
-          npm --prefix apps/manage install --package-lock-only --ignore-scripts --no-audit --no-fund
-          node -e "console.log('MANAGE_LOCK_JSON_START' + JSON.stringify(require('./apps/manage/package-lock.json')) + 'MANAGE_LOCK_JSON_END')"
       - name: "📦 Locked install"
         run: npm --prefix apps/manage ci
       - name: "🎨 Shared Prettier · manage + CSS"
