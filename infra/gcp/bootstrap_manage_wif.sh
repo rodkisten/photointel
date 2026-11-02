@@ -49,8 +49,7 @@ curl --fail --silent --show-error --max-time 15 \
   "https://api.cloudflare.com/client/v4/accounts/$cf_account/access/apps?per_page=100" > "$tmp/apps.json"
 aud="$(jq -er '
   if .success != true then error("Cloudflare Access apps request unsuccessful") else .result end |
-  [ .[] | select(.name == "photointel-manage" and
-    any(.domain, (.domain == "photos-manage.migos.club"))) | .aud ] |
+  [ .[] | select(.name == "photointel-manage" and .domain == "photos-manage.migos.club") | .aud ] |
   if length == 1 and (.[0] | type == "string" and length>=20) then .[0]
   else error("Manage Access application unavailable or ambiguous") end
 ' "$tmp/apps.json")" || { echo "::error::Unable to discover the Manage Access application audience" >&2; exit 1; }
