@@ -98,6 +98,16 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
         manual.add('Credencial de migração: verificar manualmente; migrações nunca são automáticas.');
       continue;
     }
+    // Top-level Telegram fields are canonicalized into extra_environment by
+    // gcp-env.py. They still need an API/jobs runtime sync on save.
+    if (/^telegram_notification_(?:api_token|url|chat_id)$/.test(normalized)) {
+      add('api', 'jobs');
+      continue;
+    }
+    if (normalized === 'telegram_job_events_enabled') {
+      manual.add('TELEGRAM_JOB_EVENTS_ENABLED é calculado automaticamente; override ignorado.');
+      continue;
+    }
     if (normalized.startsWith('extra_environment.')) {
       const field = normalized.slice('extra_environment.'.length);
       // The deployment renderer injects extra_environment into all Cloud Run envs.
