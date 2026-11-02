@@ -1,9 +1,10 @@
-"""Regression tests for safe legacy Telegram config compatibility."""
+"""Offline tests for direct Telegram relay configuration (Secret Manager optional)."""
 from __future__ import annotations
 
 import contextlib
 import importlib.util
 import io
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -15,53 +16,71 @@ assert spec and spec.loader
 loader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(loader)
 
+from manage import environment
 
-class LegacyTelegramConfigurationTests(unittest.TestCase):
-    def test_strips_plaintext_secret_and_computed_flag_without_leaking_values(self):
-        token = "SECRET_VALUE_NOT_FOR_LOGS_1234567890"
-        config = {
-            "project_id": "photointel",
-            "extra_environment": {
-                "TELEGRAM_NOTIFICATION_API_TOKEN": token,
-                "TELEGRAM_JOB_EVENTS_ENABLED": "true",
-                "TELEGRAM_NOTIFICATION_URL": "https://xtelegram-cf.migos.club/notifications/send",
-                "TELEGRAM_NOTIFICATION_CHAT_ID": "-10012345",
-            },
-            "telegram_notification_api_token": token,
-            "telegram_job_events_enabled": "true",
-        }
-        stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            normalized = loader.normalize_legacy_notification_fields(config)
-        self.assertNotIn("TELEGRAM_NOTIFICATION_API_TOKEN", normalized["extra_environment"])
-        self.assertNotIn("TELEGRAM_JOB_EVENTS_ENABLED", normalized["extra_environment"])
-        self.assertNotIn("telegram_notification_api_token", normalized)
-        self.assertNotIn("telegram_job_events_enabled", normalized)
-        self.assertIn("TELEGRAM_NOTIFICATION_URL", normalized["extra_environment"])
-        self.assertIn("TELEGRAM_NOTIFICATION_CHAT_ID", normalized["extra_environment"])
-        self.assertNotIn(token, stdout.getvalue())
-        self.assertIn("SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME", stdout.getvalue())
 
-    def test_dotenv_conversion_normalizes_protected_fields(self):
+class TelegramEnvTests(unittest.TestCase):
+    TOKEN = "FAKE_INLINE_TOKEN_FOR_TESTS_12345678"
+
+    def test_top_level_dotenv_direct_settings_are_canonicalized(self):
         entries = {
             "PROJECT_ID": "photointel",
             "REGION": "us-central1",
-            "EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED": "true",
-            "EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN": "INLINE_CREDENTIAL",
-            "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME": "photointel-telegram-relay",
-            "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__VERSION": "2",
+            "TELEGRAM_NOTIFICATION_API_TOKEN": self.TOKEN,
+            "TELEGRAM_NOTIFICATION_URL": "https://xtelegram-cf.migos.club/notifications/send",
+            "TELEGRAM_NOTIFICATION_CHAT_ID": "-10012345:2",
+            "TELEGRAM_JOB_EVENTS_ENABLED": "true",
+        }
+        with contextlib.redirect_stdout(io.StringIO()) as log:
+            parsed = loader.normalize_legacy_notification_fields(loader.decode_config(entries))
+        self.assertNotIn("telegram_notification_api_token", parsed)
+        self.assertNotIn("telegram_notification_url", parsed)
+        self.assertNotIn("telegram_notification_chat_id", parsed)
+        self.assertNotIn("telegram_job_events_enabled", parsed)
+        self.assertEqual(parsed["extra_environment"]["TELEGRAM_NOTIFICATION_API_TOKEN"], self.TOKEN)
+        self.assertEqual(parsed["extra_environment"]["TELEGRAM_NOTIFICATION_CHAT_ID"], "-10012345:2")
+        self.assertNotIn("TELEGRAM_JOB_EVENTS_ENABLED", parsed["extra_environment"])
+        self.assertNotIn(self.TOKEN, log.getvalue())
+
+    def test_prefixed_dotenv_token_has_precedence_and_does_not_leak_into_preview(self):
+        entries = {
+            "EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN": self.TOKEN,
+            "TELEGRAM_NOTIFICATION_API_TOKEN": "FAKE_FALLBACK_TOKEN_UNUSED_12345678",
+            "EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED": "false",
         }
         with contextlib.redirect_stdout(io.StringIO()):
-            parsed = loader.normalize_legacy_notification_fields(loader.decode_config(entries))
-        self.assertNotIn("TELEGRAM_JOB_EVENTS_ENABLED", parsed["extra_environment"])
-        self.assertNotIn("TELEGRAM_NOTIFICATION_API_TOKEN", parsed["extra_environment"])
-        self.assertEqual(parsed["secrets"]["TELEGRAM_NOTIFICATION_API_TOKEN"],
-                         {"name": "photointel-telegram-relay", "version": "2"})
+            config = loader.normalize_legacy_notification_fields(loader.decode_config(entries))
+        self.assertEqual(config["extra_environment"]["TELEGRAM_NOTIFICATION_API_TOKEN"], self.TOKEN)
+        self.assertEqual(
+            loader.redact_preview(config)["extra_environment"]["TELEGRAM_NOTIFICATION_API_TOKEN"],
+            "<redacted>",
+        )
 
-    def test_unrelated_protected_overrides_are_not_whitelisted(self):
+    def test_inline_overrides_optional_secret_manager_reference_in_runtime(self):
+        example = json.loads((GCP / "config.example.json").read_text(encoding="utf8"))
+        example["extra_environment"] = {
+            "TELEGRAM_NOTIFICATION_API_TOKEN": self.TOKEN,
+            "TELEGRAM_NOTIFICATION_URL": "https://xtelegram-cf.migos.club/notifications/send",
+            "TELEGRAM_NOTIFICATION_CHAT_ID": "-10012345",
+        }
+        example["secrets"]["TELEGRAM_NOTIFICATION_API_TOKEN"] = {
+            "name": "old-telegram-secret", "version": "1"
+        }
+        for mode in ("api", "worker"):
+            entries = environment(example, mode)
+            token = [entry for entry in entries if entry["name"] == "TELEGRAM_NOTIFICATION_API_TOKEN"]
+            self.assertEqual(token, [{"name": "TELEGRAM_NOTIFICATION_API_TOKEN", "value": self.TOKEN}])
+            self.assertEqual(
+                next(item["value"] for item in entries if item["name"] == "TELEGRAM_JOB_EVENTS_ENABLED"),
+                "true",
+            )
+        migration = environment(example, "migrate")
+        self.assertFalse(any(item["name"] == "TELEGRAM_NOTIFICATION_API_TOKEN" for item in migration))
+
+    def test_unrelated_secret_overrides_are_not_whitelisted(self):
         config = {"extra_environment": {
-            "DATABASE_URL": "should-not-be-authorized",
-            "TELEGRAM_NOTIFICATION_API_TOKEN": "legacy",
+            "DATABASE_URL": "not-authorized",
+            "TELEGRAM_NOTIFICATION_API_TOKEN": self.TOKEN,
         }}
         with contextlib.redirect_stdout(io.StringIO()):
             parsed = loader.normalize_legacy_notification_fields(config)
