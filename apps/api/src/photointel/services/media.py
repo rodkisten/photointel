@@ -171,6 +171,7 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
         "overexposed_fraction": round(float(np.mean(gray > 243)), 4),
         "file_bytes": path.stat().st_size,
         "compression": "source_codec_dependent",
+        "preview_codec_revision": "webp-avif-v1",
         "heuristic": True,
         "explanation": (
             "Índice heurístico = 50% resolução (24 MP), 30% nitidez (Laplaciano / 1000), "
@@ -187,21 +188,51 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
     for variant, size in sizes.items():
         derived = image.copy()
         derived.thumbnail((size, size), Image.Resampling.LANCZOS)
+        # The stable resource names always retain a broadly supported fallback.
+        # Quality is bounded by the user setting; thumbnails can be more compact
+        # than a large photo displayed across the full viewport.
+        quality = min(settings.image_quality, 80 if variant == "preview_large" else 76)
         output = io.BytesIO()
         try:
-            derived.save(
-                output, format="WEBP", quality=settings.image_quality, method=4, exif=b""
-            )
+            derived.save(output, format="WEBP", quality=quality, method=6, exif=b"")
             extension, mime = "webp", "image/webp"
-        except (KeyError, OSError):
+        except (KeyError, OSError, ValueError):
             output = io.BytesIO()
-            derived.save(output, format="JPEG", quality=settings.image_quality, exif=b"")
+            derived.save(output, format="JPEG", quality=quality, optimize=True, exif=b"")
             extension, mime = "jpg", "image/jpeg"
         variants.append(
             DerivedImage(
                 variant, output.getvalue(), derived.width, derived.height, mime, extension
             )
         )
+        if variant == "inference_input":
+            continue
+        # AVIF is optional across CPU architectures/Pillow wheels. Failure
+        # must never block the fallback image or the ingestion pipeline.
+        avif = io.BytesIO()
+        try:
+            derived.save(
+                avif,
+                format="AVIF",
+                quality=max(40, min(settings.image_quality - 24, 64)),
+                speed=6,
+                exif=b"",
+            )
+        except (KeyError, OSError, ValueError):
+            continue
+        # Retain an alternate only when it materially improves transfer size.
+        # Some tiny or already compressed photographs get *larger* in AVIF.
+        if avif.tell() and avif.tell() < len(output.getbuffer()) * 0.95:
+            variants.append(
+                DerivedImage(
+                    f"{variant}_avif",
+                    avif.getvalue(),
+                    derived.width,
+                    derived.height,
+                    "image/avif",
+                    "avif",
+                )
+            )
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -656,7 +687,7 @@ async def verify_media_stage(
                 "Não há prévia nem origem persistida. Refaça o download iCloud.",
                 409,
                 {"reason": "SOURCE_NOT_RETAINED"},
-            )
+            ) from None
         return await rebuild_from_preview(
             session, asset, settings, stage, job_fences=job_fences
         )
@@ -726,6 +757,12 @@ async def rebuild_from_preview(
             asset.representation_revision,
             job_fences=job_fences,
         )
+        # A retained WebP preview is sufficient for progressive optimization.
+        # The original content revision and EXIF are not altered.
+        asset.quality = {
+            **(asset.quality or {}),
+            "preview_codec_revision": "webp-avif-v1",
+        }
     else:
         asset = await _current_asset(
             session, asset, expected_content, expected_revision, job_fences

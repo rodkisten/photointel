@@ -197,6 +197,12 @@ async def reindex(
         job_types.remove("embedding_inference")
     if not job_types:
         raise AppError(ErrorCode.INVALID_REQUEST, "Selecione pelo menos um processamento", 422)
+    if body.only_outdated_previews and job_types != {"thumbnail_generate"}:
+        raise AppError(
+            ErrorCode.INVALID_REQUEST,
+            "Otimização de prévias requer apenas thumbnail_generate",
+            422,
+        )
 
     # Filter busy/ineligible assets *before* LIMIT. Previously we selected the
     # first N UUIDs, discarded already-queued jobs, then returned a misleading
@@ -230,6 +236,17 @@ async def reindex(
             and_(Asset.ingestion_status != "completed", ~downloading),
         ),
     )
+    if body.only_outdated_previews:
+        # Use the persisted encoder marker, not AVIF presence: a valid modern
+        # WebP may be smaller than AVIF, and optional AVIF encoders may be absent.
+        encoder_revision = Asset.quality["preview_codec_revision"].as_string()
+        query = query.where(
+            Asset.ingestion_status == "completed",
+            or_(
+                encoder_revision.is_(None),
+                encoder_revision != "webp-avif-v1",
+            ),
+        )
     if body.asset_ids:
         query = query.where(Asset.id.in_(body.asset_ids))
     assets = (await session.scalars(query.order_by(Asset.id).limit(limit))).all()
@@ -269,7 +286,7 @@ async def reindex(
              "requested_job_types": sorted(job_types)},
         )
     batch = JobBatch(
-        name="Reprocessamento",
+        name="Otimização de prévias" if body.only_outdated_previews else "Reprocessamento",
         total_assets=len(assets),
         estimated_cost=estimate,
     )

@@ -27,6 +27,7 @@ export function JobsPage() {
   const [previewAudit, setPreviewAudit] = useState(false);
   const [limit, setLimit] = useState(100); const [confirm, setConfirm] = useState(false);
   const [batchError, setBatchError] = useState<Error | null>(null);
+  const [optimizeOld, setOptimizeOld] = useState(false);
   const [kinds, setKinds] = useState(['duplicate_analysis', 'quality_analysis']);
   const [live, setLive] = useState(false);
   const client = useQueryClient(); const action = useAction();
@@ -79,7 +80,11 @@ export function JobsPage() {
     description="Cada etapa persistida, com retomada segura e erros que podem ser inspecionados."
     actions={<><Button variant="outline" onClick={() => setPreviewAudit(true)}>
       <FileSearch size={14} />Buscar prévias com falha</Button>
-      <Button onClick={() => { setBatchError(null); setReindex(true); }}>
+      <Button variant="outline" onClick={() => {
+        setOptimizeOld(true); setKinds(['thumbnail_generate']); setLimit(100);
+        setConfirm(false); setBatchError(null); setReindex(true);
+      }}><RefreshCw size={14} />Otimizar prévias</Button>
+      <Button onClick={() => { setOptimizeOld(false); setBatchError(null); setReindex(true); }}>
         <Plus size={14} />Processar lote</Button></>} />
     <div className="metrics">{[
       ['Na fila', stats.data?.pending_processing], ['Em execução', counts.running ?? 0],
@@ -171,18 +176,25 @@ export function JobsPage() {
         </div></div>}</>}
     </Dialog>
     {previewAudit && <PreviewAuditDialog onClose={() => setPreviewAudit(false)} />}
-    <Dialog open={reindex} onOpenChange={setReindex} title="Processar um lote"
-      description="A IA só executa com adapter configurado e limites de custo aprovados. Nenhuma imagem é apagada.">
+    <Dialog open={reindex} onOpenChange={setReindex}
+      title={optimizeOld ? 'Otimizar prévias existentes' : 'Processar um lote'}
+      description={optimizeOld ?
+        'Converte somente prévias antigas em lotes pequenos, sem novo download do iCloud. AVIF é opcional e o WebP continua disponível.' :
+        'A IA só executa com adapter configurado e limites de custo aprovados. Nenhuma imagem é apagada.'}>
       <div className="stack"><label className="field">Limite de fotografias<input type="number" min="1" max="10000"
         value={limit} onChange={(e) => setLimit(Number(e.target.value))} /></label>
-        {['joytag_inference','embedding_inference','duplicate_analysis','quality_analysis','thumbnail_generate'].map((kind) =>
+        {!optimizeOld && ['joytag_inference','embedding_inference','duplicate_analysis','quality_analysis','thumbnail_generate'].map((kind) =>
           <label className="checkbox-field" key={kind}><span>{jobNames[kind]}
             {kind.endsWith('_inference') && !gpu && <small>Adapter de inferência não configurado</small>}</span>
             <input type="checkbox" checked={kinds.includes(kind)}
               disabled={kind === 'embedding_inference' ? !embeddingsReady :
                 kind.endsWith('_inference') && !gpu}
               onChange={(e) => setKinds(e.target.checked ? [...kinds,kind] : kinds.filter((value) => value !== kind))} /></label>)}
-        {!embeddingsReady && <p className="field-help">
+        {optimizeOld && <p className="field-help">
+          Apenas fotos concluídas ainda não otimizadas. Reabra esta opção para
+          processar o próximo lote. Originais e metadados são preservados.
+        </p>}
+        {!optimizeOld && !embeddingsReady && <p className="field-help">
           Para habilitar embeddings SigLIP 2, configure a inferência em
           {' '}<Link to="/settings" onClick={() => setReindex(false)}>Configurações</Link>.
           O primeiro processamento requer um adapter válido e respeita o orçamento.
@@ -198,6 +210,7 @@ export function JobsPage() {
             try {
               await action.mutateAsync({ url:'/v1/jobs/reindex', body: {
                 limit, job_types:kinds, confirm_large_batch:confirm,
+                ...(optimizeOld ? { only_outdated_previews: true } : {}),
               } });
             } catch (error) {
               // React Query already reports the precise ApiError to the toast.
@@ -208,6 +221,6 @@ export function JobsPage() {
             }
             setReindex(false);
             useUi.getState().notify('Lote criado na fila durável.');
-          }}>Criar lote</Button></div>
+          }}>{optimizeOld ? 'Iniciar otimização' : 'Criar lote'}</Button></div>
     </Dialog></>;
 }

@@ -280,3 +280,60 @@ async def test_media_rejects_storage_total_different_from_recorded_revision(
     assert body.closed
     assert body.read_sizes == []
     session.commit.assert_awaited_once()
+
+
+
+async def test_media_negotiates_avif_and_varies_cache_by_accept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    import httpx
+    from fastapi import FastAPI
+    from photointel.auth import Identity, require_identity
+    from photointel.database import get_session
+    from photointel.routers import catalog
+    from sqlalchemy.dialects import postgresql
+
+    asset_id = uuid4()
+    avif = SimpleNamespace(
+        id=uuid4(),
+        byte_size=4,
+        object_key="assets/preview.avif",
+        mime_type="image/avif",
+        revision="representation-1",
+        sha256="avif-hash",
+    )
+    session = SimpleNamespace(scalar=AsyncMock(return_value=avif), commit=AsyncMock())
+    storage = LocalStorage(tmp_path)
+    storage.put(avif.object_key, b"AVIF", "image/avif")
+    monkeypatch.setattr(catalog, "get_storage", lambda: storage)
+    monkeypatch.setattr(
+        catalog,
+        "get_asset",
+        AsyncMock(return_value=SimpleNamespace(representation_revision="representation-1")),
+    )
+    app = FastAPI()
+    app.include_router(catalog.router, prefix="/v1")
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[require_identity] = lambda: Identity("test", "test@invalid")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://localhost",
+    ) as client:
+        result = await client.get(
+            f"/v1/assets/{asset_id}/media/thumbnail_medium",
+            headers={"Accept": "image/avif,image/webp,image/*"},
+        )
+        assert result.status_code == 200
+        assert result.content == b"AVIF"
+        assert result.headers["content-type"] == "image/avif"
+        assert "Accept" in result.headers["vary"]
+        sql = str(
+            session.scalar.call_args.args[0].compile(dialect=postgresql.dialect())
+        )
+        assert "asset_resources.resource_type IN" in sql
+        assert "ORDER BY CASE" in sql
+        assert "asset_resources.revision" in sql

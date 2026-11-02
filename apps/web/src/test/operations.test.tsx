@@ -97,6 +97,21 @@ describe('persisted operations and navigation', () => {
     ));
   });
 
+  it('starts bounded legacy-preview optimization without other inference jobs', async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.click(screen.getByRole('button', { name: 'Otimizar prévias' }));
+    const dialog = screen.getByRole('dialog', { name: 'Otimizar prévias existentes' });
+    expect(within(dialog).getByText(/Apenas fotos concluídas/)).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Iniciar otimização' }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/v1/jobs/reindex',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({
+        limit: 100, job_types: ['thumbnail_generate'], confirm_large_batch: false,
+        only_outdated_previews: true,
+      }) }),
+    ));
+  });
+
   it('blocks unconfigured inference and requires consent for a large reindex', async () => {
     const user = userEvent.setup();
     mount();

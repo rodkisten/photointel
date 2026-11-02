@@ -184,6 +184,7 @@ export function Gallery({ search, compact = false, albumId }: {
                 {showDate && <div className="gallery-date">{day ? date(group[0].captured_at) : 'Data não disponível'}</div>}
                 <div className="gallery-cells" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                   {group.map((asset) => <PhotoTile key={asset.id} asset={asset} selecting={selecting}
+                    sizes={`${Math.max(1, Math.ceil(width / columns))}px`}
                     selected={selected.has(asset.id)} onOpen={() => open(asset.id)}
                     onSelect={() => toggle(asset.id)} />)}
                 </div></div>;
@@ -208,8 +209,9 @@ export function Gallery({ search, compact = false, albumId }: {
     </Dialog>
   </>;
 }
-function PhotoTile({ asset, selected, selecting, onSelect, onOpen }: {
+function PhotoTile({ asset, selected, selecting, onSelect, onOpen, sizes }: {
   asset: Asset; selected: boolean; selecting: boolean; onSelect: () => void; onOpen: () => void;
+  sizes: string;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
@@ -227,7 +229,8 @@ function PhotoTile({ asset, selected, selecting, onSelect, onOpen }: {
       held.current = false; timer.current = setTimeout(() => { held.current = true; onSelect(); }, 550);
     } }} onPointerUp={cancel} onPointerCancel={cancel} onPointerMove={cancel}
     onContextMenu={(event) => { event.preventDefault(); if (!held.current) onSelect(); }}>
-    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} assetId={asset.id} />
+    <PrivateImage src={asset.thumbnail_url} alt={asset.filename} assetId={asset.id}
+      sizes={sizes} />
     <span className="photo-select" aria-hidden="true">{selected && <Check size={13} />}</span>
     <span className="photo-overlay">{asset.media_type === 'video' && <Image size={12} />}
       {asset.filename}</span>
