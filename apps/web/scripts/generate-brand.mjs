@@ -9,7 +9,7 @@ mkdirSync(output, { recursive: true });
 
 const table = Array.from({ length: 256 }, (_, value) => {
   let c = value;
-  for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
   return c >>> 0;
 });
 function crc32(data) {
@@ -35,12 +35,15 @@ function writePng(name, width, height, pixels) {
   for (let y = 0; y < height; y++) {
     pixels.copy(scanlines, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
   }
-  writeFileSync(join(output, name), Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk('IHDR', header),
-    chunk('IDAT', deflateSync(scanlines, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]));
+  writeFileSync(
+    join(output, name),
+    Buffer.concat([
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      chunk('IHDR', header),
+      chunk('IDAT', deflateSync(scanlines, { level: 9 })),
+      chunk('IEND', Buffer.alloc(0)),
+    ]),
+  );
 }
 const clamp = (v, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v));
 const circle = (x, y, cx, cy, radius) => Math.hypot(x - cx, y - cy) - radius;
@@ -75,9 +78,9 @@ function compose(width, height, variant = 'icon') {
       // A union of cloud lobes creates the storage silhouette.
       const cloud = Math.min(
         circle(u, v, 0.29, 0.555, 0.164),
-        circle(u, v, 0.50, 0.415, 0.238),
+        circle(u, v, 0.5, 0.415, 0.238),
         circle(u, v, 0.705, 0.548, 0.165),
-        rounded(u, v, 0.50, 0.612, 0.352, 0.138, 0.102),
+        rounded(u, v, 0.5, 0.612, 0.352, 0.138, 0.102),
       );
       if (cloud <= edge) {
         if (negative) {
@@ -100,7 +103,7 @@ function compose(width, height, variant = 'icon') {
           if (circle(u, v, 0.397, 0.525, 0.019) <= 0) color = [225, 210, 253, 255];
           const hill = Math.min(
             0.648 - v + Math.abs(u - 0.495) * -0.68,
-            0.68 - v + Math.abs(u - 0.588) * -0.90,
+            0.68 - v + Math.abs(u - 0.588) * -0.9,
           );
           if (hill <= 0) color = mix([111, 112, 187, 255], [188, 170, 233, 255], clamp((0.68 - v) * 3));
           if (frame >= -0.014) color = [237, 235, 252, 255];
@@ -112,7 +115,7 @@ function compose(width, height, variant = 'icon') {
       if (dx + dy <= 1) color = negative ? [255, 255, 255, 255] : [247, 245, 255, 255];
       for (const [cx, cy, radius, shade] of [
         [0.753, 0.255, 0.014, [124, 221, 227, 255]],
-        [0.830, 0.356, 0.012, [168, 167, 248, 255]],
+        [0.83, 0.356, 0.012, [168, 167, 248, 255]],
       ]) {
         if (circle(u, v, cx, cy, radius) <= 0) {
           color = negative ? [255, 255, 255, 255] : shade;

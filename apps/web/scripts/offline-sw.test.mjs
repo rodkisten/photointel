@@ -17,32 +17,50 @@ function setup() {
       if (!stores.has(name)) stores.set(name, new Map());
       const contents = stores.get(name);
       return {
-        async match(path) { return contents.get(path)?.clone(); },
-        async put(path, response) { contents.set(path, response.clone()); },
+        async match(path) {
+          return contents.get(path)?.clone();
+        },
+        async put(path, response) {
+          contents.set(path, response.clone());
+        },
       };
     },
-    async keys() { return [...stores.keys()]; },
-    async delete(key) { return stores.delete(key); },
+    async keys() {
+      return [...stores.keys()];
+    },
+    async delete(key) {
+      return stores.delete(key);
+    },
   };
   const self = {
     location: { origin: 'https://photos.migos.club' },
-    addEventListener(name, callback) { listeners.set(name, callback); },
+    addEventListener(name, callback) {
+      listeners.set(name, callback);
+    },
     skipWaiting: async () => undefined,
     clients: { claim: async () => undefined },
   };
   const context = {
-    self, caches, URL, Response, console,
-    importScripts() { throw new Error('FCM offline'); },
+    self,
+    caches,
+    URL,
+    Response,
+    console,
+    importScripts() {
+      throw new Error('FCM offline');
+    },
     async fetch(input) {
       requests++;
       if (offline) throw new Error('offline');
       const path = typeof input === 'string' ? input : new URL(input.url).pathname;
-      if (path.endsWith('.js')) return new Response('console.log("app")', {
-        headers: { 'content-type': 'application/javascript' },
-      });
-      if (path.endsWith('.svg')) return new Response('<svg/>', {
-        headers: { 'content-type': 'image/svg+xml' },
-      });
+      if (path.endsWith('.js'))
+        return new Response('console.log("app")', {
+          headers: { 'content-type': 'application/javascript' },
+        });
+      if (path.endsWith('.svg'))
+        return new Response('<svg/>', {
+          headers: { 'content-type': 'image/svg+xml' },
+        });
       return new Response('<!doctype html><div id="root"></div>', {
         headers: { 'content-type': 'text/html' },
       });
@@ -54,16 +72,25 @@ function setup() {
     let response;
     listeners.get(name)({
       ...data,
-      waitUntil(promise) { pending.push(promise); },
-      respondWith(promise) { response = promise; },
+      waitUntil(promise) {
+        pending.push(promise);
+      },
+      respondWith(promise) {
+        response = promise;
+      },
     });
     await Promise.all(pending);
     return response ? await response : undefined;
   }
   return {
-    trigger, stores,
-    disconnect() { offline = true; },
-    get requests() { return requests; },
+    trigger,
+    stores,
+    disconnect() {
+      offline = true;
+    },
+    get requests() {
+      return requests;
+    },
   };
 }
 
@@ -86,7 +113,12 @@ test('never intercepts private media, API, auth, or diagnostics', async () => {
   const env = setup();
   await env.trigger('install');
   const before = env.requests;
-  for (const path of ['/v1/assets/secret/media/preview_large', '/auth/login', '/__app/version', '/cdn-cgi/access/login']) {
+  for (const path of [
+    '/v1/assets/secret/media/preview_large',
+    '/auth/login',
+    '/__app/version',
+    '/cdn-cgi/access/login',
+  ]) {
     const response = await env.trigger('fetch', {
       request: { method: 'GET', mode: 'no-cors', url: 'https://photos.migos.club' + path },
     });

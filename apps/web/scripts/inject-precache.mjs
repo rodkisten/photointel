@@ -7,14 +7,13 @@ async function list(directory) {
   const result = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await list(path));
+    if (entry.isDirectory()) result.push(...(await list(path)));
     else if (entry.isFile()) result.push(path);
   }
   return result;
 }
-const files = (await list(dist)).filter((path) =>
-  !/(?:^|\/)(?:sw\.js|_headers)$/.test(path.replaceAll('\\', '/')) &&
-  !/\.map$/.test(path)
+const files = (await list(dist)).filter(
+  (path) => !/(?:^|\/)(?:sw\.js|_headers)$/.test(path.replaceAll('\\', '/')) && !/\.map$/.test(path),
 );
 const paths = files.map((path) => '/' + relative(dist, path).split(sep).join('/')).sort();
 const fingerprint = createHash('sha256');
@@ -25,7 +24,7 @@ for (const path of files.sort()) {
 const version = fingerprint.digest('hex').slice(0, 20);
 const workerPath = join(dist, 'sw.js');
 let worker = await readFile(workerPath, 'utf8');
-if (!worker.includes("/*__PHOTOINTEL_PRECACHE__*/ []") || !worker.includes('__PHOTOINTEL_SW_VERSION__')) {
+if (!worker.includes('/*__PHOTOINTEL_PRECACHE__*/ []') || !worker.includes('__PHOTOINTEL_SW_VERSION__')) {
   throw new Error('Service worker build markers missing; refuse unsafe deployment.');
 }
 worker = worker

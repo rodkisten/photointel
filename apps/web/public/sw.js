@@ -55,33 +55,32 @@ try {
 }
 
 if (typeof firebase !== 'undefined') {
-
-firebase.initializeApp({
-  apiKey: 'AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY',
-  authDomain: 'photointel-firebase.firebaseapp.com',
-  projectId: 'photointel-firebase',
-  storageBucket: 'photointel-firebase.firebasestorage.app',
-  messagingSenderId: '723658488603',
-  appId: '1:723658488603:web:64c64e34743b9aabe431be',
-  measurementId: 'G-RE93MWG6FN',
-});
-
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage((payload) => {
-  console.info('[PhotoIntel SW] Mensagem em segundo plano:', payload);
-
-  // O Firebase ja exibe notificacoes com payload.notification automaticamente.
-  // Somente as mensagens data-only precisam de showNotification manual.
-  if (payload.notification) return;
-
-  const data = payload.data || {};
-  return self.registration.showNotification(data.title || 'Photo Intelligence Cloud', {
-    body: data.body || 'Voce recebeu uma nova atualizacao.',
-    icon: '/icon-192.png',
-    data: { url: data.url || '/' },
+  firebase.initializeApp({
+    apiKey: 'AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY',
+    authDomain: 'photointel-firebase.firebaseapp.com',
+    projectId: 'photointel-firebase',
+    storageBucket: 'photointel-firebase.firebasestorage.app',
+    messagingSenderId: '723658488603',
+    appId: '1:723658488603:web:64c64e34743b9aabe431be',
+    measurementId: 'G-RE93MWG6FN',
   });
-});
+
+  const messaging = firebase.messaging();
+
+  messaging.onBackgroundMessage((payload) => {
+    console.info('[PhotoIntel SW] Mensagem em segundo plano:', payload);
+
+    // O Firebase ja exibe notificacoes com payload.notification automaticamente.
+    // Somente as mensagens data-only precisam de showNotification manual.
+    if (payload.notification) return;
+
+    const data = payload.data || {};
+    return self.registration.showNotification(data.title || 'Photo Intelligence Cloud', {
+      body: data.body || 'Voce recebeu uma nova atualizacao.',
+      icon: '/icon-192.png',
+      data: { url: data.url || '/' },
+    });
+  });
 }
 
 /* Public SPA shell and build-stamped immutable assets. No private/API caching. */
@@ -100,41 +99,56 @@ function valid(response, path) {
   return !/text\/html/.test(type);
 }
 self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const shell = await caches.open(SHELL_CACHE);
-    const assets = await caches.open(ASSET_CACHE);
-    // An incomplete install must not replace a working previous release.
-    const files = ['/index.html', ...PRECACHE.filter((url) => url !== '/index.html')];
-    for (let index = 0; index < files.length; index += 12) {
-      await Promise.all(files.slice(index, index + 12).map(async (path) => {
-        const response = await fetch(path, { cache: 'reload', credentials: 'same-origin', redirect: 'error' });
-        if (!valid(response, path)) throw new Error('Invalid asset: ' + path);
-        await (path === '/index.html' ? shell : assets).put(path, response);
-      }));
-    }
-    await self.skipWaiting();
-  })());
+  event.waitUntil(
+    (async () => {
+      const shell = await caches.open(SHELL_CACHE);
+      const assets = await caches.open(ASSET_CACHE);
+      // An incomplete install must not replace a working previous release.
+      const files = ['/index.html', ...PRECACHE.filter((url) => url !== '/index.html')];
+      for (let index = 0; index < files.length; index += 12) {
+        await Promise.all(
+          files.slice(index, index + 12).map(async (path) => {
+            const response = await fetch(path, {
+              cache: 'reload',
+              credentials: 'same-origin',
+              redirect: 'error',
+            });
+            if (!valid(response, path)) throw new Error('Invalid asset: ' + path);
+            await (path === '/index.html' ? shell : assets).put(path, response);
+          }),
+        );
+      }
+      await self.skipWaiting();
+    })(),
+  );
 });
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE)
-      .map((key) => caches.delete(key)));
-    // The static cache is intentionally retained across releases.
-    await self.clients.claim();
-  })());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE)
+          .map((key) => caches.delete(key)),
+      );
+      // The static cache is intentionally retained across releases.
+      await self.clients.claim();
+    })(),
+  );
 });
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
   if (event.data?.type === 'OFFLINE_STATUS') {
-    event.waitUntil((async () => {
-      const cache = await caches.open(SHELL_CACHE);
-      event.ports?.[0]?.postMessage({
-        shellReady: Boolean(await cache.match('/index.html')),
-        version: SW_BUILD,
-        assetCount: PRECACHE.length,
-      });
-    })());
+    event.waitUntil(
+      (async () => {
+        const cache = await caches.open(SHELL_CACHE);
+        event.ports?.[0]?.postMessage({
+          shellReady: Boolean(await cache.match('/index.html')),
+          version: SW_BUILD,
+          assetCount: PRECACHE.length,
+        });
+      })(),
+    );
   }
 });
 self.addEventListener('fetch', (event) => {
@@ -143,30 +157,36 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin || PRIVATE.test(url.pathname)) return;
   if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const response = await fetch(req);
-        if (response.status < 500) return response;
-      } catch {
-        // Offline fallback below.
-      }
-      return (await caches.open(SHELL_CACHE)).match('/index.html') ||
-        new Response('PhotoIntel precisa ser aberto online uma vez.', {
-          status: 503,
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
-    })());
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(req);
+          if (response.status < 500) return response;
+        } catch {
+          // Offline fallback below.
+        }
+        return (
+          (await caches.open(SHELL_CACHE)).match('/index.html') ||
+          new Response('PhotoIntel precisa ser aberto online uma vez.', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          })
+        );
+      })(),
+    );
     return;
   }
   if (!PRECACHE.includes(url.pathname) && !HASHED.test(url.pathname)) return;
-  event.respondWith((async () => {
-    const cache = await caches.open(ASSET_CACHE);
-    const hit = await cache.match(url.pathname);
-    if (hit) return hit;
-    const response = await fetch(req);
-    if (valid(response, url.pathname)) {
-      event.waitUntil(cache.put(url.pathname, response.clone()));
-    }
-    return response;
-  })());
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(ASSET_CACHE);
+      const hit = await cache.match(url.pathname);
+      if (hit) return hit;
+      const response = await fetch(req);
+      if (valid(response, url.pathname)) {
+        event.waitUntil(cache.put(url.pathname, response.clone()));
+      }
+      return response;
+    })(),
+  );
 });

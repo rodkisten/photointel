@@ -159,12 +159,12 @@ function Shell() {
             {offline
               ? 'Offline · recursos locais disponíveis'
               : data
-              ? data.environment === 'production'
-                ? 'Privado e conectado'
-                : 'Ambiente local'
-              : isError
-                ? 'Sem conexão com a API'
-                : 'Conectando à API'}
+                ? data.environment === 'production'
+                  ? 'Privado e conectado'
+                  : 'Ambiente local'
+                : isError
+                  ? 'Sem conexão com a API'
+                  : 'Conectando à API'}
           </div>
         </header>
         <main id="main" tabIndex={-1}>
