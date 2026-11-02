@@ -27,6 +27,7 @@ jobs:
       - name: "🎨 Shared Prettier · manage + CSS"
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
+          npx prettier --write "apps/manage/src/**/*.{js,mjs,cjs,jsx,ts,tsx,css}"
           npm run format:check:manage
       - name: "🔎 UI + Worker TypeScript"
         run: npm --prefix apps/manage run typecheck
