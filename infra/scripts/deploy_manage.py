@@ -90,10 +90,21 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     if not re.fullmatch(r"[a-fA-F0-9]{32}", cf_account) or len(cf_token) < 20:
         raise SetupError("Invalid Cloudflare deployment credentials")
 
-    wif = extra.get("MANAGE_GCP_WIF_AUDIENCE", "")
-    impersonate = extra.get("MANAGE_GCP_IMPERSONATE_SERVICE_ACCOUNT", "")
-    # Both optional and only used by the management Worker, never the
-    # frontend PhotoIntel Worker or the Cloud Run API/Jobs.
+    # These identifiers are not credentials. Use the dedicated provider
+    # provisioned by GCP bootstrap instead of silently disabling GCP integration.
+    expected_wif = (
+        "//iam.googleapis.com/projects/799387180206/locations/global/"
+        "workloadIdentityPools/manage/providers/cloudflare-access"
+    )
+    expected_account = "photointel-manage@photointel.iam.gserviceaccount.com"
+    wif = extra.get("MANAGE_GCP_WIF_AUDIENCE") or expected_wif
+    impersonate = extra.get("MANAGE_GCP_IMPERSONATE_SERVICE_ACCOUNT") or expected_account
+    if wif != expected_wif or impersonate != expected_account:
+        raise SetupError(
+            "Manage GCP WIF must use the dedicated photointel-manage pool/provider and read-only SA"
+        )
+    # Only used by this management Worker, never the public PhotoIntel Worker
+    # or the Cloud Run API/Jobs. No JSON service-account keys are created.
     wrangler = {
         "name": WORKER_NAME,
         "main": "src/worker.ts",
