@@ -723,6 +723,21 @@ def bootstrap(runner: Runner) -> None:
         ]
     )
 
+    # The authenticated in-app incident inspector needs this read-only role.
+    # Previously the bootstrap-only path granted it, but ordinary setup could
+    # leave the API running without permission to read its own Cloud Run logs.
+    runner.command(
+        [
+            "projects",
+            "add-iam-policy-binding",
+            config["project_id"],
+            "--member",
+            f"serviceAccount:{identity(config, 'api')}",
+            "--role",
+            "roles/logging.viewer",
+        ]
+    )
+
     deployer = f"serviceAccount:{identity(config, 'deployer')}"
     for role in (
         "roles/run.admin",
