@@ -80,6 +80,12 @@ reconcile_secret_access() {
   for key in "${!WORKFLOW_NAMES[@]}"; do
     change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
   done
+  # The bootstrap workflow uses the same shared Notify action. Allow only
+  # the Telegram relay credential (never the bot token) to be read after WIF login.
+  if [[ -n "${SECRET_NAMES[TELEGRAM_NOTIFICATION_API_TOKEN]:-}" ]]; then
+    change secrets add-iam-policy-binding "${SECRET_NAMES[TELEGRAM_NOTIFICATION_API_TOKEN]}" \
+      "--member=$BOOTSTRAP" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+  fi
 }
 reconcile_diagnostics_access() {
   # Authenticated read-only incident inspector. Logs are filtered/sanitized in API.
