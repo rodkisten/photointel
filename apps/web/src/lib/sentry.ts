@@ -9,7 +9,10 @@ export function safeSentryMessage(value: unknown): string {
   if (typeof value !== 'string') return '';
   return value
     .replace(/\b(?:https?|ftp|s3|gs):\/\/[^\s"'<>]+/gi, '[URL redigida]')
-    .replace(/\b(authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token|cookie)\s*[:=]\s*[^\s,;]+/gi, '$1=[redigido]')
+    .replace(
+      /\b(authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token|cookie)\s*[:=]\s*[^\s,;]+/gi,
+      '$1=[redigido]',
+    )
     .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [redigido]')
     .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[token redigido]')
     .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, '[email redigido]')
@@ -27,7 +30,7 @@ export function initSentry() {
     sendDefaultPii: false,
     attachStacktrace: true,
     defaultIntegrations: false,
-    integrations: [Sentry.browserTracingIntegration()],
+    integrations: [Sentry.browserTracingIntegration(), Sentry.linkedErrorsIntegration()],
     tracesSampleRate: 0.1,
     tracePropagationTargets: [
       /^\/v1\//,
