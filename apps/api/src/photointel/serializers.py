@@ -58,7 +58,9 @@ def resource_out(resource: AssetResource) -> ResourceOut:
             f"?v={resource.revision[:16]}"
         )
         if resource.status in {"available", "completed"}
-        and resource.resource_type != "inference_input"
+        and resource.resource_type in {
+            "thumbnail_small", "thumbnail_medium", "preview_large"
+        }
         else None
     )
     return ResourceOut.model_validate(data)
