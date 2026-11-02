@@ -1,4 +1,5 @@
 import { ApiError, bodyJson, json, redact } from './auth';
+import { planConfigChange } from './config-reconcile';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -172,16 +173,74 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
   }
   if (method === 'GET' && path === '/api/config') return json(await readConfig(env));
   if (method === 'PUT' && path === '/api/config') {
-    const input = await bodyJson<{ value?: unknown; version?: unknown }>(request);
-    if (typeof input.value !== 'string' || typeof input.version !== 'string')
-      throw new ApiError(422, 'CONFIG_FIELDS', 'Informe value e version');
+    const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown }>(request);
+    if (
+      typeof input.value !== 'string' ||
+      typeof input.version !== 'string' ||
+      (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean')
+    )
+      throw new ApiError(422, 'CONFIG_FIELDS', 'Informe value, version e auto_apply booleano');
     validateConfig(input.value);
     const current = await readConfig(env);
     if (input.version !== current.version)
       throw new ApiError(409, 'CONFIG_CONFLICT', 'Configuração alterada em outra sessão: recarregue');
+    let plan;
+    try {
+      plan = planConfigChange(current.value, input.value);
+    } catch {
+      throw new ApiError(422, 'CONFIG_DIFF', 'Não foi possível interpretar o .env para determinar os workflows. Revise a sintaxe.');
+    }
+    const version = await digest(input.value);
+    if (plan.changed.length === 0) {
+      // Formatting-only edits still save, but never spend compute on no-op runs.
+      if (current.value !== input.value)
+        await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
+      return json({ ok: true, version, updated_at: new Date().toISOString(), plan, dispatches: [] });
+    }
     await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
-    console.log(JSON.stringify({ event: 'manage_config_updated', operator: identity.email }));
-    return json({ ok: true, version: await digest(input.value), updated_at: new Date().toISOString() });
+    const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> = [];
+    // Structural IAM/identity changes must not be published before administrator approval.
+    const requiresAdmin = plan.manual.some((x) =>
+      /Novo nome de segredo|Identidade GitHub|Projeto, região|Allowlist Manage/.test(x),
+    );
+    if (input.auto_apply !== false && !requiresAdmin) {
+      for (const workflow of plan.workflows) {
+        try {
+          await gh(env, '/actions/workflows/' + workflow.file + '/dispatches', 'POST', {
+            ref: 'main',
+            inputs: workflow.file === 'config-sync.yml'
+              ? { ...workflow.inputs, config_version: version }
+              : workflow.inputs,
+          });
+          dispatches.push({ file: workflow.file, label: workflow.label, status: 'queued' });
+        } catch (error) {
+          // Saving the variable already succeeded. Never claim that deployment succeeded.
+          dispatches.push({
+            file: workflow.file,
+            label: workflow.label,
+            status: 'failed',
+            error: error instanceof ApiError ? error.message : 'Não foi possível iniciar o workflow.',
+          });
+        }
+      }
+    }
+    console.log(JSON.stringify({
+      event: 'manage_config_updated',
+      operator: identity.email,
+      changed_keys: plan.changed.length,
+      auto_apply: input.auto_apply !== false,
+      dispatched: dispatches.map((item) => ({ file: item.file, status: item.status })),
+      requires_admin: requiresAdmin,
+    }));
+    return json({
+      ok: true,
+      version,
+      updated_at: new Date().toISOString(),
+      plan,
+      dispatches,
+      auto_apply: input.auto_apply !== false,
+      blocked: requiresAdmin,
+    });
   }
   if (method === 'POST' && path === '/api/dispatch') {
     const input = await bodyJson<{ workflow?: string; inputs?: Record<string, string>; confirm?: string }>(
