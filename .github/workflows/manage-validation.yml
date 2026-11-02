@@ -1,0 +1,34 @@
+name: "🧰 Manage · Validate"
+run-name: "🧰 Manage · ${{ github.event_name }} · ${{ github.ref_name }}"
+on:
+  pull_request:
+    paths: ["apps/manage/**", "infra/scripts/deploy_manage.py", ".github/workflows/manage-*.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/manage/**", "infra/scripts/deploy_manage.py", ".github/workflows/manage-*.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  manage:
+    name: "🧪 Typecheck, tests and bundle"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/manage/package-lock.json
+      - name: "📦 Locked install"
+        run: npm --prefix apps/manage ci
+      - name: "🔎 UI + Worker TypeScript"
+        run: npm --prefix apps/manage run typecheck
+      - name: "🧪 Security and config tests"
+        run: npm --prefix apps/manage test
+      - name: "🏗 Static assets"
+        run: npm --prefix apps/manage run build
+      - name: "🐍 Python deploy script"
+        run: python3 -m py_compile infra/scripts/deploy_manage.py
