@@ -8,6 +8,13 @@ const BASE = [
 ].join('\n');
 
 describe('automatic configuration impact planner', () => {
+  it('dispatches config-only sync for top-level Telegram .env values', () => {
+    const next = BASE + '\\nTELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890';
+    const plan = planConfigChange(BASE, next);
+    expect(plan.blocked).toBe(false);
+    expect(plan.targets).toEqual(['jobs', 'api']);
+    expect(plan.workflows.map((item) => item.file)).toEqual(['config-sync.yml']);
+  });
   it('reconfigures Cloud Run without building Docker for Telegram env changes', () => {
     const changed = BASE.replace('-100123456', '-100987654');
     const plan = planConfigChange(BASE, changed);
