@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import delete, func, not_, or_, select, text
+from sqlalchemy import case, delete, func, not_, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -277,13 +277,26 @@ async def asset_media(
     request: Request,
 ) -> Response:
     asset = await get_asset(session, asset_id)
+    # Browsers advertise AVIF in Accept. Prefer the current AVIF rendition
+    # when available, otherwise return existing WebP/JPEG without a 404.
+    # This also works for albums created before AVIF support was added.
+    wants_avif = "image/avif" in request.headers.get("accept", "").lower()
+    requested_types = [variant]
+    if wants_avif:
+        requested_types.insert(0, f"{variant}_avif")
     resource = await session.scalar(
         select(AssetResource)
         .where(
             AssetResource.asset_id == asset_id,
-            AssetResource.resource_type == variant,
+            AssetResource.resource_type.in_(requested_types),
             AssetResource.revision == asset.representation_revision,
             AssetResource.status.in_(["available", "completed"]),
+        )
+        .order_by(
+            case(
+                (AssetResource.resource_type == f"{variant}_avif", 0),
+                else_=1,
+            )
         )
         .limit(1)
     )
@@ -304,7 +317,7 @@ async def asset_media(
         "X-Content-Type-Options": "nosniff",
         "ETag": etag,
         "Accept-Ranges": "bytes",
-        "Vary": "Cookie, Cf-Access-Jwt-Assertion",
+        "Vary": "Accept, Cookie, Cf-Access-Jwt-Assertion",
     }
     if matches_etag(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers=headers)
