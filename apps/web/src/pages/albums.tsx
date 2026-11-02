@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type TouchEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -19,6 +19,8 @@ type AlbumForm = z.infer<typeof albumSchema>;
 export function AlbumsPage() {
   const [params, setParams] = useSearchParams(); const activeId = params.get('album');
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false);
+  const touchStart = useRef<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Album | null>(null);
   const query = useApi<Page<Album>>(`/v1/albums?q=${encodeURIComponent(q)}&limit=100`);
   const create = useAction<Album>('/v1/albums'); const patch = useAction<Album>(undefined, 'PATCH');
@@ -30,6 +32,19 @@ export function AlbumsPage() {
     sort: active?.sort_order === 'added_desc' ? 'added_desc' : 'captured_desc',
     ...(activeId ? { filter: { op: 'album', value: activeId } } : {}),
   }), [activeId, active?.sort_order]);
+  function pullStart(event: TouchEvent<HTMLDivElement>) {
+    touchStart.current = !activeId && (document.scrollingElement?.scrollTop ?? 0) === 0 &&
+      event.touches.length === 1 ? event.touches[0].clientY : null;
+  }
+  function pullEnd(event: TouchEvent<HTMLDivElement>) {
+    if (touchStart.current === null || refreshing) return;
+    const distance = event.changedTouches[0].clientY - touchStart.current;
+    touchStart.current = null;
+    if (distance > 65) {
+      setRefreshing(true);
+      void query.refetch().finally(() => setRefreshing(false));
+    }
+  }
   function start(album?: Album) {
     setEditing(album ?? null); form.reset({ name: album?.name ?? '', description: album?.description ?? '' }); setOpen(true);
   }
@@ -38,7 +53,9 @@ export function AlbumsPage() {
     else await create.mutateAsync({ body: data });
     setOpen(false); useUi.getState().notify(editing ? 'Álbum atualizado.' : 'Álbum criado. Selecione fotos na biblioteca para adicioná-las.');
   }
-  return <><PageHeader eyebrow="Coleções pessoais" title={active?.name ?? 'Álbuns'}
+  return <><div onTouchStart={pullStart} onTouchEnd={pullEnd}>
+    {refreshing && <div className="gallery-pull-indicator" role="status">Atualizando álbuns…</div>}
+    <PageHeader eyebrow="Coleções pessoais" title={active?.name ?? 'Álbuns'}
     description={active?.description ?? 'Organize histórias com álbuns que pertencem ao seu catálogo privado.'}
     actions={active ? <Button variant="outline" onClick={() => start(active)}><Edit3 size={13} />Editar álbum</Button> :
       <Button onClick={() => start()}><Plus size={14} />Criar álbum</Button>} />
@@ -58,6 +75,7 @@ export function AlbumsPage() {
           <PrivateImage src={album.cover_url} alt={`Capa de ${album.name}`} /></div><div className="album-info">
           <h3>{album.name}</h3><p>{album.asset_count} fotografias</p></div></button>)}</div>}
     </>}
+    </div>
     <Dialog open={open} onOpenChange={setOpen} title={editing ? 'Editar álbum' : 'Criar álbum'}>
       <form onSubmit={form.handleSubmit(submit)}><div className="stack"><label className="field">Nome
         <input {...form.register('name')} placeholder="Um lugar para revisitar" autoFocus />
