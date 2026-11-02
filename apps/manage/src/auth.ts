@@ -5,6 +5,8 @@ export interface Env {
   ACCESS_AUDIENCE: string;
   ACCESS_ALLOWED_EMAILS: string;
   GITHUB_API_TOKEN?: string;
+  /** Deployed Secret Manager version only, never the secret value. */
+  GITHUB_TOKEN_SECRET_VERSION?: string;
   GITHUB_REPO: string;
   GITHUB_ENVIRONMENT: string;
   CLOUDFLARE_API_TOKEN?: string;

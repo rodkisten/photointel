@@ -240,6 +240,36 @@ The initial `Manage · Publish → apply` can also activate a new DSN if
 automatic Manage publishing is disabled. A successful CI build is not proof of
 ingestion: verify a real new occurrence in Sentry after publication.
 
+## Diagnóstico de token efetivo (GitHub e Cloudflare)
+
+Abra **Sistema → Diagnóstico de credenciais → Testar credenciais**.
+O teste roda no Worker autenticado, nunca no navegador, usando os mesmos
+`GITHUB_API_TOKEN` e `CLOUDFLARE_API_TOKEN` que estão instalados no runtime.
+Ele consulta via GET o repositório, as execuções, os workflows, a variável
+`production/GCP_CONFIG_ENV` e os Workers Cloudflare. Retorna HTTP status,
+uma causa classificada e, quando o GitHub fornece, o header seguro
+`X-Accepted-GitHub-Permissions`. Não retorna valores de variáveis nem tokens.
+
+O campo **Secret Manager versão** mostra a versão da referência
+`WORKFLOW_SECRETS__MANAGE_GITHUB_API_TOKEN__VERSION` usada **no último deploy**.
+Mudar uma referência no `.env` não atualiza o segredo do Worker sem publicar
+`Manage · Publish → apply`. O workflow agora publica automaticamente em
+pushes para `main` que afetem exclusivamente o Manage; o primeiro apply
+manual já foi realizado.
+
+- GitHub `403`: diferencie token inválido, acesso ao repositório,
+  SSO, limite de API ou permissão faltante pela resposta do teste. As chamadas
+  Actions exigem permissão Actions (read/write conforme o verbo).
+  A configuração `GCP_CONFIG_ENV` usa Environments (read/write).
+- Cloudflare `400/9106`: falha de autenticação, não simplesmente lista
+  vazia de Workers. Confirme a versão do secret
+  `MANAGE_CLOUDFLARE_API_TOKEN` instalada, sem trocar o token usado pelo deploy.
+- Na publicação, uma checagem não destrutiva desses dois secrets é incluída
+  no resumo do GitHub Actions, sem registrar o conteúdo dos tokens.
+- Chaves `.env` repetidas **com o mesmo valor** são preservadas com seus
+  comentários, e o editor mostra os números das linhas. Chaves repetidas
+  com valores diferentes continuam sendo recusadas.
+
 ## Local development
 
     cd apps/manage
