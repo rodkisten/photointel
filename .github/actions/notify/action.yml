@@ -138,6 +138,9 @@ runs:
         NOTIFY_COMPLETED: ${{ inputs.completed }}
         NOTIFY_TOTAL: ${{ inputs.total }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        REPOSITORY: ${{ github.repository }}
 
       run: |
         set -euo pipefail
@@ -152,6 +155,9 @@ runs:
           --arg completed "$NOTIFY_COMPLETED" \
           --arg total "$NOTIFY_TOTAL" \
           --arg url "$RUN_URL" \
+          --arg run_id "$RUN_ID" \
+          --arg run_attempt "$RUN_ATTEMPT" \
+          --arg repository "$REPOSITORY" \
           '
           def clean:
             gsub("^\\s+|\\s+$"; "");
@@ -243,8 +249,18 @@ runs:
             | join("\n")
           ) as $body |
 
+          (
+            ($run_attempt | tonumber? // 1) * 100000 +
+            (if $action == "start" then 2
+             elif $action == "end" then 99998
+             else 100 + (if $completed > 0 then $completed else 0 end)
+             end)
+          ) as $sequence |
+
           {
             body: $body,
+            notification_key: ("workflow:" + $repository + ":" + $run_id),
+            sequence: $sequence,
             buttons: [
               [
                 {

@@ -57,6 +57,13 @@ def credentials() -> tuple[str, str, str] | None:
     return endpoint, token, chat
 
 
+
+def notification_scope(job: Job) -> str:
+    """One persistent Telegram bubble for a batch or independent job."""
+    return ("photointel:batch:" + str(job.batch_id) if job.batch_id
+            else "photointel:job:" + str(job.id))
+
+
 def md(value: object) -> str:
     specials = "\\_*[]()~" + chr(96) + ">#+-=|{}.!"
     return "".join("\\" + c if c in specials else c for c in str(value))
@@ -115,12 +122,23 @@ def diagnostic(job: Job, event: JobEvent) -> list[str]:
 def format_message(
     job: Job, event: JobEvent, batch: JobBatch | None = None,
     counts: dict[str, int] | None = None, grouped_events: int = 1,
+    latest_failure: tuple[Job, JobEvent] | None = None,
 ) -> tuple[str, list[list[dict[str, str]]]]:
     icon, label = STATUS[event.status]
-    payload = event.payload if isinstance(event.payload, dict) else {}
-    details = job.error_details if isinstance(job.error_details, dict) else {}
-    sentry = event_id(payload.get("sentry_event_id") or details.get("sentry_event_id"))
-    correlation = valid_correlation(job.payload.get("correlation_id")) or str(job.id)
+    # A later successful sibling must not hide a still-failed batch.
+    if counts and counts.get("failed", 0) > 0 and event.status not in ERROR_STATES:
+        icon, label = "⚠️", "Lote com falhas"
+    # A failed sibling must keep its exact Sentry and GCP links even when
+    # another job completes later in the same Telegram batch message.
+    diagnostics_job, diagnostics_event = latest_failure or (job, event)
+    diagnostics_payload = (diagnostics_event.payload
+                           if isinstance(diagnostics_event.payload, dict) else {})
+    diagnostics_details = (diagnostics_job.error_details
+                           if isinstance(diagnostics_job.error_details, dict) else {})
+    sentry = event_id(diagnostics_payload.get("sentry_event_id")
+                      or diagnostics_details.get("sentry_event_id"))
+    correlation = (valid_correlation(diagnostics_job.payload.get("correlation_id"))
+                   or str(diagnostics_job.id))
     lines = [
         icon + " *PhotoIntel · " + md(label) + "*",
         "⚙️ *Etapa:* " + md(job.job_type.replace("_", " ")),
@@ -143,12 +161,12 @@ def format_message(
         ))
     if grouped_events > 1:
         lines.append("🔔 *Eventos agrupados:* " + md(grouped_events))
-    if event.status in ERROR_STATES:
+    if event.status in ERROR_STATES or latest_failure is not None:
         lines.append("")
         lines.append("*Diagnóstico técnico \\(sem dados privados\\)*")
         frames: list[str] = []
         budget = max(300, 3400 - sum(map(len, lines)))
-        for line in diagnostic(job, event):
+        for line in diagnostic(diagnostics_job, diagnostics_event):
             encoded = line.replace("\\", "\\\\").replace(chr(96), "\\" + chr(96))
             if sum(map(len, frames)) + len(encoded) + 60 > budget:
                 frames.append("Ver traceback completo no Sentry")
@@ -159,17 +177,46 @@ def format_message(
         lines.append("🔎 *Traceback completo:* abra Sentry ou GCP nos botões abaixo\\.")
     else:
         lines.append("🔗 *Correlation:* " + md(correlation))
-    return "\n".join(lines), safe_urls(job, sentry if event.status in ERROR_STATES else None, correlation)
+    error_visible = event.status in ERROR_STATES or latest_failure is not None
+    return "\n".join(lines), safe_urls(
+        diagnostics_job, sentry if error_visible else None, correlation,
+    )
+
+
+
+async def require_editable_relay(
+    client: httpx.AsyncClient, config: tuple[str, str, str],
+) -> None:
+    """Fail closed before sending anything to an old /notifications/send relay.
+
+    Legacy senders silently ignore notification_key and would spam the chat
+    on every retry. A capability probe avoids all such side effects.
+    """
+    endpoint, token, _ = config
+    capability_url = endpoint.removesuffix("/send") + "/capabilities"
+    response = await client.get(
+        capability_url, headers={"Authorization": "Bearer " + token},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if (not isinstance(payload, dict) or payload.get("ok") is not True
+            or payload.get("version") != "editable-v1"
+            or not isinstance(payload.get("features"), list)
+            or "upsert_notification_key" not in payload["features"]):
+        raise ValueError("Telegram relay is not compatible with editable notifications")
 
 
 async def deliver(
     client: httpx.AsyncClient, config: tuple[str, str, str],
     message: str, links: list[list[dict[str, str]]],
+    notification_key: str | None = None, sequence: int | None = None,
 ) -> None:
     url, token, chat = config
     response = await client.post(
         url, headers={"Authorization": "Bearer " + token},
-        json={"body": message, "chat_id": chat, "parse_mode": "MarkdownV2", "buttons": links},
+        json={"body": message, "chat_id": chat, "parse_mode": "MarkdownV2", "buttons": links,
+              **({"notification_key": notification_key, "sequence": sequence}
+                 if notification_key is not None and sequence is not None else {})},
     )
     if not response.is_success:
         trace_id = response.headers.get("X-Relay-Trace-Id", "")
@@ -185,6 +232,15 @@ async def deliver(
             "http_status": response.status_code, "stage": "notifications/send",
         })
         raise ValueError("Telegram relay delivery was not acknowledged")
+    if notification_key is not None and (
+        result.get("notification_key") != notification_key
+        or not isinstance(result.get("message_id"), int)
+        or result["message_id"] <= 0
+    ):
+        LOG.warning("telegram_relay_missing_upsert_ack", extra={
+            "stage": "notifications/send",
+        })
+        raise ValueError("Relay has not acknowledged editable notification")
 
 
 async def claim_cursor() -> tuple[str, int] | None:
@@ -256,13 +312,10 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 if event.status not in STATES:
                     advanced = event.id
                     continue
-                # Per-job failures/retries, per-batch rollups for routine events.
-                scope = (str(job.id) if event.status in ERROR_STATES or not job.batch_id
-                         else str(job.batch_id))
-                key = scope + ":" + event.status
-                if event.status in ERROR_STATES:
-                    # Every failed attempt has its own exact Sentry event.
-                    key += ":" + str(event.id)
+                # A single Telegram bubble per logical batch (or standalone job).
+                # Every transition, even failures/retries, edits that same bubble.
+                # Event IDs are monotonic: late requests cannot revert a final state.
+                key = notification_scope(job)
                 if key not in grouped and len(grouped) >= 6:
                     break
                 previous = grouped.get(key)
@@ -276,18 +329,33 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                     .group_by(Job.status)
                 )).all()) for id_ in ids
             }
+            latest_failures: dict[object, tuple[Job, JobEvent]] = {}
+            for batch_id, progress in counts.items():
+                if progress.get("failed", 0) > 0:
+                    found = (await session.execute(
+                        select(Job, JobEvent).join(JobEvent, JobEvent.job_id == Job.id)
+                        .where(Job.batch_id == batch_id, Job.status == "failed",
+                               JobEvent.status == "failed")
+                        .order_by(JobEvent.id.desc()).limit(1)
+                    )).first()
+                    if found:
+                        latest_failures[batch_id] = (found[0], found[1])
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False,
         ) as client:
+            if grouped:
+                await require_editable_relay(client, config)
             for key, (event, job, count) in grouped.items():
                 if await was_sent(key, event.id):
                     continue
                 message, links = format_message(
                     job, event, batches.get(job.batch_id), counts.get(job.batch_id), count,
+                    latest_failure=latest_failures.get(job.batch_id)
+                    if job.batch_id and event.status not in ERROR_STATES else None,
                 )
-                await deliver(client, config, message, links)
-                # Commit a per-event marker before advancing the global cursor.
-                # Retries after another group fails do not resend prior messages.
+                await deliver(client, config, message, links, key, event.id)
+                # Commit the batch/job marker before advancing the global cursor.
+                # Retries do not resend messages already acknowledged by the relay.
                 await record_sent(key, event.id)
         return {"status": "completed", "events": len(rows), "messages": len(grouped)}
     except asyncio.CancelledError:

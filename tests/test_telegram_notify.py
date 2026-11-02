@@ -99,6 +99,7 @@ async def test_relay_delivery_uses_bearer_and_rejects_error_without_redirects():
         request = route.calls.last.request
         assert request.headers["authorization"] == "Bearer " + "T" * 32
         assert b"MarkdownV2" in request.content
+        assert b'"notification_key"' not in request.content  # legacy caller remains compatible
 
     with respx.mock(assert_all_mocked=True) as mock:
         mock.post(endpoint).mock(return_value=httpx.Response(502, json={"ok": False}))
@@ -122,3 +123,81 @@ async def test_disabled_telegram_never_uses_database_or_network(monkeypatch):
     monkeypatch.setattr(telegram, "claim_cursor", AsyncMock(side_effect=AssertionError))
     assert await telegram.drain() == {"status": "disabled", "events": 0}
     await telegram.safe_notify()
+
+
+@pytest.mark.asyncio
+async def test_editable_batch_notification_sends_stable_key_and_sequence():
+    endpoint = "https://relay.example/notifications/send"
+    with respx.mock(assert_all_mocked=True) as mock:
+        route = mock.post(endpoint).mock(return_value=httpx.Response(
+            200, json={"ok": True, "message_id": 123, "edited": True,
+                       "notification_key": "photointel:batch:123456"},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            await telegram.deliver(
+                client, (endpoint, "T" * 32, "-100123:73"),
+                "*running*", [], "photointel:batch:123456", 45,
+            )
+        request = route.calls.last.request
+        assert b'"notification_key":"photointel:batch:123456"' in request.content
+        assert b'"sequence":45' in request.content
+        assert request.headers["authorization"] == "Bearer " + "T" * 32
+
+
+def test_editable_scope_per_batch_or_standalone_job():
+    job, event, batch = example("running")
+    assert telegram.notification_scope(job) == "photointel:batch:" + str(batch.id)
+    job.batch_id = None
+    assert telegram.notification_scope(job) == "photointel:job:" + str(job.id)
+
+
+@pytest.mark.asyncio
+async def test_rejects_old_relay_response_without_edit_ack():
+    endpoint = "https://relay.example/notifications/send"
+    with respx.mock(assert_all_mocked=True) as mock:
+        mock.post(endpoint).mock(return_value=httpx.Response(
+            200, json={"ok": True, "message_id": 1},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            with pytest.raises(ValueError, match="editable notification"):
+                await telegram.deliver(
+                    client, (endpoint, "T" * 32, "42"), "*running*", [],
+                    "photointel:batch:123456", 101,
+                )
+
+
+@pytest.mark.asyncio
+async def test_capability_probe_rejects_legacy_relay_before_sending():
+    endpoint = "https://relay.example/notifications/send"
+    capabilities = "https://relay.example/notifications/capabilities"
+    with respx.mock(assert_all_mocked=True) as mock:
+        route = mock.get(capabilities).mock(return_value=httpx.Response(
+            200, json={"ok": True, "version": "editable-v1",
+                       "features": ["upsert_notification_key"]},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            await telegram.require_editable_relay(client, (endpoint, "T" * 32, "42"))
+        assert route.called
+        assert route.calls.last.request.headers["authorization"] == "Bearer " + "T" * 32
+
+    with respx.mock(assert_all_mocked=True) as mock:
+        mock.get(capabilities).mock(return_value=httpx.Response(404))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await telegram.require_editable_relay(client, (endpoint, "T" * 32, "42"))
+
+
+def test_failed_job_context_survives_later_successful_sibling():
+    failed_job, failed_event, batch = example("failed")
+    success_job, success_event, _ = example("completed")
+    success_job.batch_id = batch.id
+    message, buttons = telegram.format_message(
+        success_job, success_event, batch,
+        {"completed": 1, "failed": 1},
+        latest_failure=(failed_job, failed_event),
+    )
+    assert "Lote com falhas" in message
+    assert "MEDIA_DECODE_FAILED" in message
+    assert str(failed_job.id) in message
+    assert buttons[1][0]["url"].endswith("a" * 32)
+    assert str(failed_job.id) in buttons[-1][0]["url"]
