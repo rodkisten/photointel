@@ -71,6 +71,10 @@ jobs:
           apps/api/src/photointel/routers/preview_audit.py
           apps/api/src/photointel/routers/catalog.py
           apps/api/src/photointel/services/media.py
+          apps/api/src/photointel/services/ingestion.py
+          apps/api/src/photointel/storage.py
+          tests/test_download_integrity_v11.py
+          tests/test_foundation_storage.py
           tests/test_responsive_media.py
           tests/test_private_media_streaming.py
           tests/test_media_url_versions.py
@@ -87,6 +91,8 @@ jobs:
           tests/test_responsive_media.py
           tests/test_private_media_streaming.py
           tests/test_media_url_versions.py
+          tests/test_foundation_storage.py
+          tests/test_download_integrity_v11.py
       - name: "🗄️ Enable PostgreSQL extensions"
         run: >
           PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
