@@ -87,11 +87,7 @@ if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function')
 const SW_BUILD = '__PHOTOINTEL_SW_VERSION__';
 const SHELL_CACHE = 'photointel-shell-' + SW_BUILD;
 const ASSET_CACHE = 'photointel-static-v3';
-const PUBLIC_CDN = [
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com',
-  'https://www.gstatic.com',
-];
+const PUBLIC_CDN = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://www.gstatic.com'];
 const PRECACHE = /*__PHOTOINTEL_PRECACHE__*/ [];
 const PRIVATE = /^\/(?:v1(?:\/|$)|auth(?:\/|$)|__|cdn-cgi(?:\/|$)|api(?:\/|$)|\.)/;
 const HASHED = /^\/assets\/[\w./-]+[-.][a-zA-Z0-9_-]{8,}\.(?:js|mjs|css|woff2?|png|svg|webp|avif)$/;
