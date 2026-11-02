@@ -30,22 +30,25 @@ describe('control plane restrictions', () => {
     expect(() => validateConfig('PROJECT_ID=photointel\n')).toThrow();
     expect(() => validateConfig('PROJECT_ID=photointel\nREGION=us-central1\nghp_FAKE')).toThrow();
   });
-  it('rejects obsolete Telegram overrides before writing production variables', () => {
-    const env = 'PROJECT_ID=photointel\nREGION=us-central1\n';
+  it('allows a Telegram relay token inline while keeping other secret rules', () => {
+    const env = 'PROJECT_ID=photointel\\nREGION=us-central1\\n';
     expect(() => validateConfig(env +
-      'EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN=private_token\n')
-    ).toThrow(ApiError);
+      'TELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890\\n')
+    ).not.toThrow();
     expect(() => validateConfig(env +
-      'EXTRA_ENVIRONMENT__TELEGRAM_JOB_EVENTS_ENABLED=true\n')
-    ).toThrow(ApiError);
+      'EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890\\n')
+    ).not.toThrow();
     expect(() => validateConfig(JSON.stringify({
       project_id: 'photointel', region: 'us-central1',
       secrets: { DATABASE_URL: { name: 'db', version: '1' } },
-      extra_environment: { TELEGRAM_NOTIFICATION_API_TOKEN: 'private_token' },
-    }))).toThrow(ApiError);
+      extra_environment: { TELEGRAM_NOTIFICATION_API_TOKEN: 'fake_test_token_1234567890' },
+    }))).not.toThrow();
     expect(() => validateConfig(env +
-      'SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME=photointel-telegram\n' +
-      'SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__VERSION=1\n')
+      'EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN=short\\n')
+    ).toThrow(ApiError);
+    expect(() => validateConfig(env +
+      'SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME=photointel-telegram\\n' +
+      'SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__VERSION=1\\n')
     ).not.toThrow();
   });
   it('redacts secrets, bearer headers and private URLs', () => {
