@@ -194,7 +194,7 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
         quality = min(settings.image_quality, 80 if variant == "preview_large" else 76)
         output = io.BytesIO()
         try:
-            derived.save(output, format="WEBP", quality=quality, method=6, exif=b"")
+            derived.save(output, format="WEBP", quality=quality, method=4, exif=b"")
             extension, mime = "webp", "image/webp"
         except (KeyError, OSError, ValueError):
             output = io.BytesIO()
@@ -215,7 +215,7 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
                 avif,
                 format="AVIF",
                 quality=max(40, min(settings.image_quality - 24, 64)),
-                speed=6,
+                speed=8,
                 exif=b"",
             )
         except (KeyError, OSError, ValueError):
@@ -521,8 +521,23 @@ async def store_variants(
         )
     await session.commit()
     storage = get_storage()
-    for variant, key, _ in prepared:
-        await asyncio.to_thread(storage.put, key, variant.data, variant.mime)
+    # Each variant has an immutable object key. Uploads can overlap without
+    # serializing remote R2 latency; cap concurrency to bound memory and sockets.
+    upload_limit = asyncio.Semaphore(3)
+
+    async def upload(variant: DerivedImage, key: str) -> None:
+        async with upload_limit:
+            await asyncio.to_thread(storage.put, key, variant.data, variant.mime)
+
+    results = await asyncio.gather(
+        *(upload(variant, key) for variant, key, _ in prepared),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, BaseException):
+            # All in-flight writes have finished; pending outbox intents remain
+            # recoverable by the existing orphan reconciler.
+            raise result
     await _current_asset(session, asset, content_revision, previous_revision, job_fences)
     for variant, key, digest in prepared:
         statement = insert(AssetResource).values(
