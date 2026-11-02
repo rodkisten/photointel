@@ -54,7 +54,7 @@ export function replaceReference(raw: string, key: string, oldVersion: string, n
   // Change *only* the VERSION assignment, preserving all other .env lines,
   // comments, blank lines, CRLFs and repeated identical references.
   const pattern = new RegExp('^([ \\t]*WORKFLOW_SECRETS__' + key +
-    '__VERSION[ \\t]*=[ \\t]*)([0-9]+)([ \\t]*(?:#.*)?)
+    '__VERSION[ \\t]*=[ \\t]*)([0-9]+)([ \\t]*(?:#.*)?)$', 'gm');
   let matches = 0;
   const updated = raw.replace(pattern, (_line, prefix: string, value: string, suffix: string) => {
     if (value !== oldVersion) throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referência desatualizada');
