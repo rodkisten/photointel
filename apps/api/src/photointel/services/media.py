@@ -191,14 +191,24 @@ def decode_media(path: Path, settings: Settings) -> ProcessedMedia:
         # The stable resource names always retain a broadly supported fallback.
         # Quality is bounded by the user setting; thumbnails can be more compact
         # than a large photo displayed across the full viewport.
-        quality = min(settings.image_quality, 80 if variant == "preview_large" else 76)
+        encode_quality = min(
+            settings.image_quality, 80 if variant == "preview_large" else 76
+        )
         output = io.BytesIO()
         try:
-            derived.save(output, format="WEBP", quality=quality, method=4, exif=b"")
+            derived.save(
+                output, format="WEBP", quality=encode_quality, method=4, exif=b""
+            )
             extension, mime = "webp", "image/webp"
         except (KeyError, OSError, ValueError):
             output = io.BytesIO()
-            derived.save(output, format="JPEG", quality=quality, optimize=True, exif=b"")
+            derived.save(
+                output,
+                format="JPEG",
+                quality=encode_quality,
+                optimize=True,
+                exif=b"",
+            )
             extension, mime = "jpg", "image/jpeg"
         variants.append(
             DerivedImage(
