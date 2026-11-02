@@ -30,7 +30,8 @@ export async function api(request:Request,env:Env,identity:Identity):Promise<Res
       workers:list(cfData,"result").map(x=>({name:x.id,modified_on:x.modified_on})),
       services:list(gcpData,"services").map(x=>({name:x.name,
         uri:x.uri,latestReadyRevision:x.latestReadyRevision,
-        latestCreatedRevision:x.latestCreatedRevision})),
+        latestCreatedRevision:x.latestCreatedRevision,
+        condition:x.terminalCondition?.state,reconciling:x.reconciling})),
       providers:tasks.map(x=>x.status==="fulfilled"?"ok":
         x.reason instanceof ApiError?x.reason.message:"indisponível"),
       checked_at:new Date().toISOString(),
@@ -165,6 +166,7 @@ export async function api(request:Request,env:Env,identity:Identity):Promise<Res
     return json({items:list(data,"services").map(x=>({
       name:x.name,uri:x.uri,latestReadyRevision:x.latestReadyRevision,
       latestCreatedRevision:x.latestCreatedRevision,updateTime:x.updateTime,
+      condition:x.terminalCondition?.state,reconciling:x.reconciling,
     }))});
   }
   if(method==="GET" && path==="/api/gcp/jobs"){
@@ -173,6 +175,31 @@ export async function api(request:Request,env:Env,identity:Identity):Promise<Res
       name:x.name,updateTime:x.updateTime,latestCreatedExecution:x.latestCreatedExecution?.name,
       executionCount:x.executionCount,
     }))});
+  }
+  if(method==="GET" && path==="/api/gcp/executions"){
+    const name=url.searchParams.get("job")||"";
+    if(!/^photointel-[a-z0-9-]{1,48}$/.test(name))
+      throw new ApiError(422,"GCP_JOB","Selecione um job PhotoIntel válido");
+    const data=await gcp(env,identity,gcpBase(env)+"/jobs/"+encodeURIComponent(name)+
+      "/executions?pageSize=30");
+    return json({job:name,items:list(data,"executions").map(x=>({
+      name:x.name,createTime:x.createTime,startTime:x.startTime,
+      completionTime:x.completionTime,runningCount:x.runningCount,
+      succeededCount:x.succeededCount,failedCount:x.failedCount,
+      cancelledCount:x.cancelledCount,taskCount:x.taskCount,
+      condition:x.conditions?.[0]?.state,
+      logUri:x.logUri,
+    }))});
+  }
+  if(method==="GET" && path==="/api/gcp/scheduler"){
+    const project=env.GCP_PROJECT_ID||"photointel";
+    const region=env.GCP_REGION||"us-central1";
+    const data=await gcp(env,identity,
+      "https://cloudscheduler.googleapis.com/v1/projects/"+project+
+      "/locations/"+region+"/jobs?pageSize=60");
+    return json({items:list(data,"jobs").filter(x=>String(x.name).split("/").pop().startsWith("photointel-"))
+      .map(x=>({name:x.name,state:x.state,schedule:x.schedule,timeZone:x.timeZone,
+        lastAttemptTime:x.lastAttemptTime,status:x.status?.code??null}))});
   }
   if(method==="GET" && path==="/api/gcp/logs"){
     const correlation=(url.searchParams.get("correlation")||"").trim();
