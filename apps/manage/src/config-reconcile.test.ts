@@ -68,6 +68,16 @@ describe('automatic configuration impact planner', () => {
     expect(() => planConfigChange(BASE, BASE + '\nBROKEN LINE')).toThrow();
   });
 
+  it('deploys only Manage when its new public Sentry DSN changes', () => {
+    const dsn = 'https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456';
+    for (const key of ['MANAGE_SENTRY_DSN', 'EXTRA_ENVIRONMENT__MANAGE_SENTRY_DSN']) {
+      const plan = planConfigChange(BASE, BASE + '\n' + key + '=' + dsn);
+      expect(plan.blocked).toBe(false);
+      expect(plan.targets).toEqual(['manage']);
+      expect(plan.workflows.map((item) => item.file)).toEqual(['manage-deploy.yml']);
+    }
+  });
+
   it('selects an isolated Manage publish for Manage workflow secrets', () => {
     const a = { project_id: 'photointel', workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '1' } } };
     const b = { ...a, workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '2' } } };
