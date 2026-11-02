@@ -146,6 +146,11 @@ def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, An
             "(never passed to Cloud Run). Use "
             "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME and __VERSION instead."
         )
+        if "TELEGRAM_NOTIFICATION_API_TOKEN" not in config.get("secrets", {}):
+            print(
+                "::warning::Telegram job delivery remains disabled: "
+                "SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME/VERSION not configured."
+            )
     return config
 
 
