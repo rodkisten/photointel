@@ -930,6 +930,11 @@ async def test_catalog_preview_audit_finds_missing_and_invalid_variants(pipeline
         incomplete, complete, awaiting_source = assets
         incomplete.ingestion_status = "completed"
         complete.ingestion_status = "completed"
+        failed_job = await session.scalar(
+            select(Job).where(Job.asset_id == incomplete.id)
+        )
+        assert failed_job is not None
+        failed_job.status = "failed"
         for kind in ("thumbnail_small", "thumbnail_medium", "preview_large"):
             session.add(AssetResource(
                 asset_id=complete.id,
