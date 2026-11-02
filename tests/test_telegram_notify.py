@@ -130,7 +130,8 @@ async def test_editable_batch_notification_sends_stable_key_and_sequence():
     endpoint = "https://relay.example/notifications/send"
     with respx.mock(assert_all_mocked=True) as mock:
         route = mock.post(endpoint).mock(return_value=httpx.Response(
-            200, json={"ok": True, "message_id": 123, "edited": True},
+            200, json={"ok": True, "message_id": 123, "edited": True,
+                       "notification_key": "photointel:batch:123456"},
         ))
         async with httpx.AsyncClient(follow_redirects=False) as client:
             await telegram.deliver(
@@ -148,3 +149,18 @@ def test_editable_scope_per_batch_or_standalone_job():
     assert telegram.notification_scope(job) == "photointel:batch:" + str(batch.id)
     job.batch_id = None
     assert telegram.notification_scope(job) == "photointel:job:" + str(job.id)
+
+
+@pytest.mark.asyncio
+async def test_rejects_old_relay_response_without_edit_ack():
+    endpoint = "https://relay.example/notifications/send"
+    with respx.mock(assert_all_mocked=True) as mock:
+        mock.post(endpoint).mock(return_value=httpx.Response(
+            200, json={"ok": True, "message_id": 1},
+        ))
+        async with httpx.AsyncClient(follow_redirects=False) as client:
+            with pytest.raises(ValueError, match="editable notification"):
+                await telegram.deliver(
+                    client, (endpoint, "T" * 32, "42"), "*running*", [],
+                    "photointel:batch:123456", 101,
+                )
