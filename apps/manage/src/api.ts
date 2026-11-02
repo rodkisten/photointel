@@ -362,7 +362,12 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     const endpoint = /^https:\/\//.test(byName.get('TELEGRAM_NOTIFICATION_URL')?.value || '');
     const destination = Boolean(byName.get('TELEGRAM_NOTIFICATION_CHAT_ID')?.value);
     const token = byName.get('TELEGRAM_NOTIFICATION_API_TOKEN');
-    const tokenBound = Boolean(token?.valueSource?.secretKeyRef || token?.valueFrom?.secretKeyRef);
+    // Never return a token, only whether it is present in the deployed env.
+    const tokenBound = Boolean(
+      (typeof token?.value === 'string' && token.value.length >= 12) ||
+      token?.valueSource?.secretKeyRef ||
+      token?.valueFrom?.secretKeyRef,
+    );
     return json({
       enabled,
       endpointConfigured: endpoint,
@@ -372,7 +377,7 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
       explanation:
         enabled && endpoint && destination && tokenBound
           ? 'Configuração Cloud Run presente; verifique o Relay e as entregas reais para confirmar o envio.'
-          : 'Telegram não está completamente configurado na revisão do Cloud Run; confira GCP_CONFIG_ENV e o Secret Manager.',
+          : 'Telegram não está completamente configurado na revisão do Cloud Run; confira GCP_CONFIG_ENV (token direto ou referência Secret Manager).',
     });
   }
   if (method === 'GET' && path === '/api/gcp/services') {
