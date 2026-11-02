@@ -1,0 +1,76 @@
+name: "⚙️ Config · Cloud Run"
+run-name: "⚙️ Config · ${{ inputs.targets }} · ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        type: choice
+        required: true
+        description: "Existing runtime resources to update (never builds an image)"
+        options: ["api", "jobs", "jobs,api"]
+      config_version:
+        type: string
+        required: true
+        description: "SHA-256 of GCP_CONFIG_ENV from the management editor"
+permissions:
+  contents: read
+concurrency:
+  # Serialize config-only reconciliation with full GCP deployments.
+  group: photointel-gcp-production
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "⚙️ Reconcile ${{ inputs.targets }}"
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "🛡️ Verify configuration revision"
+        env:
+          CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
+          EXPECTED_VERSION: ${{ inputs.config_version }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_VERSION" =~ ^[a-f0-9]{64}$ ]] || { echo "::error::Invalid revision"; exit 2; }
+          actual="$(printf '%s' "$CONFIG_ENV" | sha256sum | cut -d' ' -f1)"
+          [[ "$actual" == "$EXPECTED_VERSION" ]] || {
+            echo "::error::Configuration changed since this dispatch; apply the newer revision instead"
+            exit 1
+          }
+      - name: "⚙️ Load deployment configuration"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - name: "🔐 Google WIF"
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: photointel
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: photointel
+      - name: "⚙️ Apply runtime environment (reuse existing images)"
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: python3 infra/gcp/config_sync.py --targets "$TARGETS"
+      - name: "🧹 Remove temporary configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
