@@ -66,6 +66,8 @@ jobs:
         run: >
           uv run ruff check
           apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/telegram_notify.py
+          tests/test_telegram_notify.py
           apps/api/src/photointel/services/jobs.py
           apps/api/src/photointel/services/discovery.py
           apps/api/src/photointel/routers/preview_audit.py
@@ -88,6 +90,7 @@ jobs:
           tests/test_backend_contention.py
           tests/test_session_store.py
           tests/test_job_observability.py
+          tests/test_telegram_notify.py
           tests/test_responsive_media.py
           tests/test_private_media_streaming.py
           tests/test_media_url_versions.py
