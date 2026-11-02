@@ -1,0 +1,13 @@
+# This file is documentation only. Copy to .dev.vars for local wrangler dev.
+# Never commit .dev.vars.
+ACCESS_TEAM_DOMAIN=photointel.cloudflareaccess.com
+ACCESS_AUDIENCE=YOUR_SEPARATE_MANAGE_APP_AUDIENCE
+ACCESS_ALLOWED_EMAILS=["your-email@example.com"]
+GITHUB_API_TOKEN=YOUR_FINE_GRAINED_GITHUB_TOKEN
+CLOUDFLARE_API_TOKEN=YOUR_CLOUDFLARE_TOKEN
+CLOUDFLARE_ACCOUNT_ID=YOUR_CLOUDFLARE_ACCOUNT_ID
+# Optional: WIF needs a dedicated trusted Cloudflare Access OIDC provider.
+GCP_WIF_AUDIENCE=//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/manage/providers/cloudflare-access
+GCP_IMPERSONATE_SERVICE_ACCOUNT=photointel-manage@photointel.iam.gserviceaccount.com
+SENTRY_ORG=YOUR_SENTRY_ORG
+SENTRY_API_TOKEN=YOUR_SENTRY_READ_ONLY_TOKEN
