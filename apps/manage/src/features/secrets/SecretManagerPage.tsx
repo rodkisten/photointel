@@ -73,7 +73,7 @@ export function SecretManagerPage() {
             <SecretVersionCard secret={selected} preview={preview.data}
               loading={preview.isFetching} onPreview={() => void preview.refetch()} />
             {preview.error && <IssueBanner error={preview.error} />}
-            <SecretVersionForm secret={selected} busy={mutation.isPending}
+            <SecretVersionForm key={selected.key + ':' + (result?.created_version || selected.version)} secret={selected} busy={mutation.isPending}
               onSave={(value, autoApply) => mutation.mutate({ value, autoApply })} />
             {mutation.error && <IssueBanner error={mutation.error} />}
             {result?.key === selected.key && <Card className="space-y-2 p-4">
