@@ -354,6 +354,7 @@ class ReindexInput(Contract):
     job_types: list[ReindexJobType] = Field(default_factory=default_reindex_types)
     limit: int = Field(default=100, ge=1, le=10000)
     confirm_large_batch: bool = False
+    only_outdated_previews: bool = False
 
 
 class IngestionInput(Contract):
