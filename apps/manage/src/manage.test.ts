@@ -45,6 +45,9 @@ describe('control plane restrictions', () => {
     }))).not.toThrow();
     expect(() => validateConfig(env +
       'EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN=short\n')
+    ).not.toThrow();
+    expect(() => validateConfig(env +
+      'EXTRA_ENVIRONMENT__TELEGRAM_NOTIFICATION_API_TOKEN=\n')
     ).toThrow(ApiError);
     expect(() => validateConfig(env +
       'SECRETS__TELEGRAM_NOTIFICATION_API_TOKEN__NAME=photointel-telegram\n' +
