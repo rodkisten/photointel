@@ -104,6 +104,7 @@ export function JsonView({ data, search: externalSearch, title = 'JSON', default
   const structured = value !== null && typeof value === 'object';
   const copy = () => void navigator.clipboard?.writeText(
     typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+  
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-[#303238] bg-[#101113]">
       <div className="flex flex-wrap items-center gap-2 border-b border-[#303238] px-3 py-2">
@@ -115,8 +116,8 @@ export function JsonView({ data, search: externalSearch, title = 'JSON', default
               value={localSearch} onChange={event => setLocalSearch(event.target.value)}
               placeholder="Buscar e destacar"/>
           </div>}
-        <Button type="button" variant="ghost" size="sm" onClick={copy} title="Copiar conteúdo">
-          <Copy size={14}/> Copiar
+        <Button type="button" variant="ghost" size="xsm" onClick={copy} title="Copiar conteúdo">
+          <Copy size={11}/> Copiar
         </Button>
       </div>
       <ScrollArea className="w-full" style={{ height: Math.min(maxHeight, 760) }}>
