@@ -88,44 +88,54 @@ Worker Domains Read. A missing runtime token does not block GitHub functionality
 
 ## Google Cloud without long-lived service account keys
 
-The admin Worker **does not** use Google SA JSON keys. It supports short-lived
-Google Security Token Service exchange of the **verified Access JWT** through a
-dedicated Google Workload Identity Federation OIDC provider. This is *separate*
-from the GitHub Actions OIDC provider.
+The admin Worker uses **short-lived Access JWTs**. No service account JSON
+keys are used or needed. Run **🧱 Setup GCP → permissions** after the
+Cloudflare Access app has been created by **🚀 Manage · Publish → apply**.
 
-Create a WIF pool/provider trusting the precise Access issuer
-https://YOUR-TEAM.cloudflareaccess.com and allowing **only** the management
-application's returned Access AUD. Restrict its attribute mapping and
-condition to the approved issuer/audience/email (and a dedicated subject),
-The GCP bootstrap provisions the dedicated reader account and its
-project-level read-only roles:
+The bootstrap now discovers the existing `photointel-manage` Access app
+on `photos-manage.migos.club` through the **existing** Cloudflare API token
+reference in `workflow_secrets`. It validates the app-specific audience,
+retrieves the public RSA JWKS from the trusted Access team domain, and
+creates/reconciles the Google Workload Identity Pool provider
+`manage/cloudflare-access`.
+
+The provider allows ONLY the exact Manage Access AUD and the allowlisted
+`extra_environment.MANAGE_ACCESS_ALLOWED_EMAILS` identities. Bootstrap
+grants impersonation of the **read-only** `photointel-manage` service account
+only to the mapped allowlisted email principals, not the entire pool.
+
+Project roles on that account:
 
 - `roles/run.viewer`
 - `roles/logging.viewer`
 - `roles/cloudscheduler.viewer`
 
-**The WIF provider and its trust configuration remain a separate prerequisite:**
-bootstrap does not automatically trust arbitrary external JWTs. Once the
-provider is configured to check the exact Cloudflare Access issuer, management
-application AUD and permitted subjects, grant **only those validated WIF
-principals** `roles/iam.workloadIdentityUser` on the dedicated Manage service
-account. Never grant this role to an entire shared pool or use a service
-account JSON key.
+Cloudflare Access public signing keys are refreshed when bootstrap is run,
+so rerun permissions after Access certificate rotation. The bootstrap
+does not touch GitHub deploy federation or the PhotoIntel public Worker.
 
-Put the following **non-secret** entries in GCP_CONFIG_ENV extra_environment:
+The separate Manage deployment automatically sets:
 
-    "MANAGE_GCP_WIF_AUDIENCE":
-      "//iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/manage/providers/cloudflare-access",
-    "MANAGE_GCP_IMPERSONATE_SERVICE_ACCOUNT":
-      "photointel-manage@photointel.iam.gserviceaccount.com"
+```dotenv
+MANAGE_GCP_WIF_AUDIENCE=//iam.googleapis.com/projects/799387180206/locations/global/workloadIdentityPools/manage/providers/cloudflare-access
+MANAGE_GCP_IMPERSONATE_SERVICE_ACCOUNT=photointel-manage@photointel.iam.gserviceaccount.com
+```
 
-Run the Manage publish workflow again. This switches on GCP service inventory,
-Cloud Run jobs and Cloud Logging. Without it the GCP screens display
-"configure WIF" rather than claiming a healthy system.
+These are public identifiers, not secrets. You can omit them from
+`extra_environment`; if explicitly set, they must match the dedicated
+provider. Do not set a generic GitHub WIF provider here.
 
-Cloud Logging queries are bounded to project photointel, limited resource
-types, 5-240 minute windows and optional canonical correlation UUIDs. Sensitive
-data in log messages are redacted before leaving the Worker.
+**Correct activation order:**
+
+1. Run `Manage · Publish → apply` to create the protected Access app.
+2. Run `Setup GCP → permissions` to reconcile the Manage reader SA,
+   Cloudflare Access WIF pool/provider and principal-specific IAM bindings.
+3. Run `Manage · Publish → apply` again to redeploy the Manage Worker.
+4. In System, check real provider status and error details, not just the presence
+   of environment values.
+
+Cloud Logging queries remain bounded to project `photointel`, limited
+resource types, and 5–240 minute windows. Sensitive messages are sanitized.
 
 ## Sentry
 
