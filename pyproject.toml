@@ -35,7 +35,7 @@ build-backend = "hatchling.build"
 packages = ["apps/api/src/photointel", "gpu", "bridges"]
 
 [tool.ruff]
-line-length = 90
+line-length = 120
 target-version = "py312"
 extend-exclude = ["gpu/models/joytag_upstream.py", "packages/icloudpd-source"]
 
