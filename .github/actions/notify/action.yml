@@ -1,10 +1,10 @@
 
 name: "📱 Notify"
-description: "Track strategic stages, add deep links, update iPhone Live Activity and send minimal alerts."
+description: "Track strategic stages, update Live Activities and send Telegram notifications."
 
 inputs:
   action:
-    description: "start, step or end; step supports running, success, failure"
+    description: "start, step or end"
     required: true
 
   device-id:
@@ -13,6 +13,10 @@ inputs:
 
   token:
     description: "Repository secret NOTIFY_TOKEN"
+    required: false
+
+  telegram-token:
+    description: "Bearer token for xtelegram notifications"
     required: false
 
   workflow:
@@ -24,15 +28,15 @@ inputs:
     required: false
 
   step:
-    description: "Completed step label"
+    description: "Exact GitHub step name"
     required: false
 
   outcome:
-    description: "steps.<id>.outcome for step, job.status for end"
+    description: "running, success, failure, cancelled or skipped"
     required: false
 
   activity-id:
-    description: "Unique activityId from start; never a device id"
+    description: "Unique Live Activity ID"
     required: false
 
   progress:
@@ -41,39 +45,39 @@ inputs:
     default: "0"
 
   step-index:
-    description: "1-based workflow step position fallback before GitHub REST lists the step"
+    description: "1-based workflow step position"
     required: false
 
   label:
-    description: "Short human-friendly stage label (step is the exact GitHub step name)"
+    description: "Human-friendly stage label"
     required: false
 
   completed:
-    description: "Number of strategic phases completed"
+    description: "Number of completed strategic phases"
     default: "0"
     required: false
 
   total:
-    description: "Total strategic phases for this invocation"
+    description: "Total strategic phases"
     default: "1"
     required: false
 
   github-token:
-    description: "GITHUB_TOKEN with actions:read, for exact private step links"
+    description: "GITHUB_TOKEN with actions:read"
     required: false
 
   project:
-    description: "GCP project for relevant error logs"
+    description: "GCP project"
     required: false
 
   region:
-    description: "GCP region for relevant error logs"
+    description: "GCP region"
     default: "us-central1"
     required: false
 
 outputs:
   activity_id:
-    description: "New unique Live Activity ID, empty if Notify! unavailable"
+    description: "Unique Live Activity ID"
     value: ${{ steps.send.outputs.activity_id }}
 
 runs:
@@ -119,20 +123,127 @@ runs:
         --region "$NOTIFY_REGION"
 
     - name: "📨 Notify Telegram"
-      if: always()
+      if: ${{ always() && inputs.telegram-token != '' }}
       continue-on-error: true
       shell: bash
 
       env:
-        NOTIFY_TOKEN: "12345678"
+        TELEGRAM_TOKEN: ${{ inputs.telegram-token }}
+        ACTION: ${{ inputs.action }}
+        WORKFLOW_LABEL: ${{ inputs.workflow }}
+        JOB_LABEL: ${{ inputs.job }}
+        STEP_LABEL: ${{ inputs.step }}
+        PHASE_LABEL: ${{ inputs.label }}
+        STEP_OUTCOME: ${{ inputs.outcome }}
+        NOTIFY_COMPLETED: ${{ inputs.completed }}
+        NOTIFY_TOTAL: ${{ inputs.total }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        STATUS: ${{ job.status }}
 
       run: |
+        set -euo pipefail
+
         jq -n \
-          --arg body "GitHub Actions: $STATUS" \
+          --arg action "$ACTION" \
+          --arg workflow "$WORKFLOW_LABEL" \
+          --arg job "$JOB_LABEL" \
+          --arg step "$STEP_LABEL" \
+          --arg label "$PHASE_LABEL" \
+          --arg outcome "$STEP_OUTCOME" \
+          --arg completed "$NOTIFY_COMPLETED" \
+          --arg total "$NOTIFY_TOTAL" \
           --arg url "$RUN_URL" \
-          '{
+          '
+          def clean:
+            gsub("^\\s+|\\s+$"; "");
+
+          ($action | clean | ascii_downcase) as $action |
+          ($outcome | clean | ascii_downcase) as $outcome |
+          ($workflow | clean) as $workflow |
+          ($job | clean) as $job |
+          ($step | clean) as $step |
+          ($label | clean) as $label |
+          ($completed | tonumber? // 0) as $completed |
+          ($total | tonumber? // 1) as $total |
+
+          (
+            if $action == "start" then
+              "🚀 Execução iniciada"
+            elif $action == "step" then
+              if $outcome == "success" then
+                "✅ Etapa concluída"
+              elif $outcome == "failure" then
+                "❌ Etapa falhou"
+              elif $outcome == "cancelled" then
+                "🚫 Etapa cancelada"
+              elif $outcome == "skipped" then
+                "⏭️ Etapa ignorada"
+              else
+                "⏳ Etapa em andamento"
+              end
+            elif $action == "end" then
+              if $outcome == "success" then
+                "✅ Execução concluída"
+              elif $outcome == "failure" then
+                "❌ Execução falhou"
+              elif $outcome == "cancelled" then
+                "🚫 Execução cancelada"
+              else
+                "🏁 Execução encerrada"
+              end
+            else
+              "🔔 Atualização de execução"
+            end
+          ) as $title |
+
+          (
+            [
+              $title,
+
+              (
+                if $workflow != "" then
+                  "⚙️ " + $workflow
+                else
+                  empty
+                end
+              ),
+
+              (
+                if $job != "" and $job != $workflow then
+                  "🧩 " + $job
+                else
+                  empty
+                end
+              ),
+
+              (
+                if $action == "step" then
+                  if $label != "" then
+                    "📍 " + $label
+                  elif $step != "" then
+                    "📍 " + $step
+                  else
+                    empty
+                  end
+                else
+                  empty
+                end
+              ),
+
+              (
+                if $action == "step"
+                   and $completed > 0
+                   and $total > 1
+                   and $completed <= $total then
+                  "📊 Progresso: \($completed)/\($total)"
+                else
+                  empty
+                end
+              )
+            ]
+            | join("\n")
+          ) as $body |
+
+          {
             body: $body,
             buttons: [
               [
@@ -142,11 +253,15 @@ runs:
                 }
               ]
             ]
-          }' > notification.json
-
-        curl --fail-with-body --retry 2 \
-          -X POST \
-          "https://xtelegram-cf.migos.club/notifications/send" \
-          -H "Authorization: Bearer $NOTIFY_TOKEN" \
-          -H "Content-Type: application/json" \
-          --data-binary @notification.json
+          }
+          ' |
+          curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            --retry 2 \
+            -X POST \
+            "https://xtelegram-cf.migos.club/notifications/send" \
+            -H "Authorization: Bearer $TELEGRAM_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @-
