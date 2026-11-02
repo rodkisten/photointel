@@ -276,7 +276,9 @@ async def asset_media(
     session: Session,
     request: Request,
 ) -> Response:
-    asset = await get_asset(session, asset_id)
+    # A joined lookup avoids one extra database round trip for every
+    # thumbnail, which is significant when the gallery loads dozens at once.
+    # The router still authenticates before making this private query.
     # Browsers advertise AVIF in Accept. Prefer the current AVIF rendition
     # when available, otherwise return existing WebP/JPEG without a 404.
     # This also works for albums created before AVIF support was added.
@@ -286,10 +288,11 @@ async def asset_media(
         requested_types.insert(0, f"{variant}_avif")
     resource = await session.scalar(
         select(AssetResource)
+        .join(Asset, Asset.id == AssetResource.asset_id)
         .where(
-            AssetResource.asset_id == asset_id,
+            Asset.id == asset_id,
             AssetResource.resource_type.in_(requested_types),
-            AssetResource.revision == asset.representation_revision,
+            AssetResource.revision == Asset.representation_revision,
             AssetResource.status.in_(["available", "completed"]),
         )
         .order_by(
