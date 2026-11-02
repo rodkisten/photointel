@@ -200,9 +200,7 @@ export async function api(request: Request, env: Env, identity: Identity): Promi
     await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
     const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> = [];
     // Structural IAM/identity changes must not be published before administrator approval.
-    const requiresAdmin = plan.manual.some((x) =>
-      /Novo nome de segredo|Identidade GitHub|Projeto, região|Allowlist Manage/.test(x),
-    );
+    const requiresAdmin = plan.blocked;
     if (input.auto_apply !== false && !requiresAdmin) {
       for (const workflow of plan.workflows) {
         try {
