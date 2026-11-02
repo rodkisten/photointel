@@ -721,6 +721,48 @@ class ICloudAdapter:
             version = photo.versions.get(AssetVersionSize.ORIGINAL)
         return version
 
+    # pyicloud rewrites 421/450/500 as "Authentication required for Account."
+    _REFUSAL_CODES = {
+        401: ErrorCode.ICLOUD_AUTH_EXPIRED,
+        421: ErrorCode.ICLOUD_AUTH_EXPIRED,
+        450: ErrorCode.ICLOUD_AUTH_EXPIRED,
+        500: ErrorCode.ICLOUD_AUTH_EXPIRED,
+        403: ErrorCode.ICLOUD_ACCESS_DENIED,
+        404: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
+        410: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
+        429: ErrorCode.ICLOUD_RATE_LIMITED,
+    }
+
+    def _download_refused(
+        self, status: Any, detail: str | None = None
+    ) -> AppError | None:
+        """Map an Apple download refusal to a classified AppError.
+
+        Returns None for a direct response whose status is not a known refusal
+        (the caller then relies on raise_for_status). When ``detail`` is given
+        the session already raised, so an AppError is always returned.
+        """
+        try:
+            status_code: int | None = int(status)
+        except (TypeError, ValueError):
+            status_code = None
+        code = self._REFUSAL_CODES.get(status_code) if status_code else None
+        if code is None:
+            if detail is None:
+                return None
+            code, _ = classify_icloud_failure(f"{detail} {status}")
+        if code == ErrorCode.ICLOUD_AUTH_EXPIRED:
+            record_authentication(
+                self.settings,
+                "expired",
+                "Autentique novamente no terminal",
+            )
+        return AppError(
+            code,
+            f"Apple recusou o download (HTTP {status}); verifique sessão ou limite",
+            503,
+        )
+
     def download(self, photo: Any, version: Any, target: Path) -> int:
         if version.size <= 0 or version.size > self.settings.max_download_bytes:
             raise AppError(
@@ -750,27 +792,18 @@ class ICloudAdapter:
             partial.unlink()
             offset = 0
         transferred = 0
-        response = photo.download(self.client.session, version.url, start=offset)
+        from pyicloud_ipd.exceptions import PyiCloudAPIResponseException
+
         try:
-            if response.status_code in (401, 403, 404, 410, 429):
-                code = {
-                    401: ErrorCode.ICLOUD_AUTH_EXPIRED,
-                    403: ErrorCode.ICLOUD_ACCESS_DENIED,
-                    404: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
-                    410: ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
-                    429: ErrorCode.ICLOUD_RATE_LIMITED,
-                }[response.status_code]
-                if response.status_code == 401:
-                    record_authentication(
-                        self.settings,
-                        "expired",
-                        "Autentique novamente no terminal",
-                    )
-                raise AppError(
-                    code,
-                    "Apple recusou o download; verifique sessão ou limite",
-                    503,
-                )
+            response = photo.download(self.client.session, version.url, start=offset)
+        except PyiCloudAPIResponseException as exc:
+            # PyiCloudSession raises on any non-OK, non-JSON response before the
+            # response is returned, so classify Apple's refusal here.
+            raise self._download_refused(exc.code, str(exc)) from exc
+        try:
+            error = self._download_refused(response.status_code)
+            if error is not None:
+                raise error
             response.raise_for_status()
             if offset and response.status_code != 206:
                 offset = 0
