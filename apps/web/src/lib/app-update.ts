@@ -1,4 +1,4 @@
-/** Update the SPA without caching HTML, private media or API responses. */
+/** Refresh app while preserving the last verified offline shell and immutable assets. */
 import { FRONTEND_RELEASE_ID } from './release';
 
 export async function checkForUpdate(): Promise<boolean> {
@@ -18,7 +18,7 @@ export async function checkForUpdate(): Promise<boolean> {
 }
 
 export async function refreshApplication(): Promise<void> {
-  // The SW only caches public icons. Never touch private API/media storage.
+  // The new SW pre-caches the complete release before activation.
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(
@@ -28,12 +28,6 @@ export async function refreshApplication(): Promise<void> {
           await registration.update().catch(() => undefined);
           registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
         }),
-    );
-  }
-  if ('caches' in window) {
-    const keys = await caches.keys();
-    await Promise.all(
-      keys.filter((key) => key.startsWith('photointel-shell-')).map((key) => caches.delete(key)),
     );
   }
   const url = new URL(location.href);
