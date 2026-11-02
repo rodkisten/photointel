@@ -46,6 +46,26 @@ def test_deterministic_resource_keys_are_revision_specific() -> None:
         object_key(asset_id, "revision", "original")
 
 
+@pytest.mark.parametrize("variant", [
+    "thumbnail_small", "thumbnail_medium", "preview_large",
+])
+def test_avif_derivatives_use_safe_immutable_object_keys(variant: str) -> None:
+    asset_id = str(uuid4())
+    webp_key = object_key(asset_id, "revision:hash", variant, "webp")
+    avif_key = object_key(asset_id, "revision:hash", variant + "_avif", "avif")
+    assert avif_key.endswith(f"/{variant}_avif.avif")
+    assert avif_key != webp_key
+    assert avif_key == object_key(asset_id, "revision:hash", variant + "_avif", "avif")
+    assert "revision:hash" not in avif_key
+    for bad in [
+        (variant, "avif"), (variant + "_avif", "webp"),
+        ("inference_input_avif", "avif"), ("../thumbnail_medium_avif", "avif"),
+        ("thumbnail_medium_avif", "svg"),
+    ]:
+        with pytest.raises(AppError):
+            object_key(asset_id, "revision:hash", *bad)
+
+
 def test_local_storage_round_trip_is_private_and_atomic(tmp_path: Path) -> None:
     storage = LocalStorage(tmp_path)
     key = object_key(str(uuid4()), "r1", "thumbnail_small")

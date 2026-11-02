@@ -707,6 +707,16 @@ class ICloudAdapter:
                 "Original exige ALLOW_ORIGINAL_FALLBACK=true explicitamente",
             )
         version = photo.versions.get(size)
+        if version is None and size != AssetVersionSize.ORIGINAL:
+            # Apple sometimes exposes only one of these non-original sizes.
+            # Prefer a smaller, permitted representation over failing a
+            # download solely because the configured rendition is absent.
+            alternate = (
+                AssetVersionSize.THUMB
+                if size == AssetVersionSize.MEDIUM
+                else AssetVersionSize.MEDIUM
+            )
+            version = photo.versions.get(alternate)
         if version is None and self.settings.allow_original_fallback:
             version = photo.versions.get(AssetVersionSize.ORIGINAL)
         return version

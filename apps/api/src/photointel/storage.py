@@ -90,8 +90,14 @@ def object_key(
 ) -> str:
     identifier = str(UUID(str(asset_id)))
     safe_revision = sha256(revision.encode()).hexdigest()[:24]
-    allowed = {"thumbnail_small", "thumbnail_medium", "preview_large", "inference_input"}
-    if variant not in allowed or extension not in {"webp", "jpg", "png"}:
+    base = {"thumbnail_small", "thumbnail_medium", "preview_large", "inference_input"}
+    avif = {f"{name}_avif" for name in base if name != "inference_input"}
+    allowed = (
+        variant in base and extension in {"webp", "jpg", "png"}
+    ) or (
+        variant in avif and extension == "avif"
+    )
+    if not allowed:
         raise AppError(ErrorCode.INVALID_REQUEST, "Variante de imagem inválida", 400)
     return f"assets/{identifier}/{safe_revision}/{variant}.{extension}"
 

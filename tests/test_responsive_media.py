@@ -2,10 +2,12 @@
 
 from io import BytesIO
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from photointel.config import Settings
 from photointel.services.media import decode_media
+from photointel.storage import object_key
 from PIL import Image
 
 
@@ -24,6 +26,14 @@ def _sample(tmp_path: Path) -> Path:
 def test_all_required_preview_sizes_have_supported_fallbacks(tmp_path: Path) -> None:
     result = decode_media(_sample(tmp_path), Settings(_env_file=None))
     by_name = {item.variant: item for item in result.variants}
+    # Regression for PHOTOINTEL-PYTHON-5: every derivative emitted by the
+    # encoder must have a legal, deterministic private R2 key.
+    asset_id = str(uuid4())
+    for variant in result.variants:
+        key = object_key(
+            asset_id, result.sha256, variant.variant, variant.extension
+        )
+        assert key.endswith(f"/{variant.variant}.{variant.extension}")
     for name, max_edge in {
         "thumbnail_small": 240,
         "thumbnail_medium": 640,

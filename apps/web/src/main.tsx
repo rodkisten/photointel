@@ -7,6 +7,7 @@ import { AppErrorBoundary } from './components/error-boundary';
 import { IncidentInspector } from './components/incident-inspector';
 import { reportDiagnostic } from './lib/diagnostics';
 import { initSentry } from './lib/sentry';
+import { classifyBrowserError } from './lib/browser-errors';
 
 initSentry();
 import { useUi } from './lib/store';
@@ -32,13 +33,14 @@ function reportNonFatal(error: unknown, phase: 'runtime' | 'promise' | 'resource
   }
 }
 
+// Only static, allowlisted categories enter Sentry. Never attach the script URL,
+// error message, photo metadata, cross-origin stack, or arbitrary resource paths.
 window.addEventListener('error', (event) => {
-  const target = event.target;
-  if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) {
-    reportNonFatal(new Error('Falha ao carregar recurso de aplicativo'), 'resource');
-  } else if (target === window) {
-    reportNonFatal(event.error ?? new Error('Erro JavaScript não identificado'), 'runtime');
-  }
+  const error = classifyBrowserError(event);
+  if (!error) return;
+  reportNonFatal(error,
+    event.target instanceof HTMLScriptElement || event.target instanceof HTMLLinkElement
+      ? 'resource' : 'runtime');
 }, true);
 
 window.addEventListener('unhandledrejection', (event) => {
