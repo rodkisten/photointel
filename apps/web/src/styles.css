@@ -3851,3 +3851,22 @@ textarea.input {
 .private-image-frame.image-ready::before {
   content: none;
 }
+
+/* Identity in both desktop sidebar and iPhone top navigation. */
+.brand-icon {
+  overflow: hidden;
+  background: #0a0c11;
+  border-color: #333740;
+}
+.brand-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.breadcrumb-logo {
+  display: block;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+}
