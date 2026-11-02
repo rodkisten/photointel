@@ -1,7 +1,6 @@
 import { ApiError, bodyJson, json, redact } from './auth';
 import { planConfigChange } from './config-reconcile';
 import { runManageDiagnostics } from './diagnostics';
-import { installedCredentialIdentities } from './credential-identity';
 import { secretRoutes } from './routes/secrets';
 import type { Env, Identity } from './auth';
 import {
@@ -51,8 +50,6 @@ export async function api(
       sentry_reader: Boolean(env.SENTRY_API_TOKEN),
       sentry_org: env.SENTRY_ORG || null,
     });
-  if (method === 'GET' && path === '/api/credential-identities')
-    return json(await installedCredentialIdentities(env));
   if (method === 'GET' && path === '/api/diagnostics')
     return json(await runManageDiagnostics(env));
   if (method === 'GET' && path === '/api/overview') {
