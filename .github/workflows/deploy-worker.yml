@@ -61,8 +61,8 @@ jobs:
         run: npm --prefix apps/web run test:pwa
       - name: "🧪 Cloudflare Worker tests"
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-     # - name: "🏗 Production Vite build"
-     #   run: npm --prefix apps/web run build
+      - name: "🏗 Production Vite build + PWA precache"
+        run: npm --prefix apps/web run build
 
   deploy:
     name: "🌐 Publish unified Worker"
