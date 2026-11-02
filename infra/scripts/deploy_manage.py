@@ -15,6 +15,8 @@ import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from cloudflare_setup import client, policy, reconcile_app, SetupError
 from prepare_workflow_env import read_config, secret_value
@@ -37,6 +39,31 @@ def run(args: list[str], *, env: dict[str, str], stdin: str | None = None) -> No
         # Keep them out of GitHub Actions logs.
         raise SetupError("Management Wrangler command failed; inspect Cloudflare "
                          "dashboard deploy logs and your API permissions.")
+
+
+def probe_installed_credential(label: str, url: str, token: str) -> str:
+    """Exercise the exact Secret Manager value without displaying credential content."""
+    request = Request(url, headers={
+        "Authorization": "Bearer " + token.strip(),
+        "Accept": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "photointel-manage-deploy-probe",
+    })
+    try:
+        with urlopen(request, timeout=8) as response:
+            status = response.status
+            permissions = response.headers.get("X-Accepted-GitHub-Permissions", "")
+    except HTTPError as exc:
+        status = exc.code
+        permissions = exc.headers.get("X-Accepted-GitHub-Permissions", "")
+        exc.close()
+    except (URLError, TimeoutError, OSError):
+        return label + ": network/timeout"
+    if not re.fullmatch(r"[a-z_=,; -]{0,180}", permissions, flags=re.IGNORECASE):
+        permissions = ""
+    suffix = " (required: " + permissions + ")" if permissions else ""
+    return label + ": HTTP " + str(status) + suffix
+
 
 
 def public_sentry_settings(config: dict) -> tuple[str, str]:
@@ -127,6 +154,31 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     cf_account = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
     if not re.fullmatch(r"[a-fA-F0-9]{32}", cf_account) or len(cf_token) < 20:
         raise SetupError("Invalid Cloudflare deployment credentials")
+
+    # Test the exact version-pinned runtime tokens at deploy time (not the
+    # GitHub connector's own identity). Continue publishing diagnostic UI even
+    # when the provider denies the token, so the operator can inspect it.
+    pat_version = str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"])
+    github_probe = probe_installed_credential(
+        "GitHub PAT version " + pat_version + " / Actions",
+        "https://api.github.com/repos/rodkisten/photointel/actions/runs?per_page=1",
+        gh_token,
+    )
+    cf_probe = probe_installed_credential(
+        "Cloudflare Manage runtime token / Workers",
+        "https://api.cloudflare.com/client/v4/accounts/" + cf_account + "/workers/scripts",
+        cf_token,
+    )
+    for outcome in (github_probe, cf_probe):
+        print(("::notice::" if "HTTP 200" in outcome else "::warning::") +
+              "Manage credential preflight: " + outcome)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf8") as handle:
+            handle.write("### Manage credential preflight (read-only)\\n\\n")
+            for outcome in (github_probe, cf_probe):
+                handle.write("- " + outcome + "\\n")
+            handle.write("\\nNo secret values were logged.\\n")
 
     # These identifiers are not credentials. Use the dedicated provider
     # provisioned by GCP bootstrap instead of silently disabling GCP integration.
