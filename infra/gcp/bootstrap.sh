@@ -80,6 +80,15 @@ reconcile_secret_access() {
   for key in "${!WORKFLOW_NAMES[@]}"; do
     change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" "--member=$DEPLOYER" --role=roles/secretmanager.secretAccessor --condition=None --format=none
   done
+  # Manage WIF bootstrapping discovers ONLY the public Access app AUD using
+  # the existing Cloudflare deployment credentials from Secret Manager.
+  if [[ -n "$(jq -r '.extra_environment.MANAGE_ACCESS_ALLOWED_EMAILS // ""' "$CONFIG")" ]]; then
+    for key in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+      [[ -n "${WORKFLOW_NAMES[$key]:-}" ]] || { echo "::error::Missing $key secret reference for Manage WIF" >&2; return 1; }
+      change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" \
+        "--member=$BOOTSTRAP" --role=roles/secretmanager.secretAccessor --condition=None --format=none
+    done
+  fi
   # The bootstrap workflow uses the same shared Notify action. Allow only
   # the Telegram relay credential (never the bot token) to be read after WIF login.
   if [[ -n "${SECRET_NAMES[TELEGRAM_NOTIFICATION_API_TOKEN]:-}" ]]; then
@@ -100,6 +109,12 @@ ensure_manage_identity() {
     @@CREATE@@ iam service-accounts create "$MANAGE_ID" \
     "--display-name=PhotoIntel Manage (read-only)"
 }
+reconcile_manage_federation() {
+  # Only configure external federation if a distinct Manage admin allowlist exists.
+  if [[ -n "$(jq -r '.extra_environment.MANAGE_ACCESS_ALLOWED_EMAILS // ""' "$CONFIG")" ]]; then
+    bash infra/gcp/bootstrap_manage_wif.sh
+  fi
+}
 reconcile_manage_access() {
   # Inventory, executions, bounded logs and scheduler listings only.
   # Never grant run.invoker/run.admin, IAM admin, Secret Manager or tokenCreator.
@@ -116,12 +131,13 @@ if [[ "$MODE" == permissions ]]; then
   reconcile_secret_access
   reconcile_diagnostics_access
   reconcile_manage_access
-  log "✅ Secret Manager and diagnostic IAM reconciled; Manage read-only identity ready."
+  reconcile_manage_federation
+  log "✅ Manage identity and constrained WIF federation reconciled."
   exit 0
 fi
 if [[ "$MODE" != plan ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
-  log "No mutations. Will reconcile APIs, Docker repository, seven service accounts (including read-only Manage), $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
+  log "No mutations. Will reconcile APIs, Docker repository, seven service accounts (including read-only Manage and its Cloudflare Access WIF federation when configured), $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
   exit 0
 fi
 enabled="$(gcp services list --enabled --format='value(config.name)')"
@@ -161,6 +177,7 @@ log "Staging bucket location: $(gcp storage buckets describe "$BUCKET" --format=
 reconcile_secret_access
 reconcile_diagnostics_access
 reconcile_manage_access
+reconcile_manage_federation
 # The terminal bootstrap preflight checks OAuth version existence/state without
 # ever reading credential payloads. Metadata-only viewer is scoped to these
 # two secret containers and is distinct from secretAccessor.
