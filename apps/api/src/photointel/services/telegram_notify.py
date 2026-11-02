@@ -122,15 +122,23 @@ def diagnostic(job: Job, event: JobEvent) -> list[str]:
 def format_message(
     job: Job, event: JobEvent, batch: JobBatch | None = None,
     counts: dict[str, int] | None = None, grouped_events: int = 1,
+    latest_failure: tuple[Job, JobEvent] | None = None,
 ) -> tuple[str, list[list[dict[str, str]]]]:
     icon, label = STATUS[event.status]
     # A later successful sibling must not hide a still-failed batch.
     if counts and counts.get("failed", 0) > 0 and event.status not in ERROR_STATES:
         icon, label = "⚠️", "Lote com falhas"
-    payload = event.payload if isinstance(event.payload, dict) else {}
-    details = job.error_details if isinstance(job.error_details, dict) else {}
-    sentry = event_id(payload.get("sentry_event_id") or details.get("sentry_event_id"))
-    correlation = valid_correlation(job.payload.get("correlation_id")) or str(job.id)
+    # A failed sibling must keep its exact Sentry and GCP links even when
+    # another job completes later in the same Telegram batch message.
+    diagnostics_job, diagnostics_event = latest_failure or (job, event)
+    diagnostics_payload = (diagnostics_event.payload
+                           if isinstance(diagnostics_event.payload, dict) else {})
+    diagnostics_details = (diagnostics_job.error_details
+                           if isinstance(diagnostics_job.error_details, dict) else {})
+    sentry = event_id(diagnostics_payload.get("sentry_event_id")
+                      or diagnostics_details.get("sentry_event_id"))
+    correlation = (valid_correlation(diagnostics_job.payload.get("correlation_id"))
+                   or str(diagnostics_job.id))
     lines = [
         icon + " *PhotoIntel · " + md(label) + "*",
         "⚙️ *Etapa:* " + md(job.job_type.replace("_", " ")),
@@ -153,12 +161,12 @@ def format_message(
         ))
     if grouped_events > 1:
         lines.append("🔔 *Eventos agrupados:* " + md(grouped_events))
-    if event.status in ERROR_STATES:
+    if event.status in ERROR_STATES or latest_failure is not None:
         lines.append("")
         lines.append("*Diagnóstico técnico \\(sem dados privados\\)*")
         frames: list[str] = []
         budget = max(300, 3400 - sum(map(len, lines)))
-        for line in diagnostic(job, event):
+        for line in diagnostic(diagnostics_job, diagnostics_event):
             encoded = line.replace("\\", "\\\\").replace(chr(96), "\\" + chr(96))
             if sum(map(len, frames)) + len(encoded) + 60 > budget:
                 frames.append("Ver traceback completo no Sentry")
@@ -169,7 +177,10 @@ def format_message(
         lines.append("🔎 *Traceback completo:* abra Sentry ou GCP nos botões abaixo\\.")
     else:
         lines.append("🔗 *Correlation:* " + md(correlation))
-    return "\n".join(lines), safe_urls(job, sentry if event.status in ERROR_STATES else None, correlation)
+    error_visible = event.status in ERROR_STATES or latest_failure is not None
+    return "\n".join(lines), safe_urls(
+        diagnostics_job, sentry if error_visible else None, correlation,
+    )
 
 
 
@@ -318,6 +329,17 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                     .group_by(Job.status)
                 )).all()) for id_ in ids
             }
+            latest_failures: dict[object, tuple[Job, JobEvent]] = {}
+            for batch_id, progress in counts.items():
+                if progress.get("failed", 0) > 0:
+                    found = (await session.execute(
+                        select(Job, JobEvent).join(JobEvent, JobEvent.job_id == Job.id)
+                        .where(Job.batch_id == batch_id, Job.status == "failed",
+                               JobEvent.status == "failed")
+                        .order_by(JobEvent.id.desc()).limit(1)
+                    )).first()
+                    if found:
+                        latest_failures[batch_id] = (found[0], found[1])
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(5.0, connect=2.0), follow_redirects=False,
         ) as client:
@@ -328,6 +350,8 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                     continue
                 message, links = format_message(
                     job, event, batches.get(job.batch_id), counts.get(job.batch_id), count,
+                    latest_failure=latest_failures.get(job.batch_id)
+                    if job.batch_id and event.status not in ERROR_STATES else None,
                 )
                 await deliver(client, config, message, links, key, event.id)
                 # Commit the batch/job marker before advancing the global cursor.
