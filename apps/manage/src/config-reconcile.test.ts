@@ -9,7 +9,7 @@ const BASE = [
 
 describe('automatic configuration impact planner', () => {
   it('dispatches config-only sync for top-level Telegram .env values', () => {
-    const next = BASE + '\\nTELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890';
+    const next = BASE + '\nTELEGRAM_NOTIFICATION_API_TOKEN=fake_test_token_1234567890';
     const plan = planConfigChange(BASE, next);
     expect(plan.blocked).toBe(false);
     expect(plan.targets).toEqual(['jobs', 'api']);
