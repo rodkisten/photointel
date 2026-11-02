@@ -1,0 +1,54 @@
+name: "🎨 Manage · Autoformat"
+run-name: "🎨 Manage · Prettier · ${{ github.ref_name }}"
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/manage/src/**"
+      - ".github/workflows/manage-format.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: photointel-manage-format
+  cancel-in-progress: false
+
+jobs:
+  format:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install repository formatter
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format Manage source
+        run: npx prettier --write "apps/manage/src/**/*.{js,mjs,cjs,jsx,ts,tsx,css}"
+      - name: Commit formatting if needed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- apps/manage/src; then
+            echo "Already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/manage/src
+          git commit -m "style(manage): apply shared Prettier formatting"
+          git push origin HEAD:main
+      - name: Verify formatting
+        run: npm run format:check:manage
+      - name: Verify TypeScript and unit tests
+        run: |
+          npm --prefix apps/manage ci --ignore-scripts --no-audit --no-fund
+          npm --prefix apps/manage run typecheck
+          npm --prefix apps/manage test
