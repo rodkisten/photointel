@@ -73,8 +73,8 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       continue;
     }
     if (normalized.startsWith('workflow_secrets.')) {
-      if (/\.(?:manage_[a-z0-9_]+)$/.test(normalized)) add('manage');
-      else if (/\.(?:cloudflare_[a-z0-9_]+)$/.test(normalized)) add('worker', 'manage');
+      if (/^workflow_secrets\.manage_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('manage');
+      else if (/^workflow_secrets\.cloudflare_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('worker', 'manage');
       else manual.add('Referências de credenciais de workflow: verificar IAM/Secret Manager manualmente.');
       if (/(?:\.name|\.version)$/.test(normalized))
         manual.add('Versões e novos containers de secrets devem existir antes de publicar.');
