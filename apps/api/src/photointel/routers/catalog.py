@@ -313,7 +313,13 @@ async def asset_media(
     # End the read transaction before opening R2 or streaming to a slow client.
     await session.commit()
     headers = {
-        "Cache-Control": "private, no-store",
+        # A small private browser-only cache avoids repeatedly fetching the same
+        # thumbnail while scrolling. Authentication is still checked on misses,
+        # revalidation and any request that reaches the application. CDN caches
+        # must never retain user media, even if a custom rule is later enabled.
+        "Cache-Control": "private, max-age=300, must-revalidate",
+        "CDN-Cache-Control": "no-store",
+        "Cloudflare-CDN-Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
         "ETag": etag,
         "Accept-Ranges": "bytes",
