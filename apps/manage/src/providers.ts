@@ -96,6 +96,8 @@ export async function provider(url: string, token: string, init: RequestInit = {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   headers.set('Content-Type', 'application/json');
+  if (new URL(url).hostname === 'api.github.com')
+    headers.set('User-Agent', 'PhotoIntel-Manage');
   if (token?.trim()) headers.set('Authorization', 'Bearer ' + token.trim());
   const response = await fetch(url, {
     ...init,
