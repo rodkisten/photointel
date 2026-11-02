@@ -78,8 +78,9 @@ jobs:
       - run: bash -n infra/gcp/release.sh && python3 infra/gcp/manage.py render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
-   # if: github.event_name == 'workflow_dispatch' && 
-    if: github.ref == 'refs/heads/main' 
+    # Push performs only the offline check. Production releases require
+    # an explicit workflow_dispatch (the Manage config sync has its own path).
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 90
