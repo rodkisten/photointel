@@ -20,6 +20,45 @@ export const WORKFLOW_INPUTS: Record<string, Record<string, string[]>> = {
   'icloud-validation.yml': {},
   'backend-smoke.yml': {},
 };
+/** Classify provider faults without returning remote response bodies or credentials. */
+function providerFault(url: string, status: number, body: string): ApiError {
+  const host = new URL(url).hostname;
+  let upstream = '';
+  let numericCode = '';
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: unknown; errors?: Array<{ code?: unknown }>;
+    };
+    if (typeof parsed.error === 'string' && /^[a-z_]{3,60}$/i.test(parsed.error))
+      upstream = parsed.error.toLowerCase();
+    const first = parsed.errors?.[0]?.code;
+    if (typeof first === 'number' && Number.isSafeInteger(first)) numericCode = String(first);
+  } catch { /* provider sent HTML or non-JSON, never echo its contents */ }
+  if (host === 'sts.googleapis.com') {
+    const reason = upstream === 'invalid_target'
+      ? 'Federação GCP: provider WIF inexistente ou audience não corresponde ao provider.'
+      : upstream === 'invalid_grant'
+        ? 'Federação GCP: Cloudflare Access JWT recusado. Verifique issuer, allowed audiences e condição WIF.'
+        : 'Falha na troca STS. Confira WIF, issuer, audience e atributos do Cloudflare Access.';
+    return new ApiError(503, 'GCP_STS_' + (upstream || status), reason);
+  }
+  if (host === 'iamcredentials.googleapis.com')
+    return new ApiError(503, 'GCP_IMPERSONATE_' + status,
+      'GCP recusou a impersonação. Confira roles/iam.workloadIdentityUser no photointel-manage e o principal WIF exato.');
+  if (host === 'api.github.com')
+    return new ApiError(503, 'GITHUB_' + status,
+      status === 403
+        ? 'GitHub 403: confira o PAT fine-grained, acesso ao repositório e permissões Actions (read/write) e Environments (read/write).'
+        : 'GitHub API recusou a operação (HTTP ' + status + '). Confira o PAT do Manage.');
+  if (host === 'api.cloudflare.com')
+    return new ApiError(503, 'CLOUDFLARE_' + status + (numericCode ? '_' + numericCode : ''),
+      'Cloudflare API recusou a operação (HTTP ' + status +
+      (numericCode ? ', código ' + numericCode : '') +
+      '). Confira conta, escopo do token e parâmetros da API.');
+  return new ApiError(502, 'PROVIDER_' + status,
+    'Provedor recusou a operação (HTTP ' + status + ').');
+}
+
 export async function provider(url: string, token: string, init: RequestInit = {}): Promise<unknown> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
@@ -31,22 +70,32 @@ export async function provider(url: string, token: string, init: RequestInit = {
     redirect: 'manual',
     signal: AbortSignal.timeout(12000),
   });
-  if (!response.ok)
-    throw new ApiError(
-      response.status === 401 || response.status === 403 ? 503 : 502,
-      'PROVIDER_' + response.status,
-      'Provedor recusou a operação (HTTP ' + response.status + ')',
-    );
+  if (!response.ok) {
+    // Limit any inspection to 4 KB; do not log/return upstream bodies or tokens.
+    const body = await response.text().then((x) => x.slice(0, 4096)).catch(() => '');
+    throw providerFault(url, response.status, body);
+  }
   if (response.status === 204) return { ok: true };
   if (Number(response.headers.get('Content-Length') || 0) > 2_000_000)
     throw new ApiError(502, 'RESPONSE_SIZE', 'Resposta maior que 2 MB');
   const text = await response.text();
   if (text.length > 2_000_000) throw new ApiError(502, 'RESPONSE_SIZE', 'Resposta muito grande');
+  let parsed: unknown;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     throw new ApiError(502, 'RESPONSE_JSON', 'Resposta externa inválida');
   }
+  // Cloudflare REST can return 200 + success:false.
+  if (new URL(url).hostname === 'api.cloudflare.com') {
+    const cf = parsed as { success?: boolean; errors?: Array<{ code?: unknown }> };
+    if (cf?.success === false) {
+      const code = cf.errors?.[0]?.code;
+      throw new ApiError(503, 'CLOUDFLARE_API' + (typeof code === 'number' ? '_' + code : ''),
+        'Cloudflare respondeu success=false. Confira o código e o escopo do token.');
+    }
+  }
+  return parsed;
 }
 export function gh(env: Env, path: string, method = 'GET', payload?: unknown): Promise<unknown> {
   if (!env.GITHUB_API_TOKEN) throw new ApiError(503, 'GITHUB_TOKEN', 'Configure GITHUB_API_TOKEN');
