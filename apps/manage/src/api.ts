@@ -1,6 +1,7 @@
 import { ApiError, bodyJson, json, redact } from './auth';
 import { planConfigChange } from './config-reconcile';
 import { runManageDiagnostics } from './diagnostics';
+import { parseLogRequest, gcpLogFilter } from './log-query';
 import { secretRoutes } from './routes/secrets';
 import type { Env, Identity } from './auth';
 import {
@@ -333,22 +334,19 @@ export async function api(
     });
   }
   if (method === 'GET' && path === '/api/cloudflare/logs') {
-    const search = (url.searchParams.get('search') || '').slice(0, 80).trim();
-    const minutes = Math.min(240, Math.max(5, Number(url.searchParams.get('minutes') || 30)));
-    if (!Number.isFinite(minutes)) throw new ApiError(422, 'MINUTES', 'Período inválido');
-    const now = Date.now();
-    // Cloudflare Observability query uses a top-level queryId and nested
-    // parameters (not a top-level datasets/needle/orderBy structure).
+    const investigation = parseLogRequest(url.searchParams);
+    // This API currently exposes one indexed search needle; correlation takes
+    // priority over the job ID when a deep link contains both.
+    const search = investigation.terms[0] || '';
     const data = await cf(env, '/workers/observability/telemetry/query', 'POST', {
       queryId: 'photointel-manage-logs',
       view: 'events',
       dry: true,
-      timeframe: { from: now - minutes * 60_000, to: now },
+      timeframe: { from: investigation.start, to: investigation.end },
       limit: search ? 100 : 70,
       order: 'desc',
       parameters: {
         datasets: ['cloudflare-workers'],
-        // Search all event fields, including nested source correlation IDs.
         ...(search ? { needle: { value: search, matchCase: false } } : {}),
       },
     });
@@ -481,28 +479,18 @@ export async function api(
     });
   }
   if (method === 'GET' && path === '/api/gcp/logs') {
-    const correlation = (url.searchParams.get('correlation') || '').trim();
-    if (correlation && !UUID.test(correlation))
-      throw new ApiError(422, 'CORRELATION', 'Correlation ID precisa ser UUID');
-    const minutes = Math.min(240, Math.max(5, Number(url.searchParams.get('minutes') || 30)));
-    if (!Number.isFinite(minutes)) throw new ApiError(422, 'MINUTES', 'Período inválido');
-    const after = new Date(Date.now() - minutes * 60_000).toISOString();
-    const filter =
-      '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision") AND timestamp>="' +
-      after +
-      '"' +
-      (correlation ? ' AND SEARCH("' + correlation + '")' : ' AND severity>=WARNING');
+    const investigation = parseLogRequest(url.searchParams);
     const project = env.GCP_PROJECT_ID || 'photointel';
     const data = await gcp(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
       resourceNames: ['projects/' + project],
-      filter,
+      filter: gcpLogFilter(investigation),
       orderBy: 'timestamp desc',
-      pageSize: 60,
+      pageSize: 100,
     });
     return json({
       items: mapCloudLogs((data as { entries?: unknown }).entries),
-      console_url: correlation
-        ? logsExplorer(env, correlation)
+      console_url: investigation.terms.length
+        ? logsExplorer(env, investigation.terms[0])
         : 'https://console.cloud.google.com/logs/query?project=' + project,
     });
   }
