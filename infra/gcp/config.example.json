@@ -25,6 +25,7 @@
   "job_deadline_seconds": 2400,
   "job_timeout_seconds": 2700,
   "scheduler_timezone": "Etc/UTC",
+  "auto_resume_schedules": false,
   "discovery_schedule": "0 * * * *",
   "worker_schedule": "*/10 * * * *",
   "maintenance_schedule": "17 */6 * * *",
