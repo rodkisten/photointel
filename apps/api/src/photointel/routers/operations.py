@@ -54,8 +54,9 @@ from photointel.schemas import (
 from photointel.serializers import decode_uuid_cursor, encode_cursor, row_dict
 from photointel.services.catalog import audit
 from photointel.services.import_policy import authorize_import
-from photointel.services.job_notify import safe_notify
 from photointel.services.job_control import transition_job
+from photointel.services.job_notify import safe_notify
+from photointel.services.jobs import refresh_batch
 from photointel.services.runtime_settings import effective_settings
 
 router = APIRouter(dependencies=[Depends(require_identity)])
