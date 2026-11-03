@@ -753,17 +753,21 @@ function scheduler(runner) {
       '--time-zone', requireField(config, 'scheduler_timezone'),
       '--uri', uri,
       '--http-method', 'POST',
-      '--headers', 'Content-Type=application/json',
+      operation === 'create' ? '--headers' : '--update-headers', 'Content-Type=application/json',
       '--message-body', '{}',
       '--oauth-service-account-email', identity(config, 'scheduler'),
       '--oauth-token-scope', SCOPES,
       '--attempt-deadline', '60s',
       '--max-retry-attempts', '1',
     ]);
-    runner.command([
-      'scheduler', 'jobs', 'pause', name,
-      '--location', config.region,
-    ]);
+    // A deployment must preserve schedules the operator has already resumed.
+    const action = config.auto_resume_schedules ? 'resume' : operation === 'create' ? 'pause' : null;
+    if (action) {
+      runner.command([
+        'scheduler', 'jobs', action, name,
+        '--location', config.region,
+      ]);
+    }
   }
 }
 
