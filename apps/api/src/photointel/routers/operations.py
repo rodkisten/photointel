@@ -1150,6 +1150,9 @@ async def statistics(session: Session) -> dict[str, Any]:
             )
         ).all()
     }
+    now = datetime.now(UTC)
+    # Sample real completions across the last 24 hours for a useful duration,
+    # even if none finished in the last hour (otherwise the UI displays zero).
     timing = (
         await session.execute(
             select(
@@ -1157,24 +1160,51 @@ async def statistics(session: Session) -> dict[str, Any]:
                 func.count(Job.id),
             ).where(
                 Job.status == "completed",
-                Job.finished_at > datetime.now(UTC) - timedelta(hours=1),
+                Job.started_at.is_not(None),
+                Job.finished_at.is_not(None),
+                Job.finished_at >= now - timedelta(hours=24),
             )
         )
     ).one()
     recent_five_minutes = await session.scalar(
         select(func.count(Job.id)).where(
             Job.status == "completed",
-            Job.finished_at >= datetime.now(UTC) - timedelta(minutes=5),
+            Job.finished_at >= now - timedelta(minutes=5),
         )
     ) or 0
+    recent_hour = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.status == "completed",
+            Job.finished_at >= now - timedelta(hours=1),
+        )
+    ) or 0
+    started_five_minutes = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.started_at >= now - timedelta(minutes=5),
+        )
+    ) or 0
+    last_completion = await session.scalar(
+        select(func.max(Job.finished_at)).where(Job.status == "completed")
+    )
     last_sync = await session.scalar(
         select(func.max(IngestionRun.finished_at)).where(
             IngestionRun.status == "completed"
         )
     )
-    avg_duration = float(timing[0]) if timing[0] else None
+    avg_duration = float(timing[0]) if timing[0] is not None else None
     pending = sum(
-        job_counts.get(status, 0) for status in ["queued", "retrying", "preparing"]
+        job_counts.get(status, 0)
+        for status in ("queued", "retrying", "preparing", "running")
+    )
+    observed_rate = (
+        recent_five_minutes / 300
+        if recent_five_minutes
+        else recent_hour / 3600
+        if recent_hour
+        else None
+    )
+    rate_window = (
+        "5min" if recent_five_minutes else "hour" if recent_hour else None
     )
     return {
         "total_assets": assets[0],
@@ -1182,14 +1212,27 @@ async def statistics(session: Session) -> dict[str, Any]:
         "processed_assets": assets[2],
         "job_counts": job_counts,
         "pending_processing": pending,
+        "running_jobs": job_counts.get("running", 0),
+        "paused_jobs": job_counts.get("paused", 0),
         "failed_jobs": job_counts.get("failed", 0),
         "last_icloud_sync": last_sync,
-        "jobs_per_second_last_hour": (timing[1] or 0) / 3600,
+        "latest_completed_job": last_completion,
+        "jobs_started_last_5min": started_five_minutes,
+        "jobs_per_second_last_hour": recent_hour / 3600,
         "jobs_per_second_last_5min": recent_five_minutes / 300,
-        "jobs_completed_last_hour": timing[1] or 0,
+        "jobs_per_second_observed": observed_rate,
+        "jobs_rate_window": rate_window,
+        "jobs_completed_last_hour": recent_hour,
+        "jobs_completed_last_5min": recent_five_minutes,
         "average_job_duration_seconds": avg_duration,
-        "estimated_remaining_seconds": pending * avg_duration if avg_duration else None,
-        "estimate_notice": "Estimativa baseada nos jobs concluídos; não é garantia.",
+        "duration_sample_size": timing[1] or 0,
+        "estimated_remaining_seconds": (
+            pending / observed_rate if pending and observed_rate else None
+        ),
+        "estimate_notice": (
+            "ETA calculada pela taxa real de conclusão da janela recente; "
+            "ausência de amostras é informada em vez de inventar estimativas."
+        ),
     }
 
 
