@@ -6,11 +6,10 @@ import {
   Info,
   Pause,
   Play,
+  X,
   Plus,
   ExternalLink,
   RefreshCw,
-  RotateCcw,
-  X,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -21,6 +20,8 @@ import { DetailList, Empty, ErrorState, PageHeader, Skeleton, Status } from '../
 import { Button } from '../components/ui/button';
 import { Dialog } from '../components/ui/dialog';
 import { PreviewAuditDialog } from '../components/preview-audit';
+import { QueueControls } from '../components/queue-controls';
+import { JobControls, JobProgress } from '../components/job-controls';
 import { date, items, number, obj, text } from '../lib/format';
 import { useUi } from '../lib/store';
 import { jobLogsUrl } from '../lib/diagnostics';
@@ -149,6 +150,7 @@ export function JobsPage() {
           </>
         }
       />
+      <QueueControls />
       <div className="metrics">
         {[
           ['Na fila', stats.data?.pending_processing],
@@ -239,6 +241,7 @@ export function JobsPage() {
                   )}
                 </div>
                 <Status value={batch.status} />
+                <div className="job-batch-actions">
                 <Button
                   variant="outline"
                   size="icon"
@@ -254,6 +257,21 @@ export function JobsPage() {
                 >
                   {batch.status === 'paused' ? <Play size={13} /> : <Pause size={13} />}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Cancelar lote"
+                  title="Cancelar os jobs pendentes deste lote"
+                  disabled={action.isPending || ['completed', 'failed', 'cancelled'].includes(text(batch.status))}
+                  onClick={() => {
+                    if (window.confirm('Cancelar os jobs pendentes deste lote?')) {
+                      action.mutate({ url: `/v1/job-batches/${batch.id}/cancel` });
+                    }
+                  }}
+                >
+                  <X size={13} />
+                </Button>
+                </div>
               </div>
             );
           })}
@@ -326,36 +344,17 @@ export function JobsPage() {
                     </span>
                   </button>
                 )}
-                <Status value={item.status} />
+                <div className="job-state-progress">
+                  <Status value={item.status} />
+                  <JobProgress job={item} compact />
+                </div>
                 <span className="job-duration muted">
                   {item.started_at && item.finished_at
                     ? `${number((new Date(item.finished_at).getTime() - new Date(item.started_at).getTime()) / 1000)} s`
                     : '—'}
                 </span>
                 <div className="job-actions">
-                  {['failed', 'cancelled'].includes(item.status) ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Repetir job"
-                      disabled={action.isPending}
-                      onClick={() => action.mutate({ url: `/v1/jobs/${item.id}/retry` })}
-                    >
-                      <RotateCcw size={14} />
-                    </Button>
-                  ) : (
-                    !['completed', 'cancelled'].includes(item.status) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Cancelar job"
-                        disabled={action.isPending}
-                        onClick={() => action.mutate({ url: `/v1/jobs/${item.id}/cancel` })}
-                      >
-                        <X size={14} />
-                      </Button>
-                    )
-                  )}
+                  <JobControls job={item} compact />
                   <Button
                     variant="ghost"
                     size="icon"
