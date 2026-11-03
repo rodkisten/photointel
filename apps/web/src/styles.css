@@ -59,7 +59,11 @@
 
   h1,
   h2,
-  h3,
+  h3 {
+    @apply m-0;
+    font-family: var(--font-family-headings);
+  }
+
   p {
     @apply m-0;
   }

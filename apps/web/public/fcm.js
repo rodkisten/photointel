@@ -14,19 +14,19 @@ import {
 } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-messaging.js';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY',
-  authDomain: 'photointel-firebase.firebaseapp.com',
-  projectId: 'photointel-firebase',
-  storageBucket: 'photointel-firebase.firebasestorage.app',
-  messagingSenderId: '723658488603',
-  appId: '1:723658488603:web:64c64e34743b9aabe431be',
-  measurementId: 'G-RE93MWG6FN',
+  apiKey: 'AIzaSyD3SeCdsCKawqwt-GiEit6CdbiJglE2c-4',
+  authDomain: 'photointel.firebaseapp.com',
+  projectId: 'photointel',
+  storageBucket: 'photointel.firebasestorage.app',
+  messagingSenderId: '799387180206',
+  appId: '1:799387180206:web:9271bf1c847deb91baa13f',
+  measurementId: 'G-20WQ9D91LP',
 };
 
 // Firebase Console > Configuracoes do projeto > Cloud Messaging
 // > Configuracao da Web > Certificados Web Push > Chave publica.
 const VAPID_PUBLIC_KEY =
-  'BPMDhEs2FPaek4BwM2UVJBrMrRnDDXxLRn8SDeji1hZNGC8hft0IEplz5Y7jKnfRGBb14iKWtbNyGOw__nXHCHQ';
+  'BD5hS2NpwUvKXtIfVkmETkgXbOZhWtkyWis7ZNzXBYBW50YfpfS9Q8oJgK2KPaXPOQxS8TRRndPjOEd3dRZOlo0';
 const WORKER_URL = '/sw.js';
 
 const app = initializeApp(firebaseConfig);
