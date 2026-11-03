@@ -70,6 +70,15 @@ export function asStructuredData(value: unknown): unknown {
   }
 }
 
+export function isEmptyJsonValue(data: unknown): boolean {
+  const value = asStructuredData(data);
+  return (
+    value == null ||
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'object' && Object.keys(value).length === 0)
+  );
+}
+
 // Auxiliar para definir a cor baseada no tipo primitivo
 function getSyntaxColor(value: unknown, kind: string): string {
   if (value === null) return 'text-carbon-500';
@@ -283,10 +292,7 @@ export function JsonView({
 
   const isStructured = value !== null && typeof value === 'object';
   // Includes the literal string "{}" after asStructuredData() parses it.
-  const isEmpty =
-    value == null ||
-    (typeof value === 'string' && value.trim() === '') ||
-    (typeof value === 'object' && Object.keys(value).length === 0);
+  const isEmpty = isEmptyJsonValue(value);
 
   const handleCopy = () => {
     const textToCopy = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
