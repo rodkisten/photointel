@@ -281,7 +281,8 @@ por falta de IAM é marcada "Não verificado". O nome conhecido
 ICLOUD_SESSION_KEY → photointel-session-aead-key é exibido mesmo que a
 referência esteja ausente do .env, para orientar a recuperação.
 
-O fluxo mobile oferece busca por nome/variável, histórico paginado de versões,
+O fluxo mobile oferece busca por nome/variável, link direto com
+`?tab=secrets&secret=ICLOUD_SESSION_KEY`, histórico paginado de versões,
 estados ENABLED/DISABLED/DESTROYED, visualização segura de apenas três caracteres
 do início e três do fim do payload (ou máscara integral para dados binários/
 multilinha), adição de versões de até 64 KiB e criação de containers com prefixo
@@ -298,8 +299,10 @@ referência podem receber versões, mas só entram em produção após vincular
 NAME e VERSION na aba Ambiente. Criar container também não cria referências
 automaticamente.
 
-**Permissões necessárias:** execute **🧱 Setup GCP → permissions** na main após
-atualizar o código. O bootstrap concede à identidade Access-allowlisted
+**Permissões necessárias:** abra a aba Secrets e use **Sincronizar IAM**,
+ou execute **🧱 Setup GCP → permissions** na main após atualizar o código.
+O botão solicita o workflow privilegiado e exibe link para acompanhá-lo;
+não apresenta o dispatch como se a execução já tivesse terminado. O bootstrap concede à identidade Access-allowlisted
 photointel-manage@photointel.iam.gserviceaccount.com, somente no projeto
 photointel, as funções roles/secretmanager.viewer,
 roles/secretmanager.secretAccessor e roles/secretmanager.secretVersionAdder.
