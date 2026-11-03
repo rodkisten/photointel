@@ -51,6 +51,35 @@ describe('iCloud password and 2FA gateway', () => {
     expect(gcp).toHaveBeenCalledOnce();
   });
 
+  it('accepts short Apple passwords, independently of 32-byte AES keys', async () => {
+    const upstream = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(String(init.body))).toEqual({ password: 'shortpass' });
+      return new Response(JSON.stringify({
+        state: 'verification_required', challenge: 'A'.repeat(100), mode: '2fa',
+        expires_in: 600, message: 'Digite o código Apple',
+      }), { status: 200 });
+    });
+    globalThis.fetch = upstream as typeof fetch;
+    const result = await icloudAuthRoute(request('start', { password: 'shortpass' }), env, identity);
+    expect((await result?.json()).state).toBe('verification_required');
+  });
+
+  it('checks iCloud readiness via GET without sending a password or a code', async () => {
+    const upstream = vi.fn(async (url: string, init: RequestInit) => {
+      expect(url).toBe('https://photointel-api-abcdef-uc.a.run.app/v1/ingestion/web-auth/status');
+      expect(init.method).toBe('GET');
+      expect(init.body).toBeUndefined();
+      return new Response(JSON.stringify({ ready: false, code: 'ICLOUD_SESSION_KEY_UNAVAILABLE',
+        message: 'Chave técnica indisponível' }), { status: 200 });
+    });
+    globalThis.fetch = upstream as typeof fetch;
+    const req = new Request('https://photos-manage.migos.club/api/icloud/auth/status');
+    const result = await icloudAuthRoute(req, env, identity);
+    expect(await result?.json()).toEqual({
+      ready: false, code: 'ICLOUD_SESSION_KEY_UNAVAILABLE', message: 'Chave técnica indisponível',
+    });
+  });
+
   it('completes 2FA without forwarding any password', async () => {
     const upstream = vi.fn(async (_url: string, init: RequestInit) => {
       expect(JSON.parse(String(init.body))).toEqual({ challenge: 'A'.repeat(40), code: '123456' });

@@ -79,7 +79,7 @@ reconcile_secret_access() {
     name="${SECRET_NAMES[$key]}"
     for role in api jobs migrate; do
       case "$role:$key" in
-        api:MIGRATION_DATABASE_URL|api:ICLOUD_SESSION_KEY|jobs:MIGRATION_DATABASE_URL|jobs:SENTRY_API_TOKEN) continue ;;
+        api:MIGRATION_DATABASE_URL|jobs:MIGRATION_DATABASE_URL|jobs:SENTRY_API_TOKEN) continue ;;
         migrate:*) if [[ "$key" != DATABASE_URL && "$key" != MIGRATION_DATABASE_URL ]]; then continue; fi ;;
       esac
       change secrets add-iam-policy-binding "$name" "--member=serviceAccount:photointel-$role@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None --format=none

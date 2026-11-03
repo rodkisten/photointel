@@ -22,6 +22,16 @@ The Manage **iCloud** tab now provides a native browser login:
    API origin discovered with the authenticated GCP control plane. The backend
    verifies the signed Access JWT and separate Manage admin email allowlist.
 
+The browser login first checks the API's `/v1/ingestion/web-auth/status`
+readiness endpoint. A **32-byte Base64 AES key** is infrastructure configuration,
+not a 32-character password rule. The API service account must have scoped
+`roles/secretmanager.secretAccessor` access to the existing `ICLOUD_SESSION_KEY`
+secret and a pinned runtime secret reference, the same encryption key used by
+the worker. The GCP bootstrap permissions workflow grants access on that single
+secret, and the production API release reconciles its environment.
+The UI includes password, 2FA/2SA code, expiration recovery, and confirmation
+screens without persisting the Apple code or password.
+
 The existing CLI method remains available only as an optional recovery fallback;
 it is **not required** for ordinary login in the Manage UI. Never add Apple
 passwords to GitHub Variables, Secret Manager, Actions workflows, URL parameters,

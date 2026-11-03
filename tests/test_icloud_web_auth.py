@@ -22,6 +22,31 @@ def config(tmp_path: Path) -> Settings:
     )
 
 
+def test_readiness_distinguishes_apple_password_and_session_encryption_key(tmp_path):
+    cfg = config(tmp_path)
+    assert web.login_readiness(cfg)["ready"] is True
+    unavailable = cfg.model_copy(update={"icloud_session_key": None})
+    status = web.login_readiness(unavailable)
+    assert status["ready"] is False
+    assert status["code"] == "ICLOUD_SESSION_KEY_UNAVAILABLE"
+    assert "senha Apple" in status["message"]
+
+
+@pytest.mark.asyncio
+async def test_short_apple_password_rejected_only_if_infrastructure_missing(monkeypatch, tmp_path):
+    cfg = config(tmp_path).model_copy(update={"icloud_session_key": None})
+    called = []
+
+    def fake_begin(*args):
+        called.append(True)
+        raise AssertionError("Apple must not be contacted without the AES session key")
+
+    monkeypatch.setattr(web, "_begin_sync", fake_begin)
+    with pytest.raises(AppError, match="chave técnica"):
+        await web.start_login(cfg, "admin@invalid.test", "shortpass")
+    assert not called
+
+
 def test_browser_challenge_is_encrypted_short_lived_and_identity_bound(tmp_path, monkeypatch):
     cfg = config(tmp_path)
     source = tmp_path / "stage"

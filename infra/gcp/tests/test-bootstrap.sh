@@ -117,6 +117,11 @@ grep -F 'secrets add-iam-policy-binding photointel-sentry-dsn' "$GCLOUD_TRACE" |
     grep -Fq 'roles/secretmanager.secretAccessor'
 grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
     grep -Fq 'photointel-api@replace-project-id.iam.gserviceaccount.com'
+# Apple browser 2FA needs the existing AES session key in API, not a longer Apple password.
+# Grant only Secret Manager accessor on this specific secret, never project-wide.
+grep -F 'secrets add-iam-policy-binding photointel-session-aead-key' "$GCLOUD_TRACE" |
+    grep -F 'photointel-api@replace-project-id.iam.gserviceaccount.com' |
+    grep -Fq -- '--role=roles/secretmanager.secretAccessor'
 if grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
     grep -Fq 'photointel-jobs@'; then
     echo "ERROR: private Sentry API token granted to worker identity" >&2; exit 1

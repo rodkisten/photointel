@@ -1,0 +1,74 @@
+name: "🔐 iCloud MFA · One-time IAM + API Repair"
+run-name: "🔐 iCloud MFA · Repair API secret access then release"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temporary-icloud-mfa-repair.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: photointel-icloud-mfa-permission-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: "🔐 Grant API secret access, then dispatch API release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: "🔐 IAM permissions through approved Bootstrap workflow"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The bootstrap provider is restricted to gcp-bootstrap.yml.
+          # Never impersonate it from an arbitrary workflow.
+          before="$(gh api "repos/$GH_REPO/actions/workflows/gcp-bootstrap.yml/runs?event=workflow_dispatch&per_page=30" --jq '[.workflow_runs[].id] | max // 0')"
+          gh api -X POST "repos/$GH_REPO/actions/workflows/gcp-bootstrap.yml/dispatches" \
+            -f ref=main -f 'inputs[mode]=permissions'
+          echo "Dispatched bootstrap IAM-only reconciliation (not full provisioning)."
+
+          run_id=""
+          for attempt in $(seq 1 90); do
+            run_id="$(gh api "repos/$GH_REPO/actions/workflows/gcp-bootstrap.yml/runs?event=workflow_dispatch&per_page=30" \
+              --jq '[.workflow_runs[] | select(.id > ('"$before"') and (.display_title | contains("permissions")))] | sort_by(.id) | last | .id // empty')"
+            if [[ -n "$run_id" ]]; then break; fi
+            sleep 5
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "::error::Could not locate the IAM-only bootstrap run; API release was not dispatched."
+            exit 1
+          fi
+          echo "IAM run: https://github.com/$GH_REPO/actions/runs/$run_id"
+          conclusion=""
+          for attempt in $(seq 1 150); do
+            result="$(gh api "repos/$GH_REPO/actions/runs/$run_id" --jq '[.status, (.conclusion // "")] | join(" ")')"
+            read -r status conclusion <<< "$result"
+            if [[ "$status" == completed ]]; then break; fi
+            sleep 6
+          done
+          if [[ "$status" != completed || "$conclusion" != success ]]; then
+            echo "::error::IAM bootstrap did not succeed. The backend will not be released."
+            exit 1
+          fi
+
+      - name: "🚀 Dispatch API release with encrypted iCloud session key"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api -X POST "repos/$GH_REPO/actions/workflows/gcp-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[action]=release' \
+            -f 'inputs[migration_mode]=plan' \
+            -f 'inputs[migration_database]=unselected'
+          echo "The audited production API release has been dispatched. No database migrations requested."
