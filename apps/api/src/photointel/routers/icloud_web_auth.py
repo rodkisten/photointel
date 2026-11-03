@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from photointel.auth import Identity, require_manage_identity
 from photointel.database import get_session
 from photointel.services.runtime_settings import effective_settings
-from photointel.services.icloud_web_auth import start_login, verify_login
+from photointel.services.icloud_web_auth import start_login, verify_login, login_readiness
 
 router = APIRouter(
     prefix="/ingestion/web-auth",
@@ -27,6 +27,12 @@ class BeginLogin(BaseModel):
 class VerifyLogin(BaseModel):
     challenge: str = Field(min_length=32, max_length=750000)
     code: SecretStr = Field(min_length=6, max_length=6)
+
+
+@router.get("/status")
+async def login_status(session: Session, identity: Actor) -> dict:
+    settings = await effective_settings(session)
+    return login_readiness(settings)
 
 
 @router.post("/start")
