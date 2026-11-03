@@ -661,3 +661,56 @@ async def test_capabilities_require_current_model_and_input_revision(
     assert stale["joytag"]["state"] == "unavailable"
     assert stale["semantic_search"]["state"] == "not_configured"
     assert stale["gpu_inference"]["state"] == "unavailable"
+
+
+async def test_automatic_preview_repair_reuses_durable_source(
+    asset: Asset, database: AsyncSession,
+) -> None:
+    from photointel.models import utcnow
+    from photointel.services.preview_repair import _queue_repair
+    from photointel.services.runtime_settings import effective_settings
+
+    asset.ingestion_status = "completed"
+    database.add(AssetResource(
+        asset_id=asset.id,
+        resource_type="source_download",
+        revision=asset.content_revision,
+        status="available",
+        object_key=f"source/{asset.id}/image",
+    ))
+    await database.flush()
+    settings = await effective_settings(database)
+    first = await _queue_repair(
+        database, asset.id, settings, utcnow(), ingestion_paused=False,
+    )
+    second = await _queue_repair(
+        database, asset.id, settings, utcnow(), ingestion_paused=False,
+    )
+    assert first == "queued"
+    assert second == "busy"
+    jobs = list((await database.scalars(select(Job).where(
+        Job.asset_id == asset.id, Job.job_type == "thumbnail_generate",
+    ))).all())
+    assert len(jobs) == 1
+    assert jobs[0].payload["automatic_preview_repair"] is True
+    assert jobs[0].payload["content_revision"] == asset.content_revision
+
+
+async def test_automatic_preview_repair_requires_manifest_for_new_download(
+    asset: Asset, database: AsyncSession,
+) -> None:
+    from photointel.models import utcnow
+    from photointel.services.preview_repair import _queue_repair
+    from photointel.services.runtime_settings import effective_settings
+
+    asset.ingestion_status = "completed"
+    await database.flush()
+    settings = await effective_settings(database)
+    result = await _queue_repair(
+        database, asset.id, settings, utcnow(), ingestion_paused=False,
+    )
+    assert result == "blocked"
+    total = await database.scalar(select(func.count(Job.id)).where(
+        Job.asset_id == asset.id,
+    ))
+    assert total == 0
