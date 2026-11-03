@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { RefreshCcw, Search } from 'lucide-react';
 import { Badge, Button, Card, Input, Select } from '../components/ui';
 import { JsonView } from '../components/json-view';
@@ -34,27 +35,23 @@ const TABS: Array<{ id: Source; label: string }> = [
 ];
 
 export function LogViewer() {
-  const [link, setLink] = useState<LogLink>(() => readLogLink(window.location.search));
-  const [search, setSearch] = useState(() => primaryTerm(readLogLink(window.location.search)));
-  const [serverFilter, setServerFilter] = useState(() => primaryTerm(readLogLink(window.location.search)));
+  const link = useSearch({ from: '/logs' });
+  const navigate = useNavigate({ from: '/logs' });
+  const [search, setSearch] = useState(() => primaryTerm(link));
+  const [serverFilter, setServerFilter] = useState(() => primaryTerm(link));
   const [showStructured, setShowStructured] = useState(true);
   const source = link.source;
   const minutes = link.minutes;
 
+  // Back/forward and deep links always restore the selected provider and filters.
   useEffect(() => {
-    const onLocationChange = () => {
-      const next = readLogLink(window.location.search);
-      setLink(next);
-      setSearch(primaryTerm(next));
-      setServerFilter(primaryTerm(next));
-    };
-    window.addEventListener('popstate', onLocationChange);
-    return () => window.removeEventListener('popstate', onLocationChange);
-  }, []);
+    const term = primaryTerm(link);
+    setSearch(term);
+    setServerFilter(term);
+  }, [link]);
 
   const updateLink = (next: LogLink) => {
-    setLink(next);
-    window.history.replaceState(null, '', logLinkPath(next));
+    void navigate({ to: '/logs', search: next, replace: true });
   };
 
   const params = apiLogParams(link, serverFilter).toString();
