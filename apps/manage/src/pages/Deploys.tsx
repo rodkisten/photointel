@@ -42,7 +42,7 @@ import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
-export function Deploys({ openRun }: { openRun: (n: number) => void }) {
+export function Deploys() {
   const qc = useQueryClient();
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: () => api<{ items: WF[] }>('/workflows') });
   const runs = useQuery({
@@ -151,7 +151,7 @@ export function Deploys({ openRun }: { openRun: (n: number) => void }) {
         ) : (
           <Card className="overflow-hidden">
             {runs.data?.items.slice(0, 40).map((r) => (
-              <RunRow key={r.id} run={r} onSelect={openRun} />
+              <RunRow key={r.id} run={r} />
             ))}
           </Card>
         )}
