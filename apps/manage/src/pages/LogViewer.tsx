@@ -26,10 +26,20 @@ const TABS: Array<{ id: Source; label: string }> = [
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 export function LogViewer() {
-  const [source, setSource] = useState<Source>('gcp');
-  const [minutes, setMinutes] = useState('30');
-  const [search, setSearch] = useState('');
-  const [serverFilter, setServerFilter] = useState('');
+  const [source, setSource] = useState<Source>(() => {
+    const requested = new URLSearchParams(window.location.search).get('source');
+    return TABS.some((tab) => tab.id === requested) ? (requested as Source) : 'gcp';
+  });
+  const [minutes, setMinutes] = useState(() =>
+    new URLSearchParams(window.location.search).has('correlation') ? '240' : '30',
+  );
+  const [search, setSearch] = useState(
+    () => new URLSearchParams(window.location.search).get('correlation') || '',
+  );
+  const [serverFilter, setServerFilter] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get('correlation') || '';
+    return UUID.test(id) ? id : '';
+  });
   const [showStructured, setShowStructured] = useState(true);
   const q = useQuery<ResponseData>({
     queryKey: ['logs', source, minutes, serverFilter],
@@ -62,7 +72,7 @@ export function LogViewer() {
       setServerFilter(search.trim());
   };
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-[#292b2f] bg-[#151618] p-1">
         {TABS.map(({ id, label }) => (
           <button
@@ -87,7 +97,7 @@ export function LogViewer() {
         {(source === 'gcp' || source === 'cloudflare') && (
           <Select
             aria-label="Janela de tempo"
-            className="w-28"
+            className="w-[110px] shrink-0"
             value={minutes}
             onChange={(event) => setMinutes(event.target.value)}
           >
@@ -97,7 +107,7 @@ export function LogViewer() {
             <option value="240">4 horas</option>
           </Select>
         )}
-        <div className="relative min-w-[150px] flex-1">
+        <div className="relative min-w-0 basis-full flex-1 sm:basis-[190px]">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-3 text-slate-500" />
           <Input
             value={search}
