@@ -89,6 +89,7 @@ jobs:
           uv run pytest -q
           tests/test_backend_contention.py
           tests/test_session_store.py
+          tests/test_icloud_web_auth.py
           tests/test_job_observability.py
           tests/test_telegram_notify.py
           tests/test_responsive_media.py
