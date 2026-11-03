@@ -7,6 +7,8 @@ import type { Info, Job, Page } from '../api/types';
 import { Status } from './common';
 import { jobLogsUrl } from '../lib/diagnostics';
 import { sentryEventUrl } from '../lib/sentry';
+import { QueueControls, type QueueState } from './queue-controls';
+import { JobControls, JobProgress } from './job-controls';
 
 type Size = 'closed' | 'mini' | 'half' | 'full';
 const STORAGE_KEY = 'photointel:jobs-drawer:v2';
@@ -38,6 +40,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   // SSE keeps the badge live; a longer safety poll avoids duplicate reads.
   const jobs = useApi<Page<Job>>('/v1/jobs/activity?limit=24', 30_000);
   const batches = useApi<Page<Info>>('/v1/job-batches?limit=8', 30_000);
+  const queue = useApi<QueueState>('/v1/jobs/control', 6_000);
   const [size, setSize] = useState<Size>(savedSize);
   const touch = useRef<number | null>(null);
   const activeJobs = (jobs.data?.items ?? []).filter((job) => ACTIVE.has(job.status));
@@ -46,11 +49,13 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   const visibleBatch =
     activeBatches[0] ?? batches.data?.items.find((batch) => !terminal.has(String(batch.status)));
   const progress = visibleBatch ? batchSummary(visibleBatch) : null;
-  const title = activeJobs.some((job) => job.status === 'running')
-    ? 'Processamento em andamento'
-    : activeJobs.length || activeBatches.length
-      ? 'Jobs aguardando execução'
-      : 'Atividade de processamento';
+  const title = queue.data?.paused
+    ? 'Fila pausada'
+    : (queue.data?.running ?? 0) > 0
+      ? 'Processamento em andamento'
+      : (queue.data?.open ?? 0) > 0
+        ? 'Jobs aguardando execução'
+        : 'Atividade de processamento';
 
   function resize(next: Size) {
     setSize(next);
@@ -132,13 +137,13 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
         type="button"
         className="jobs-drawer-toggle"
         onClick={() => resize('mini')}
-        aria-label={`Abrir monitor de jobs: ${activeJobs.length} ativos`}
+        aria-label={`Abrir monitor de jobs: ${queue.data?.open ?? 'contagem indisponível'} pendentes`}
       >
         <Activity
           size={17}
           className={activeJobs.some((job) => job.status === 'running') ? 'job-running-icon' : ''}
         />
-        <span>{activeJobs.length ? `${activeJobs.length} jobs` : 'Jobs'}</span>
+        <span>{queue.data ? `${queue.data.open} jobs` : 'Jobs'}</span>
         {progress && (
           <span className="jobs-toggle-progress" aria-label={`Progresso: ${progress.percent}%`}>
             <span style={{ width: `${progress.percent}%` }} />
@@ -177,7 +182,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           <span>
             <strong>{title}</strong>
             <small>
-              {activeJobs.length} ativos · {activeBatches.length} lotes
+              {queue.data ? queue.data.open + ' pendentes · ' + queue.data.running + ' executando' : 'Consultando fila…'}
             </small>
           </span>
         </button>
@@ -204,6 +209,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           </button>
         </div>
       </div>
+      <QueueControls compact />
       {progress && (
         <div className="jobs-drawer-overall">
           <div className="jobs-drawer-stats">
@@ -229,35 +235,39 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           ) : (
             recent.map((job) => (
               <div className="jobs-drawer-job" key={job.id}>
-                {job.status === 'failed' ? (
-                  <a
-                    href={jobLogsUrl(
-                      job.job_type,
-                      job.id,
-                      typeof job.error_details?.correlation_id === 'string'
-                        ? job.error_details.correlation_id
-                        : undefined,
-                      job.finished_at || job.started_at || job.created_at,
-                    )}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="jobs-drawer-job-title"
-                    aria-label={'Investigar falha do job ' + job.id + ' no Manage'}
-                  >
-                    <strong>{job.job_type.replaceAll('_', ' ')}</strong>
-                    <small>
-                      ID {job.id.slice(0, 8)} · falhou · tentativa {job.attempts}/{job.maximum_attempts}
-                    </small>
-                  </a>
-                ) : (
-                  <div>
-                    <strong>{job.job_type.replaceAll('_', ' ')}</strong>
-                    <small>
-                      ID {job.id.slice(0, 8)} · tentativa {job.attempts}/{job.maximum_attempts}
-                    </small>
-                  </div>
-                )}
+                <div className="jobs-drawer-job-main">
+                  {job.status === 'failed' ? (
+                    <a
+                      href={jobLogsUrl(
+                        job.job_type,
+                        job.id,
+                        typeof job.error_details?.correlation_id === 'string'
+                          ? job.error_details.correlation_id
+                          : undefined,
+                        job.finished_at || job.started_at || job.created_at,
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="jobs-drawer-job-title"
+                      aria-label={'Investigar falha do job ' + job.id + ' no Manage'}
+                    >
+                      <strong>{job.job_type.replaceAll('_', ' ')}</strong>
+                      <small>
+                        ID {job.id.slice(0, 8)} · falhou · tentativa {job.attempts}/{job.maximum_attempts}
+                      </small>
+                    </a>
+                  ) : (
+                    <div>
+                      <strong>{job.job_type.replaceAll('_', ' ')}</strong>
+                      <small>
+                        ID {job.id.slice(0, 8)} · tentativa {job.attempts}/{job.maximum_attempts}
+                      </small>
+                    </div>
+                  )}
+                  <JobProgress job={job} compact />
+                </div>
                 <Status value={job.status} />
+                <JobControls job={job} compact />
                 {job.status === 'failed' &&
                   typeof job.error_details?.sentry_event_id === 'string' &&
                   sentryEventUrl(job.error_details.sentry_event_id) && (
