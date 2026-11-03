@@ -4,7 +4,7 @@ import { json, request, useApi } from '../api/client';
 import { Button } from './ui/button';
 import { useUi } from '../lib/store';
 
-type PushState = 'idle' | 'unsupported' | 'registering' | 'registered' | 'unregistered' | 'offline' | 'error';
+type PushState = 'idle' | 'unsupported' | 'registering' | 'registered' | 'offline' | 'error';
 type PushStatus = { enabled: boolean; registered_devices: number };
 type PushEvent = CustomEvent<{ state: PushState; message?: string }>;
 
@@ -47,18 +47,21 @@ export function PushNotifications() {
     }
   }
 
-  const description =
-    message ||
-    (!supported
-      ? 'No iPhone, adicione o PhotoIntel à Tela de Início e abra o aplicativo instalado.'
-      : permission === 'denied'
-        ? 'Notificações bloqueadas. Autorize o PhotoIntel nos ajustes do dispositivo.'
-        : state === 'registered' ||
-            (permission === 'granted' && (status.data?.registered_devices ?? 0) > 0)
-          ? 'Dispositivo inscrito. Você receberá atualizações dos jobs mesmo fora da tela.'
-          : permission === 'granted'
-            ? 'Permissão concedida. Sincronizando o registro com a API.'
-            : 'Ative para acompanhar falhas e conclusão de jobs mesmo com o PWA fechado.');
+  const registered = (status.data?.registered_devices ?? 0) > 0;
+  let description = message;
+  if (!description) {
+    if (!supported) {
+      description = 'No iPhone, adicione o PhotoIntel à Tela de Início e abra o aplicativo instalado.';
+    } else if (permission === 'denied') {
+      description = 'Notificações bloqueadas. Autorize o PhotoIntel nos ajustes do dispositivo.';
+    } else if (state === 'registered' || (permission === 'granted' && registered)) {
+      description = 'Dispositivo inscrito. Você receberá atualizações dos jobs mesmo fora da tela.';
+    } else if (permission === 'granted') {
+      description = 'Permissão concedida. Sincronizando o registro com a API.';
+    } else {
+      description = 'Ative para acompanhar falhas e conclusão de jobs mesmo com o PWA fechado.';
+    }
+  }
 
   return (
     <section className="panel" aria-label="Notificações Firebase" style={{ marginTop: 20 }}>
