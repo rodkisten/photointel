@@ -176,3 +176,39 @@ def test_icloud_representation_falls_back_only_to_allowed_non_original_sizes() -
     assert approved.representation(SimpleNamespace(
         versions={original: original_resource}
     )) is original_resource
+
+def test_refresh_photo_validates_identity_and_bounds_the_lookup() -> None:
+    adapter = ICloudAdapter(Settings(_env_file=None, maximum_authorized_import_limit=1000))
+    adapter.library = object()
+    photos = [SimpleNamespace(id=f"photo-{index:04d}") for index in range(1100)]
+    visited: list[int] = []
+
+    def assets(offset: int = 0):
+        visited.append(offset)
+        return iter(photos[offset:])
+
+    adapter.assets = assets
+    assert adapter.fresh_photo("photo-0080", rank=80).id == "photo-0080"
+    assert visited == [32]
+    # Rank is not identity; a different photo at that position must be rejected.
+    assert adapter.fresh_photo("not-in-library", rank=80) is None
+    # Old manifests lack a rank, so recovery scans only a bounded prefix.
+    assert adapter.fresh_photo("photo-0999").id == "photo-0999"
+    assert adapter.fresh_photo("photo-1099") is None
+    assert visited[-2:] == [0, 0]
+
+
+def test_http_410_is_expired_media_not_expired_apple_credentials(tmp_path: Path) -> None:
+    adapter = ICloudAdapter(Settings(_env_file=None, max_download_bytes=1024))
+    adapter.client = SimpleNamespace(session=object())
+    refusal = SimpleNamespace(
+        status_code=410,
+        close=lambda: None,
+    )
+    photo = SimpleNamespace(download=lambda *args, **kwargs: refusal)
+    version = SimpleNamespace(size=8, checksum="safe", url="not-logged")
+    with pytest.raises(AppError) as caught:
+        adapter.download(photo, version, tmp_path / "expired.image")
+    assert caught.value.code == "ICLOUD_ASSET_UNAVAILABLE"
+    assert "HTTP 410" in caught.value.message
+    assert "sessão" not in caught.value.message

@@ -676,6 +676,31 @@ async def retry_job(
         raise AppError(
             ErrorCode.INVALID_REQUEST, "Apenas jobs finais podem ser reenfileirados", 409
         )
+    if job.job_type == "media_download" and job.asset_id:
+        # A previous HTTP 410 may have exhausted the *manifest* attempt budget,
+        # not only the job budget. An explicit operator retry must reset both,
+        # otherwise the worker immediately refuses to download again.
+        asset = await session.get(Asset, job.asset_id, with_for_update=True)
+        if asset:
+            manifest = await session.scalar(
+                select(DiscoveryManifest)
+                .where(
+                    DiscoveryManifest.asset_id == asset.id,
+                    DiscoveryManifest.content_revision == asset.content_revision,
+                )
+                .with_for_update()
+            )
+            if (
+                manifest is not None
+                and manifest.failure_category == "remote_asset_unavailable"
+                and manifest.status in {"retrying", "failed", "quarantined"}
+            ):
+                manifest.attempts = 0
+                manifest.status = "queued"
+                manifest.failure_category = None
+                manifest.last_error = None
+                asset.ingestion_status = "queued"
+                asset.last_error = None
     job.status = "queued"
     job.attempts = 0
     job.scheduled_at = datetime.now(UTC)

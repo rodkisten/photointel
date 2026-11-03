@@ -604,6 +604,9 @@ async def discover_icloud(
                             **(manifest.snapshot or {}),
                             "metadata": public_snapshot,
                             "encrypted": encrypted,
+                            # Rank is only a lookup hint, never a photo identity.
+                            # A worker must match the source_key after re-querying.
+                            "remote_rank": offset,
                         }
                         already_completed = asset.ingestion_status == "completed"
                         if already_completed:
@@ -957,6 +960,7 @@ async def download_discovered_asset(
         # Never count a deferred session-lease claim as a download attempt.
         # Acquire the shared session first, then transition to downloading.
         encrypted = dict(manifest.snapshot.get("encrypted", {}))
+        remote_rank = manifest.snapshot.get("remote_rank")
         relative = asset.source_metadata.get("cache_relative_path")
         await session.commit()
     root = settings.icloud_download_directory.resolve()
@@ -1007,9 +1011,48 @@ async def download_discovered_asset(
                 raise AppError(
                     "INVALID_REPRESENTATION", "Representação solicitada indisponível"
                 )
-            transferred = await asyncio.to_thread(
-                adapter.download, photo, version, target
-            )
+            try:
+                transferred = await asyncio.to_thread(
+                    adapter.download, photo, version, target
+                )
+            except AppError as error:
+                if (
+                    error.code != ErrorCode.ICLOUD_ASSET_UNAVAILABLE
+                    or "HTTP 410" not in error.message
+                ):
+                    raise
+                # A manifest may outlive Apple's signed rendition URL.
+                # Re-fetch exactly this photo from the current library, validate
+                # its identity and immutable rendition before retrying once.
+                fresh_photo = await asyncio.to_thread(
+                    adapter.fresh_photo,
+                    source_key,
+                    remote_rank if type(remote_rank) is int else None,
+                )
+                if fresh_photo is None:
+                    raise AppError(
+                        ErrorCode.ICLOUD_ASSET_UNAVAILABLE,
+                        "URL iCloud expirada; foto não localizada no índice recente. "
+                        "Refaça a descoberta para renovar o manifesto.",
+                        503,
+                    ) from error
+                fresh_version = await asyncio.to_thread(
+                    adapter.representation, fresh_photo
+                )
+                if (
+                    fresh_version is None
+                    or fresh_version.size != version.size
+                    or fresh_version.checksum != version.checksum
+                ):
+                    raise AppError(
+                        "INVALID_REPRESENTATION",
+                        "A representação da foto mudou no iCloud. "
+                        "Refaça a descoberta antes de baixar.",
+                        409,
+                    ) from error
+                transferred = await asyncio.to_thread(
+                    adapter.download, fresh_photo, fresh_version, target
+                )
         digest = await asyncio.to_thread(fixture_content_hash, target)
         data = await asyncio.to_thread(target.read_bytes)
         if len(data) > settings.max_download_bytes or sha256(data).hexdigest() != digest:

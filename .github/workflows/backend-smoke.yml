@@ -89,6 +89,7 @@ jobs:
           uv run pytest -q
           tests/test_backend_contention.py
           tests/test_session_store.py
+          tests/test_icloud_web_auth.py
           tests/test_job_observability.py
           tests/test_telegram_notify.py
           tests/test_responsive_media.py
@@ -105,7 +106,7 @@ jobs:
       - name: "🧪 iCloud lease integration"
         run: >
           uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
-          -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit'
+          -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit or expired_icloud_media_url_is_refreshed_once or refresh_refuses_changed_icloud_representation'
 
   preview-web:
     name: "🌐 Preview audit UI"
