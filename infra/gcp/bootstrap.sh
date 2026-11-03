@@ -21,13 +21,12 @@ BOOTSTRAP="serviceAccount:photointel-bootstrap@$PROJECT.iam.gserviceaccount.com"
 MANAGE_ID="photointel-manage"
 MANAGE_EMAIL="$MANAGE_ID@$PROJECT.iam.gserviceaccount.com"
 MANAGE="serviceAccount:$MANAGE_EMAIL"
-# Firebase is an explicitly pinned external GCP project. Do not allow an
-# unexpected dotenv value to mutate arbitrary projects.
+# FCM uses this exact GCP project. Never mutate IAM in a second project.
 FCM_PROJECT="$(jq -r '.extra_environment.FCM_PROJECT_ID // ""' "$CONFIG")"
 FCM_ENABLED="$(jq -r '(.extra_environment.FCM_JOB_EVENTS_ENABLED // "false") | tostring | ascii_downcase' "$CONFIG")"
 [[ "$FCM_ENABLED" == true || "$FCM_ENABLED" == false ]] || { echo "::error::FCM_JOB_EVENTS_ENABLED must be true or false" >&2; exit 2; }
-if [[ "$FCM_ENABLED" == true && "$FCM_PROJECT" != photointel-firebase ]]; then
-  echo "::error::FCM_PROJECT_ID must be photointel-firebase; refusing cross-project IAM changes" >&2
+if [[ "$FCM_ENABLED" == true && "$FCM_PROJECT" != "$PROJECT" ]]; then
+  echo "::error::FCM_PROJECT_ID must match GCP project_id ($PROJECT); refusing cross-project IAM changes" >&2
   exit 2
 fi
 APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
@@ -109,39 +108,36 @@ reconcile_secret_access() {
 }
 reconcile_fcm_permissions() {
   [[ "$FCM_ENABLED" == true ]] || return 0
-  # Cross-project FCM HTTP v1: enable service in sender AND target projects.
-  # Cloud Run uses ADC; only the api/jobs service accounts can send messages.
-  local target account enabled_apis
-  for target in "$PROJECT" "$FCM_PROJECT"; do
-    if ! enabled_apis="$(gcloud services list --enabled "--project=$target" --format='value(config.name)' --quiet)"; then
-      echo "::error::Cannot inspect enabled APIs in $target. Bootstrap needs serviceusage.services.list on this project." >&2
+  # FCM HTTP v1 and the runtime accounts belong to the same GCP project.
+  # Enable the API once and grant sending privileges only to api/jobs.
+  local enabled_apis account
+  if ! enabled_apis="$(gcloud services list --enabled "--project=$PROJECT" --format='value(config.name)' --quiet)"; then
+    echo "::error::Cannot inspect enabled APIs in $PROJECT. Bootstrap needs serviceusage.services.list." >&2
+    return 1
+  fi
+  if grep -Fxq fcm.googleapis.com <<< "$enabled_apis"; then
+    log "EXISTS: Firebase Cloud Messaging API in $PROJECT"
+  else
+    log "Enabling Firebase Cloud Messaging API in $PROJECT"
+    if ! gcloud services enable fcm.googleapis.com "--project=$PROJECT" --quiet; then
+      echo "::error::Cannot enable FCM API in $PROJECT. Bootstrap needs serviceusage.services.enable." >&2
       return 1
     fi
-    if grep -Fxq fcm.googleapis.com <<< "$enabled_apis"; then
-      log "EXISTS: Firebase Cloud Messaging API in $target"
-    else
-      log "Enabling Firebase Cloud Messaging API in $target"
-      if ! gcloud services enable fcm.googleapis.com "--project=$target" --quiet; then
-        echo "::error::Cannot enable FCM API in $target. Bootstrap needs serviceusage.services.enable on this project." >&2
-        return 1
-      fi
-    fi
-  done
+  fi
 
-  # Target-scoped IAM. The bootstrap workflow needs projects.setIamPolicy in
-  # the Firebase project, which it cannot grant to itself.
   for account in api jobs; do
-    log "Reconciling FCM send permission for photointel-$account in $FCM_PROJECT"
-    if ! gcloud projects add-iam-policy-binding "$FCM_PROJECT" \
+    log "Reconciling FCM send permission for photointel-$account in $PROJECT"
+    if ! gcloud projects add-iam-policy-binding "$PROJECT" \
       "--member=serviceAccount:photointel-$account@$PROJECT.iam.gserviceaccount.com" \
       --role=roles/firebasecloudmessaging.admin --condition=None --format=none \
-      "--project=$FCM_PROJECT" --quiet; then
-      echo "::error::Cannot grant FCM role in $FCM_PROJECT. Bootstrap service account photointel-bootstrap@$PROJECT.iam.gserviceaccount.com needs resourcemanager.projects.setIamPolicy in the Firebase project." >&2
+      "--project=$PROJECT" --quiet; then
+      echo "::error::Cannot grant FCM role in $PROJECT. Bootstrap service account photointel-bootstrap@$PROJECT.iam.gserviceaccount.com needs resourcemanager.projects.setIamPolicy." >&2
       return 1
     fi
   done
-  log "✅ FCM API and target-scoped runtime IAM reconciled."
+  log "✅ FCM API and project-scoped runtime IAM reconciled."
 }
+
 reconcile_diagnostics_access() {
   # Authenticated read-only incident inspector. Logs are filtered/sanitized in API.
   change projects add-iam-policy-binding "$PROJECT" \
@@ -196,7 +192,7 @@ fi
 if [[ "$MODE" != plan ]]; then log "Active identity: $(gcloud auth list --filter=status:ACTIVE --format='value(account)' --quiet)"; fi
 if [[ "$MODE" == plan ]]; then
   log "No mutations. Will reconcile APIs, Docker repository, seven service accounts (including read-only Manage and its Cloudflare Access WIF federation when configured), $((${#KEYS[@]} + WORKFLOW_COUNT)) secret containers, staging bucket, IAM, and bootstrap WIF condition (bootstrap + terminal only)."
-  [[ "$FCM_ENABLED" == true ]] && log "PLAN: FCM API in $PROJECT + $FCM_PROJECT; grant api/jobs FCM send role only in $FCM_PROJECT"
+  [[ "$FCM_ENABLED" == true ]] && log "PLAN: FCM API and api/jobs FCM send role in $PROJECT only"
   exit 0
 fi
 enabled="$(gcp services list --enabled --format='value(config.name)')"

@@ -10,7 +10,7 @@ Adicione **duas entradas não sigilosas** no `GCP_CONFIG_ENV` (dotenv) do
 GitHub Environment `production`:
 
 ```dotenv
-FCM_PROJECT_ID=photointel-firebase
+FCM_PROJECT_ID=photointel
 FCM_JOB_EVENTS_ENABLED=true
 ```
 
@@ -20,40 +20,45 @@ e `EXTRA_ENVIRONMENT__FCM_JOB_EVENTS_ENABLED`, mas não duplique as formas.
 O deploy passa ambas às instâncias de API e aos Cloud Run Jobs. Não configure
 chaves privadas Firebase nem tokens de servidor no frontend.
 
-**Permissões automáticas (projetos separados):** o serviço de envio roda no
-Cloud Run do projeto `photointel`; o Firebase de destino é
-`photointel-firebase`. Em vez de configurar cada permissão manualmente,
-rode **Actions → 🧱 Setup GCP → Run workflow → mode: permissions** na branch
-`main`, depois de mesclar o PR e salvar as duas entradas .env acima.
+**Permissões automáticas (projeto único):** tanto Cloud Run quanto Firebase
+Cloud Messaging pertencem ao projeto GCP `photointel`.
+Depois de salvar as duas entradas .env acima, execute
+**Actions → 🧱 Setup GCP → Run workflow → mode: permissions**
+na branch `main`.
 
-O modo `permissions` de `.github/workflows/gcp-bootstrap.yml` chama
-`infra/gcp/bootstrap.sh`. Quando FCM está habilitado, o bootstrap:
+O modo `permissions` de `.github/workflows/gcp-bootstrap.yml` executa
+`infra/gcp/bootstrap.sh`. Com FCM habilitado, ele:
 
-- Verifica e habilita `fcm.googleapis.com` no projeto remetente
-  `photointel` e no destino `photointel-firebase`;
-- Concede `roles/firebasecloudmessaging.admin` **somente** a
+- Verifica e habilita `fcm.googleapis.com` **uma única vez** no projeto `photointel`;
+- Concede `roles/firebasecloudmessaging.admin` somente às service accounts
   `photointel-api@photointel.iam.gserviceaccount.com` e
-  `photointel-jobs@photointel.iam.gserviceaccount.com`, no projeto
-  `photointel-firebase`;
-- Pode ser repetido sem recriar serviços. Não amplia permissões do
-  `photointel-deployer`, `photointel-manage` nem das contas de migração;
-- Rejeita IDs de projetos Firebase diferentes do esperado e falha com
-  mensagem explícita se faltarem privilégios para modificar o projeto alvo.
+  `photointel-jobs@photointel.iam.gserviceaccount.com`, no mesmo projeto;
+- Mantém o modo idempotente, sem ampliar privilégios do deployer, Manage ou migrador;
+- Recusa `FCM_PROJECT_ID` diferente de `project_id`, evitando alterações de
+  IAM acidentais em outros projetos.
 
-**Pré-requisito de confiança entre projetos:** a identidade que executa esse
-workflow (`photointel-bootstrap@photointel.iam.gserviceaccount.com`) precisa
-**já estar autorizada** no projeto `photointel-firebase` para consultar e
-habilitar APIs (`serviceusage.services.list` e
-`serviceusage.services.enable`) e atualizar IAM
-(`resourcemanager.projects.getIamPolicy` e
-`resourcemanager.projects.setIamPolicy`). Se não estiver, um administrador
-**do projeto Firebase** deve estabelecer essa autorização inicial. A
-automação não pode conceder privilégios a si própria. Depois disso, as
-permissões do PhotoIntel ficam gerenciadas pelo workflow, sem comandos de
-configuração das contas de execução.
+A identidade do bootstrap
+(`photointel-bootstrap@photointel.iam.gserviceaccount.com`) precisa ter
+`serviceusage.services.list`, `serviceusage.services.enable`,
+`resourcemanager.projects.getIamPolicy` e
+`resourcemanager.projects.setIamPolicy` **no próprio projeto `photointel`**.
+O workflow diagnostica a falta dessas permissões, mas não consegue conceder a
+si próprio direitos administrativos que ainda não possui.
 
-O modo `apply` também reconcilia as mesmas permissões. O modo `plan`
-apenas descreve as mudanças, sem acessar ou modificar o Firebase.
+O modo `apply` também reconcilia as permissões. O modo `plan` apenas
+descreve as mudanças, sem acessar ou modificar o Firebase.
+
+**Atenção à configuração do navegador:** os arquivos
+`apps/web/public/fcm.js` e `apps/web/public/sw.js` ainda contêm a
+configuração do Firebase Web App anteriormente fornecida para o projeto
+`photointel-firebase`. `apiKey`, `appId`, `messagingSenderId` e a chave
+VAPID pertencem àquele aplicativo e **não podem ser transferidos** apenas
+mudando `projectId`. Para receber push de `photointel`, substitua **o objeto
+completo de configuração nos dois arquivos** pelos valores reais do Firebase
+Console → Projeto `photointel` → Configurações → Seus apps → App Web, e use
+a chave VAPID correspondente ao mesmo projeto. Não reutilize as credenciais
+de `photointel-firebase`. Até essa atualização, o backend corrigido e o
+registro web existente não pertencem ao mesmo projeto e os envios poderão falhar.
 
 O servidor usa **Application Default Credentials**, com escopo
 `https://www.googleapis.com/auth/firebase.messaging`; não precisa de JSON de
