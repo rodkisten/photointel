@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
+import { readLogLink } from '../log-deeplink';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Activity,
@@ -329,16 +331,18 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                   </p>
                   <div className="mt-1 flex justify-between text-xs text-carbon-600">
                     <span>{date(e.createTime)}</span>
-                    <External
-                      href={
-                        '/?tab=logs&source=gcp&search=' +
-                        encodeURIComponent(selectedJob) +
-                        '&at=' +
-                        encodeURIComponent(e.createTime)
-                      }
+                    <Link
+                      to="/logs"
+                      search={readLogLink(
+                        '?source=gcp&search=' +
+                          encodeURIComponent(selectedJob) +
+                          '&at=' +
+                          encodeURIComponent(e.createTime),
+                      )}
+                      className="inline-flex items-center gap-1.5 text-carbon-300 underline-offset-4 hover:text-white hover:underline"
                     >
                       Logs no Manage
-                    </External>
+                    </Link>         </External>
                   </div>
                 </div>
               ))
@@ -389,8 +393,8 @@ export function SystemInfo({ meta }: { meta: Meta }) {
       </Section>
       <div className="flex flex-wrap gap-4 text-xs">
         <External href="https://github.com/rodkisten/photointel/actions">GitHub Actions</External>
-        <External href="/?tab=logs&source=gcp">Logs GCP · Manage</External>
-        <External href="/?tab=logs&source=cloudflare">Logs Cloudflare · Manage</External>
+        <Link to="/logs" search={readLogLink("?source=gcp")} className="text-carbon-300 hover:underline">Logs GCP · Manage</Link>
+        <Link to="/logs" search={readLogLink("?source=cloudflare")} className="text-carbon-300 hover:underline">Logs Cloudflare · Manage</Link>
       </div>
     </div>
   );
