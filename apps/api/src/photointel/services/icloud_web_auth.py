@@ -179,6 +179,9 @@ def _finish_sync(settings: Settings, email: str, challenge: str, code: str) -> d
                     "Código inválido ou expirado. Verifique o código Apple e tente novamente.",
                     422,
                 )
+            # Rebuild service endpoints after the MFA handshake; in 1.32.3 a
+            # resumed client can complete 2FA without initializing _webservices.
+            client.authenticate()
             return {
                 "state": "authenticated",
                 "archive": pack_directory(directory, settings.icloud_session_max_bytes),
