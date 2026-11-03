@@ -1549,7 +1549,7 @@
   }
 
   /* =======================================
-   RESPONSIVIDADE (MEDIA QUERIES GLOBAIS) 
+   RESPONSIVIDADE (MEDIA QUERIES GLOBAIS)
    ======================================= */
 
   @media (min-width: 1500px) {
@@ -2255,7 +2255,7 @@
   }
 
   /* =======================================
-   SETUP & CRASH RECOVERY 
+   SETUP & CRASH RECOVERY
    ======================================= */
 
   .setup-panel {
@@ -2459,7 +2459,7 @@
   }
 
   /* =======================================
-   DARK THEME SPECIFICS 
+   DARK THEME SPECIFICS
    ======================================= */
 
   html,
