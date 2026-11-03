@@ -1,6 +1,5 @@
 """Browser Apple authentication: encrypted MFA continuation and guarded publishing."""
 
-import asyncio
 import base64
 from pathlib import Path
 
