@@ -4,6 +4,7 @@ import base64
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 
 from photointel.config import Settings
 from photointel.errors import AppError
@@ -30,6 +31,12 @@ def test_readiness_distinguishes_apple_password_and_session_encryption_key(tmp_p
     assert status["ready"] is False
     assert status["code"] == "ICLOUD_SESSION_KEY_UNAVAILABLE"
     assert "senha Apple" in status["message"]
+    invalid = cfg.model_copy(update={"icloud_session_key": SecretStr("not-base64")})
+    invalid_status = web.login_readiness(invalid)
+    assert invalid_status["ready"] is False
+    assert invalid_status["code"] == "ICLOUD_SESSION_KEY_INVALID"
+    assert "Secret Manager" in invalid_status["message"]
+    assert "senha Apple" in invalid_status["message"]
 
 
 @pytest.mark.asyncio
