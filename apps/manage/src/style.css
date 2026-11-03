@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../../../packages/design-tokens/carbon.css';
 :root {
   font-family:
     Inter,
@@ -8,12 +9,12 @@
     system-ui,
     sans-serif;
   color: #f6f6f7;
-  background: #0d0e10;
+  background: var(--color-carbon-950);
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
 }
 html {
-  background: #0d0e10;
+  background: var(--color-carbon-950);
   scroll-padding-top: 84px;
 }
 body {
@@ -53,7 +54,7 @@ button:disabled {
 .logbox {
   border: 1px solid #2e3036;
   background: #101114;
-  color: #cbd5e1;
+  color: var(--color-carbon-200);
   border-radius: 9px;
   padding: 12px;
 }
