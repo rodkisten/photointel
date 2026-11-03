@@ -56,7 +56,7 @@ export function gcpLogFilter(request: LogRequest): string {
   const resources = '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision")';
   const terms = request.terms.length
     ? ' AND (' + request.terms.map((value) => 'SEARCH("' + value + '")').join(' OR ') + ')'
-    : ' AND severity>=WARNING';
+    : request.entry ? '' : ' AND severity>=WARNING';
   return resources + ' AND ' + window + terms +
     (request.entry ? ' AND insertId="' + request.entry + '"' : '');
 }
