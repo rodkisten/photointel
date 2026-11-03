@@ -35,8 +35,7 @@ export function parseLogRequest(params: URLSearchParams, now = Date.now()): LogR
     if (value && !terms.includes(value)) terms.push(value);
   }
   const entry = params.get('entry') || '';
-  if (entry && !TERM.test(entry))
-    throw new ApiError(422, 'LOG_ENTRY', 'Identificador de registro inválido');
+  if (entry && !TERM.test(entry)) throw new ApiError(422, 'LOG_ENTRY', 'Identificador de registro inválido');
   const at = params.get('at');
   if (at) {
     if (at.length > 40 || Number.isNaN(Date.parse(at)))
@@ -45,18 +44,31 @@ export function parseLogRequest(params: URLSearchParams, now = Date.now()): LogR
     if (moment > now + 60_000 || moment < now - MAX_AGE)
       throw new ApiError(422, 'LOG_TIMESTAMP', 'Evento fora da janela de 7 dias');
     const pad = CONTEXT_MINUTES * 60_000;
-    return { terms, entry, start: Math.max(now - MAX_AGE, moment - pad), end: Math.min(now, moment + pad), minutes };
+    return {
+      terms,
+      entry,
+      start: Math.max(now - MAX_AGE, moment - pad),
+      end: Math.min(now, moment + pad),
+      minutes,
+    };
   }
   return { terms, entry, start: now - minutes * 60_000, end: now, minutes };
 }
 
 export function gcpLogFilter(request: LogRequest): string {
-  const window = 'timestamp>="' + new Date(request.start).toISOString() +
-    '" AND timestamp<="' + new Date(request.end).toISOString() + '"';
+  const window =
+    'timestamp>="' +
+    new Date(request.start).toISOString() +
+    '" AND timestamp<="' +
+    new Date(request.end).toISOString() +
+    '"';
   const resources = '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision")';
   const terms = request.terms.length
     ? ' AND (' + request.terms.map((value) => 'SEARCH("' + value + '")').join(' OR ') + ')'
-    : request.entry ? '' : ' AND severity>=WARNING';
-  return resources + ' AND ' + window + terms +
-    (request.entry ? ' AND insertId="' + request.entry + '"' : '');
+    : request.entry
+      ? ''
+      : ' AND severity>=WARNING';
+  return (
+    resources + ' AND ' + window + terms + (request.entry ? ' AND insertId="' + request.entry + '"' : '')
+  );
 }

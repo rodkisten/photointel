@@ -329,7 +329,16 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                   </p>
                   <div className="mt-1 flex justify-between text-xs text-slate-600">
                     <span>{date(e.createTime)}</span>
-                    <External href={e.logUri}>Logs</External>
+                    <External
+                      href={
+                        '/?tab=logs&source=gcp&search=' +
+                        encodeURIComponent(selectedJob) +
+                        '&at=' +
+                        encodeURIComponent(e.createTime)
+                      }
+                    >
+                      Logs no Manage
+                    </External>
                   </div>
                 </div>
               ))
@@ -380,8 +389,8 @@ export function SystemInfo({ meta }: { meta: Meta }) {
       </Section>
       <div className="flex flex-wrap gap-4 text-xs">
         <External href="https://github.com/rodkisten/photointel/actions">GitHub Actions</External>
-        <External href="https://console.cloud.google.com/run?project=photointel">Cloud Run</External>
-        <External href="https://dash.cloudflare.com/?to=/:account/workers-and-pages">Cloudflare</External>
+        <External href="/?tab=logs&source=gcp">Logs GCP · Manage</External>
+        <External href="/?tab=logs&source=cloudflare">Logs Cloudflare · Manage</External>
       </div>
     </div>
   );

@@ -17,7 +17,9 @@ describe('bounded provider log queries', () => {
     expect(filter).toContain('SEARCH("' + correlation + '") OR SEARCH("' + job + '")');
     expect(filter).toContain('resource.type="cloud_run_job"');
     expect(filter).toContain('2026-11-03T10:45:00.000Z');
-    const exact = gcpLogFilter(parseLogRequest(new URLSearchParams({ entry: 'insert-9876', minutes: '15' }), now));
+    const exact = gcpLogFilter(
+      parseLogRequest(new URLSearchParams({ entry: 'insert-9876', minutes: '15' }), now),
+    );
     expect(exact).toContain('insertId="insert-9876"');
     expect(exact).not.toContain('severity>=WARNING');
   });
@@ -26,7 +28,8 @@ describe('bounded provider log queries', () => {
       new URLSearchParams({ correlation: 'hello" OR true', minutes: '30' }),
       new URLSearchParams({ search: 'foo bar', minutes: '30' }),
       new URLSearchParams({ minutes: '999999' }),
-    ]) expect(() => parseLogRequest(params)).toThrow(ApiError);
+    ])
+      expect(() => parseLogRequest(params)).toThrow(ApiError);
   });
   it('shows only warnings for the unfiltered general feed', () => {
     const filter = gcpLogFilter(parseLogRequest(new URLSearchParams({ minutes: '15' })));

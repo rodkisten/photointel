@@ -26,8 +26,7 @@ export function correlationExplorerUrl(id: string, project = 'photointel'): stri
 
 export function correlationSentryUrl(id: string, org: string | undefined): string | null {
   if (!UUID.test(id) || !org || !ORG.test(org)) return null;
-  return 'https://' + org + '.sentry.io/issues/?query=' +
-    encodeURIComponent('tags[correlation_id]:' + id);
+  return 'https://' + org + '.sentry.io/issues/?query=' + encodeURIComponent('tags[correlation_id]:' + id);
 }
 
 export function correlationCloudflareUrl(accountId: string | undefined): string | null {
@@ -49,14 +48,10 @@ function ProviderLinks({ id }: { id: string }) {
     retry: false,
   });
   const sentry = correlationSentryUrl(id, meta?.sentry_org);
-  const gcp = correlationExplorerUrl(id, meta?.project);
-  const cloudflare = correlationCloudflareUrl(meta?.cloudflare_account_id);
   const links = [
     { title: 'Sentry · eventos com esta tag', url: sentry },
-    { title: 'Google Cloud · Logs Explorer', url: gcp },
-    { title: 'Cloudflare · Observability', url: cloudflare },
-    { title: 'Cloudflare · busca filtrada no Manage', url: correlationManageUrl(id, 'cloudflare') },
-    { title: 'GCP · busca filtrada no Manage', url: correlationManageUrl(id, 'gcp') },
+    { title: 'Cloudflare · logs no Manage', url: correlationManageUrl(id, 'cloudflare') },
+    { title: 'GCP · logs no Manage', url: correlationManageUrl(id, 'gcp') },
   ];
   return (
     <>
@@ -66,19 +61,21 @@ function ProviderLinks({ id }: { id: string }) {
       </div>
       <DropdownMenu.Separator className="my-1 h-px bg-slate-700/70" />
       {isPending && <p className="px-3 py-2 text-xs text-slate-400">Carregando integrações…</p>}
-      {links.filter((link) => link.url).map((link) => (
-        <DropdownMenu.Item key={link.title} asChild>
-          <a
-            href={link.url!}
-            target={link.url!.startsWith('/') ? '_self' : '_blank'}
-            rel="noopener noreferrer"
-            className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
-          >
-            <span>{link.title}</span>
-            <ExternalLink size={13} className="shrink-0" />
-          </a>
-        </DropdownMenu.Item>
-      ))}
+      {links
+        .filter((link) => link.url)
+        .map((link) => (
+          <DropdownMenu.Item key={link.title} asChild>
+            <a
+              href={link.url!}
+              target={link.url!.startsWith('/') ? '_self' : '_blank'}
+              rel="noopener noreferrer"
+              className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
+            >
+              <span>{link.title}</span>
+              <ExternalLink size={13} className="shrink-0" />
+            </a>
+          </DropdownMenu.Item>
+        ))}
       <DropdownMenu.Item
         className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
         onSelect={() => void navigator.clipboard?.writeText(id)}
@@ -87,8 +84,7 @@ function ProviderLinks({ id }: { id: string }) {
         Copiar correlation ID
       </DropdownMenu.Item>
       <p className="px-3 pb-2 text-[11px] leading-4 text-slate-500">
-        Sentry pesquisa a tag correlation_id. Cloudflare abre o painel nativo;
-        a busca com ID pré-preenchido fica no Manage.
+        O Manage recebe o ID e abre o filtro do provedor selecionado.
       </p>
     </>
   );

@@ -25,9 +25,7 @@ describe('correlation investigation links', () => {
 
   it('searches an indexed Sentry tag and validates the organization slug', () => {
     const url = correlationSentryUrl(correlation, 'photointel');
-    expect(url).toBe(
-      'https://photointel.sentry.io/issues/?query=tags%5Bcorrelation_id%5D%3A' + correlation,
-    );
+    expect(url).toBe('https://photointel.sentry.io/issues/?query=tags%5Bcorrelation_id%5D%3A' + correlation);
     expect(correlationSentryUrl(correlation, 'bad.example.com')).toBeNull();
   });
 

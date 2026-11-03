@@ -61,7 +61,7 @@
   h2,
   h3 {
     @apply m-0;
-    font-family: var(--font-family-headings)
+    font-family: var(--font-family-headings);
   }
 
   p {
@@ -2681,7 +2681,7 @@
   .jobs-drawer-toggle,
   .jobs-drawer {
     position: fixed;
-    right: 12px;
+    left: 12px;
     right: 12px;
     z-index: 55;
     bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 10px);
@@ -2904,10 +2904,105 @@
     height: calc(100dvh - var(--bottom-nav-height) - env(safe-area-inset-bottom) - 28px);
   }
 
+  /* Keep the floating monitor on the right, including iPhone and iPad. */
+  .jobs-drawer,
+  .jobs-drawer-toggle {
+    left: auto;
+    right: max(12px, env(safe-area-inset-right));
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .jobs-drawer {
+    width: min(560px, calc(100vw - 24px - env(safe-area-inset-right)));
+  }
+
+  .jobs-drawer-job-title {
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .jobs-drawer-job-title:focus-visible {
+    outline: 2px solid var(--gray-14);
+    outline-offset: 3px;
+  }
+
+  .topbar-home-link,
+  .topbar-manage-link,
+  .topbar-tools-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    gap: 5px;
+  }
+
+  .topbar-manage-link,
+  .topbar-icloud-alert,
+  .topbar-tools-trigger {
+    font-size: var(--text-11);
+    color: var(--gray-13);
+    white-space: nowrap;
+    border-radius: 8px;
+    padding: 6px;
+  }
+
+  .topbar-tools {
+    position: relative;
+    flex: none;
+    margin-left: auto;
+  }
+  .topbar-tools-trigger {
+    border: 1px solid var(--gray-8);
+    background: var(--gray-3);
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .topbar-tools-dropdown {
+    position: absolute;
+    top: calc(100% + 9px);
+    right: 0;
+    z-index: 80;
+    width: min(370px, calc(100vw - 24px));
+    max-height: min(75dvh, 550px);
+    overflow-y: auto;
+    padding: 0 12px 12px;
+    border: 1px solid var(--gray-8);
+    border-radius: 12px;
+    background: var(--surface-raised);
+    box-shadow: 0 20px 45px rgb(0 0 0 / 55%);
+  }
+  .topbar-icloud-alert {
+    color: var(--gray-15);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .topbar-tools-dropdown .panel {
+    margin-top: 12px !important;
+  }
+  @media (max-width: 720px) {
+    .topbar-manage-link span,
+    .topbar-icloud-alert {
+      font-size: 0;
+    }
+    .topbar-icloud-alert::after {
+      content: 'iCloud';
+      font-size: 11px;
+    }
+    .topbar-manage-link {
+      padding: 4px;
+    }
+    .connection {
+      display: none;
+    }
+  }
+
   @media (min-width: 721px) {
     .jobs-drawer,
     .jobs-drawer-toggle {
-      right: auto;
+      left: auto;
       bottom: 16px;
       right: 16px;
     }

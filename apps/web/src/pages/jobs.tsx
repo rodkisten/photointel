@@ -282,21 +282,50 @@ export function JobsPage() {
           >
             {query.data.items.map((item) => (
               <div className="job-row" key={item.id}>
-                <button
-                  className="job-name"
-                  onClick={() => setJob(item)}
-                  style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}
-                >
-                  <span className="job-icon">
-                    <Activity size={15} />
-                  </span>
-                  <span>
-                    <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
-                    <small>
-                      {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}
-                    </small>
-                  </span>
-                </button>
+                {item.status === 'failed' ? (
+                  <a
+                    className="job-name"
+                    href={jobLogsUrl(
+                      item.job_type,
+                      item.id,
+                      typeof item.error_details?.correlation_id === 'string'
+                        ? item.error_details.correlation_id
+                        : undefined,
+                      item.finished_at || item.started_at || item.created_at,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={'Investigar falha do job ' + item.id + ' no Manage'}
+                    style={{ textAlign: 'left', color: 'inherit' }}
+                  >
+                    <span className="job-icon">
+                      <Activity size={15} />
+                    </span>
+                    <span>
+                      <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
+                      <small>
+                        {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts} · falhou ·
+                        abrir logs no Manage
+                      </small>
+                    </span>
+                  </a>
+                ) : (
+                  <button
+                    className="job-name"
+                    onClick={() => setJob(item)}
+                    style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}
+                  >
+                    <span className="job-icon">
+                      <Activity size={15} />
+                    </span>
+                    <span>
+                      <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
+                      <small>
+                        {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}
+                      </small>
+                    </span>
+                  </button>
+                )}
                 <Status value={item.status} />
                 <span className="job-duration muted">
                   {item.started_at && item.finished_at
@@ -355,19 +384,30 @@ export function JobsPage() {
           </div>
           <DetailList
             data={{
-              throughput: `${
-                typeof stats.data?.jobs_per_second_last_5min === 'number'
-                  ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 5 }).format(
-                      stats.data.jobs_per_second_last_5min,
-                    )
-                  : '—'
-              } jobs/s`,
+              throughput:
+                typeof stats.data?.jobs_per_second_observed === 'number' &&
+                stats.data.jobs_per_second_observed > 0
+                  ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(
+                      stats.data.jobs_per_second_observed,
+                    ) +
+                    ' jobs/s · janela ' +
+                    (stats.data.jobs_rate_window === '5min' ? '5 min' : '1 hora')
+                  : 'Sem conclusões recentes',
               jobs_hour: number(stats.data?.jobs_completed_last_hour),
-              average: `${number(stats.data?.average_job_duration_seconds)} s`,
+              average:
+                typeof stats.data?.average_job_duration_seconds === 'number' &&
+                Number(stats.data.duration_sample_size) > 0
+                  ? number(stats.data.average_job_duration_seconds) +
+                    ' s · ' +
+                    number(stats.data.duration_sample_size) +
+                    ' amostras (24h)'
+                  : 'Sem amostra de duração nas últimas 24h',
+              pending: number(stats.data?.pending_processing),
+              running: number(stats.data?.running_jobs),
               remaining:
-                stats.data?.estimated_remaining_seconds == null
-                  ? 'Sem amostra suficiente'
-                  : `${number(Number(stats.data.estimated_remaining_seconds) / 60)} min (estimativa)`,
+                typeof stats.data?.estimated_remaining_seconds !== 'number'
+                  ? 'Aguardando conclusão de jobs para calcular'
+                  : `${number(Number(stats.data.estimated_remaining_seconds) / 60)} min · taxa observada`,
               gpu: `${number(costs.data?.gpu_runtime_ms)} ms`,
               transferred: costs.data?.bytes_transferred,
               cost: `USD ${number(costs.data?.estimated_monthly_cost)} / mês (estimativa)`,
@@ -376,6 +416,8 @@ export function JobsPage() {
               throughput: 'Últimos 5 minutos',
               jobs_hour: 'Concluídos na última hora',
               average: 'Tempo médio',
+              pending: 'Na fila ou executando',
+              running: 'Executando agora',
               remaining: 'Tempo restante',
               gpu: 'Runtime GPU',
               transferred: 'Bytes transferidos',

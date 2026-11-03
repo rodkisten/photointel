@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -567,6 +568,65 @@ async def repair_preview(
             "status": job.status, "message": message}
 
 
+class PreviewRepairBatchInput(BaseModel):
+    """Explicitly authorized, paged repair; every request is bounded to 25 assets."""
+
+    limit: int = Field(10, ge=1, le=25)
+    cursor: str | None = Field(None, max_length=4096)
+    asset_ids: list[UUID] | None = Field(None, max_length=25)
+    confirm: bool = False
+
+
+@router.post("/jobs/previews/repair-batch", tags=["jobs"])
+async def repair_preview_batch(
+    body: PreviewRepairBatchInput, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """Repair a bounded page of missing previews without touching original photos.
+
+    Reuses the single-photo recovery path so active jobs, blocked media, manifests
+    and Cloud Run dispatch checks obey exactly the same validation.
+    """
+    if not body.confirm:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Confirme o reparo de prévias", 409)
+    from photointel.routers.preview_audit import _audit_predicates
+
+    if body.asset_ids is not None:
+        identifiers = list(dict.fromkeys(body.asset_ids))
+        next_cursor = None
+    else:
+        statement = select(Asset.id).where(*_audit_predicates())
+        if body.cursor:
+            statement = statement.where(Asset.id > decode_uuid_cursor(body.cursor))
+        rows = list((await session.scalars(
+            statement.order_by(Asset.id).limit(body.limit + 1)
+        )).all())
+        identifiers = rows[:body.limit]
+        next_cursor = (
+            encode_cursor({"id": identifiers[-1]})
+            if len(rows) > body.limit and identifiers else None
+        )
+    accepted: list[str] = []
+    reused: list[str] = []
+    failures: list[dict[str, str]] = []
+    for identifier in identifiers:
+        try:
+            outcome = await repair_preview(identifier, session, identity, background_tasks)
+            (accepted if outcome["created"] else reused).append(str(identifier))
+        except AppError as exc:
+            await session.rollback()
+            failures.append({"asset_id": str(identifier), "code": str(exc.code)})
+    return {
+        "scanned": len(identifiers),
+        "queued": len(accepted),
+        "already_active": len(reused),
+        "failed": len(failures),
+        "failed_items": failures,
+        "next_cursor": next_cursor,
+        "message": "Reparo solicitado. O resultado final depende da execução dos workers.",
+    }
+
+
 @router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])
 async def job_activity(
     session: Session, limit: int = Query(24, ge=1, le=100)
@@ -851,6 +911,58 @@ async def ingestion_health(session: Session) -> dict[str, Any]:
         "recovery": "Execute make icloud-auth por SSH se a sessão expirou.",
     }
 
+@router.post("/ingestion/connection-test", tags=["ingestion"])
+async def icloud_connection_test(session: Session, identity: Actor) -> dict[str, Any]:
+    """Perform an actual bounded Apple session probe, without accepting credentials.
+
+    Uses the same encrypted session restore path as ingestion, and never returns
+    photo data, session cookies, Apple errors, tokens or account identifiers.
+    """
+    from photointel.services.ingestion import ICloudAdapter
+    from photointel.services.session_store import session_directory
+
+    settings = await effective_settings(session)
+    if not settings.icloud_enabled or not settings.icloud_account:
+        return {
+            "state": "not_configured",
+            "valid": False,
+            "reauth_required": True,
+            "checked_at": utcnow().isoformat(),
+            "message": "Configure a conta e publique a sessão Apple no terminal seguro.",
+        }
+    try:
+        async with session_directory(settings) as restored:
+            current = settings.model_copy(update={"icloud_session_directory": restored})
+            await asyncio.wait_for(
+                asyncio.to_thread(ICloudAdapter(current).connect, require_library=False),
+                timeout=25,
+            )
+        return {
+            "state": "valid",
+            "valid": True,
+            "reauth_required": False,
+            "checked_at": utcnow().isoformat(),
+            "message": "A Apple aceitou a sessão restaurada. Nenhuma foto foi transferida.",
+        }
+    except TimeoutError:
+        return {
+            "state": "timeout",
+            "valid": False,
+            "reauth_required": False,
+            "checked_at": utcnow().isoformat(),
+            "message": "A Apple não respondeu no limite do teste. Verifique a rede e tente novamente.",
+        }
+    except Exception:
+        # Third-party Apple exceptions may contain secrets or signed URLs.
+        return {
+            "state": "verification_failed",
+            "valid": False,
+            "reauth_required": True,
+            "checked_at": utcnow().isoformat(),
+            "message": "Sessão Apple recusada ou indisponível. Reautentique no terminal seguro e teste novamente.",
+        }
+
+
 
 @router.get("/ingestion/runs", tags=["ingestion"])
 async def ingestion_runs(
@@ -1090,6 +1202,9 @@ async def statistics(session: Session) -> dict[str, Any]:
             )
         ).all()
     }
+    now = datetime.now(UTC)
+    # Sample real completions across the last 24 hours for a useful duration,
+    # even if none finished in the last hour (otherwise the UI displays zero).
     timing = (
         await session.execute(
             select(
@@ -1097,24 +1212,51 @@ async def statistics(session: Session) -> dict[str, Any]:
                 func.count(Job.id),
             ).where(
                 Job.status == "completed",
-                Job.finished_at > datetime.now(UTC) - timedelta(hours=1),
+                Job.started_at.is_not(None),
+                Job.finished_at.is_not(None),
+                Job.finished_at >= now - timedelta(hours=24),
             )
         )
     ).one()
     recent_five_minutes = await session.scalar(
         select(func.count(Job.id)).where(
             Job.status == "completed",
-            Job.finished_at >= datetime.now(UTC) - timedelta(minutes=5),
+            Job.finished_at >= now - timedelta(minutes=5),
         )
     ) or 0
+    recent_hour = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.status == "completed",
+            Job.finished_at >= now - timedelta(hours=1),
+        )
+    ) or 0
+    started_five_minutes = await session.scalar(
+        select(func.count(Job.id)).where(
+            Job.started_at >= now - timedelta(minutes=5),
+        )
+    ) or 0
+    last_completion = await session.scalar(
+        select(func.max(Job.finished_at)).where(Job.status == "completed")
+    )
     last_sync = await session.scalar(
         select(func.max(IngestionRun.finished_at)).where(
             IngestionRun.status == "completed"
         )
     )
-    avg_duration = float(timing[0]) if timing[0] else None
+    avg_duration = float(timing[0]) if timing[0] is not None else None
     pending = sum(
-        job_counts.get(status, 0) for status in ["queued", "retrying", "preparing"]
+        job_counts.get(status, 0)
+        for status in ("queued", "retrying", "preparing", "running")
+    )
+    observed_rate = (
+        recent_five_minutes / 300
+        if recent_five_minutes
+        else recent_hour / 3600
+        if recent_hour
+        else None
+    )
+    rate_window = (
+        "5min" if recent_five_minutes else "hour" if recent_hour else None
     )
     return {
         "total_assets": assets[0],
@@ -1122,14 +1264,27 @@ async def statistics(session: Session) -> dict[str, Any]:
         "processed_assets": assets[2],
         "job_counts": job_counts,
         "pending_processing": pending,
+        "running_jobs": job_counts.get("running", 0),
+        "paused_jobs": job_counts.get("paused", 0),
         "failed_jobs": job_counts.get("failed", 0),
         "last_icloud_sync": last_sync,
-        "jobs_per_second_last_hour": (timing[1] or 0) / 3600,
+        "latest_completed_job": last_completion,
+        "jobs_started_last_5min": started_five_minutes,
+        "jobs_per_second_last_hour": recent_hour / 3600,
         "jobs_per_second_last_5min": recent_five_minutes / 300,
-        "jobs_completed_last_hour": timing[1] or 0,
+        "jobs_per_second_observed": observed_rate,
+        "jobs_rate_window": rate_window,
+        "jobs_completed_last_hour": recent_hour,
+        "jobs_completed_last_5min": recent_five_minutes,
         "average_job_duration_seconds": avg_duration,
-        "estimated_remaining_seconds": pending * avg_duration if avg_duration else None,
-        "estimate_notice": "Estimativa baseada nos jobs concluídos; não é garantia.",
+        "duration_sample_size": timing[1] or 0,
+        "estimated_remaining_seconds": (
+            pending / observed_rate if pending and observed_rate else None
+        ),
+        "estimate_notice": (
+            "ETA calculada pela taxa real de conclusão da janela recente; "
+            "ausência de amostras é informada em vez de inventar estimativas."
+        ),
     }
 
 

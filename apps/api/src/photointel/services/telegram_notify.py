@@ -11,7 +11,7 @@ import os
 import re
 from collections import OrderedDict
 from datetime import timedelta
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlencode, urlsplit
 from uuid import uuid4
 
 import httpx
@@ -84,16 +84,15 @@ def safe_urls(job: Job, sentry: str | None, correlation: str) -> list[list[dict[
             "text": "🧨 Erro exato · Sentry",
             "url": origin + "/v1/observability/sentry-events/" + sentry,
         }])
-    project = os.getenv("GCP_PROJECT_ID", "photointel")
-    if not re.fullmatch(r"[a-z][a-z0-9:-]{3,62}", project):
-        project = "photointel"
-    name = "photointel-discover" if job.job_type == "icloud_discovery" else "photointel-worker"
-    query = ('resource.type="cloud_run_job"\nresource.labels.job_name="' +
-             name + '"\n(SEARCH("' + str(job.id) + '") OR SEARCH("' + correlation + '"))')
     links.append([{
-        "text": "🪵 Logs completos · GCP",
-        "url": "https://console.cloud.google.com/logs/query;query=" +
-               quote(query, safe="") + ";duration=P7D?project=" + project,
+        "text": "🪵 Logs completos · Manage",
+        "url": "https://photos-manage.migos.club/?" + urlencode({
+            "tab": "logs",
+            "source": "gcp",
+            "job": str(job.id),
+            "correlation": correlation,
+            "job_type": job.job_type,
+        }),
     }])
     return links[:3]
 

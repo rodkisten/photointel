@@ -5,6 +5,15 @@
   "compatibility_date": "2026-11-01",
   "workers_dev": false,
   "preview_urls": false,
+  "previews": {
+    "vars": {
+      "GITHUB_REPO": "rodkisten/photointel",
+      "GITHUB_ENVIRONMENT": "preview",
+      "GCP_PROJECT_ID": "photointel-preview",
+      "GCP_REGION": "us-central1",
+      "PHOTOINTEL_PREVIEW": "true",
+    },
+  },
   "observability": {
     "enabled": true,
     "logs": { "enabled": true, "invocation_logs": false },

@@ -49,7 +49,7 @@ def test_all_statuses_receive_markdown_and_deep_links(status, monkeypatch):
     assert "never-send-me" not in text
     assert "bearer token" not in text
     assert buttons[0][0]["url"] == "https://photos.migos.club/jobs"
-    assert buttons[-1][0]["url"].startswith("https://console.cloud.google.com/logs/query")
+    assert buttons[-1][0]["url"].startswith("https://photos-manage.migos.club/?tab=logs&source=gcp")
     if status in telegram.ERROR_STATES:
         assert "ValueError" in text
         assert "MEDIA_DECODE_FAILED" in text

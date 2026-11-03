@@ -43,6 +43,8 @@ import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
 import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
+import { DotenvFields } from '../components/dotenv-fields';
+import { RepositoryVariables } from './RepositoryVariables';
 export function ConfigEditor() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -52,6 +54,7 @@ export function ConfigEditor() {
     refetchOnWindowFocus: false,
   });
   const [editor, setEditor] = useState('');
+  const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
   const [version, setVersion] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [autoApply, setAutoApply] = useState(true);
@@ -122,12 +125,39 @@ export function ConfigEditor() {
               <span>CodeMirror 6 · {detectEnvironmentFormat(editor) === 'json' ? 'JSON' : 'dotenv'}</span>
               <span>{editor.split(/\r?\n/).length} linhas · comentários preservados</span>
             </div>
-            <CodeMirrorEnvEditor
-              value={editor}
-              onChange={setEditor}
-              format={detectEnvironmentFormat(editor)}
-              ariaLabel="Editar GCP_CONFIG_ENV"
-            />
+            <div
+              className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-800 p-1"
+              role="group"
+              aria-label="Modo do editor"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={editorMode === 'code' ? 'secondary' : 'ghost'}
+                onClick={() => setEditorMode('code')}
+              >
+                Código
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={editorMode === 'fields' ? 'secondary' : 'ghost'}
+                onClick={() => setEditorMode('fields')}
+                disabled={detectEnvironmentFormat(editor) === 'json'}
+              >
+                Chave e valor
+              </Button>
+            </div>
+            {editorMode === 'fields' && detectEnvironmentFormat(editor) === 'dotenv' ? (
+              <DotenvFields value={editor} onChange={setEditor} />
+            ) : (
+              <CodeMirrorEnvEditor
+                value={editor}
+                onChange={setEditor}
+                format={detectEnvironmentFormat(editor)}
+                ariaLabel="Editar GCP_CONFIG_ENV"
+              />
+            )}
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
                 Chaves repetidas:{' '}
@@ -247,6 +277,7 @@ export function ConfigEditor() {
           </Card>
         )}
       </Section>
+      <RepositoryVariables />
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}

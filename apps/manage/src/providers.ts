@@ -18,6 +18,7 @@ export const WORKFLOW_INPUTS: Record<string, Record<string, string[]>> = {
   },
   'gcp-validation.yml': {},
   'icloud-validation.yml': {},
+  'icloud-setup.yml': {},
   'backend-smoke.yml': {},
 };
 /** Classify provider faults without returning remote response bodies or credentials. */
