@@ -57,7 +57,7 @@ export function SecretManagerPage() {
         <Card className="flex items-center justify-between gap-3 p-3">
           <div className="min-w-0">
             <p className="text-sm font-medium">Google Secret Manager</p>
-            <p className="text-xs text-slate-500">Projeto photointel · credenciais do Manage</p>
+            <p className="text-xs text-carbon-500">Projeto photointel · credenciais do Manage</p>
           </div>
           <Button size="sm" variant="outline" onClick={() => void list.refetch()} disabled={list.isFetching}>
             <RefreshCcw size={15} className={list.isFetching ? 'animate-spin' : ''} /> Atualizar
@@ -96,7 +96,7 @@ export function SecretManagerPage() {
                     <Badge tone="success">
                       Versão v{result.created_version} criada e referência atualizada
                     </Badge>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-carbon-400">
                       {result.dispatches.length
                         ? result.dispatches
                             .map(
@@ -115,7 +115,7 @@ export function SecretManagerPage() {
           </div>
         )}
       </Section>
-      <p className="text-xs leading-5 text-slate-500">
+      <p className="text-xs leading-5 text-carbon-500">
         Somente uma nova versão é criada, sem apagar versões anteriores. O painel não aceita arquivos ou
         valores com múltiplas linhas. Em caso de erro após criar uma versão, consulte a mensagem antes de
         tentar novamente para evitar duplicações.
