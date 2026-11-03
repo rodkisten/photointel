@@ -57,7 +57,11 @@ export default function App() {
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
   const pageDescription = isViewingRun ? 'Etapas e logs técnicos' : TAB_DESCRIPTIONS[tab];
-  const { data: meta, isPending, error } = useQuery({
+  const {
+    data: meta,
+    isPending,
+    error,
+  } = useQuery({
     queryKey: ['meta'],
     queryFn: () => api<Meta>('/meta'),
     retry: false,
@@ -67,21 +71,13 @@ export default function App() {
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
       <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link
-            to="/"
-            aria-label="Ir para a home do Manage"
-            className="flex items-center gap-3 text-left"
-          >
+          <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
               <CloudCog size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">
-                PhotoIntel
-              </p>
-              <p className="text-[11px] font-medium tracking-wider text-carbon-500">
-                CONTROL CENTER
-              </p>
+              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">PhotoIntel</p>
+              <p className="text-[11px] font-medium tracking-wider text-carbon-500">CONTROL CENTER</p>
             </div>
           </Link>
 
@@ -119,10 +115,7 @@ export default function App() {
                       : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200',
                   )}
                 >
-                  <item.icon
-                    size={17}
-                    className={isActive ? 'text-carbon-200' : 'text-carbon-500'}
-                  />
+                  <item.icon size={17} className={isActive ? 'text-carbon-200' : 'text-carbon-500'} />
                   {item.label}
                 </Link>
               );
@@ -141,9 +134,7 @@ export default function App() {
               </h1>
               <p className="text-sm text-carbon-400">{pageDescription}</p>
             </div>
-            {currentNav && !isViewingRun && (
-              <currentNav.icon size={20} className="mt-3 text-carbon-600" />
-            )}
+            {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-carbon-600" />}
           </div>
 
           {isPending ? (

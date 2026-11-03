@@ -393,8 +393,16 @@ export function SystemInfo({ meta }: { meta: Meta }) {
       </Section>
       <div className="flex flex-wrap gap-4 text-xs">
         <External href="https://github.com/rodkisten/photointel/actions">GitHub Actions</External>
-        <Link to="/logs" search={readLogLink('?source=gcp')} className="text-carbon-300 hover:underline">Logs GCP · Manage</Link>
-        <Link to="/logs" search={readLogLink('?source=cloudflare')} className="text-carbon-300 hover:underline">Logs Cloudflare · Manage</Link>
+        <Link to="/logs" search={readLogLink('?source=gcp')} className="text-carbon-300 hover:underline">
+          Logs GCP · Manage
+        </Link>
+        <Link
+          to="/logs"
+          search={readLogLink('?source=cloudflare')}
+          className="text-carbon-300 hover:underline"
+        >
+          Logs Cloudflare · Manage
+        </Link>
       </div>
     </div>
   );

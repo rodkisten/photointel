@@ -53,9 +53,9 @@ export function ICloudDiagnostics() {
           <div className="space-y-2">
             <h2 className="text-base font-semibold">Conexão iCloud e sessão Apple</h2>
             <p className="text-sm leading-6 text-carbon-400">
-              Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico
-              abaixo também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade.
-              A sessão só é publicada depois de confirmar o acesso à biblioteca.
+              Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico abaixo
+              também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade. A
+              sessão só é publicada depois de confirmar o acesso à biblioteca.
             </p>
           </div>
         </div>
@@ -102,8 +102,8 @@ export function ICloudDiagnostics() {
                   </p>
                 )}
                 <p className="text-xs leading-5 text-carbon-400">
-                  Use o formulário de senha e código Apple no topo desta página para renovar a sessão,
-                  sem terminal. Se houver erro, confira os logs correlacionados abaixo.
+                  Use o formulário de senha e código Apple no topo desta página para renovar a sessão, sem
+                  terminal. Se houver erro, confira os logs correlacionados abaixo.
                 </p>
                 <a
                   href="https://photos.migos.club/icloud"
