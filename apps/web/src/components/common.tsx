@@ -141,7 +141,13 @@ export function Toast() {
 
   return (
     <div className={`toast toast-${toast.kind}`} role={toast.kind === 'error' ? 'alert' : 'status'}>
-      {toast.kind === 'error' ? <AlertCircle size={17} /> : toast.kind === 'info' ? <Bell size={17} /> : <Check size={17} />}
+      {toast.kind === 'error' ? (
+        <AlertCircle size={17} />
+      ) : toast.kind === 'info' ? (
+        <Bell size={17} />
+      ) : (
+        <Check size={17} />
+      )}
       <div className="toast-message">
         <span>{toast.text}</span>
         {toast.kind === 'error' && toast.incident && (
