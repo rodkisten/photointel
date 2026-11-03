@@ -756,6 +756,19 @@ async def change_batch(
     pause: bool,
     background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
+    if not pause:
+        setting = await session.get(Setting, "jobs_paused")
+        if setting and setting.value:
+            raise AppError(ErrorCode.INVALID_REQUEST, "Retome primeiro a fila global", 409)
+    eligible = ["queued", "retrying", "preparing", "running"] if pause else ["paused"]
+    # Lock jobs first, then the batch: workers commit in the same order.
+    # Reversing it can deadlock with a worker finishing a result mid-pause.
+    affected = list((await session.scalars(
+        select(Job)
+        .where(Job.batch_id == batch_id, Job.status.in_(eligible))
+        .order_by(Job.id)
+        .with_for_update()
+    )).all())
     batch = await session.scalar(
         select(JobBatch).where(JobBatch.id == batch_id).with_for_update()
     )
@@ -763,19 +776,7 @@ async def change_batch(
         raise AppError(ErrorCode.NOT_FOUND, "Lote não encontrado", 404)
     if batch.status in ("completed", "failed", "cancelled"):
         raise AppError(ErrorCode.INVALID_REQUEST, "Lote já finalizado", 409)
-    if not pause:
-        setting = await session.get(Setting, "jobs_paused")
-        if setting and setting.value:
-            raise AppError(ErrorCode.INVALID_REQUEST, "Retome primeiro a fila global", 409)
     batch.status = "paused" if pause else "queued"
-    eligible = ["queued", "retrying", "preparing", "running"] if pause else ["paused"]
-    affected = (
-        await session.scalars(
-            select(Job)
-            .where(Job.batch_id == batch_id, Job.status.in_(eligible))
-            .with_for_update()
-        )
-    ).all()
     for job in affected:
         if transition_job(job, "pause" if pause else "resume"):
             emit_job_event(session, job)
@@ -787,10 +788,20 @@ async def change_batch(
         batch_id=str(batch_id),
     )
     platform = (await effective_settings(session)).execution_platform
-    if not pause and platform == "cloud_run":
+    if not pause and platform == "cloud_run" and affected:
         from photointel.services.outbox import enqueue_dispatch
 
-        await enqueue_dispatch(session, "worker", f"batch-resume:{batch_id}:{uuid4()}")
+        modes = {
+            "backfill" if job.job_type == "icloud_discovery" and
+            job.payload.get("mode") == "backfill"
+            else "discover" if job.job_type == "icloud_discovery"
+            else "worker"
+            for job in affected
+        }
+        for mode in sorted(modes):
+            await enqueue_dispatch(
+                session, mode, f"batch-resume:{batch_id}:{mode}:{uuid4()}"
+            )
     await session.commit()
     if not pause:
         _schedule_cloud_dispatch(background_tasks, platform)
