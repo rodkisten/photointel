@@ -8,14 +8,14 @@ import { cn } from '../lib/utils';
 // ==========================================
 
 const buttonVariants = cva(
-  'inline-flex select-none items-center justify-center gap-2 rounded-lg font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-slate-500 disabled:pointer-events-none disabled:opacity-40 active:scale-[.98]',
+  'inline-flex select-none items-center justify-center gap-2 rounded-lg font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-carbon-500 disabled:pointer-events-none disabled:opacity-40 active:scale-[.98]',
   {
     variants: {
       variant: {
-        default: 'bg-white text-black hover:bg-slate-200',
-        secondary: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
-        outline: 'border border-slate-700 bg-transparent text-slate-100 hover:bg-slate-800',
-        ghost: 'text-slate-300 hover:bg-slate-800/80 hover:text-white',
+        default: 'bg-white text-black hover:bg-carbon-200',
+        secondary: 'bg-carbon-800 text-carbon-100 hover:bg-carbon-700',
+        outline: 'border border-carbon-700 bg-transparent text-carbon-100 hover:bg-carbon-800',
+        ghost: 'text-carbon-300 hover:bg-carbon-800/80 hover:text-white',
         destructive: 'bg-red-950 text-red-200 hover:bg-red-900',
       },
       size: {
@@ -55,7 +55,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-xl border border-slate-800 bg-slate-950 shadow-lg shadow-black/20', className)}
+      className={cn('rounded-xl border border-carbon-800 bg-carbon-950 shadow-lg shadow-black/20', className)}
       {...props}
     />
   ),
@@ -67,7 +67,7 @@ Card.displayName = 'Card';
 // ==========================================
 
 const badgeColors = {
-  neutral: 'bg-white/10 text-slate-300',
+  neutral: 'bg-white/10 text-carbon-300',
   success: 'bg-emerald-500/10 text-emerald-400',
   danger: 'bg-red-500/10 text-red-400',
   warning: 'bg-amber-500/10 text-amber-400',
@@ -106,7 +106,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     <input
       ref={ref}
       className={cn(
-        'flex h-10 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 text-base text-white outline-none transition-colors placeholder:text-slate-500 focus-visible:border-slate-500 md:text-sm',
+        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors placeholder:text-carbon-500 focus-visible:border-carbon-500 md:text-sm',
         className,
       )}
       {...props}
@@ -120,7 +120,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
     <select
       ref={ref}
       className={cn(
-        'flex h-10 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 text-base text-white outline-none transition-colors focus-visible:border-slate-500 md:text-sm',
+        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors focus-visible:border-carbon-500 md:text-sm',
         className,
       )}
       {...props}
@@ -136,7 +136,7 @@ export const Textarea = React.forwardRef<
   <textarea
     ref={ref}
     className={cn(
-      'flex min-h-[80px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-3 font-mono text-[13px] leading-6 text-slate-200 outline-none transition-colors focus-visible:border-slate-500',
+      'flex min-h-[80px] w-full rounded-lg border border-carbon-700 bg-carbon-950 px-3 py-3 font-mono text-[13px] leading-6 text-carbon-200 outline-none transition-colors focus-visible:border-carbon-500',
       className,
     )}
     {...props}
@@ -160,8 +160,8 @@ export const Section = React.forwardRef<HTMLElement, SectionProps>(
       <section ref={ref} className={cn('space-y-3', className)} {...props}>
         <div className="flex items-end justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="text-base font-semibold tracking-tight text-slate-100">{title}</h2>
-            {detail && <p className="text-xs text-slate-400">{detail}</p>}
+            <h2 className="text-base font-semibold tracking-tight text-carbon-100">{title}</h2>
+            {detail && <p className="text-xs text-carbon-400">{detail}</p>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
         </div>
