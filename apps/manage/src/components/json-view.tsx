@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, Search } from 'lucide-react';
 import { Button, Input } from './ui';
 import { ScrollArea } from './scroll-area';
+import { CorrelationPopover, isCorrelationKey } from './correlation-links';
 
 // ==========================================
 // Tipos
@@ -88,7 +89,7 @@ function getSyntaxColor(value: unknown, kind: string): string {
 // Subcomponentes
 // ==========================================
 
-function Highlight({ text, pattern }: { text: string; pattern: RegExp | null }) {
+function PlainHighlight({ text, pattern }: { text: string; pattern: RegExp | null }) {
   if (!pattern) return <>{text}</>;
 
   const parts: Array<{ value: string; match: boolean }> = [];
@@ -120,6 +121,47 @@ function Highlight({ text, pattern }: { text: string; pattern: RegExp | null }) 
       )}
     </>
   );
+}
+
+/** Link UUIDs only when the log identifies them as correlation IDs. */
+function Highlight({
+  text,
+  pattern,
+  correlationKey = false,
+}: {
+  text: string;
+  pattern: RegExp | null;
+  correlationKey?: boolean;
+}) {
+  const uuid = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
+  const labelled = /(?:correlation[_-]?id|correlationId)["']?\s*[:=]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const matches: Array<{ id: string; start: number; end: number }> = [];
+  if (correlationKey) {
+    for (const match of text.matchAll(uuid)) {
+      matches.push({ id: match[0], start: match.index, end: match.index + match[0].length });
+    }
+  } else {
+    for (const match of text.matchAll(labelled)) {
+      const id = match[1];
+      const start = match.index + match[0].lastIndexOf(id);
+      matches.push({ id, start, end: start + id.length });
+    }
+  }
+  if (!matches.length) return <PlainHighlight text={text} pattern={pattern} />;
+  const parts = [];
+  let cursor = 0;
+  for (const match of matches.slice(0, 40)) {
+    if (match.start < cursor) continue;
+    if (match.start > cursor) {
+      parts.push(<PlainHighlight key={'text-' + cursor} text={text.slice(cursor, match.start)} pattern={pattern} />);
+    }
+    parts.push(<CorrelationPopover key={'id-' + match.start} id={match.id} />);
+    cursor = match.end;
+  }
+  if (cursor < text.length) {
+    parts.push(<PlainHighlight key={'tail-' + cursor} text={text.slice(cursor)} pattern={pattern} />);
+  }
+  return <>{parts}</>;
 }
 
 function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: NodeProps) {
@@ -180,7 +222,7 @@ function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: 
             </button>
           ) : (
             <span className={syntaxTone}>
-              <Highlight text={primitiveString} pattern={pattern} />
+              <Highlight text={primitiveString} pattern={pattern} correlationKey={Boolean(name && isCorrelationKey(name))} />
             </span>
           )}
         </span>
