@@ -14,7 +14,7 @@ if [[ " $* " == *" add-iam-policy-binding "* && " $* " != *" --condition=None "*
   echo "Adding a binding without specifying a condition to a policy containing conditions is prohibited in non-interactive mode." >&2
   exit 1
 fi
-if [[ "${FAKE_FCM_IAM_DENIED:-false}" == true && "$*" == *"projects add-iam-policy-binding replace-project-id"* && "$*" == *"--role=roles/firebasecloudmessaging.admin"* ]]; then
+if [[ "${FAKE_FCM_IAM_DENIED:-false}" == true && "$*" == *"projects add-iam-policy-binding photointel"* && "$*" == *"--role=roles/firebasecloudmessaging.admin"* ]]; then
   echo 'PERMISSION_DENIED: FCM send role grant denied' >&2
   exit 1
 fi
