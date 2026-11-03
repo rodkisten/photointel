@@ -146,10 +146,9 @@ async def control_queue(
     return {"changed": len(touched), **(await read_control(session))}
 
 
-@router.post("/jobs/{job_id}/{action}", response_model=JobOut)
-async def control_job(
+async def _control_job(
     job_id: UUID, action: Literal["pause", "resume"],
-    session: Session, identity: Actor, background_tasks: BackgroundTasks,
+    session: AsyncSession, identity: Identity, background_tasks: BackgroundTasks,
 ) -> JobOut:
     job = await session.scalar(select(Job).where(Job.id == job_id).with_for_update())
     if job is None:
@@ -170,6 +169,22 @@ async def control_job(
     await session.commit()
     await _after_commit(background_tasks, dispatch)
     return JobOut.model_validate(job)
+
+
+@router.post("/jobs/{job_id}/pause", response_model=JobOut)
+async def pause_job(
+    job_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
+) -> JobOut:
+    return await _control_job(job_id, "pause", session, identity, background_tasks)
+
+
+@router.post("/jobs/{job_id}/resume", response_model=JobOut)
+async def resume_job(
+    job_id: UUID, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
+) -> JobOut:
+    return await _control_job(job_id, "resume", session, identity, background_tasks)
 
 
 @router.post("/job-batches/{batch_id}/cancel")
