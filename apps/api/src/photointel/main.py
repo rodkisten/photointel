@@ -293,6 +293,9 @@ def create_app() -> FastAPI:
 
     app.include_router(observability, prefix="/v1")
     app.include_router(operations, prefix="/v1")
+    from photointel.routers.icloud_web_auth import router as icloud_web_auth
+
+    app.include_router(icloud_web_auth, prefix="/v1")
     from photointel.routers.push import router as push
 
     app.include_router(push, prefix="/v1")
