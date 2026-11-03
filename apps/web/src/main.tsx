@@ -60,10 +60,12 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Foreground FCM messages update all job views without waiting for polling.
 window.addEventListener('photointel:fcm-message', (event) => {
-  const payload = (event as CustomEvent<{
-    data?: Record<string, string>;
-    notification?: { title?: string; body?: string };
-  }>).detail;
+  const payload = (
+    event as CustomEvent<{
+      data?: Record<string, string>;
+      notification?: { title?: string; body?: string };
+    }>
+  ).detail;
   if (payload?.data?.kind !== 'job_status') return;
   void client.invalidateQueries({
     predicate: (query) =>
