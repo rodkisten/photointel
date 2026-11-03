@@ -55,7 +55,7 @@ export function RepositoryVariables() {
           próprio.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className="space-y-1 text-xs text-slate-400">
+          <label className="space-y-1 text-xs text-carbon-400">
             Local
             <Select
               value={scope}
@@ -71,7 +71,7 @@ export function RepositoryVariables() {
               <option value="repository">Repositório</option>
             </Select>
           </label>
-          <label className="space-y-1 text-xs text-slate-400">
+          <label className="space-y-1 text-xs text-carbon-400">
             Variável
             <Select
               value={selected}
@@ -96,7 +96,7 @@ export function RepositoryVariables() {
         </div>
         {variables.isPending && <Spinner />}
         {variables.error && <IssueBanner error={variables.error} />}
-        <label className="space-y-1 text-xs text-slate-400">
+        <label className="space-y-1 text-xs text-carbon-400">
           Chave
           <Input
             value={name}
@@ -104,7 +104,7 @@ export function RepositoryVariables() {
             placeholder="NOME_DA_VARIAVEL"
           />
         </label>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-carbon-400">
           <span>Valor · {value.split('\n').length} linhas</span>
           <div className="flex gap-1">
             <Button
