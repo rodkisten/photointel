@@ -83,7 +83,7 @@ export async function icloudAuthRoute(
   } catch {
     throw new ApiError(
       503, 'APPLE_BACKEND', 'A API do PhotoIntel não respondeu. Confira o deploy e tente novamente.',
-    ) from undefined;
+    );
   }
   if (response.status >= 300 && response.status < 400) {
     throw new ApiError(502, 'UPSTREAM_REDIRECT', 'Redirecionamento inesperado da API');
