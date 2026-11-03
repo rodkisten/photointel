@@ -1,0 +1,25 @@
+name: "🎨 Jobs Test One-time Formatting"
+on:
+  push:
+    branches: [feat/jobs-global-pause-cancel-progress]
+    paths: [".github/workflows/temporary-job-controls-test-format.yml"]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: true}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx prettier --write apps/web/src/test/job-control.test.tsx apps/web/src/components/queue-controls.tsx
+      - run: |
+          git add apps/web/src/test/job-control.test.tsx apps/web/src/components/queue-controls.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style(web): format jobs control regression tests"
+          git push origin HEAD:feat/jobs-global-pause-cancel-progress
