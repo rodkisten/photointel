@@ -17,7 +17,7 @@ export function JobControls({ job, compact = false }: { job: Job; compact?: bool
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={paused ? 'Retomar job ' + job.id : 'Pausar job ' + job.id}
+          aria-label={paused ? 'Retomar job' : 'Pausar job'}
           title={paused ? 'Retomar job' : 'Pausar job'}
           disabled={action.isPending}
           onClick={() => action.mutate({ url: '/v1/jobs/' + job.id + (paused ? '/resume' : '/pause') })}
@@ -30,7 +30,7 @@ export function JobControls({ job, compact = false }: { job: Job; compact?: bool
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={'Cancelar job ' + job.id}
+          aria-label="Cancelar job"
           title="Cancelar job"
           disabled={action.isPending}
           onClick={() => action.mutate({ url: '/v1/jobs/' + job.id + '/cancel' })}
@@ -43,7 +43,7 @@ export function JobControls({ job, compact = false }: { job: Job; compact?: bool
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={'Repetir job ' + job.id}
+          aria-label="Repetir job"
           title="Repetir job"
           disabled={action.isPending}
           onClick={() => action.mutate({ url: '/v1/jobs/' + job.id + '/retry' })}
