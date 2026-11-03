@@ -97,6 +97,7 @@ jobs:
           tests/test_media_url_versions.py
           tests/test_foundation_storage.py
           tests/test_download_integrity_v11.py
+          tests/test_auto_preview_repair.py
       - name: "🗄️ Enable PostgreSQL extensions"
         run: >
           PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
@@ -107,6 +108,8 @@ jobs:
         run: >
           uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
           -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit or expired_icloud_media_url_is_refreshed_once or refresh_refuses_changed_icloud_representation'
+      - name: "🛠 Automatic preview repair integration"
+        run: uv run pytest -q tests/integration/test_api.py -k automatic_preview_repair
 
   preview-web:
     name: "🌐 Preview audit UI"
@@ -129,3 +132,4 @@ jobs:
         run: npm --prefix apps/web run typecheck
       - name: "🧪 Preview audit UI"
         run: npm --prefix apps/web test -- src/test/operations.test.tsx
+
