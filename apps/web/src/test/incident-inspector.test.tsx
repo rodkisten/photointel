@@ -75,7 +75,7 @@ describe('incident inspector', () => {
     expect(await within(dialog).findByText('api_http_error')).toBeVisible();
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(within(dialog).getByRole('button', { name: 'Copiar relatório' })).toBeVisible();
-    expect(within(dialog).getByRole('link', { name: 'Abrir Google Cloud' })).toBeVisible();
+    expect(within(dialog).getByRole('link', { name: 'Ver logs no Manage' })).toBeVisible();
     expect(dialog).not.toHaveTextContent('PRIVATE');
     await user.click(within(dialog).getByRole('button', { name: 'Voltar' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
