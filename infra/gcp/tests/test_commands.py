@@ -182,7 +182,8 @@ class CloudRunCommandsTests(unittest.TestCase):
         api_names = {item["name"] for item in manage.environment(self.config, "api")}
         jobs_names = {item["name"] for item in manage.environment(self.config, "worker")}
         self.assertNotIn("MIGRATION_DATABASE_URL", api_names | jobs_names)
-        self.assertNotIn("ICLOUD_SESSION_KEY", api_names)
+        # Browser Apple 2FA must seal its challenge using the SAME key as the worker.
+        self.assertIn("ICLOUD_SESSION_KEY", api_names)
         self.assertIn("ICLOUD_SESSION_KEY", jobs_names)
         self.assertIn(
             "MIGRATION_DATABASE_URL",
