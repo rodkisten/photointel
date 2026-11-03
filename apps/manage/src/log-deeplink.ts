@@ -61,7 +61,7 @@ export function primaryTerm(link: LogLink): string {
 }
 
 export function logLinkPath(link: LogLink): string {
-  const params = new URLSearchParams({ tab: 'logs', source: link.source });
+  const params = new URLSearchParams({ source: link.source });
   for (const [key, value] of [
     ['correlation', link.correlation],
     ['job', link.job],
@@ -74,7 +74,7 @@ export function logLinkPath(link: LogLink): string {
   ])
     if (value) params.set(key, value);
   params.set('minutes', link.minutes);
-  return '/?' + params.toString();
+  return '/logs?' + params.toString();
 }
 
 /** Only identifiers and a bounded time window reach provider queries. */
