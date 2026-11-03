@@ -12,7 +12,7 @@ import { sentryEventUrl } from '../lib/sentry';
 import { useUi } from '../lib/store';
 
 export function DiagnosticActions({ incident, error }: { incident: Diagnostic; error?: Error }) {
-  const label = incident.source === 'gcp' ? 'Ver logs no GCP' : 'Ver logs no Cloudflare';
+  const label = 'Ver logs no Manage';
   return (
     <div className="diagnostic-actions">
       <span className="diagnostic-id">
@@ -62,13 +62,12 @@ export function DiagnosticActions({ incident, error }: { incident: Diagnostic; e
             Copiar filtro do GCP
           </button>
           <small>
-            Se o Google Cloud abrir com a pesquisa incompleta no iPhone, cole o filtro copiado no Logs
-            Explorer e execute a consulta.
+            O Manage pesquisa automaticamente o incidente. O filtro do GCP fica disponível para uma consulta avançada, se necessário.
           </small>
         </>
       )}
       {incident.source === 'cloudflare' && (
-        <small>Abra o Worker photointel → Observability e pesquise pelo correlation_id.</small>
+        <small>O Manage abrirá a busca do Cloudflare com o correlation ID preenchido.</small>
       )}
     </div>
   );
