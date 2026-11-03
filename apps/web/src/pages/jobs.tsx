@@ -242,35 +242,37 @@ export function JobsPage() {
                 </div>
                 <Status value={batch.status} />
                 <div className="job-batch-actions">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label={batch.status === 'paused' ? 'Retomar lote' : 'Pausar lote'}
-                  disabled={
-                    action.isPending || ['completed', 'failed', 'cancelled'].includes(text(batch.status))
-                  }
-                  onClick={() =>
-                    action.mutate({
-                      url: `/v1/job-batches/${batch.id}/${batch.status === 'paused' ? 'resume' : 'pause'}`,
-                    })
-                  }
-                >
-                  {batch.status === 'paused' ? <Play size={13} /> : <Pause size={13} />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Cancelar lote"
-                  title="Cancelar os jobs pendentes deste lote"
-                  disabled={action.isPending || ['completed', 'failed', 'cancelled'].includes(text(batch.status))}
-                  onClick={() => {
-                    if (window.confirm('Cancelar os jobs pendentes deste lote?')) {
-                      action.mutate({ url: `/v1/job-batches/${batch.id}/cancel` });
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={batch.status === 'paused' ? 'Retomar lote' : 'Pausar lote'}
+                    disabled={
+                      action.isPending || ['completed', 'failed', 'cancelled'].includes(text(batch.status))
                     }
-                  }}
-                >
-                  <X size={13} />
-                </Button>
+                    onClick={() =>
+                      action.mutate({
+                        url: `/v1/job-batches/${batch.id}/${batch.status === 'paused' ? 'resume' : 'pause'}`,
+                      })
+                    }
+                  >
+                    {batch.status === 'paused' ? <Play size={13} /> : <Pause size={13} />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Cancelar lote"
+                    title="Cancelar os jobs pendentes deste lote"
+                    disabled={
+                      action.isPending || ['completed', 'failed', 'cancelled'].includes(text(batch.status))
+                    }
+                    onClick={() => {
+                      if (window.confirm('Cancelar os jobs pendentes deste lote?')) {
+                        action.mutate({ url: `/v1/job-batches/${batch.id}/cancel` });
+                      }
+                    }}
+                  >
+                    <X size={13} />
+                  </Button>
                 </div>
               </div>
             );

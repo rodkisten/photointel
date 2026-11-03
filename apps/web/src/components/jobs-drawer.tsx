@@ -182,7 +182,9 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           <span>
             <strong>{title}</strong>
             <small>
-              {queue.data ? queue.data.open + ' pendentes · ' + queue.data.running + ' executando' : 'Consultando fila…'}
+              {queue.data
+                ? queue.data.open + ' pendentes · ' + queue.data.running + ' executando'
+                : 'Consultando fila…'}
             </small>
           </span>
         </button>

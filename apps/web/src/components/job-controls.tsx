@@ -57,26 +57,28 @@ export function JobControls({ job, compact = false }: { job: Job; compact?: bool
 
 export function JobProgress({ job, compact = false }: { job: Job; compact?: boolean }) {
   const detail = job.progress;
-  const explicit = typeof detail?.percent === 'number' && Number.isFinite(detail.percent)
-    ? detail.percent
-    : typeof detail?.completed === 'number' && typeof detail?.total === 'number' && detail.total > 0
-      ? detail.completed * 100 / detail.total
-      : null;
+  const explicit =
+    typeof detail?.percent === 'number' && Number.isFinite(detail.percent)
+      ? detail.percent
+      : typeof detail?.completed === 'number' && typeof detail?.total === 'number' && detail.total > 0
+        ? (detail.completed * 100) / detail.total
+        : null;
   const percent = explicit === null ? null : Math.min(100, Math.max(0, Math.round(explicit)));
   const active = job.status === 'running' || job.status === 'preparing';
-  const label = job.status === 'completed'
-    ? 'Concluído'
-    : job.status === 'failed'
-      ? 'Falhou'
-      : job.status === 'cancelled'
-        ? 'Cancelado'
-        : job.status === 'paused'
-          ? 'Pausado'
-          : job.status === 'retrying'
-            ? 'Nova tentativa agendada'
-            : job.status === 'queued'
-              ? 'Aguardando worker'
-              : 'Processando ' + job.job_type.replaceAll('_', ' ');
+  const label =
+    job.status === 'completed'
+      ? 'Concluído'
+      : job.status === 'failed'
+        ? 'Falhou'
+        : job.status === 'cancelled'
+          ? 'Cancelado'
+          : job.status === 'paused'
+            ? 'Pausado'
+            : job.status === 'retrying'
+              ? 'Nova tentativa agendada'
+              : job.status === 'queued'
+                ? 'Aguardando worker'
+                : 'Processando ' + job.job_type.replaceAll('_', ' ');
   return (
     <div className={'job-progress ' + (compact ? 'job-progress-compact' : '')}>
       <div className="job-progress-label">

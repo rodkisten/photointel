@@ -59,11 +59,15 @@ export function QueueControls({ compact = false }: { compact?: boolean }) {
     <div className={'queue-controls ' + (compact ? 'queue-controls-compact' : '')}>
       <div className="queue-controls-summary">
         <div className="queue-controls-title">
-          <strong>{data?.paused ? 'Fila pausada' : data?.running ? 'Fila em processamento' : 'Controle da fila'}</strong>
+          <strong>
+            {data?.paused ? 'Fila pausada' : data?.running ? 'Fila em processamento' : 'Controle da fila'}
+          </strong>
           <span className="muted">
             {data
               ? count(data.open) + ' jobs no total da fila'
-              : queue.isPending ? 'Consultando fila…' : 'Contagem indisponível'}
+              : queue.isPending
+                ? 'Consultando fila…'
+                : 'Contagem indisponível'}
           </span>
         </div>
         {data && (
@@ -79,16 +83,33 @@ export function QueueControls({ compact = false }: { compact?: boolean }) {
               <>
                 <div className="queue-controls-progress-label">
                   <span>Progresso persistido dos lotes ativos</span>
-                  <strong>{count(progress.finished)}/{count(progress.total)} · {progress.percent}%</strong>
+                  <strong>
+                    {count(progress.finished)}/{count(progress.total)} · {progress.percent}%
+                  </strong>
                 </div>
-                <div className="progress-track" role="progressbar" aria-label="Progresso dos lotes" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.finished}>
+                <div
+                  className="progress-track"
+                  role="progressbar"
+                  aria-label="Progresso dos lotes"
+                  aria-valuemin={0}
+                  aria-valuemax={progress.total}
+                  aria-valuenow={progress.finished}
+                >
                   <div className="progress-fill" style={{ width: progress.percent + '%' }} />
                 </div>
               </>
             ) : (
               <div className="queue-controls-progress-label">
                 <span>Progresso global</span>
-                <span>{data.running ? 'Executando, sem total de etapas informado' : data.waiting ? 'Aguardando workers' : data.paused_jobs ? 'Interrompido' : 'Sem jobs pendentes'}</span>
+                <span>
+                  {data.running
+                    ? 'Executando, sem total de etapas informado'
+                    : data.waiting
+                      ? 'Aguardando workers'
+                      : data.paused_jobs
+                        ? 'Interrompido'
+                        : 'Sem jobs pendentes'}
+                </span>
               </div>
             )}
           </div>
@@ -138,11 +159,13 @@ export function QueueControls({ compact = false }: { compact?: boolean }) {
         <div className="stack">
           <p className="flex items-start gap-2 text-sm">
             <AlertTriangle size={18} className="shrink-0" />
-            {count(data?.open ?? 0)} jobs serão cancelados. Isso afeta toda a fila persistida,
-            não apenas os 24 itens exibidos no drawer.
+            {count(data?.open ?? 0)} jobs serão cancelados. Isso afeta toda a fila persistida, não apenas os
+            24 itens exibidos no drawer.
           </p>
           <div className="form-actions">
-            <Button variant="outline" onClick={() => setConfirm(false)}>Voltar</Button>
+            <Button variant="outline" onClick={() => setConfirm(false)}>
+              Voltar
+            </Button>
             <Button variant="destructive" disabled={action.isPending} onClick={() => void command('cancel')}>
               <Square size={15} /> {action.isPending ? 'Cancelando…' : 'Confirmar cancelamento'}
             </Button>

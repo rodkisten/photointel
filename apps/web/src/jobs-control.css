@@ -179,8 +179,12 @@
 }
 
 @keyframes photointel-progress-indeterminate {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(275%); }
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(275%);
+  }
 }
 
 .jobs-drawer .queue-controls-compact {
