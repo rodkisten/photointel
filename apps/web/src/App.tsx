@@ -4,6 +4,8 @@ import {
   ChevronRight,
   Cloud,
   Copy,
+  Bell,
+  ExternalLink,
   Fingerprint,
   Home,
   Images,
@@ -24,6 +26,7 @@ import { Dialog } from './components/ui/dialog';
 import { Button } from './components/ui/button';
 import { Toast } from './components/common';
 import { JobsDrawer } from './components/jobs-drawer';
+import { PushNotifications } from './components/push-notifications';
 import { Overview } from './pages/overview';
 import { Library } from './pages/library';
 import { SearchPage } from './pages/search';
@@ -51,6 +54,7 @@ const navigation = [
 ];
 function Shell() {
   const [menu, setMenu] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -66,6 +70,9 @@ function Shell() {
   }, []);
   const location = useLocation();
   const { data, isError } = useApi<Info>('/v1/system/status', 30_000);
+  const icloud = useApi<Info>('/v1/ingestion/status', 60_000);
+  const authState = String((icloud.data?.authentication as Info | undefined)?.state ?? '');
+  const needsICloudLogin = ['expired', 'verification_required', 'not_configured'].includes(authState);
   const current = navigation.find((item) => item.to === location.pathname);
   useEffect(() => {
     document.getElementById('boot-splash')?.remove();
@@ -99,6 +106,7 @@ function Shell() {
   }
   useEffect(() => {
     setMenu(false);
+    setToolsOpen(false);
     document.title = `${current?.label ?? 'PhotoIntel'} · Photo Intelligence`;
   }, [location.pathname, current?.label]);
   return (
@@ -134,10 +142,30 @@ function Shell() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            <img className="breadcrumb-logo" src="/mark.svg" alt="" width={25} height={25} />
+            <NavLink to="/" aria-label="Início do PhotoIntel" className="topbar-home-link">
+              <img className="breadcrumb-logo" src="/mark.svg" alt="" width={25} height={25} />
+            </NavLink>
             <span>Workspace pessoal</span>
             <ChevronRight size={13} />
             <strong>{current?.label ?? 'Biblioteca'}</strong>
+          </div>
+          <a className="topbar-manage-link" href="https://photos-manage.migos.club/" title="Abrir o centro de gestão" aria-label="Abrir Manage">
+            <ExternalLink size={15} /><span>Manage</span>
+          </a>
+          {needsICloudLogin && (
+            <a className="topbar-icloud-alert" href="https://photos-manage.migos.club/?tab=icloud" title="Verificar sessão iCloud">
+              iCloud · reconectar
+            </a>
+          )}
+          <div className="topbar-tools">
+            <button className="topbar-tools-trigger" type="button" aria-expanded={toolsOpen} aria-haspopup="true" aria-label="Notificações e ferramentas" onClick={() => setToolsOpen(!toolsOpen)}>
+              <Bell size={17} />
+            </button>
+            {toolsOpen && (
+              <div className="topbar-tools-dropdown" role="region" aria-label="Notificações e ferramentas">
+                <PushNotifications />
+              </div>
+            )}
           </div>
           <button
             type="button"
