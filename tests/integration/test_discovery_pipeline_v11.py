@@ -265,6 +265,77 @@ async def test_500_assets_one_failure_keeps_499_downloaded_and_checkpoint(pipeli
     assert len(list(storage.directory.rglob("*.image"))) == 500
 
 
+async def test_expired_icloud_media_url_is_refreshed_once(pipeline, monkeypatch):
+    factory, settings, adapter, photos, _ = pipeline
+    adapter.photos = photos(1)
+    await discovery.discover_icloud(settings, 1, mode="backfill")
+
+    original_download = adapter.download
+    attempts: list[str] = []
+    refreshed_ranks: list[int | None] = []
+
+    def expiring_download(self, photo, version, target):
+        attempts.append(photo.id)
+        if len(attempts) == 1:
+            raise AppError(
+                "ICLOUD_ASSET_UNAVAILABLE",
+                "URL temporária da foto expirou (HTTP 410)",
+                503,
+            )
+        return original_download(self, photo, version, target)
+
+    def refresh(self, source_key, rank=None):
+        refreshed_ranks.append(rank)
+        return next((photo for photo in self.photos if photo.id == source_key), None)
+
+    monkeypatch.setattr(adapter, "download", expiring_download)
+    monkeypatch.setattr(adapter, "fresh_photo", refresh, raising=False)
+
+    async with factory() as session:
+        asset = await session.scalar(select(Asset))
+        assert asset is not None
+        asset_id = asset.id
+        manifest = await session.scalar(select(DiscoveryManifest))
+        assert manifest.snapshot["remote_rank"] == 0
+
+    result = await discovery.download_discovered_asset(asset_id, settings)
+    assert result["downloaded"] is True
+    assert attempts == ["photo-0001", "photo-0001"]
+    assert refreshed_ranks == [0]
+    async with factory() as session:
+        manifest = await session.scalar(select(DiscoveryManifest))
+        assert manifest.status == "downloaded" and manifest.attempts == 1
+
+
+async def test_refresh_refuses_changed_icloud_representation(pipeline, monkeypatch):
+    factory, settings, adapter, photos, _ = pipeline
+    adapter.photos = photos(1)
+    await discovery.discover_icloud(settings, 1, mode="backfill")
+
+    def expired(self, photo, version, target):
+        raise AppError("ICLOUD_ASSET_UNAVAILABLE", "Apple (HTTP 410)", 503)
+
+    def changed(self, source_key, rank=None):
+        return SimpleNamespace(id=source_key)
+
+    def changed_version(self, photo):
+        return SimpleNamespace(size=999, checksum="different", url="not-logged")
+
+    monkeypatch.setattr(adapter, "download", expired)
+    monkeypatch.setattr(adapter, "fresh_photo", changed, raising=False)
+    monkeypatch.setattr(adapter, "representation", changed_version)
+
+    async with factory() as session:
+        asset_id = (await session.scalar(select(Asset))).id
+    with pytest.raises(AppError) as caught:
+        await discovery.download_discovered_asset(asset_id, settings)
+    assert caught.value.code == "INVALID_REPRESENTATION"
+    async with factory() as session:
+        manifest = await session.scalar(select(DiscoveryManifest))
+        assert manifest.status == "quarantined"
+        assert manifest.failure_category == "invalid_representation"
+
+
 async def test_interruption_preserves_manifest_cursor_and_resume_anchors(pipeline):
     factory, settings, adapter, photos, _ = pipeline
     adapter.photos = photos(120)
