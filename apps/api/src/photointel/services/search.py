@@ -16,6 +16,7 @@ from photointel.errors import AppError, ErrorCode
 from photointel.models import (
     AlbumAsset,
     Asset,
+    AssetResource,
     AssetTag,
     DuplicateMember,
     Embedding,
@@ -176,6 +177,25 @@ def filter_expression(node: FilterNode, show_sensitive: bool = False) -> Any:
                 ErrorCode.INVALID_REQUEST, "Valor numérico inválido", 422
             ) from exc
         return and_(*clauses)
+    if node.op == "has_preview":
+        # Match a CURRENT, stored image resource, not merely a completed ingestion.
+        # The correlated EXISTS works with keyset pagination and combined filters.
+        available = and_(
+            Asset.ingestion_status == "completed",
+            Asset.media_type != "video",
+            exists(
+                select(AssetResource.id).where(
+                    AssetResource.asset_id == Asset.id,
+                    AssetResource.revision == Asset.representation_revision,
+                    AssetResource.resource_type.in_(
+                        ("thumbnail_small", "thumbnail_medium", "preview_large")
+                    ),
+                    AssetResource.status.in_(("available", "completed")),
+                    AssetResource.object_key.is_not(None),
+                )
+            ),
+        )
+        return available if node.value is True else not_(available)
     if node.op == "media_type":
         return Asset.media_type == node.value
     if node.op == "source":
