@@ -230,10 +230,7 @@ export function LogViewer() {
                 const item = raw as Run;
                 return (
                   <div key={item.id} className="border-b border-[#282a2e]">
-                    <RunRow
-                      run={item}
-                      onSelect={() => window.open(item.html_url, '_blank', 'noopener,noreferrer')}
-                    />
+                    <RunRow run={item} />
                     {showStructured && (
                       <details className="px-4 pb-3">
                         <summary className="cursor-pointer text-xs text-carbon-500">Dados JSON</summary>
