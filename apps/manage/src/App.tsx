@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CloudCog, Code2, KeyRound, Logs, Settings2, Shield, Workflow } from 'lucide-react';
+import { Activity, CloudCog, Code2, KeyRound, Logs, Settings2, Shield, Workflow, Images, Apple } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
 import { IssueBanner, Spinner } from './components/shared';
@@ -11,6 +11,7 @@ import { Deploys } from './pages/Deploys';
 import { LogViewer } from './pages/LogViewer';
 import { ConfigEditor } from './pages/ConfigEditor';
 import { SystemInfo } from './pages/SystemInfo';
+import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
 import { SecretManagerPage } from './features/secrets/SecretManagerPage';
 
 import { api } from './lib/client';
@@ -28,6 +29,7 @@ const NAV: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: 'logs', label: 'Logs', icon: Logs },
   { id: 'config', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', label: 'Secrets', icon: KeyRound },
+  { id: 'icloud', label: 'iCloud', icon: Apple },
   { id: 'settings', label: 'Sistema', icon: Settings2 },
 ];
 
@@ -37,6 +39,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   logs: 'Eventos investigáveis em cada provedor',
   config: 'Edição segura das configurações de produção',
   secrets: 'Versões e credenciais do Google Secret Manager',
+  icloud: 'Diagnóstico e recuperação do acesso Apple',
   settings: 'Integrações, jobs e acesso',
 };
 
@@ -105,6 +108,8 @@ export default function App() {
         return <SecretManagerPage />;
       case 'settings':
         return <SystemInfo meta={meta!} />;
+      case 'icloud':
+        return <ICloudDiagnostics />;
       default:
         return null;
     }
@@ -115,7 +120,7 @@ export default function App() {
       {/* Top Header */}
       <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
+          <button type="button" onClick={() => navigate('overview')} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-slate-200 text-slate-900 shadow-sm">
               <CloudCog size={20} />
             </div>
@@ -123,9 +128,12 @@ export default function App() {
               <p className="text-sm font-semibold leading-tight tracking-tight text-slate-100">PhotoIntel</p>
               <p className="text-[11px] font-medium tracking-wider text-slate-500">CONTROL CENTER</p>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-3 text-xs text-slate-400">
+            <a href="https://photos.migos.club/" className="inline-flex items-center gap-1 rounded-lg border border-slate-800 px-2.5 py-2 text-xs text-slate-300 hover:bg-slate-900" aria-label="Abrir PhotoIntel">
+              <Images size={16} /> <span className="hidden sm:inline">Fotos</span>
+            </a>
             <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>
             <Shield size={17} className={meta ? 'text-emerald-400' : 'text-slate-600'} />
             <Badge tone="neutral">Production</Badge>
@@ -188,7 +196,7 @@ export default function App() {
       {/* Mobile Bottom Navigation */}
       <nav
         aria-label="Navegação principal"
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-800 bg-slate-950/90 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-slate-800 bg-slate-950/90 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
       >
         {NAV.map((n) => {
           const isActive = tab === n.id;
@@ -198,7 +206,7 @@ export default function App() {
               onClick={() => navigate(n.id)}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] transition-colors',
+                'flex min-w-[56px] flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] transition-colors',
                 isActive ? 'text-slate-200' : 'text-slate-500 hover:text-slate-400',
               )}
             >
