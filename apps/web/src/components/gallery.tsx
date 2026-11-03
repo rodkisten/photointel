@@ -304,7 +304,7 @@ export function Gallery({
                   className="gallery-row"
                   data-index={row.index}
                   ref={virtualizer.measureElement}
-                  style={{ transform: `translateY(${row.start}px)` }}
+                  style={{ transform: `trancarbonY(${row.start}px)` }}
                 >
                   {showDate && (
                     <div className="gallery-date">
