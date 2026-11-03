@@ -318,7 +318,14 @@ async def test_refresh_refuses_changed_icloud_representation(pipeline, monkeypat
     def changed(self, source_key, rank=None):
         return SimpleNamespace(id=source_key)
 
+    original_representation = adapter.representation
+    representation_calls = 0
+
     def changed_version(self, photo):
+        nonlocal representation_calls
+        representation_calls += 1
+        if representation_calls == 1:
+            return original_representation(self, photo)
         return SimpleNamespace(size=999, checksum="different", url="not-logged")
 
     monkeypatch.setattr(adapter, "download", expired)
