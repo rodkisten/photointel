@@ -68,14 +68,14 @@ export function ConfirmDialog({
         <Dialog.Content className="fixed inset-x-3 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2 rounded-2xl border border-[#34363b] bg-[#191b1e] p-5 shadow-2xl">
           <div className="flex justify-between gap-2">
             <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
-            <Dialog.Close className="text-slate-400">
+            <Dialog.Close className="text-carbon-400">
               <X size={20} />
             </Dialog.Close>
           </div>
-          <Dialog.Description className="mt-2 text-sm leading-6 text-slate-400">
+          <Dialog.Description className="mt-2 text-sm leading-6 text-carbon-400">
             {description}
           </Dialog.Description>
-          <p className="mt-4 text-xs text-slate-400">
+          <p className="mt-4 text-xs text-carbon-400">
             Digite <strong className="text-white">CONFIRMAR</strong> para continuar.
           </p>
           <Input

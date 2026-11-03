@@ -90,14 +90,14 @@ export function Overview({ openRun }: { openRun: (n: number) => void }) {
         {cards.map(({ name, icon: Icon, ok, sub }, i) => (
           <Card key={name} className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-white/5 p-2.5">
-              <Icon size={19} className="text-slate-300" />
+              <Icon size={19} className="text-carbon-300" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium">{name}</p>
                 <span className={cn('h-1.5 w-1.5 rounded-full', ok ? 'bg-emerald-400' : 'bg-amber-400')} />
               </div>
-              <p className="mt-0.5 text-xs text-slate-500">{ok ? sub : data.providers[i]}</p>
+              <p className="mt-0.5 text-xs text-carbon-500">{ok ? sub : data.providers[i]}</p>
             </div>
           </Card>
         ))}
@@ -127,13 +127,13 @@ export function Overview({ openRun }: { openRun: (n: number) => void }) {
             {data.workers.length ? (
               data.workers.slice(0, 12).map((w) => (
                 <div key={w.name} className="flex items-center gap-3 px-4 py-3">
-                  <Cloud size={15} className="text-slate-500" />
+                  <Cloud size={15} className="text-carbon-500" />
                   <span className="min-w-0 flex-1 truncate text-sm">{w.name}</span>
-                  <span className="text-xs text-slate-600">{date(w.modified_on)}</span>
+                  <span className="text-xs text-carbon-600">{date(w.modified_on)}</span>
                 </div>
               ))
             ) : (
-              <div className="p-4 text-sm text-slate-500">Sem dados do Cloudflare</div>
+              <div className="p-4 text-sm text-carbon-500">Sem dados do Cloudflare</div>
             )}
           </Card>
         </Section>
@@ -142,7 +142,7 @@ export function Overview({ openRun }: { openRun: (n: number) => void }) {
             {data.services.length ? (
               data.services.map((s) => (
                 <div key={s.name} className="flex items-center gap-3 px-4 py-3">
-                  <Server size={15} className="text-slate-500" />
+                  <Server size={15} className="text-carbon-500" />
                   <span className="min-w-0 flex-1 truncate text-sm">{s.name.split('/').pop()}</span>
                   <Badge
                     tone={
@@ -160,7 +160,7 @@ export function Overview({ openRun }: { openRun: (n: number) => void }) {
                 </div>
               ))
             ) : (
-              <div className="p-4 text-sm text-slate-500">Federação GCP não configurada ou sem serviços</div>
+              <div className="p-4 text-sm text-carbon-500">Federação GCP não configurada ou sem serviços</div>
             )}
           </Card>
         </Section>

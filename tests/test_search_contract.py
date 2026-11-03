@@ -29,6 +29,19 @@ def test_nested_filters_are_parameterized_and_use_exists() -> None:
     assert "rejected" in compiled.params.values()
 
 
+@pytest.mark.parametrize("with_preview", [True, False])
+def test_preview_availability_is_server_filtered_and_parameterized(with_preview: bool) -> None:
+    node = FilterNode(op="has_preview", value=with_preview)
+    compiled = filter_expression(node).compile(dialect=postgresql.dialect())
+    statement = str(compiled)
+    assert "asset_resources" in statement
+    assert "EXISTS" in statement
+    assert "representation_revision" in statement
+    assert "thumbnail_medium" in compiled.params.values() or (
+        "thumbnail_medium" in str(compiled.params.values())
+    )
+
+
 @pytest.mark.parametrize(
     "node",
     [
@@ -43,6 +56,8 @@ def test_nested_filters_are_parameterized_and_use_exists() -> None:
         {"op": "screenshots", "value": "false"},
         {"op": "duplicate", "value": "true"},
         {"op": "media_type", "value": "arbitrary"},
+        {"op": "has_preview"},
+        {"op": "has_preview", "value": "true"},
     ],
 )
 def test_unknown_or_unimplemented_fields_rejected(node: dict) -> None:

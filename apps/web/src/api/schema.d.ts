@@ -1751,7 +1751,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "and" | "or" | "not" | "tag" | "text" | "date" | "number" | "media_type" | "source" | "album" | "duplicate" | "quality" | "screenshots";
+            op: "and" | "or" | "not" | "tag" | "text" | "date" | "number" | "media_type" | "source" | "album" | "duplicate" | "quality" | "screenshots" | "has_preview";
             /** Children */
             children?: components["schemas"]["FilterNode"][];
             /** Key */

@@ -42,7 +42,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
   const touch = useRef<number | null>(null);
   const activeJobs = (jobs.data?.items ?? []).filter((job) => ACTIVE.has(job.status));
   const activeBatches = (batches.data?.items ?? []).filter((batch) => ACTIVE.has(String(batch.status)));
-  const recent = (jobs.data?.items ?? []).slice(0, 8);
+  const recent = (jobs.data?.items ?? []).slice(0, 5);
   const visibleBatch =
     activeBatches[0] ?? batches.data?.items.find((batch) => !terminal.has(String(batch.status)));
   const progress = visibleBatch ? batchSummary(visibleBatch) : null;

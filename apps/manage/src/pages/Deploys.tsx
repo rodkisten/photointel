@@ -121,7 +121,7 @@ export function Deploys({ openRun }: { openRun: (n: number) => void }) {
               </div>
             ))}
           <div className="flex items-center justify-between gap-3 border-t border-[#2d2f33] pt-4">
-            <span className="text-xs text-slate-500">Uma confirmação é necessária antes de executar.</span>
+            <span className="text-xs text-carbon-500">Uma confirmação é necessária antes de executar.</span>
             <Button disabled={!selected || mutation.isPending} onClick={() => setConfirm(true)}>
               <Play size={15} />
               Executar

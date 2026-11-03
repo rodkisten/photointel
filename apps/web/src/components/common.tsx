@@ -489,8 +489,8 @@ export function PrivateImage({
   if (!(overrideSrc ?? src) || failed) {
     return (
       <div className={`image-unavailable ${className ?? ''}`.trim()}>
-        <Camera size={16} aria-hidden="true" />
-        <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
+        <Camera size={18} aria-hidden="true" />
+        <span className="sr-only">{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
 
         <button
           type="button"

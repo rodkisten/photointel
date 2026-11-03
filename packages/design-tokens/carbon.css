@@ -1,0 +1,20 @@
+/*
+ * PhotoIntel Carbon: a neutral graphite scale shared by Manage and Photos.
+ * Pure achromatic steps, inspired by Cloudflare's restrained dark surfaces.
+ * Use Tailwind utilities like bg-carbon-900 and border-carbon-700.
+ */
+@theme {
+  --color-carbon-0: #000000;
+  --color-carbon-50: #f8f8f8;
+  --color-carbon-100: #eeeeee;
+  --color-carbon-200: #d8d8d8;
+  --color-carbon-300: #bcbcbc;
+  --color-carbon-400: #9e9e9e;
+  --color-carbon-500: #808080;
+  --color-carbon-600: #626262;
+  --color-carbon-700: #424242;
+  --color-carbon-800: #292929;
+  --color-carbon-900: #191919;
+  --color-carbon-950: #0d0d0d;
+  --color-carbon-1000: #080808;
+}

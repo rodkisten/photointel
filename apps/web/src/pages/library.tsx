@@ -3,16 +3,26 @@ import { useSearchParams } from 'react-router-dom';
 import { Images } from 'lucide-react';
 import { PageHeader } from '../components/common';
 import { Gallery } from '../components/gallery';
-import type { SearchRequest } from '../api/types';
+import type { FilterNode, SearchRequest } from '../api/types';
 
 export function Library() {
   const [params, setParams] = useSearchParams();
   const sort = (params.get('sort') ?? 'captured_desc') as SearchRequest['sort'];
   const media = params.get('type');
-  const search = useMemo<SearchRequest>(
-    () => ({ sort, limit: 90, ...(media ? { filter: { op: 'media_type', value: media } } : {}) }),
-    [sort, media],
-  );
+  const preview = params.get('preview');
+  const search = useMemo<SearchRequest>(() => {
+    const filters: FilterNode[] = [];
+    if (media) filters.push({ op: 'media_type', value: media });
+    if (preview === 'with' || preview === 'without')
+      filters.push({ op: 'has_preview', value: preview === 'with' });
+    return {
+      sort,
+      limit: 90,
+      ...(filters.length
+        ? { filter: filters.length === 1 ? filters[0] : { op: 'and', children: filters } }
+        : {}),
+    };
+  }, [sort, media, preview]);
   function update(key: string, value: string) {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
@@ -36,7 +46,7 @@ export function Library() {
         <select
           aria-label="Ordenar fotografias"
           className="input"
-          style={{ width: 190 }}
+          style={{ flex: '1 1 160px', width: 'auto', minWidth: 0 }}
           value={sort}
           onChange={(event) => update('sort', event.target.value)}
         >
@@ -48,7 +58,7 @@ export function Library() {
         <select
           aria-label="Tipo de mídia"
           className="input"
-          style={{ width: 145 }}
+          style={{ flex: '1 1 145px', width: 'auto', minWidth: 0 }}
           value={media ?? ''}
           onChange={(event) => update('type', event.target.value)}
         >
@@ -56,6 +66,17 @@ export function Library() {
           <option value="image">Fotografias</option>
           <option value="live_photo">Live Photos</option>
           <option value="video">Vídeos</option>
+        </select>
+        <select
+          aria-label="Disponibilidade da prévia"
+          className="input"
+          style={{ flex: '1 1 145px', width: 'auto', minWidth: 0 }}
+          value={preview ?? ''}
+          onChange={(event) => update('preview', event.target.value)}
+        >
+          <option value="">Todas as prévias</option>
+          <option value="with">Com prévia</option>
+          <option value="without">Sem prévia</option>
         </select>
       </div>
       <Gallery search={search} />

@@ -88,7 +88,7 @@ export function DotenvFields({ value, onChange }: { value: string; onChange: (va
   const fields = parseDotenvFields(value);
   return (
     <div className="space-y-3">
-      <p className="text-xs leading-5 text-slate-400">
+      <p className="text-xs leading-5 text-carbon-400">
         Edição estruturada: comentários, ordem, prefixo export, espaçamento e linhas em branco são
         preservados. Para colar um .env completo, use a aba Código.
       </p>
@@ -96,7 +96,7 @@ export function DotenvFields({ value, onChange }: { value: string; onChange: (va
         {fields.map((field) => (
           <div
             key={field.index}
-            className="grid min-w-0 grid-cols-[1fr_auto] gap-2 rounded-lg border border-slate-800 p-2 sm:grid-cols-[minmax(0,36%)_1fr_auto]"
+            className="grid min-w-0 grid-cols-[1fr_auto] gap-2 rounded-lg border border-carbon-800 p-2 sm:grid-cols-[minmax(0,36%)_1fr_auto]"
           >
             <Input
               aria-label={'Chave da linha ' + (field.index + 1)}
@@ -124,7 +124,7 @@ export function DotenvFields({ value, onChange }: { value: string; onChange: (va
               <Trash2 size={15} />
             </Button>
             {field.comment && (
-              <p className="col-span-full break-words font-mono text-xs text-slate-500">{field.comment}</p>
+              <p className="col-span-full break-words font-mono text-xs text-carbon-500">{field.comment}</p>
             )}
           </div>
         ))}

@@ -47,13 +47,13 @@ function JobSteps({ steps }: { steps: Job['steps'] }) {
   if (!steps?.length) return null;
 
   return (
-    <div className="mt-3 space-y-1.5 border-l-2 border-slate-800 pl-3">
+    <div className="mt-3 space-y-1.5 border-l-2 border-carbon-800 pl-3">
       {steps.map((step) => {
         const currentTone = state(step.conclusion);
         return (
-          <div key={step.number} className="flex items-center justify-between gap-2 text-xs text-slate-400">
+          <div key={step.number} className="flex items-center justify-between gap-2 text-xs text-carbon-400">
             <span className="truncate">{step.name}</span>
-            <span className={currentTone === 'danger' ? 'font-medium text-red-400' : 'text-slate-500'}>
+            <span className={currentTone === 'danger' ? 'font-medium text-red-400' : 'text-carbon-500'}>
               {human(step.conclusion || step.status)}
             </span>
           </div>
@@ -75,16 +75,16 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
   });
 
   return (
-    <div className="border-b border-slate-800 p-4 transition-colors last:border-0 hover:bg-slate-900/20">
+    <div className="border-b border-carbon-800 p-4 transition-colors last:border-0 hover:bg-carbon-900/20">
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium text-slate-200">{item.name}</span>
+        <span className="truncate text-sm font-medium text-carbon-200">{item.name}</span>
         <Badge tone={state(status)}>{human(status)}</Badge>
       </div>
 
       <div className="mt-2 flex items-center gap-4">
         <External href={item.html_url}>GitHub</External>
         <button
-          className="text-xs font-medium text-slate-400 underline underline-offset-4 transition-colors hover:text-slate-200"
+          className="text-xs font-medium text-carbon-400 underline underline-offset-4 transition-colors hover:text-carbon-200"
           onClick={onToggleLog}
         >
           {isActive ? 'Fechar logs' : 'Ver logs'}
@@ -124,28 +124,28 @@ export function RunRow({ run, onSelect }: RunRowProps) {
   return (
     <button
       onClick={() => onSelect(run.id)}
-      className="flex w-full items-center gap-3 border-b border-slate-800 px-4 py-3.5 text-left transition-colors last:border-0 hover:bg-slate-800/50"
+      className="flex w-full items-center gap-3 border-b border-carbon-800 px-4 py-3.5 text-left transition-colors last:border-0 hover:bg-carbon-800/50"
     >
       <div
         className={cn(
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
           currentTone === 'success' && 'bg-emerald-500/10 text-emerald-400',
           currentTone === 'danger' && 'bg-red-500/10 text-red-400',
-          currentTone !== 'success' && currentTone !== 'danger' && 'bg-slate-800 text-slate-400',
+          currentTone !== 'success' && currentTone !== 'danger' && 'bg-carbon-800 text-carbon-400',
         )}
       >
         <RunIcon status={status} />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-slate-200">{run.name}</p>
-        <p className="mt-0.5 truncate text-xs text-slate-500">
+        <p className="truncate text-sm font-medium text-carbon-200">{run.name}</p>
+        <p className="mt-0.5 truncate text-xs text-carbon-500">
           #{run.run_number} · {date(run.created_at)} · {run.event || 'manual'}
         </p>
       </div>
 
       <Badge tone={currentTone}>{human(status)}</Badge>
-      <ChevronRight size={15} className="shrink-0 text-slate-600" />
+      <ChevronRight size={15} className="shrink-0 text-carbon-600" />
     </button>
   );
 }
@@ -173,7 +173,7 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
     <div className="space-y-4">
       {/* Header de Ações */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onBack} className="text-slate-400 hover:text-slate-200">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-carbon-400 hover:text-carbon-200">
           <ArrowLeft size={15} className="mr-1.5" />
           Voltar
         </Button>
@@ -183,7 +183,7 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
           size="sm"
           onClick={() => setShowConfirm(true)}
           disabled={retryMutation.isPending}
-          className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+          className="border-carbon-700 bg-carbon-800 text-carbon-200 hover:bg-carbon-700"
         >
           <RotateCcw size={14} className="mr-1.5" />
           Reexecutar falhas
@@ -197,7 +197,7 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
         ) : error ? (
           <IssueBanner error={error} />
         ) : (
-          <Card className="overflow-hidden border-slate-800 bg-slate-950">
+          <Card className="overflow-hidden border-carbon-800 bg-carbon-950">
             {data?.items.map((item) => (
               <JobItem
                 key={item.id}

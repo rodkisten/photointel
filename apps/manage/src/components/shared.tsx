@@ -45,21 +45,21 @@ export const External = ({ href, children }: { href?: string; children: React.Re
       href={href}
       rel="noopener noreferrer"
       target="_blank"
-      className="inline-flex items-center gap-1.5 text-sm text-slate-300 underline-offset-4 hover:text-white hover:underline"
+      className="inline-flex items-center gap-1.5 text-sm text-carbon-300 underline-offset-4 hover:text-white hover:underline"
     >
       {children}
       <ArrowUpRight size={13} />
     </a>
   ) : null;
 export function Spinner() {
-  return <LoaderCircle size={17} className="animate-spin text-slate-500" />;
+  return <LoaderCircle size={17} className="animate-spin text-carbon-500" />;
 }
 export function Empty({ title, detail }: { title: string; detail?: string }) {
   return (
     <Card className="p-7 text-center">
-      <CircleAlert className="mx-auto text-slate-600" size={25} />
+      <CircleAlert className="mx-auto text-carbon-600" size={25} />
       <p className="mt-3 text-sm font-medium">{title}</p>
-      {detail && <p className="mt-1.5 text-xs text-slate-500">{detail}</p>}
+      {detail && <p className="mt-1.5 text-xs text-carbon-500">{detail}</p>}
     </Card>
   );
 }

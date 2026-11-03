@@ -119,14 +119,14 @@ export function ConfigEditor() {
           <Card className="space-y-3 p-4">
             <div className="flex items-center justify-between">
               <Badge tone={dirty ? 'warning' : 'success'}>{dirty ? 'Não salvo' : 'Sincronizado'}</Badge>
-              <span className="text-xs text-slate-500">Editado {date(q.data?.updated_at)}</span>
+              <span className="text-xs text-carbon-500">Editado {date(q.data?.updated_at)}</span>
             </div>
-            <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="flex items-center justify-between text-xs text-carbon-400">
               <span>CodeMirror 6 · {detectEnvironmentFormat(editor) === 'json' ? 'JSON' : 'dotenv'}</span>
               <span>{editor.split(/\r?\n/).length} linhas · comentários preservados</span>
             </div>
             <div
-              className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-800 p-1"
+              className="inline-flex flex-wrap gap-1 rounded-lg border border-carbon-800 p-1"
               role="group"
               aria-label="Modo do editor"
             >
@@ -170,10 +170,10 @@ export function ConfigEditor() {
             {preview?.error && <p className="text-xs text-red-300">{preview.error}</p>}
             {preview?.plan && (
               <div className="rounded-lg border border-[#34363b] bg-white/[.025] p-3 text-xs">
-                <p className="font-semibold text-slate-200">
+                <p className="font-semibold text-carbon-200">
                   {preview.plan.changed.length} variáveis alteradas
                 </p>
-                <p className="mt-1 text-slate-400">
+                <p className="mt-1 text-carbon-400">
                   {preview.plan.workflows.length
                     ? 'Ao salvar: ' + preview.plan.workflows.map((item) => item.label).join(' · ')
                     : 'Nenhuma publicação automática necessária.'}
@@ -185,7 +185,7 @@ export function ConfigEditor() {
                 ))}
               </div>
             )}
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-carbon-300">
               <input
                 type="checkbox"
                 checked={autoApply}
@@ -232,7 +232,7 @@ export function ConfigEditor() {
                 Salvar variável
               </Button>
             </div>
-            <p className="text-xs leading-5 text-slate-500">
+            <p className="text-xs leading-5 text-carbon-500">
               O painel edita uma variável do GitHub, não um secret. O Telegram aceita token diretamente no
               .env, mas o valor poderá ser visto por quem tem acesso às variáveis do repositório e à
               configuração do Cloud Run. Prefira um GitHub Environment Secret ou Secret Manager se precisar de
@@ -248,10 +248,10 @@ export function ConfigEditor() {
                   </p>
                 )}
                 {!lastSave.auto_apply && (
-                  <p className="text-slate-400">Aplicação automática desativada neste salvamento.</p>
+                  <p className="text-carbon-400">Aplicação automática desativada neste salvamento.</p>
                 )}
                 {lastSave.dispatches.map((item) => (
-                  <p key={item.file} className={item.status === 'failed' ? 'text-red-300' : 'text-slate-300'}>
+                  <p key={item.file} className={item.status === 'failed' ? 'text-red-300' : 'text-carbon-300'}>
                     {item.status === 'queued' ? '✓ Solicitado' : '✕ Falha ao solicitar'}: {item.label}
                     {item.error ? ' · ' + item.error : ''}{' '}
                     <a
@@ -270,7 +270,7 @@ export function ConfigEditor() {
                   </p>
                 ))}
                 {lastSave.plan.changed.length === 0 && (
-                  <p className="text-slate-400">Somente formatação alterada; nenhum workflow necessário.</p>
+                  <p className="text-carbon-400">Somente formatação alterada; nenhum workflow necessário.</p>
                 )}
               </div>
             )}

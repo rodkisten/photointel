@@ -94,7 +94,7 @@ export default function App() {
   const renderContent = () => {
     if (isPending) {
       return (
-        <Card className="flex items-center justify-center p-12 bg-slate-950">
+        <Card className="flex items-center justify-center p-12 bg-carbon-950">
           <Spinner />
         </Card>
       );
@@ -127,9 +127,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-slate-800">
+    <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
       {/* Top Header */}
-      <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <button
             type="button"
@@ -137,25 +137,25 @@ export default function App() {
             aria-label="Ir para a home do Manage"
             className="flex items-center gap-3 text-left"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-slate-200 text-slate-900 shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
               <CloudCog size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-slate-100">PhotoIntel</p>
-              <p className="text-[11px] font-medium tracking-wider text-slate-500">CONTROL CENTER</p>
+              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">PhotoIntel</p>
+              <p className="text-[11px] font-medium tracking-wider text-carbon-500">CONTROL CENTER</p>
             </div>
           </button>
 
-          <div className="flex items-center gap-3 text-xs text-slate-400">
+          <div className="flex items-center gap-3 text-xs text-carbon-400">
             <a
               href="https://photos.migos.club/"
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-800 px-2.5 py-2 text-xs text-slate-300 hover:bg-slate-900"
+              className="inline-flex items-center gap-1 rounded-lg border border-carbon-800 px-2.5 py-2 text-xs text-carbon-300 hover:bg-carbon-900"
               aria-label="Abrir PhotoIntel"
             >
               <Images size={16} /> <span className="hidden sm:inline">Fotos</span>
             </a>
             <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>
-            <Shield size={17} className={meta ? 'text-emerald-400' : 'text-slate-600'} />
+            <Shield size={17} className={meta ? 'text-emerald-400' : 'text-carbon-600'} />
             <Badge tone="neutral">Production</Badge>
           </div>
         </div>
@@ -175,11 +175,11 @@ export default function App() {
                   className={cn(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-slate-800/80 text-slate-100 shadow-sm'
-                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
+                      ? 'bg-carbon-800/80 text-carbon-100 shadow-sm'
+                      : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200',
                   )}
                 >
-                  <n.icon size={17} className={isActive ? 'text-slate-200' : 'text-slate-500'} />
+                  <n.icon size={17} className={isActive ? 'text-carbon-200' : 'text-carbon-500'} />
                   {n.label}
                 </button>
               );
@@ -192,22 +192,22 @@ export default function App() {
           {/* Page Header */}
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <p className="text-[11px] font-medium tracking-wider text-slate-500 uppercase">
+              <p className="text-[11px] font-medium tracking-wider text-carbon-500 uppercase">
                 PRODUCTION / {meta?.project || 'photointel'}
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-carbon-100 sm:text-3xl">
                 {pageTitle}
               </h1>
-              <p className="text-sm text-slate-400">{pageDescription}</p>
+              <p className="text-sm text-carbon-400">{pageDescription}</p>
             </div>
-            {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-slate-600" />}
+            {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-carbon-600" />}
           </div>
 
           {/* Dynamic Content */}
           {renderContent()}
 
           {/* Desktop Footer */}
-          <footer className="border-t border-slate-800/60 pt-5 text-xs text-slate-500">
+          <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
             PhotoIntel Manage · Operações auditáveis · Cloudflare Access
           </footer>
         </main>
@@ -216,7 +216,7 @@ export default function App() {
       {/* Mobile Bottom Navigation */}
       <nav
         aria-label="Navegação principal"
-        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-slate-800 bg-slate-950/90 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-carbon-800 bg-carbon-950/90 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
       >
         {NAV.map((n) => {
           const isActive = tab === n.id;
@@ -227,10 +227,10 @@ export default function App() {
               aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex min-w-[56px] flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] transition-colors',
-                isActive ? 'text-slate-200' : 'text-slate-500 hover:text-slate-400',
+                isActive ? 'text-carbon-200' : 'text-carbon-500 hover:text-carbon-400',
               )}
             >
-              <n.icon size={21} className={isActive ? 'text-slate-300' : 'opacity-80'} />
+              <n.icon size={21} className={isActive ? 'text-carbon-300' : 'opacity-80'} />
               <span className="truncate font-medium">{n.label}</span>
             </button>
           );

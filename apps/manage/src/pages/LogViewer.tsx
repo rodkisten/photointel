@@ -128,7 +128,7 @@ export function LogViewer() {
             aria-pressed={source === id}
             className={cn(
               'min-w-[70px] flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
-              source === id ? 'bg-[#35373b] text-white' : 'text-slate-500 hover:text-slate-300',
+              source === id ? 'bg-[#35373b] text-white' : 'text-carbon-500 hover:text-carbon-300',
             )}
           >
             {label}
@@ -136,7 +136,7 @@ export function LogViewer() {
         ))}
       </div>
       {(link.correlation || link.job || link.ray || link.event || link.entry || link.at) && (
-        <div className="rounded-lg border border-[#303238] bg-[#191b20] px-3 py-2 text-xs text-slate-400">
+        <div className="rounded-lg border border-[#303238] bg-[#191b20] px-3 py-2 text-xs text-carbon-400">
           Investigação vinculada
           {link.correlation && <span className="ml-2 break-all">Correlação: {link.correlation}</span>}
           {link.job && <span className="ml-2 break-all">Job: {link.job}</span>}
@@ -163,7 +163,7 @@ export function LogViewer() {
           </Select>
         )}
         <div className="relative min-w-0 basis-full flex-1 sm:basis-[190px]">
-          <Search size={15} className="pointer-events-none absolute left-2.5 top-3 text-slate-500" />
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-3 text-carbon-500" />
           <Input
             value={search}
             className="pl-8"
@@ -189,7 +189,7 @@ export function LogViewer() {
           <RefreshCcw size={16} />
         </Button>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-carbon-500">
         <span>
           {visible.length} de {q.data?.items?.length || 0} registros · busca destaca chaves e valores
         </span>
@@ -213,7 +213,7 @@ export function LogViewer() {
         <Card className="min-w-0 overflow-hidden">
           <ScrollArea className="h-[min(65vh,720px)] w-full">
             {source === 'sentry' && q.data?.read_enabled === false && (
-              <div className="space-y-2 border-b border-[#282a2e] p-4 text-sm text-slate-300">
+              <div className="space-y-2 border-b border-[#282a2e] p-4 text-sm text-carbon-300">
                 <p>
                   O DSN envia erros sem token adicional. Para listar issues, configure o token de leitura.
                 </p>
@@ -239,7 +239,7 @@ export function LogViewer() {
                     />
                     {showStructured && (
                       <details className="px-4 pb-3">
-                        <summary className="cursor-pointer text-xs text-slate-500">Dados JSON</summary>
+                        <summary className="cursor-pointer text-xs text-carbon-500">Dados JSON</summary>
                         <JsonView data={item} search={search} showSearch={false} maxHeight={300} />
                       </details>
                     )}
@@ -252,10 +252,10 @@ export function LogViewer() {
                   <div key={item.id} className="space-y-2 border-b border-[#282a2e] px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Badge tone="danger">{item.level}</Badge>
-                      <span className="text-xs text-slate-500">{item.project}</span>
+                      <span className="text-xs text-carbon-500">{item.project}</span>
                     </div>
                     <p className="break-words text-sm font-medium">{item.title}</p>
-                    <div className="flex justify-between text-xs text-slate-500">
+                    <div className="flex justify-between text-xs text-carbon-500">
                       <span>
                         {item.count} eventos · {date(item.lastSeen)}
                       </span>
@@ -263,7 +263,7 @@ export function LogViewer() {
                     </div>
                     {showStructured && (
                       <details>
-                        <summary className="cursor-pointer text-xs text-slate-500">Dados JSON</summary>
+                        <summary className="cursor-pointer text-xs text-carbon-500">Dados JSON</summary>
                         <JsonView data={item} search={search} showSearch={false} maxHeight={300} />
                       </details>
                     )}
@@ -278,7 +278,7 @@ export function LogViewer() {
                   className="min-w-0 space-y-2 border-b border-[#282a2e] px-3 py-3 sm:px-4"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate text-xs text-slate-400">{heading}</span>
+                    <span className="min-w-0 truncate text-xs text-carbon-400">{heading}</span>
                     <Badge tone={state(item.severity === 'ERROR' ? 'error' : 'neutral')}>
                       {item.severity || 'LOG'}
                     </Badge>
@@ -292,7 +292,7 @@ export function LogViewer() {
                   />
                   {showStructured && (
                     <details>
-                      <summary className="cursor-pointer text-xs text-slate-500">Metadados JSON</summary>
+                      <summary className="cursor-pointer text-xs text-carbon-500">Metadados JSON</summary>
                       <JsonView
                         data={item}
                         search={search}
@@ -319,7 +319,7 @@ export function LogViewer() {
                       Abrir este registro exato
                     </a>
                   )}
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-carbon-500">
                     {source === 'gcp'
                       ? date(item.timestamp)
                       : new Date(item.timestamp).toLocaleString('pt-BR')}
@@ -330,7 +330,7 @@ export function LogViewer() {
           </ScrollArea>
         </Card>
       )}
-      <p className="text-xs leading-5 text-slate-600">
+      <p className="text-xs leading-5 text-carbon-600">
         Mensagens são sanitizadas no servidor. JSON válido aparece em árvore; logs de texto permanecem
         selecionáveis, com busca destacada.
       </p>

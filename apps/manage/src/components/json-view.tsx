@@ -70,9 +70,18 @@ export function asStructuredData(value: unknown): unknown {
   }
 }
 
+export function isEmptyJsonValue(data: unknown): boolean {
+  const value = asStructuredData(data);
+  return (
+    value == null ||
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'object' && Object.keys(value).length === 0)
+  );
+}
+
 // Auxiliar para definir a cor baseada no tipo primitivo
 function getSyntaxColor(value: unknown, kind: string): string {
-  if (value === null) return 'text-slate-500';
+  if (value === null) return 'text-carbon-500';
   switch (kind) {
     case 'string':
       return 'text-emerald-400';
@@ -81,7 +90,7 @@ function getSyntaxColor(value: unknown, kind: string): string {
     case 'boolean':
       return 'text-sky-400';
     default:
-      return 'text-slate-300';
+      return 'text-carbon-300';
   }
 }
 
@@ -211,14 +220,14 @@ function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: 
               <span className="text-sky-300">
                 <Highlight text={name} pattern={pattern} />
               </span>
-              <span className="text-slate-500 mr-1">:</span>
+              <span className="text-carbon-500 mr-1">:</span>
             </>
           )}
 
           {isObject ? (
             <button
               type="button"
-              className="font-mono text-slate-400 hover:text-white transition-colors"
+              className="font-mono text-carbon-400 hover:text-white transition-colors"
               onClick={() => setManualOpen(!isOpen)}
             >
               {isOpen ? (isArray ? '[' : '{') : summary}
@@ -236,7 +245,7 @@ function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: 
       </div>
 
       {isObject && isOpen && (
-        <div role="group" className="ml-2 border-l border-slate-700/60 pl-3">
+        <div role="group" className="ml-2 border-l border-carbon-700/60 pl-3">
           {entries.slice(0, 1200).map(([key, child]) => (
             <Node
               key={key}
@@ -251,12 +260,12 @@ function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: 
           ))}
 
           {entries.length > 1200 && (
-            <p className="px-2 py-1 text-xs text-slate-500 italic">
+            <p className="px-2 py-1 text-xs text-carbon-500 italic">
               Mais {entries.length - 1200} propriedades ocultas. Copie o JSON para inspecionar tudo.
             </p>
           )}
 
-          <div className="pb-1 font-mono text-slate-500">{isArray ? ']' : '}'}</div>
+          <div className="pb-1 font-mono text-carbon-500">{isArray ? ']' : '}'}</div>
         </div>
       )}
     </div>
@@ -282,26 +291,30 @@ export function JsonView({
   const value = useMemo(() => asStructuredData(data), [data]);
 
   const isStructured = value !== null && typeof value === 'object';
+  // Includes the literal string "{}" after asStructuredData() parses it.
+  const isEmpty = isEmptyJsonValue(value);
 
   const handleCopy = () => {
     const textToCopy = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     navigator.clipboard?.writeText(textToCopy);
   };
 
+  if (isEmpty) return null;
+
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-carbon-800 bg-carbon-950">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/50 px-3 py-2">
-        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-400">{title}</span>
+      <div className="flex flex-wrap items-center gap-3 border-b border-carbon-800 bg-carbon-900/50 px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-carbon-400">{title}</span>
 
         {showSearch && externalSearch === undefined && (
           <div className="relative min-w-[120px] flex-1 sm:max-w-64">
             <Search
               size={14}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-carbon-500"
             />
             <Input
-              className="h-7 pl-8 text-sm sm:text-xs bg-slate-900 border-slate-700 focus:border-slate-600"
+              className="h-7 pl-8 text-sm sm:text-xs bg-carbon-900 border-carbon-700 focus:border-carbon-600"
               aria-label={`Buscar em ${title}`}
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
@@ -316,18 +329,18 @@ export function JsonView({
           size="xsm"
           onClick={handleCopy}
           title="Copiar conteúdo"
-          className="px-2 text-slate-400 hover:text-slate-100"
+          className="px-2 text-carbon-400 hover:text-carbon-100"
         >
           <Copy size={11} className="mr-1.5" /> Copiar
         </Button>
       </div>
 
       {/* Content */}
-      <ScrollArea className="w-full" style={{ height: Math.min(maxHeight, 500) }}>
+      <ScrollArea className="w-full min-w-0 max-w-full" style={{ maxHeight: Math.min(maxHeight, 500) }}>
         <div
           role={isStructured ? 'tree' : undefined}
           aria-label={title}
-          className="min-w-0 p-3 font-mono text-[13px] text-slate-300"
+          className="w-full min-w-0 max-w-full p-2.5 font-mono text-[12px] leading-5 text-carbon-300"
         >
           {isStructured ? (
             <Node

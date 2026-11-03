@@ -56,11 +56,11 @@ function ProviderLinks({ id }: { id: string }) {
   return (
     <>
       <div className="px-3 py-2">
-        <p className="text-xs font-semibold text-slate-100">Investigar correlation ID</p>
-        <p className="mt-1 select-all break-all font-mono text-[11px] text-slate-400">{id}</p>
+        <p className="text-xs font-semibold text-carbon-100">Investigar correlation ID</p>
+        <p className="mt-1 select-all break-all font-mono text-[11px] text-carbon-400">{id}</p>
       </div>
-      <DropdownMenu.Separator className="my-1 h-px bg-slate-700/70" />
-      {isPending && <p className="px-3 py-2 text-xs text-slate-400">Carregando integrações…</p>}
+      <DropdownMenu.Separator className="my-1 h-px bg-carbon-700/70" />
+      {isPending && <p className="px-3 py-2 text-xs text-carbon-400">Carregando integrações…</p>}
       {links
         .filter((link) => link.url)
         .map((link) => (
@@ -69,7 +69,7 @@ function ProviderLinks({ id }: { id: string }) {
               href={link.url!}
               target={link.url!.startsWith('/') ? '_self' : '_blank'}
               rel="noopener noreferrer"
-              className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
+              className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-carbon-200 outline-none hover:bg-carbon-800 focus:bg-carbon-800"
             >
               <span>{link.title}</span>
               <ExternalLink size={13} className="shrink-0" />
@@ -77,13 +77,13 @@ function ProviderLinks({ id }: { id: string }) {
           </DropdownMenu.Item>
         ))}
       <DropdownMenu.Item
-        className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
+        className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-xs text-carbon-200 outline-none hover:bg-carbon-800 focus:bg-carbon-800"
         onSelect={() => void navigator.clipboard?.writeText(id)}
       >
         <Copy size={13} />
         Copiar correlation ID
       </DropdownMenu.Item>
-      <p className="px-3 pb-2 text-[11px] leading-4 text-slate-500">
+      <p className="px-3 pb-2 text-[11px] leading-4 text-carbon-500">
         O Manage recebe o ID e abre o filtro do provedor selecionado.
       </p>
     </>
@@ -98,7 +98,7 @@ export function CorrelationPopover({ id }: { id: string }) {
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          className="correlation-trigger inline-flex max-w-full items-center gap-1 rounded px-1 py-0.5 font-mono text-sky-300 underline decoration-dotted underline-offset-2 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2"
+          className="correlation-trigger inline-flex max-w-full items-center gap-1 rounded px-1 py-0.5 font-mono text-sky-300 underline decoration-dotted underline-offset-2 hover:bg-carbon-800 focus-visible:outline focus-visible:outline-2"
           aria-label={'Investigar correlation ID ' + id}
         >
           <span className="min-w-0 break-all">{id}</span>
@@ -111,7 +111,7 @@ export function CorrelationPopover({ id }: { id: string }) {
           collisionPadding={12}
           side="bottom"
           align="start"
-          className="correlation-popover z-[100] w-[min(340px,calc(100vw-24px))] max-h-[min(75dvh,480px)] overflow-y-auto rounded-xl border border-slate-700 bg-[#191b1f] p-1 shadow-2xl"
+          className="correlation-popover z-[100] w-[min(340px,calc(100vw-24px))] max-h-[min(75dvh,480px)] overflow-y-auto rounded-xl border border-carbon-700 bg-[#191b1f] p-1 shadow-2xl"
         >
           <ProviderLinks id={id} />
         </DropdownMenu.Content>

@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../../../packages/design-tokens/carbon.css';
 @import './design-system.css';
 
 /* Native elements and typography. Tailwind utilities can override component styles. */
@@ -3285,6 +3286,134 @@
   @media (max-width: 720px) {
     .jobs-drawer-job > .status {
       flex: none;
+    }
+  }
+  /* Compact, intentionally quiet missing-preview states. Never put long text in a 50px tile. */
+  .image-unavailable {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    gap: 0;
+    background: var(--gray-3);
+    color: var(--gray-11);
+    border: 1px solid var(--gray-6);
+    overflow: hidden;
+  }
+  .image-unavailable > svg {
+    opacity: 0.55;
+    max-width: 36%;
+    max-height: 36%;
+  }
+  .image-unavailable .preview-action-button {
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--gray-8);
+    border-radius: 6px;
+    background: var(--gray-5);
+    color: var(--gray-14);
+    opacity: 0.85;
+  }
+  .preview-repair-state {
+    min-width: 0;
+    max-width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    background: var(--surface-panel);
+    font-size: var(--text-12);
+    line-height: 1.45;
+  }
+  .preview-repair-state > strong {
+    display: block;
+    font-size: var(--text-12);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .preview-repair-state dl,
+  .incident-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 7px 12px;
+    margin: 10px 0;
+    min-width: 0;
+    font-size: var(--text-11);
+  }
+  .preview-repair-state dt,
+  .incident-fields dt {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .preview-repair-state dd,
+  .incident-fields dd {
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-weight: 520;
+    font-family: var(--font-family-ui);
+  }
+  .incident-fields > div {
+    display: contents;
+  }
+  .incident-inspector {
+    width: min(580px, calc(100vw - 24px));
+    overflow-x: hidden;
+  }
+  .incident-inspector-body,
+  .incident-summary,
+  .incident-section {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    font-size: var(--text-12);
+    line-height: 1.5;
+  }
+  .incident-inspector pre,
+  .incident-inspector code {
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: var(--text-11);
+  }
+  .jobs-drawer-content {
+    max-height: min(39dvh, 300px);
+    overscroll-behavior: contain;
+  }
+  .jobs-drawer-job {
+    padding: 6px 0;
+    gap: 6px;
+  }
+  .jobs-drawer-half {
+    height: min(44dvh, 370px);
+  }
+  @media (max-width: 720px) {
+    .jobs-drawer {
+      left: auto;
+      right: max(8px, env(safe-area-inset-right));
+      width: min(440px, calc(100vw - 16px));
+    }
+    .jobs-drawer-toggle {
+      left: auto;
+      right: max(10px, env(safe-area-inset-right));
+    }
+    .jobs-drawer-content {
+      max-height: min(35dvh, 250px);
+    }
+    .jobs-drawer-job small {
+      font-size: var(--text-9);
+    }
+    .preview-repair-state dl,
+    .incident-fields {
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+      gap: 6px 10px;
     }
   }
 }
