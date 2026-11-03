@@ -4,12 +4,12 @@ import { json, request, useApi } from '../api/client';
 import { Button } from './ui/button';
 import { useUi } from '../lib/store';
 
-type PushState = 'idle' | 'unsupported' | 'registering' | 'registered' | 'offline' | 'error';
+type State = 'idle' | 'unsupported' | 'registering' | 'registered' | 'unregistered' | 'offline' | 'error';
 type PushStatus = { enabled: boolean; registered_devices: number };
-type PushEvent = CustomEvent<{ state: PushState; message?: string }>;
+type PushEvent = CustomEvent<{ state: State; message?: string }>;
 
 export function PushNotifications() {
-  const [state, setState] = useState<PushState>('idle');
+  const [state, setState] = useState<State>('idle');
   const [message, setMessage] = useState('');
   const [testing, setTesting] = useState(false);
   const status = useApi<PushStatus>('/v1/push/status', 60_000);
