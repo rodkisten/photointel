@@ -159,14 +159,14 @@ export async function listManageSecrets(env: Env, identity: Identity): Promise<{
   try {
     inventory = (await gcpSecrets(env, identity)).secrets;
   } catch (error) {
-    if (!(error instanceof ApiError) || error.code !== 'PROVIDER_403') throw error;
+    if (!(error instanceof ApiError) || !['PROVIDER_403', 'GCP_SECRET_MANAGER_403'].includes(error.code)) throw error;
     warning = 'Sem permissão para listar segredos no GCP. Execute Setup GCP → permissions; as referências abaixo vêm apenas do .env.';
   }
   const indexed = new Map<string, SecretItem>();
   for (const entry of inventory)
     indexed.set(entry.name, { name: entry.name, exists: true, references: [], created_at: entry.createTime });
   for (const ref of refs) {
-    const entry = indexed.get(ref.name) || {
+    const entry: SecretItem = indexed.get(ref.name) || {
       name: ref.name,
       exists: warning ? 'unknown' as const : false,
       references: [],
