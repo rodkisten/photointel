@@ -14,7 +14,7 @@ import {
   apiLogParams,
   logLinkPath,
   primaryTerm,
-  readLogLink,
+  toLogSearch,
   TERM,
   type LogLink,
   type LogSource,
@@ -51,7 +51,7 @@ export function LogViewer() {
   }, [link]);
 
   const updateLink = (next: LogLink) => {
-    void navigate({ to: '/logs', search: next, replace: true });
+    void navigate({ to: '/logs', search: toLogSearch(next), replace: true });
   };
 
   const params = apiLogParams(link, serverFilter).toString();
