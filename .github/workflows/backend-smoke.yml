@@ -70,6 +70,8 @@ jobs:
           tests/test_telegram_notify.py
           apps/api/src/photointel/services/jobs.py
           apps/api/src/photointel/services/discovery.py
+          apps/api/src/photointel/services/preview_repair.py
+          tests/test_auto_preview_repair.py
           apps/api/src/photointel/routers/preview_audit.py
           apps/api/src/photointel/routers/catalog.py
           apps/api/src/photointel/services/media.py
