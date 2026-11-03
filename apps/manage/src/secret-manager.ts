@@ -357,3 +357,74 @@ export async function createSecretVersion(
     config_updated: toUpdate.length > 0, dispatches, manual,
   };
 }
+
+
+/** Repoint production to an already-existing, ENABLED version (rollback). */
+export async function activateSecretVersion(
+  env: Env,
+  identity: Identity,
+  name: string,
+  input: { version?: unknown; config_version?: unknown; confirm?: unknown; auto_apply?: unknown },
+): Promise<{
+  ok: true;
+  name: string;
+  activated_version: string;
+  dispatches: Array<{ file: string; status: 'queued' | 'failed' }>;
+  manual: string[];
+}> {
+  parseName(name);
+  if (typeof input.version !== 'string' || !VERSION.test(input.version) ||
+      typeof input.config_version !== 'string' || !/^[a-f0-9]{64}$/.test(input.config_version) ||
+      input.confirm !== 'ATIVAR ' + name + ' v' + input.version ||
+      (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean'))
+    throw new ApiError(422, 'SECRET_ACTIVATE_FIELDS', 'Informe a versão e confirme a ativação');
+  const original = await readConfig(env);
+  if (original.version !== input.config_version)
+    throw new ApiError(409, 'CONFIG_CONFLICT', 'O .env mudou. Atualize a tela antes de ativar.');
+  const references = listReferences(original.value).filter((ref) => ref.name === name && ref.scope !== 'expected');
+  if (!references.length)
+    throw new ApiError(409, 'SECRET_NOT_REFERENCED', 'Secret não referenciado no .env de produção.');
+  if (references.some((ref) => !VERSION.test(ref.version)))
+    throw new ApiError(409, 'SECRET_REFERENCE_VERSION', 'Há referência sem versão válida.');
+  if (references.every((ref) => ref.version === input.version))
+    throw new ApiError(409, 'SECRET_ALREADY_ACTIVE', 'Essa versão já está referenciada.');
+  const token = await gcpToken(env, identity);
+  const check = await provider(ROOT + '/' + name + '/versions/' + input.version, token) as { state?: string };
+  if (check.state !== 'ENABLED')
+    throw new ApiError(422, 'SECRET_NOT_ENABLED', 'Somente versões ENABLED podem ser ativadas.');
+  const latest = await readConfig(env);
+  if (latest.version !== original.version)
+    throw new ApiError(409, 'CONFIG_CONFLICT', 'A configuração mudou durante a verificação.');
+  let updated = original.value;
+  for (const ref of references)
+    if (ref.version !== input.version)
+      updated = replaceReference(updated, ref.key, ref.version, input.version, ref.scope as 'secrets' | 'workflow_secrets');
+  const plan = planConfigChange(original.value, updated);
+  if (plan.blocked)
+    throw new ApiError(409, 'SECRET_ACTIVATION_MANUAL', 'O plano exige atualização manual.');
+  await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: updated });
+  const dispatches: Array<{ file: string; status: 'queued' | 'failed' }> = [];
+  if (input.auto_apply !== false) {
+    for (const workflow of plan.workflows) {
+      try {
+        await gh(env, '/actions/workflows/' + workflow.file + '/dispatches', 'POST', {
+          ref: 'main',
+          inputs: workflow.file === 'config-sync.yml'
+            ? { ...workflow.inputs, config_version: await digest(updated) }
+            : workflow.inputs,
+        });
+        dispatches.push({ file: workflow.file, status: 'queued' });
+      } catch {
+        dispatches.push({ file: workflow.file, status: 'failed' });
+      }
+    }
+  }
+  console.log(JSON.stringify({
+    event: 'manage_secret_version_activated',
+    name, version: input.version, operator: identity.email, dispatches,
+  }));
+  return {
+    ok: true, name, activated_version: input.version,
+    dispatches, manual: plan.manual,
+  };
+}
