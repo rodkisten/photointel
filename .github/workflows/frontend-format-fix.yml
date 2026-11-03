@@ -22,7 +22,7 @@ on:
           - changed
           - all
       base_ref:
-        description: "Optional base commit/ref for changed mode (default: previous commit)"
+        description: "Optional base commit/ref (default: last 10 commits)"
         type: string
         required: false
         default: ""
