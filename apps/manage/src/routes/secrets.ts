@@ -23,7 +23,7 @@ export async function secretRoutes(request: Request, env: Env, identity: Identit
   if (path === '/api/secrets/permissions') {
     if (method !== 'POST') throw new ApiError(405, 'METHOD', 'Método não permitido');
     const input = await bodyJson<{ confirm?: unknown }>(request, 300);
-    if (input.confirm !== 'SINCRONIZAR IAM PHOT OINTEL')
+    if (input.confirm !== 'SINCRONIZAR IAM PHOTOINTEL')
       throw new ApiError(422, 'SECRET_PERMISSIONS_CONFIRM', 'Confirme a sincronização IAM do projeto');
     await gh(env, '/actions/workflows/gcp-bootstrap.yml/dispatches', 'POST', {
       ref: 'main', inputs: { mode: 'permissions' },
