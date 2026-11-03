@@ -7,6 +7,7 @@ export interface LogLink {
   jobType: string;
   ray: string;
   event: string;
+  entry: string;
   at: string;
   search: string;
   minutes: string;
@@ -34,6 +35,7 @@ export function readLogLink(search: string): LogLink {
   const ray = params.get('ray') || '';
   const event = params.get('event') || '';
   const query = params.get('search') || '';
+  const entry = params.get('entry') || '';
   const minutes = params.get('minutes') || '';
   const at = safeDate(params.get('at'));
   const link: LogLink = {
@@ -43,18 +45,19 @@ export function readLogLink(search: string): LogLink {
     jobType: JOB_TYPE.test(params.get('job_type') || '') ? params.get('job_type')! : '',
     ray: RAY.test(ray) ? ray : '',
     event: EVENT.test(event) ? event : '',
+    entry: TERM.test(entry) ? entry : '',
     at,
     search: TERM.test(query) ? query : '',
     minutes: ['15', '30', '60', '240', '1440', '10080'].includes(minutes) ? minutes : '30',
   };
-  if (!minutes && (link.correlation || link.job || link.ray || link.event || link.search)) {
+  if (!minutes && (link.correlation || link.job || link.ray || link.event || link.entry || link.search)) {
     link.minutes = at ? '30' : '10080';
   }
   return link;
 }
 
 export function primaryTerm(link: LogLink): string {
-  return link.correlation || link.job || link.ray || link.event || link.search;
+  return link.entry || link.correlation || link.job || link.ray || link.event || link.search;
 }
 
 export function logLinkPath(link: LogLink): string {
@@ -65,6 +68,7 @@ export function logLinkPath(link: LogLink): string {
     ['job_type', link.jobType],
     ['ray', link.ray],
     ['event', link.event],
+    ['entry', link.entry],
     ['at', link.at],
     ['search', link.search],
   ]) if (value) params.set(key, value);
@@ -81,6 +85,7 @@ export function apiLogParams(link: LogLink, editedTerm: string): URLSearchParams
     if (link.job) params.set('job', link.job);
     if (link.ray) params.set('ray', link.ray);
     if (link.event) params.set('event', link.event);
+    if (link.entry) params.set('entry', link.entry);
     if (link.search) params.set('search', link.search);
   } else if (TERM.test(editedTerm)) {
     params.set('search', editedTerm);
