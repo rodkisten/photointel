@@ -47,6 +47,42 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
   const repair = useAction<{ created: boolean; message: string }>();
+  const repairBatch = useAction<{ scanned: number; queued: number; already_active: number; failed: number; next_cursor: string | null }>();
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [nextRepairCursor, setNextRepairCursor] = useState<string | null | undefined>(undefined);
+  const [batchProgress, setBatchProgress] = useState({ scanned: 0, queued: 0, already_active: 0, failed: 0, batches: 0 });
+
+  async function retryBatch() {
+    setRepairError(null);
+    setBatchRunning(true);
+    let next = nextRepairCursor ?? null;
+    const totals = nextRepairCursor === undefined
+      ? { scanned: 0, queued: 0, already_active: 0, failed: 0, batches: 0 }
+      : { ...batchProgress };
+    try {
+      // A deliberate limit avoids an unbounded stream of external Apple downloads.
+      for (let pageIndex = 0; pageIndex < 4; pageIndex++) {
+        const outcome = await repairBatch.mutateAsync({
+          url: '/v1/jobs/previews/repair-batch',
+          body: { limit: 25, cursor: next, confirm: true },
+        });
+        totals.scanned += outcome.scanned;
+        totals.queued += outcome.queued;
+        totals.already_active += outcome.already_active;
+        totals.failed += outcome.failed;
+        totals.batches++;
+        setBatchProgress({ ...totals });
+        next = outcome.next_cursor;
+        setNextRepairCursor(next);
+        if (!next || outcome.scanned === 0) break;
+      }
+      void page.refetch();
+    } catch (error) {
+      setRepairError(error instanceof Error ? error : new Error('Não foi possível solicitar o lote'));
+    } finally {
+      setBatchRunning(false);
+    }
+  }
 
   async function retry(finding: PreviewFinding) {
     setRepairError(null);
@@ -96,6 +132,31 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 Auditoria dos registros do catálogo, inclusive falhas sem job recente. Não verifica objetos do
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
+              <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                <strong>Reparo em lote</strong>
+                <p className="field-help">
+                  Enfileira até 100 fotos por vez em lotes de 25, respeitando jobs ativos, mídias bloqueadas e
+                  os limites do worker. Nenhuma foto é considerada reparada antes de o processamento terminar.
+                </p>
+                <div className="form-actions">
+                  <Button
+                    size="sm"
+                    disabled={batchRunning || (nextRepairCursor === null && batchProgress.batches > 0)}
+                    onClick={() => void retryBatch()}
+                  >
+                    <RotateCcw size={14} />
+                    {batchRunning ? 'Solicitando lotes…' : nextRepairCursor ? 'Continuar reparo' : 'Reparar fotos em lote'}
+                  </Button>
+                  <span role="status" aria-live="polite" className="field-help">
+                    {batchProgress.scanned} verificadas · {batchProgress.queued} enfileiradas · {batchProgress.already_active} já ativas · {batchProgress.failed} bloqueadas/falhas
+                  </span>
+                </div>
+                {batchProgress.failed > 0 && (
+                  <a href="https://photos-manage.migos.club/?tab=icloud" target="_blank" rel="noopener noreferrer">
+                    Diagnosticar conexão iCloud no Manage
+                  </a>
+                )}
+              </div>
               {page.data.items.length === 0 ? (
                 <Empty
                   title="Nenhuma prévia incompleta"
