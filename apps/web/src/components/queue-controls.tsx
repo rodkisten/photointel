@@ -120,7 +120,7 @@ export function QueueControls({ compact = false }: { compact?: boolean }) {
           type="button"
           variant="outline"
           size="sm"
-          disabled={!data || action.isPending || (data.open === 0 && !data.paused)}
+          disabled={!data || action.isPending}
           onClick={() => void command(data?.paused ? 'resume' : 'pause')}
           title={data?.paused ? 'Retomar os jobs pausados' : 'Pausar os jobs e impedir novos claims'}
         >
