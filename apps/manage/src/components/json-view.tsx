@@ -316,14 +316,14 @@ export function JsonView({
           size="xsm"
           onClick={handleCopy}
           title="Copiar conteúdo"
-          className="h-7 px-2 text-slate-400 hover:text-slate-100"
+          className="px-2 text-slate-400 hover:text-slate-100"
         >
-          <Copy size={13} className="mr-1.5" /> Copiar
+          <Copy size={11} className="mr-1.5" /> Copiar
         </Button>
       </div>
 
       {/* Content */}
-      <ScrollArea className="w-full" style={{ height: Math.min(maxHeight, 760) }}>
+      <ScrollArea className="w-full" style={{ height: Math.min(maxHeight, 500) }}>
         <div
           role={isStructured ? 'tree' : undefined}
           aria-label={title}
