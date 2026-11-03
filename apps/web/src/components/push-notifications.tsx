@@ -4,7 +4,14 @@ import { json, request, useApi } from '../api/client';
 import { Button } from './ui/button';
 import { useUi } from '../lib/store';
 
-type PushState = 'idle' | 'unsupported' | 'registering' | 'registered' | 'unregistered' | 'offline' | 'error';
+type PushState =
+  | 'idle'
+  | 'unsupported'
+  | 'registering'
+  | 'registered'
+  | 'unregistered'
+  | 'offline'
+  | 'error';
 type PushStatus = { enabled: boolean; registered_devices: number };
 type PushEvent = CustomEvent<{ state: PushState; message?: string }>;
 
@@ -53,7 +60,8 @@ export function PushNotifications() {
       ? 'No iPhone, adicione o PhotoIntel à Tela de Início e abra o aplicativo instalado.'
       : permission === 'denied'
         ? 'Notificações bloqueadas. Autorize o PhotoIntel nos ajustes do dispositivo.'
-        : state === 'registered' || (permission === 'granted' && (status.data?.registered_devices ?? 0) > 0)
+        : state === 'registered' ||
+            (permission === 'granted' && (status.data?.registered_devices ?? 0) > 0)
           ? 'Dispositivo inscrito. Você receberá atualizações dos jobs mesmo fora da tela.'
           : permission === 'granted'
             ? 'Permissão concedida. Sincronizando o registro com a API.'
@@ -67,9 +75,7 @@ export function PushNotifications() {
       </div>
       <p className="muted">{description}</p>
       {!status.isPending && status.data && !status.data.enabled && (
-        <p className="muted">
-          O recebimento ainda depende da ativação do emissor FCM na API.
-        </p>
+        <p className="muted">O recebimento ainda depende da ativação do emissor FCM na API.</p>
       )}
       <div className="header-actions" style={{ marginTop: 14 }}>
         <Button
