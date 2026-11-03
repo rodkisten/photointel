@@ -1,4 +1,5 @@
 name: "Temporary formatter for Manage deep links"
+# One-time branch cleanup after syncing FCM from main
 on:
   push:
     branches: [feat/manage-deep-links-log-investigation]
