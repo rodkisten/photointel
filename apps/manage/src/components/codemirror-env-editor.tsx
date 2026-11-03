@@ -41,12 +41,12 @@ const syntax = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  '&': { backgroundColor: '#101113', color: '#e5e7eb', height: 'min(64vh, 520px)', fontSize: '16px' },
+  '&': { backgroundColor: '#101113', color: '#e5e7eb', height: 'min(64vh, 520px)', fontSize: '13px' },
   '.cm-scroller': {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     overflow: 'auto',
   },
-  '.cm-content': { minHeight: '320px', caretColor: '#ffffff', padding: '12px 2px' },
+  '.cm-content': { minHeight: '320px', caretColor: '#ffffff', padding: '6px 2px' },
   '.cm-gutters': { backgroundColor: '#101113', color: '#737781', borderRight: '1px solid #292b30' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#25272d80' },
   '&.cm-focused': { outline: 'none' },
