@@ -45,7 +45,10 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 // ==========================================
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    return NAV.some((item) => item.id === requested) ? (requested as Tab) : 'overview';
+  });
   const [openedRunId, setOpenedRunId] = useState<number | null>(null);
 
   const {
@@ -61,6 +64,8 @@ export default function App() {
   const navigate = (nextTab: Tab) => {
     setOpenedRunId(null);
     setTab(nextTab);
+    // Drop deep-linked log filters when navigating elsewhere.
+    if (window.location.search) window.history.replaceState(null, '', window.location.pathname);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
