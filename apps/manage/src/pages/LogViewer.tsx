@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCcw, Search } from 'lucide-react';
 import { Badge, Button, Card, Input, Select } from '../components/ui';
@@ -9,8 +9,9 @@ import { RunRow } from '../components/runs';
 import { api } from '../lib/client';
 import { date, cn, state } from '../lib/utils';
 import type { CloudLog, CfLog, Issue, Run } from '../types';
+import { apiLogParams, logLinkPath, primaryTerm, readLogLink, TERM, type LogLink, type LogSource } from '../log-deeplink';
 
-type Source = 'gcp' | 'cloudflare' | 'github' | 'sentry';
+type Source = LogSource;
 type ResponseData = {
   items: Array<CloudLog | CfLog | Run | Issue>;
   console_url?: string;
@@ -23,53 +24,61 @@ const TABS: Array<{ id: Source; label: string }> = [
   { id: 'github', label: 'Actions' },
   { id: 'sentry', label: 'Sentry' },
 ];
-const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 export function LogViewer() {
-  const [source, setSource] = useState<Source>(() => {
-    const requested = new URLSearchParams(window.location.search).get('source');
-    return TABS.some((tab) => tab.id === requested) ? (requested as Source) : 'gcp';
-  });
-  const [minutes, setMinutes] = useState(() =>
-    new URLSearchParams(window.location.search).has('correlation') ? '240' : '30',
-  );
-  const [search, setSearch] = useState(
-    () => new URLSearchParams(window.location.search).get('correlation') || '',
-  );
-  const [serverFilter, setServerFilter] = useState(() => {
-    const id = new URLSearchParams(window.location.search).get('correlation') || '';
-    return UUID.test(id) ? id : '';
-  });
+  const [link, setLink] = useState<LogLink>(() => readLogLink(window.location.search));
+  const [search, setSearch] = useState(() => primaryTerm(readLogLink(window.location.search)));
+  const [serverFilter, setServerFilter] = useState(() => primaryTerm(readLogLink(window.location.search)));
   const [showStructured, setShowStructured] = useState(true);
+  const source = link.source;
+  const minutes = link.minutes;
+
+  useEffect(() => {
+    const onLocationChange = () => {
+      const next = readLogLink(window.location.search);
+      setLink(next);
+      setSearch(primaryTerm(next));
+      setServerFilter(primaryTerm(next));
+    };
+    window.addEventListener('popstate', onLocationChange);
+    return () => window.removeEventListener('popstate', onLocationChange);
+  }, []);
+
+  const updateLink = (next: LogLink) => {
+    setLink(next);
+    window.history.replaceState(null, '', logLinkPath(next));
+  };
+
+  const params = apiLogParams(link, serverFilter).toString();
   const q = useQuery<ResponseData>({
-    queryKey: ['logs', source, minutes, serverFilter],
+    queryKey: ['logs', source, params],
     queryFn: async () => {
-      if (source === 'gcp')
-        return api<ResponseData>(
-          '/gcp/logs?minutes=' +
-            minutes +
-            (UUID.test(serverFilter) ? '&correlation=' + encodeURIComponent(serverFilter) : ''),
-        );
-      if (source === 'cloudflare')
-        return api<ResponseData>(
-          '/cloudflare/logs?minutes=' + minutes + '&search=' + encodeURIComponent(serverFilter),
-        );
+      if (source === 'gcp') return api<ResponseData>('/gcp/logs?' + params);
+      if (source === 'cloudflare') return api<ResponseData>('/cloudflare/logs?' + params);
       if (source === 'github') return api<ResponseData>('/runs');
       return api<ResponseData>('/sentry/issues');
     },
     refetchInterval: source === 'sentry' ? 60000 : 20000,
     retry: false,
   });
-  const visible = useMemo(
-    () =>
-      (q.data?.items || []).filter(
-        (item) => !search.trim() || JSON.stringify(item).toLowerCase().includes(search.trim().toLowerCase()),
-      ),
-    [q.data, search],
-  );
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const linkedTerms = serverFilter === primaryTerm(link)
+      ? [link.correlation, link.job, link.ray, link.event, link.search].filter(Boolean).map((term) => term.toLowerCase())
+      : [];
+    return (q.data?.items || []).filter((item) => {
+      if (!needle) return true;
+      const body = JSON.stringify(item).toLowerCase();
+      return body.includes(needle) || linkedTerms.some((term) => body.includes(term));
+    });
+  }, [q.data, search, link, serverFilter]);
   const applyServerFilter = () => {
-    if (source === 'cloudflare' || (source === 'gcp' && UUID.test(search.trim())))
-      setServerFilter(search.trim());
+    const term = search.trim();
+    if (term && !TERM.test(term)) return;
+    if (term !== primaryTerm(link)) {
+      updateLink({ ...link, correlation: '', job: '', jobType: '', ray: '', event: '', at: '', search: term });
+    }
+    setServerFilter(term);
   };
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
@@ -79,7 +88,7 @@ export function LogViewer() {
             type="button"
             key={id}
             onClick={() => {
-              setSource(id);
+              updateLink({ ...link, source: id, correlation: '', job: '', jobType: '', ray: '', event: '', at: '', search: '', minutes: '30' });
               setServerFilter('');
               setSearch('');
             }}
@@ -93,18 +102,30 @@ export function LogViewer() {
           </button>
         ))}
       </div>
+      {(link.correlation || link.job || link.ray || link.event || link.at) && (
+        <div className="rounded-lg border border-[#303238] bg-[#191b20] px-3 py-2 text-xs text-slate-400">
+          Investigação vinculada
+          {link.correlation && <span className="ml-2 break-all">Correlação: {link.correlation}</span>}
+          {link.job && <span className="ml-2 break-all">Job: {link.job}</span>}
+          {link.ray && <span className="ml-2 break-all">Ray: {link.ray}</span>}
+          {link.event && <span className="ml-2 break-all">Evento: {link.event}</span>}
+          {link.at && <span className="ml-2">Ocorrido em {date(link.at)} (±15 min)</span>}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {(source === 'gcp' || source === 'cloudflare') && (
           <Select
             aria-label="Janela de tempo"
             className="w-[110px] shrink-0"
             value={minutes}
-            onChange={(event) => setMinutes(event.target.value)}
+            onChange={(event) => updateLink({ ...link, minutes: event.target.value })}
           >
             <option value="15">15 min</option>
             <option value="30">30 min</option>
             <option value="60">1 hora</option>
             <option value="240">4 horas</option>
+            <option value="1440">24 horas</option>
+            <option value="10080">7 dias</option>
           </Select>
         )}
         <div className="relative min-w-0 basis-full flex-1 sm:basis-[190px]">
@@ -112,7 +133,7 @@ export function LogViewer() {
           <Input
             value={search}
             className="pl-8"
-            placeholder="Buscar e destacar em todos os logs"
+            placeholder="Correlation ID, job ID ou termo de log"
             aria-label="Buscar e destacar logs"
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
@@ -125,10 +146,10 @@ export function LogViewer() {
           size="sm"
           onClick={applyServerFilter}
           disabled={
-            source === 'github' || source === 'sentry' || (source === 'gcp' && !UUID.test(search.trim()))
+            source === 'github' || source === 'sentry' || (search.trim() !== '' && !TERM.test(search.trim()))
           }
         >
-          Filtrar API
+          Buscar no provedor
         </Button>
         <Button variant="outline" size="icon" aria-label="Atualizar logs" onClick={() => void q.refetch()}>
           <RefreshCcw size={16} />
