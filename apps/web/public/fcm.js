@@ -9,6 +9,7 @@ import {
   isSupported as isMessagingSupported,
   onMessage,
   onRegistered,
+  onUnregistered,
   register,
 } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-messaging.js';
 
@@ -30,6 +31,41 @@ const WORKER_URL = '/sw.js';
 
 const app = initializeApp(firebaseConfig);
 let registrationPromise = null;
+let currentInstallation = null;
+
+function emitState(state, message = '') {
+  window.dispatchEvent(new CustomEvent('photointel:fcm-state', {
+    detail: { state, message },
+  }));
+}
+
+async function syncInstallation(installationId) {
+  if (!navigator.onLine) {
+    emitState('offline', 'O registro será sincronizado quando houver conexão.');
+    return;
+  }
+  emitState('registering');
+  const response = await fetch('/v1/push/registrations', {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installation_id: installationId }),
+  });
+  if (!response.ok) {
+    throw new Error('A API não confirmou o registro do dispositivo (HTTP ' + response.status + ').');
+  }
+  emitState('registered', 'Este dispositivo está inscrito nas notificações de jobs.');
+}
+
+window.addEventListener('online', () => {
+  if (currentInstallation) {
+    void syncInstallation(currentInstallation).catch((error) => {
+      console.warn('[PhotoIntel Push] Falha ao sincronizar registro:', error);
+      emitState('error', error.message);
+    });
+  }
+});
 
 // O Analytics e opcional e nao deve impedir o funcionamento do Push.
 isAnalyticsSupported()
@@ -62,7 +98,7 @@ async function registerForPush(messaging) {
       serviceWorkerRegistration: workerRegistration,
     });
 
-    console.info('[PhotoIntel Push] Registro FCM iniciado com sucesso.');
+    console.info('[PhotoIntel Push] Registro FCM iniciado.');
   })();
 
   try {
@@ -82,6 +118,7 @@ const messagingReady = (async () => {
     !(await isMessagingSupported())
   ) {
     console.warn('[PhotoIntel Push] Navegador ou contexto sem suporte a Web Push.');
+    emitState('unsupported', 'No iPhone, instale o PhotoIntel na Tela de Início para ativar o push.');
     return null;
   }
 
@@ -99,36 +136,41 @@ const messagingReady = (async () => {
   });
 
   onRegistered(messaging, (installationId) => {
-    if (!installationId) {
-      return;
-    }
+    if (!installationId) return;
+    // O FID é um identificador de entrega, não uma credencial de servidor.
+    // Não exponha seu valor em logs ou mensagens da interface.
+    currentInstallation = installationId;
+    void syncInstallation(installationId).catch((error) => {
+      console.warn('[PhotoIntel Push] Falha no registro com a API:', error);
+      emitState('error', error.message);
+    });
+  });
 
-    console.info('[PhotoIntel Push] Firebase Installation ID:', installationId);
-    try {
-      localStorage.setItem('photointel:fcm:installation-id', installationId);
-    } catch (error) {
-      console.warn('[PhotoIntel Push] Nao foi possivel salvar o FID localmente:', error);
-    }
-
-    window.dispatchEvent(
-      new CustomEvent('photointel:fcm-registered', {
-        detail: { installationId },
-      }),
-    );
-    // TODO: associe installationId ao usuario autenticado no seu backend.
-    // Nao envie credenciais de servidor nem chaves privadas ao navegador.
+  onUnregistered(messaging, (installationId) => {
+    if (!installationId) return;
+    if (currentInstallation === installationId) currentInstallation = null;
+    emitState('unregistered');
+    void fetch('/v1/push/registrations', {
+      method: 'DELETE',
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ installation_id: installationId }),
+    }).catch(() => undefined);
   });
 
   // Se o usuario ja concedeu permissao, revalida o registro ao abrir o app.
   if (Notification.permission === 'granted') {
     void registerForPush(messaging).catch((error) => {
       console.error('[PhotoIntel Push] Falha na renovacao do registro:', error);
+      emitState('error', error.message);
     });
   }
 
   return messaging;
 })().catch((error) => {
   console.error('[PhotoIntel Push] Falha ao inicializar FCM:', error);
+  emitState('error', 'Não foi possível iniciar o Firebase Messaging.');
   return null;
 });
 
@@ -151,6 +193,10 @@ async function enableNotifications() {
   }
 
   await registerForPush(messaging);
+  // onRegistered() confirms the Firebase ID and its association with the API.
+  if (currentInstallation) {
+    await syncInstallation(currentInstallation);
+  }
 }
 
 // Dispare este evento diretamente no onClick de um botao React:
@@ -158,6 +204,7 @@ async function enableNotifications() {
 document.addEventListener('photointel:enable-notifications', () => {
   void enableNotifications().catch((error) => {
     console.error('[PhotoIntel Push] Nao foi possivel ativar:', error);
+    emitState('error', error.message);
     window.dispatchEvent(
       new CustomEvent('photointel:fcm-error', {
         detail: { message: String(error), error },
