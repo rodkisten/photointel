@@ -272,38 +272,60 @@ manual já foi realizado.
 
 ## Secret Manager no painel
 
-Na aba **Secrets**, o painel lê as referências existentes em
-`production/GCP_CONFIG_ENV` e mostra somente as chaves `MANAGE_*` da
-seção `WORKFLOW_SECRETS`. Nenhum Secret Manager recebe acesso amplo de
-projeto. Execute **🧱 Setup GCP → permissions** na `main` para atribuir
-à identidade `photointel-manage`, em cada secret referenciado, as
-permissões `roles/secretmanager.secretAccessor` e
-`roles/secretmanager.secretVersionAdder`. Isso **não** concede acesso
-a secrets do banco de dados, exclusão de versões nem alteração de IAM.
+Na aba **Secrets**, o Manage consulta o inventário do Google Secret Manager no
+projeto fixo photointel e cruza todos os secrets com as referências em
+production/GCP_CONFIG_ENV, tanto SECRETS__* (API e jobs) quanto
+WORKFLOW_SECRETS__*. Agora os secrets sem referência também aparecem.
+Um item ausente no GCP é marcado "Ausente"; uma referência não verificada
+por falta de IAM é marcada "Não verificado". O nome conhecido
+ICLOUD_SESSION_KEY → photointel-session-aead-key é exibido mesmo que a
+referência esteja ausente do .env, para orientar a recuperação.
 
-O fluxo mobile é: **escolher secret → ver versão referenciada →
-ver trecho mascarado sob demanda → inserir novo valor → confirmar**.
-O trecho do valor é composto por apenas **três caracteres iniciais**,
-um bloco de máscara e **três finais**. Os outros bytes nunca chegam
-ao navegador. O Secret Manager retorna a versão integral somente ao
-Worker autenticado, via token GCP de curta duração.
+O fluxo mobile oferece busca por nome/variável, histórico paginado de versões,
+estados ENABLED/DISABLED/DESTROYED, visualização segura de apenas três caracteres
+do início e três do fim do payload (ou máscara integral para dados binários/
+multilinha), adição de versões de até 64 KiB e criação de containers com prefixo
+photointel-. É possível escolher e **ativar uma versão ENABLED anterior** no
+GCP_CONFIG_ENV sem copiar ou revelar seu valor. Versões anteriores são
+preservadas; não existe função de apagar/destruir/desabilitar no Manage.
 
-Ao confirmar, o Manage cria uma nova versão sem destruir as antigas,
-atualiza somente a referência `__VERSION` em `GCP_CONFIG_ENV` e,
-se autorizado, solicita os workflows calculados pelo planejamento.
-O arquivo `.env` preserva comentários, quebras de linha, chaves
-repetidas idênticas e demais valores. A atualização usa o hash de
-configuração para detectar outras sessões; se a versão GCP for criada
-mas o GitHub for alterado concorrentemente, o painel informa o número
-da versão criada para permitir recuperação manual sem sobrescrever
-alterações. **A versão adicionada não está necessariamente em uso** até
-que o deploy respectivo conclua.
+Ao adicionar uma versão, a opção de atualizar as referências existentes no .env
+é separada da criação em GCP. Para referências existentes, a atualização é
+otimista pelo hash SHA-256, preservando comentários e demais linhas .env;
+todas as referências desse mesmo secret são reconciliadas. Os workflows
+aplicáveis são solicitados, não necessariamente concluídos. Secrets sem
+referência podem receber versões, mas só entram em produção após vincular
+NAME e VERSION na aba Ambiente. Criar container também não cria referências
+automaticamente.
 
-O formulário não aceita quebras de linha nem arquivos, pois os secrets
-de integração do Manage são credenciais de linha única. Os valores
-integrais nunca são enviados para Sentry ou logs e não são armazenados
-no frontend. Somente a listagem de referências exige o PAT GitHub;
-visualizar um trecho ou criar a versão exige WIF e IAM no GCP.
+**Permissões necessárias:** execute **🧱 Setup GCP → permissions** na main após
+atualizar o código. O bootstrap concede à identidade Access-allowlisted
+photointel-manage@photointel.iam.gserviceaccount.com, somente no projeto
+photointel, as funções roles/secretmanager.viewer,
+roles/secretmanager.secretAccessor e roles/secretmanager.secretVersionAdder.
+Essas permissões dão leitura de payloads e criação de versões em **todos**
+os segredos do projeto, um aumento deliberado de privilégio pedido para este
+painel de administração. O worker expõe ao navegador apenas trechos mascarados.
+Para criar containers, o bootstrap instala um papel IAM customizado
+photointelManageSecretCreator, contendo exclusivamente a permissão
+secretmanager.secrets.create. Não concede Secret Manager Admin/Editor, alteração
+de IAM pelo Worker nem destruição de versões.
+
+O bootstrap também deve ser executado novamente sempre que a configuração
+de identidade ou a federação Cloudflare Access mudar. Se o inventário não
+aparecer, o painel explica a necessidade de atualizar IAM em vez de apresentar
+uma lista falsamente vazia.
+
+**Atenção ao iCloud:** ICLOUD_SESSION_KEY não é a senha da Apple. O payload
+precisa conter 32 bytes aleatórios em base64 (normalmente 44 caracteres).
+O formulário valida o tamanho e permite gerar uma chave AES-256, mas uma
+nova chave perde a capacidade de descriptografar sessões e manifests antigos.
+O botão de atualizar referências começa desmarcado para esse secret. Prefira
+ativar a **versão original** caso ainda exista.
+
+Os valores integrais não são retornados à UI, logs ou Sentry. A criação de
+novas versões ou containers exige confirmação explícita na sessão protegida
+pelo Cloudflare Zero Trust Access.
 
 ## Estrutura modular do frontend
 
