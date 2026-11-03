@@ -9,6 +9,7 @@ const CONTEXT_MINUTES = 15;
 
 export interface LogRequest {
   terms: string[];
+  entry: string;
   start: number;
   end: number;
   minutes: number;
@@ -33,6 +34,9 @@ export function parseLogRequest(params: URLSearchParams, now = Date.now()): LogR
       throw new ApiError(422, 'LOG_IDENTIFIER', 'Identificador de log inválido');
     if (value && !terms.includes(value)) terms.push(value);
   }
+  const entry = params.get('entry') || '';
+  if (entry && !TERM.test(entry))
+    throw new ApiError(422, 'LOG_ENTRY', 'Identificador de registro inválido');
   const at = params.get('at');
   if (at) {
     if (at.length > 40 || Number.isNaN(Date.parse(at)))
@@ -41,9 +45,9 @@ export function parseLogRequest(params: URLSearchParams, now = Date.now()): LogR
     if (moment > now + 60_000 || moment < now - MAX_AGE)
       throw new ApiError(422, 'LOG_TIMESTAMP', 'Evento fora da janela de 7 dias');
     const pad = CONTEXT_MINUTES * 60_000;
-    return { terms, start: Math.max(now - MAX_AGE, moment - pad), end: Math.min(now, moment + pad), minutes };
+    return { terms, entry, start: Math.max(now - MAX_AGE, moment - pad), end: Math.min(now, moment + pad), minutes };
   }
-  return { terms, start: now - minutes * 60_000, end: now, minutes };
+  return { terms, entry, start: now - minutes * 60_000, end: now, minutes };
 }
 
 export function gcpLogFilter(request: LogRequest): string {
@@ -53,5 +57,6 @@ export function gcpLogFilter(request: LogRequest): string {
   const terms = request.terms.length
     ? ' AND (' + request.terms.map((value) => 'SEARCH("' + value + '")').join(' OR ') + ')'
     : ' AND severity>=WARNING';
-  return resources + ' AND ' + window + terms;
+  return resources + ' AND ' + window + terms +
+    (request.entry ? ' AND insertId="' + request.entry + '"' : '');
 }
