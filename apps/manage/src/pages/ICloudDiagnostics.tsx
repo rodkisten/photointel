@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Apple, ArrowUpRight, RefreshCcw, ShieldAlert, ShieldCheck, Terminal, TestTube } from 'lucide-react';
+import { Apple, ArrowUpRight, RefreshCcw, ShieldAlert, ShieldCheck, TestTube } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, Section } from '../components/ui';
 import { IssueBanner, Spinner } from '../components/shared';
+import { ICloudLoginForm } from '../components/icloud-login-form';
 import { api, send } from '../lib/client';
 import { date } from '../lib/utils';
 
@@ -43,15 +44,16 @@ export function ICloudDiagnostics() {
   });
   return (
     <div className="space-y-5">
+      <ICloudLoginForm onConnected={() => void qc.invalidateQueries({ queryKey: ['icloud-diagnostics'] })} />
       <Card className="space-y-3 p-4">
         <div className="flex items-start gap-3">
           <Apple size={20} className="mt-1 shrink-0 text-slate-300" />
           <div className="space-y-2">
             <h2 className="text-base font-semibold">Conexão iCloud e sessão Apple</h2>
             <p className="text-sm leading-6 text-slate-400">
-              O Manage consulta logs recentes de falhas e pré-requisitos da infraestrutura. Isto não é um
-              teste autenticado à Apple: para renovar cookies e o token, o fluxo atual exige senha e 2FA no
-              terminal seguro do PhotoIntel. A sessão resultante é publicada criptografada.
+              Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico
+              abaixo também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade.
+              A sessão só é publicada depois de confirmar o acesso à biblioteca.
             </p>
           </div>
         </div>
@@ -65,15 +67,6 @@ export function ICloudDiagnostics() {
           <Button variant="outline" size="sm" asChild>
             <a href="https://photos.migos.club/icloud?test=1" target="_blank" rel="noopener noreferrer">
               <TestTube size={15} /> Testar sessão Apple ao vivo <ArrowUpRight size={14} />
-            </a>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <a
-              href="https://github.com/rodkisten/photointel/actions/workflows/gcp-terminal.yml"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Terminal size={15} /> Abrir terminal seguro <ArrowUpRight size={14} />
             </a>
           </Button>
         </div>
@@ -107,10 +100,8 @@ export function ICloudDiagnostics() {
                   </p>
                 )}
                 <p className="text-xs leading-5 text-slate-400">
-                  Para renovar com segurança: abra o terminal, execute{' '}
-                  <code>python3 infra/scripts/icloud_terminal.py setup</code>
-                  com o comando de autenticação recomendado pela documentação e conclua o desafio 2FA. Não
-                  cole a senha em campos de ambiente, commits, Actions ou logs.
+                  Use o formulário de senha e código Apple no topo desta página para renovar a sessão,
+                  sem terminal. Se houver erro, confira os logs correlacionados abaixo.
                 </p>
                 <a
                   href="https://photos.migos.club/icloud"
