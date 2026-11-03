@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -565,6 +566,65 @@ async def repair_preview(
         message = "Etapa aguardando o worker local; nenhuma duplicata foi criada."
     return {"created": created, "job_id": str(job.id), "job_type": job.job_type,
             "status": job.status, "message": message}
+
+
+class PreviewRepairBatchInput(BaseModel):
+    """Explicitly authorized, paged repair; every request is bounded to 25 assets."""
+
+    limit: int = Field(10, ge=1, le=25)
+    cursor: str | None = Field(None, max_length=4096)
+    asset_ids: list[UUID] | None = Field(None, max_length=25)
+    confirm: bool = False
+
+
+@router.post("/jobs/previews/repair-batch", tags=["jobs"])
+async def repair_preview_batch(
+    body: PreviewRepairBatchInput, session: Session, identity: Actor,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    """Repair a bounded page of missing previews without touching original photos.
+
+    Reuses the single-photo recovery path so active jobs, blocked media, manifests
+    and Cloud Run dispatch checks obey exactly the same validation.
+    """
+    if not body.confirm:
+        raise AppError(ErrorCode.INVALID_REQUEST, "Confirme o reparo de prévias", 409)
+    from photointel.routers.preview_audit import _audit_predicates
+
+    if body.asset_ids is not None:
+        identifiers = list(dict.fromkeys(body.asset_ids))
+        next_cursor = None
+    else:
+        statement = select(Asset.id).where(*_audit_predicates())
+        if body.cursor:
+            statement = statement.where(Asset.id > decode_uuid_cursor(body.cursor))
+        rows = list((await session.scalars(
+            statement.order_by(Asset.id).limit(body.limit + 1)
+        )).all())
+        identifiers = rows[:body.limit]
+        next_cursor = (
+            encode_cursor({"id": identifiers[-1]})
+            if len(rows) > body.limit and identifiers else None
+        )
+    accepted: list[str] = []
+    reused: list[str] = []
+    failures: list[dict[str, str]] = []
+    for identifier in identifiers:
+        try:
+            outcome = await repair_preview(identifier, session, identity, background_tasks)
+            (accepted if outcome["created"] else reused).append(str(identifier))
+        except AppError as exc:
+            await session.rollback()
+            failures.append({"asset_id": str(identifier), "code": str(exc.code)})
+    return {
+        "scanned": len(identifiers),
+        "queued": len(accepted),
+        "already_active": len(reused),
+        "failed": len(failures),
+        "failed_items": failures,
+        "next_cursor": next_cursor,
+        "message": "Reparo solicitado. O resultado final depende da execução dos workers.",
+    }
 
 
 @router.get("/jobs/activity", response_model=Page[JobOut], tags=["jobs"])
