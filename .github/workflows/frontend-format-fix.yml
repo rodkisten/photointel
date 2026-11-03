@@ -2,14 +2,6 @@ name: "🧹 Frontends · ESLint + Prettier Fix"
 run-name: "🧹 Fix · ${{ inputs.target }} · ${{ inputs.mode }} · ${{ github.ref_name }}"
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/web/src/styles.css'
-      - 'apps/web/src/design-system.css'
-      - 'apps/web/src/App.tsx'
-      - 'apps/web/tests/e2e/mobile-navigation.spec.ts'
-      - '.github/workflows/frontend-format-fix.yml'
   workflow_dispatch:
     inputs:
       target:
@@ -69,7 +61,7 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Web ESLint"
-        if: inputs.target == 'web' || inputs.target == 'both' || github.event_name == 'push'
+        if: inputs.target == 'web' || inputs.target == 'both'
         run: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Manage ESLint"
@@ -79,8 +71,8 @@ jobs:
       - name: "🧹 ESLint --fix + Prettier --write"
         id: format
         env:
-          TARGET: ${{ inputs.target || 'web' }}
-          MODE: ${{ inputs.mode || 'changed' }}
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
           BASE_REF: ${{ inputs.base_ref }}
         run: bash scripts/format-changed-frontends.sh
 
