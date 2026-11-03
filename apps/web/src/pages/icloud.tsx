@@ -17,6 +17,9 @@ export function ICloudPage() {
   const libraries = useApi<Page<InfoData>>('/v1/libraries');
   const gates = useApi<VerificationGates>('/v1/verification/gates');
   const action = useAction();
+  const connectionTest = useAction<{
+    state: string; valid: boolean; reauth_required: boolean; checked_at: string; message: string;
+  }>();
   const [limit, setLimit] = useState(100);
   const [mode, setMode] = useState('backfill');
   const [continuous, setContinuous] = useState(false);
@@ -56,6 +59,36 @@ export function ICloudPage() {
         }
       />
       {state.error && <ErrorState error={state.error} retry={() => void state.refetch()} />}
+      <div className="panel" style={{ marginBottom: 18 }}>
+        <div className="panel-title">
+          <h2>Teste ao vivo de conexão Apple</h2>
+          <Cloud size={16} />
+        </div>
+        <p className="muted">
+          Verifica a sessão criptografada atual diretamente na Apple, sem baixar fotos e sem solicitar sua senha.
+        </p>
+        <div className="header-actions" style={{ marginTop: 12 }}>
+          <Button
+            variant="outline"
+            disabled={connectionTest.isPending}
+            onClick={() => connectionTest.mutate({ url: '/v1/ingestion/connection-test' })}
+          >
+            <ShieldCheck size={14} />
+            {connectionTest.isPending ? 'Verificando com a Apple…' : 'Testar sessão iCloud agora'}
+          </Button>
+          <Button asChild variant="outline">
+            <a href="https://photos-manage.migos.club/?tab=icloud">
+              Diagnóstico e renovação no Manage
+            </a>
+          </Button>
+        </div>
+        {connectionTest.data && (
+          <div className={connectionTest.data.valid ? 'notice' : 'notice warning'} role="status" style={{ marginTop: 12 }}>
+            {connectionTest.data.message}
+          </div>
+        )}
+        {connectionTest.error && <ErrorState error={connectionTest.error} />}
+      </div>
       <div className="notice">
         <LockKeyhole size={15} />
         <span>
