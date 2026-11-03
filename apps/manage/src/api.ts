@@ -337,7 +337,7 @@ export async function api(
     const investigation = parseLogRequest(url.searchParams);
     // This API currently exposes one indexed search needle; correlation takes
     // priority over the job ID when a deep link contains both.
-    const search = investigation.terms[0] || '';
+    const search = investigation.terms[0] || investigation.entry || '';
     const data = await cf(env, '/workers/observability/telemetry/query', 'POST', {
       queryId: 'photointel-manage-logs',
       view: 'events',
@@ -352,8 +352,11 @@ export async function api(
     });
     const result = (data as { result?: Record<string, unknown> }).result;
     const events = list(result?.events, 'events');
+    const matching = investigation.entry
+      ? events.filter((x) => String(x.$metadata?.id || '') === investigation.entry)
+      : events;
     return json({
-      items: events.map((x) => ({
+      items: matching.map((x) => ({
         id: x.$metadata?.id,
         timestamp: x.timestamp,
         service: x.$metadata?.service || x.$workers?.scriptName,
