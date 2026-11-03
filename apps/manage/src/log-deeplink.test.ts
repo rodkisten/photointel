@@ -18,6 +18,10 @@ describe('Manage log URL contract', () => {
     expect(query.get('job')).toBe(job);
     expect(query.get('correlation')).toBe(correlation);
     expect(readLogLink(logLinkPath(link).split('?')[1]).job).toBe(job);
+    const exact = readLogLink(logLinkPath({ ...link, entry: 'insertId-123' }));
+    expect(exact.entry).toBe('insertId-123');
+    expect(primaryTerm(exact)).toBe('insertId-123');
+    expect(apiLogParams(exact, primaryTerm(exact)).get('entry')).toBe('insertId-123');
   });
   it('rejects malformed or unsafe URL fields', () => {
     const link = readLogLink('?source=https://evil.invalid&job=x%22%29&search=%22%20OR%20true&ray=../');
