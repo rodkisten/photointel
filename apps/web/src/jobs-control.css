@@ -1,0 +1,270 @@
+/* Job controls use PhotoIntel's own neutral palette and small mobile actions. */
+
+.queue-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--gray-8);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.queue-controls-summary {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.queue-controls-title,
+.queue-controls-progress-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  min-width: 0;
+}
+
+.queue-controls-title {
+  font-size: var(--text-12);
+}
+
+.queue-controls-title > .muted,
+.queue-controls-progress-label {
+  font-size: var(--text-10);
+}
+
+.queue-controls-counts {
+  display: flex;
+  gap: 5px 12px;
+  flex-wrap: wrap;
+  font-size: var(--text-10);
+  color: var(--text-secondary, var(--gray-12));
+}
+
+.queue-controls-counts > span {
+  white-space: nowrap;
+}
+
+.queue-controls-progress {
+  min-width: 0;
+}
+
+.queue-controls-progress-label {
+  color: var(--gray-12);
+  margin-bottom: 5px;
+}
+
+.queue-controls-progress-label strong {
+  color: var(--gray-15);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-controls-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.queue-controls-actions .button,
+.job-batch-actions .button {
+  white-space: nowrap;
+}
+
+.queue-controls-compact {
+  margin: 0;
+  padding: 8px 12px 10px;
+  gap: 8px;
+  border: 0;
+  border-top: 1px solid var(--gray-7);
+  border-bottom: 1px solid var(--gray-7);
+  border-radius: 0;
+  background: transparent;
+}
+
+.queue-controls-compact .queue-controls-title strong {
+  font-size: var(--text-11);
+}
+
+.queue-controls-compact .queue-controls-title > .muted,
+.queue-controls-compact .queue-controls-counts,
+.queue-controls-compact .queue-controls-progress-label {
+  font-size: var(--text-9);
+}
+
+.queue-controls-compact .queue-controls-actions {
+  gap: 4px;
+}
+
+.queue-controls-compact .queue-controls-actions .button {
+  min-height: 32px;
+  padding: 6px 9px;
+  font-size: var(--text-10);
+}
+
+.job-inline-actions,
+.job-batch-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.job-inline-actions .button {
+  width: 34px;
+  height: 34px;
+  flex: none;
+}
+
+.job-state-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 7px;
+}
+
+.job-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(220px, 100%);
+  min-width: 0;
+}
+
+.job-progress-label {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-9);
+  color: var(--gray-12);
+}
+
+.job-progress-label > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-progress-label > span:last-child {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.job-progress .progress-track {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+}
+
+.job-progress-compact {
+  width: 100%;
+}
+
+.job-progress-indeterminate .progress-fill {
+  width: 35%;
+  min-width: 18px;
+  animation: photointel-progress-indeterminate 1.7s ease-in-out infinite alternate;
+}
+
+@keyframes photointel-progress-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(275%); }
+}
+
+.jobs-drawer .queue-controls-compact {
+  flex: 0 0 auto;
+}
+
+.jobs-drawer-job .jobs-drawer-job-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.jobs-drawer-job-main > div:first-child,
+.jobs-drawer-job-title {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.jobs-drawer-job-main .job-progress {
+  margin-top: 7px;
+}
+
+.jobs-drawer-job .job-inline-actions {
+  flex: none;
+}
+
+.jobs-drawer-job .job-inline-actions .button {
+  width: 28px;
+  height: 30px;
+  padding: 0;
+}
+
+.jobs-drawer-job > .status {
+  flex: none;
+}
+
+@media (max-width: 800px) {
+  .queue-controls:not(.queue-controls-compact) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .queue-controls:not(.queue-controls-compact) .queue-controls-actions {
+    justify-content: flex-start;
+  }
+
+  .queue-controls-compact {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .queue-controls-compact .queue-controls-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 520px) {
+  .jobs-drawer .queue-controls-compact {
+    gap: 7px;
+  }
+
+  .jobs-drawer-job {
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  .jobs-drawer-job .job-inline-actions {
+    margin-left: auto;
+  }
+
+  .job-row .job-inline-actions .button {
+    width: 27px;
+    height: 30px;
+    padding: 0;
+  }
+
+  .job-state-progress .job-progress-label {
+    max-width: 110px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .job-progress-indeterminate .progress-fill {
+    animation: none;
+    width: 35%;
+  }
+}
