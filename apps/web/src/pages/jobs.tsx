@@ -304,8 +304,8 @@ export function JobsPage() {
                     <span>
                       <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
                       <small>
-                        {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts} · falhou · abrir
-                        logs no Manage
+                        {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts} · falhou ·
+                        abrir logs no Manage
                       </small>
                     </span>
                   </a>
