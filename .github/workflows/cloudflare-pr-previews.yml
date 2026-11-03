@@ -1,0 +1,67 @@
+name: "🧪 Cloudflare · PR Previews"
+run-name: "🧪 Previews · PR #${{ github.event.pull_request.number }} · ${{ github.head_ref }}"
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "apps/web/**"
+      - "apps/manage/**"
+      - "infra/cloudflare/cloud-run-proxy/**"
+      - ".github/workflows/cloudflare-pr-previews.yml"
+permissions:
+  contents: read
+concurrency:
+  group: photointel-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  previews:
+    name: "🌐 Manage + Fotos · isolated preview"
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/manage/package-lock.json
+      - name: "🔑 Verify dedicated preview credentials"
+        id: credentials
+        shell: bash
+        run: |
+          if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub preview Environment. Production secrets are intentionally not reused."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: "📦 Install both apps"
+        run: |
+          npm --prefix apps/web ci
+          npm --prefix apps/manage ci
+      - name: "🏗 Build static Photos and Manage"
+        run: |
+          npm --prefix apps/web run build
+          npm --prefix apps/manage run build
+      - name: "🖼 Photos static preview, no production API"
+        if: steps.credentials.outputs.ready == 'true'
+        working-directory: apps/web
+        run: npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ github.event.pull_request.number }}"
+      - name: "🛡 Manage preview · dedicated Access required"
+        if: steps.credentials.outputs.ready == 'true'
+        working-directory: apps/manage
+        run: npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ github.event.pull_request.number }}"
+      - name: "📝 Preview configuration"
+        if: steps.credentials.outputs.ready != 'true'
+        run: |
+          echo "### Previews not deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Create GitHub Environment preview and set CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID scoped for Preview Workers." >> "$GITHUB_STEP_SUMMARY"
