@@ -110,6 +110,8 @@ jobs:
         run: >
           uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
           -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit or expired_icloud_media_url_is_refreshed_once or refresh_refuses_changed_icloud_representation'
+      - name: "🗃 Prepare isolated integration schema"
+        run: uv run alembic -c infra/migrations/alembic.ini upgrade head
       - name: "🛠 Automatic preview repair integration"
         run: uv run pytest -q tests/integration/test_api.py -k automatic_preview_repair
 
