@@ -191,3 +191,11 @@ async def audit_previews(
         ),
         "verification": "catalog_metadata",
     }
+
+
+@router.get("/jobs/previews/automation", tags=["jobs"])
+async def preview_automation_status(session: Session) -> dict:
+    """Public-to-authorized-operator status only; no private object keys."""
+    from photointel.services.preview_repair import automatic_preview_status
+
+    return await automatic_preview_status(session)
