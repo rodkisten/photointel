@@ -189,7 +189,7 @@ function Shell() {
       <Dialog open={menu} onOpenChange={setMenu} title="Seu workspace" className="mobile-menu">
         <nav aria-label="Todas as páginas">
           {navigation.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} end={to === '/'}>
+            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMenu(false)}>
               <Icon size={18} />
               {label}
               <ChevronRight size={14} />
