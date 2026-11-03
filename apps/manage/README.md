@@ -307,7 +307,7 @@ visualizar um trecho ou criar a versão exige WIF e IAM no GCP.
 
 ## Estrutura modular do frontend
 
-`src/App.tsx` é só o shell de navegação. Telas em `src/pages/`,
+`src/App.tsx` é o layout persistente com topbar, sidebar e bottom nav.\n`src/router.tsx` define as rotas tipadas usando TanStack Router (configuração em código,\nsem geração automática). Telas em `src/pages/`,
 componentes comuns em `src/components/` e o editor de Secret Manager
 em `src/features/secrets/` (lista, cartão da versão, formulário,
 orquestração e tipos). O backend do editor fica separado entre
@@ -371,3 +371,24 @@ The Vite UI proxies /api to the local Wrangler port 8788.
 
 Sources: GitHub REST Actions/Variables; Cloudflare Access and Workers
 Observability REST API; Google Security Token Service and Cloud Run/Logging.
+
+## Navegação TanStack Router
+
+O Manage usa URLs próprias e histórico do navegador para todas as páginas:
+
+| Tela | Rota |
+| --- | --- |
+| Visão geral | `/` |
+| Deploys e execuções | `/deploys`, `/deploys/$runId` |
+| Logs (provedor e investigação) | `/logs?source=gcp&correlation=...` |
+| Ambiente | `/environment` |
+| Secrets | `/secrets` |
+| iCloud | `/icloud` |
+| Sistema | `/system` |
+
+Links legados `/?tab=...` de PhotoIntel, GitHub Actions e Telegram
+são redirecionados, mantendo parâmetros de logs (job, correlation, ray,
+entry, event e período). Use `<Link>` e `useNavigate` para novas
+navegações internas; não modifique `window.history` diretamente.
+A aplicação continua protegida pelo Cloudflare Access inclusive em URLs
+abertas diretamente ou após recarregar.
