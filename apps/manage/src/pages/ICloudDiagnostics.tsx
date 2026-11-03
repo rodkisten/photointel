@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Apple, ArrowUpRight, RefreshCcw, ShieldAlert, ShieldCheck, TestTube } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { readLogLink } from '../log-deeplink';
+import { readLogLink, toLogSearch } from '../log-deeplink';
 import { Badge, Button, Card, Section } from '../components/ui';
 import { IssueBanner, Spinner } from '../components/shared';
 import { ICloudLoginForm } from '../components/icloud-login-form';
@@ -135,7 +135,7 @@ export function ICloudDiagnostics() {
                 <div className="p-3">
                   <Link
                     to="/logs"
-                    search={readLogLink('?source=gcp&search=icloud&minutes=1440')}
+                    search={toLogSearch(readLogLink('?source=gcp&search=icloud&minutes=1440'))}
                     className="text-sm text-sky-300 underline"
                   >
                     Investigar nos logs do Manage
