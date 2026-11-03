@@ -129,6 +129,21 @@ async def run_finite(
         deadline_seconds=min(30, max(1, deadline - time.monotonic())),
         stopped=shutdown,
     )
+    preview_repair = {"status": "not_run"}
+    if mode in ("worker", "maintenance"):
+        from photointel.services.preview_repair import run_automatic_preview_repair
+
+        try:
+            preview_repair = await run_automatic_preview_repair()
+        except Exception as exc:
+            # A failed audit must never prevent queued photos from processing.
+            import structlog
+
+            from photointel.sentry_observability import capture_exception
+
+            structlog.get_logger().exception("automatic_preview_sweep_failed")
+            capture_exception(exc, error_code="AUTO_PREVIEW_SWEEP_FAILED")
+            preview_repair = {"status": "failed"}
     if mode == "maintenance":
         from photointel.services.media import (
             cleanup_temporary_media,
@@ -155,6 +170,7 @@ async def run_finite(
             "recovered": recovered,
             "dispatches": dispatches,
             "followup": followup,
+            "preview_repair": preview_repair,
             **cleanup,
             **orphans,
         }
@@ -239,6 +255,7 @@ async def run_finite(
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "source_of_truth": "postgresql",
         "dispatches": dispatches,
+        "preview_repair": preview_repair,
     }
 
 
