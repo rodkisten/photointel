@@ -5093,7 +5093,8 @@
               "album",
               "duplicate",
               "quality",
-              "screenshots"
+              "screenshots",
+              "has_preview"
             ],
             "title": "Op"
           },
