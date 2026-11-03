@@ -30,6 +30,9 @@ case "$*" in
     exit 0 ;;
   "artifacts repositories describe "*"--format=value(format)"*) echo DOCKER; exit 0 ;;
   "storage buckets describe "*"--format=value(location)"*) echo US; exit 0 ;;
+  "iam roles describe "*)
+    if [[ "${FAKE_CREATOR_ROLE_MISSING:-false}" == true ]]; then echo "NOT_FOUND: creator role does not exist" >&2; exit 1; fi
+    exit 0 ;;
   "iam service-accounts describe "*)
     if [[ "${FAKE_PERMISSION_DENIED:-false}" == true ]]; then echo 'PERMISSION_DENIED: Permission denied' >&2; exit 1; fi
     if [[ "${FAKE_MANAGE_MISSING:-false}" == true && "$*" == *"photointel-manage@"* ]]; then
@@ -56,14 +59,16 @@ for attempt in 1 2; do
   fi
   grep -Fq -- "--attribute-condition=$EXPECTED_WIF_CONDITION" "$GCLOUD_TRACE"
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
-  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/secretmanager.viewer roles/secretmanager.secretAccessor \
+    roles/secretmanager.secretVersionAdder projects/replace-project-id/roles/photointelManageSecretCreator; do
     grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
       grep -F -- "--member=serviceAccount:photointel-manage@replace-project-id.iam.gserviceaccount.com" |
       grep -Fq -- "--role=$role"
   done
   if grep -F "projects add-iam-policy-binding" "$GCLOUD_TRACE" |
       grep -F "photointel-manage@" |
-      grep -Ev -- "--role=roles/(run.viewer|logging.viewer|cloudscheduler.viewer)" >/dev/null; then
+      grep -Ev -- "--role=(roles/(run.viewer|logging.viewer|cloudscheduler.viewer|secretmanager.viewer|secretmanager.secretAccessor|secretmanager.secretVersionAdder)|projects/replace-project-id/roles/photointelManageSecretCreator)" >/dev/null; then
     echo "ERROR: Manage service account received an unexpected IAM role" >&2; exit 1
   fi
   for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
@@ -134,18 +139,29 @@ grep -F 'projects add-iam-policy-binding replace-project-id' "$GCLOUD_TRACE" |
 if grep -Eq 'services enable|artifacts |storage |iam service-accounts (add-iam-policy-binding|create)|secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
     echo "ERROR: IAM-only mode attempted broader provisioning" >&2; exit 1
 fi
-for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/secretmanager.viewer roles/secretmanager.secretAccessor \
+    roles/secretmanager.secretVersionAdder projects/replace-project-id/roles/photointelManageSecretCreator; do
   grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
     grep -Fq -- "--member=serviceAccount:photointel-manage@replace-project-id.iam.gserviceaccount.com --role=$role"
 done
-if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 4 ]]; then
+if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 8 ]]; then
   echo "ERROR: IAM-only mode changed unexpected project policies" >&2; exit 1
 fi
 : > "$GCLOUD_TRACE"
 FAKE_MANAGE_MISSING=true GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTRAP_MODE=permissions \
   bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/manage-missing"
 grep -F "iam service-accounts create photointel-manage" "$GCLOUD_TRACE" |
-  grep -Fq -- "--display-name=PhotoIntel Manage (read-only)"
+  grep -Fq -- "--display-name=PhotoIntel Manage (Access protected admin)"
+: > "$GCLOUD_TRACE"
+FAKE_CREATOR_ROLE_MISSING=true GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTRAP_MODE=permissions \
+  bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/creator-missing"
+grep -F "iam roles create photointelManageSecretCreator" "$GCLOUD_TRACE" |
+  grep -Fq -- "--permissions=secretmanager.secrets.create"
+if grep -F "iam roles create photointelManageSecretCreator" "$GCLOUD_TRACE" |
+   grep -E "(delete|destroy|setIamPolicy|versions.access)" >/dev/null; then
+  echo "ERROR: custom Manage creator role is overprivileged" >&2; exit 1
+fi
 if grep -F "iam service-accounts create " "$GCLOUD_TRACE" | grep -v "photointel-manage" >/dev/null; then
   echo "ERROR: IAM-only mode created unrelated service accounts" >&2; exit 1
 fi
