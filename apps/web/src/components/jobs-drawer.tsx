@@ -229,12 +229,27 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
           ) : (
             recent.map((job) => (
               <div className="jobs-drawer-job" key={job.id}>
-                <div>
-                  <strong>{job.job_type.replaceAll('_', ' ')}</strong>
-                  <small>
-                    ID {job.id.slice(0, 8)} · tentativa {job.attempts}/{job.maximum_attempts}
-                  </small>
-                </div>
+                {job.status === 'failed' ? (
+                  <a
+                    href={jobLogsUrl(
+                      job.job_type, job.id,
+                      typeof job.error_details?.correlation_id === 'string' ? job.error_details.correlation_id : undefined,
+                      job.finished_at || job.started_at || job.created_at,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="jobs-drawer-job-title"
+                    aria-label={'Investigar falha do job ' + job.id + ' no Manage'}
+                  >
+                    <strong>{job.job_type.replaceAll('_', ' ')}</strong>
+                    <small>ID {job.id.slice(0, 8)} · falhou · tentativa {job.attempts}/{job.maximum_attempts}</small>
+                  </a>
+                ) : (
+                  <div>
+                    <strong>{job.job_type.replaceAll('_', ' ')}</strong>
+                    <small>ID {job.id.slice(0, 8)} · tentativa {job.attempts}/{job.maximum_attempts}</small>
+                  </div>
+                )}
                 <Status value={job.status} />
                 {job.status === 'failed' &&
                   typeof job.error_details?.sentry_event_id === 'string' &&
