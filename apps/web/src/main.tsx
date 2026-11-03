@@ -58,6 +58,25 @@ window.addEventListener('unhandledrejection', (event) => {
   reportNonFatal(event.reason, 'promise');
 });
 
+// Foreground FCM messages update all job views without waiting for polling.
+window.addEventListener('photointel:fcm-message', (event) => {
+  const payload = (event as CustomEvent<{
+    data?: Record<string, string>;
+    notification?: { title?: string; body?: string };
+  }>).detail;
+  if (payload?.data?.kind !== 'job_status') return;
+  void client.invalidateQueries({
+    predicate: (query) =>
+      String(query.queryKey[0]).startsWith('/v1/jobs') ||
+      String(query.queryKey[0]).startsWith('/v1/job-batches') ||
+      query.queryKey[0] === '/v1/system/statistics',
+  });
+  if (['completed', 'failed', 'retrying'].includes(payload.data.status)) {
+    const description = payload.notification?.body ?? 'O estado dos jobs foi atualizado.';
+    useUi.getState().notify(description, payload.data.status === 'completed' ? 'success' : 'info');
+  }
+});
+
 const root = document.getElementById('root');
 if (!root) {
   reportNonFatal(new Error('Elemento #root não encontrado'), 'runtime');
