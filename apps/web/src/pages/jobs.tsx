@@ -282,21 +282,38 @@ export function JobsPage() {
           >
             {query.data.items.map((item) => (
               <div className="job-row" key={item.id}>
-                <button
-                  className="job-name"
-                  onClick={() => setJob(item)}
-                  style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}
-                >
-                  <span className="job-icon">
-                    <Activity size={15} />
-                  </span>
-                  <span>
-                    <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
-                    <small>
-                      {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}
-                    </small>
-                  </span>
-                </button>
+                {item.status === 'failed' ? (
+                  <a
+                    className="job-name"
+                    href={jobLogsUrl(
+                      item.job_type, item.id,
+                      typeof item.error_details?.correlation_id === 'string' ? item.error_details.correlation_id : undefined,
+                      item.finished_at || item.started_at || item.created_at,
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={'Investigar falha do job ' + item.id + ' no Manage'}
+                    style={{ textAlign: 'left', color: 'inherit' }}
+                  >
+                    <span className="job-icon"><Activity size={15} /></span>
+                    <span>
+                      <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
+                      <small>{item.id.slice(0, 8)} · falhou · abrir logs no Manage</small>
+                    </span>
+                  </a>
+                ) : (
+                  <button
+                    className="job-name"
+                    onClick={() => setJob(item)}
+                    style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}
+                  >
+                    <span className="job-icon"><Activity size={15} /></span>
+                    <span>
+                      <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
+                      <small>{item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}</small>
+                    </span>
+                  </button>
+                )
                 <Status value={item.status} />
                 <span className="job-duration muted">
                   {item.started_at && item.finished_at
