@@ -193,14 +193,13 @@ def gcp_failure_url(step: str, project: str, region: str) -> str:
     if not re.fullmatch(r"[a-z]+-[a-z]+[0-9]", region):
         return ""
     normalized = step.casefold()
-    base = "https://console.cloud.google.com"
+    base = "https://photos-manage.migos.club/?tab=logs&source=gcp"
     if "api" in normalized or "cloud run" in normalized:
-        return f"{base}/run/detail/{region}/photointel-api/logs?project={project}"
+        return base + "&search=photointel-api"
     if "jobs" in normalized or "worker" in normalized:
-        query = f'resource.type="cloud_run_job" AND resource.labels.location="{region}"'
-        return f"{base}/logs/query;query={urllib.parse.quote(query, safe='')}?project={project}"
+        return base + "&search=photointel-worker"
     if "build" in normalized:
-        return f"{base}/cloud-build/builds?project={project}"
+        return "https://photos-manage.migos.club/?tab=deploy"
     return ""
 
 
