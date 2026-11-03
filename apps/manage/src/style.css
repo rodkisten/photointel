@@ -105,3 +105,25 @@ main > *,
   .correlation-popover { max-width: calc(100vw - 24px); }
   pre, code { overflow-wrap: anywhere; }
 }
+
+/* Six mobile tabs: retain independent hit areas and legible labels. */
+@media (max-width: 767px) {
+  nav[aria-label='Navegação principal'] > button {
+    width: 0;
+    min-width: 0;
+    max-width: calc(100% / 6);
+    flex: 1 1 0;
+    overflow: hidden;
+  }
+  nav[aria-label='Navegação principal'] > button > span {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-align: center;
+    font-size: 10px;
+  }
+}
