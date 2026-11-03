@@ -313,7 +313,7 @@ export function JobsPage() {
                       <small>{item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}</small>
                     </span>
                   </button>
-                )
+                )}
                 <Status value={item.status} />
                 <span className="job-duration muted">
                   {item.started_at && item.finished_at
