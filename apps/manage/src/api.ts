@@ -3,6 +3,7 @@ import { planConfigChange } from './config-reconcile';
 import { runManageDiagnostics } from './diagnostics';
 import { parseLogRequest, gcpLogFilter } from './log-query';
 import { secretRoutes } from './routes/secrets';
+import { icloudAuthRoute } from './routes/icloud-auth';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -38,6 +39,10 @@ export async function api(
     method = request.method;
   if (path.startsWith('/api/secrets')) {
     const response = await secretRoutes(request, env, identity);
+    if (response) return response;
+  }
+  if (path.startsWith('/api/icloud/auth/')) {
+    const response = await icloudAuthRoute(request, env, identity);
     if (response) return response;
   }
   if (method === 'GET' && path === '/api/meta')
