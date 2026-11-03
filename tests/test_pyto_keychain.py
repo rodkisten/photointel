@@ -96,7 +96,9 @@ class KeychainPolicyTests(unittest.TestCase):
 
     def test_entitlement_error_is_not_a_missing_credential(self) -> None:
         self.backend.read_result = (-34018, None)
-        self.assert_error("KEYCHAIN_UNAVAILABLE", lambda: self.store.get(self.account))
+        self.assert_error(
+            "KEYCHAIN_ENTITLEMENT_MISSING", lambda: self.store.get(self.account)
+        )
 
     def test_new_credential_is_read_back(self) -> None:
         self.store.set(self.account, "private-test-credential")
