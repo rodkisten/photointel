@@ -8,6 +8,8 @@ export type Meta = {
   sentry: boolean;
   sentry_reader?: boolean;
   sentry_org?: string;
+  cloudflare_account_id?: string;
+  gcp_region?: string;
 };
 export type Run = {
   id: number;
