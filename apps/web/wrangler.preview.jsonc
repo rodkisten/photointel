@@ -1,0 +1,25 @@
+{
+  "$schema": "../manage/node_modules/wrangler/config-schema.json",
+  "name": "photointel-api-relay",
+  "main": "../../infra/cloudflare/cloud-run-proxy/worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  },
+  "previews": {
+    "vars": {
+      "PHOTOINTEL_PREVIEW": "true",
+      "FRONTEND_ORIGIN": "https://photos-preview.invalid",
+      "CLOUD_RUN_ORIGIN": "https://photointel-preview.run.app"
+    }
+  }
+}
