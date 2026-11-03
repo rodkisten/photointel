@@ -215,12 +215,30 @@ async def _publish(settings: Settings, result: dict[str, Any]) -> dict[str, Any]
             422,
         )
     target = settings.model_copy(update={"icloud_enabled": True})
-    async with session_directory(target, require_existing=False) as directory:
-        unpack_directory(result["archive"], directory, target.icloud_session_max_bytes)
-        inspected = target.model_copy(update={"icloud_session_directory": directory})
-        # Full library probe, no download, no job. Publication is aborted if
-        # Apple has not yet granted access to the selected library.
-        await asyncio.to_thread(ICloudAdapter(inspected).connect)
+    try:
+        async with session_directory(target, require_existing=False) as directory:
+            unpack_directory(result["archive"], directory, target.icloud_session_max_bytes)
+            inspected = target.model_copy(update={"icloud_session_directory": directory})
+            # Full library probe, no download, no job. Publication is aborted if
+            # Apple has not yet granted access to the selected library.
+            try:
+                await asyncio.to_thread(ICloudAdapter(inspected).connect)
+            except AppError:
+                raise
+            except Exception:
+                raise AppError(
+                    ErrorCode.ICLOUD_ACCESS_DENIED,
+                    "A Apple não confirmou o acesso à biblioteca. Sessão anterior preservada.",
+                    422,
+                ) from None
+    except AppError:
+        raise
+    except Exception:
+        raise AppError(
+            ErrorCode.STORAGE_UNAVAILABLE,
+            "Não foi possível publicar a nova sessão criptografada. Verifique o armazenamento.",
+            503,
+        ) from None
     return {
         "state": "connected",
         "valid": True,
@@ -246,9 +264,16 @@ async def start_login(settings: Settings, email: str, password: str) -> dict[str
         )
     if not isinstance(password, str) or not 1 <= len(password) <= 512:
         raise AppError(ErrorCode.INVALID_REQUEST, "Senha Apple ausente ou inválida", 422)
-    result = await asyncio.wait_for(
-        asyncio.to_thread(_begin_sync, settings, email, password), timeout=75,
-    )
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_begin_sync, settings, email, password), timeout=75,
+        )
+    except TimeoutError:
+        raise AppError(
+            ErrorCode.ICLOUD_ACCESS_DENIED,
+            "Tempo esgotado ao contatar a Apple. Tente novamente.",
+            504,
+        ) from None
     if result["state"] == "verification_required":
         return result
     return await _publish(settings, result)
@@ -259,8 +284,15 @@ async def verify_login(
 ) -> dict[str, Any]:
     if not isinstance(code, str) or not CODE.fullmatch(code):
         raise AppError(ErrorCode.VERIFICATION_REQUIRED, "Digite o código Apple de 6 dígitos", 422)
-    result = await asyncio.wait_for(
-        asyncio.to_thread(_finish_sync, settings, email, challenge, code),
-        timeout=75,
-    )
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(_finish_sync, settings, email, challenge, code),
+            timeout=75,
+        )
+    except TimeoutError:
+        raise AppError(
+            ErrorCode.VERIFICATION_REQUIRED,
+            "Tempo esgotado ao confirmar o código com a Apple. Recomece o login.",
+            504,
+        ) from None
     return await _publish(settings, result)
