@@ -64,7 +64,7 @@ export function LogViewer() {
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const linkedTerms = serverFilter === primaryTerm(link)
-      ? [link.correlation, link.job, link.ray, link.event, link.search].filter(Boolean).map((term) => term.toLowerCase())
+      ? [link.correlation, link.job, link.ray, link.event, link.entry, link.search].filter(Boolean).map((term) => term.toLowerCase())
       : [];
     return (q.data?.items || []).filter((item) => {
       if (!needle) return true;
@@ -76,7 +76,7 @@ export function LogViewer() {
     const term = search.trim();
     if (term && !TERM.test(term)) return;
     if (term !== primaryTerm(link)) {
-      updateLink({ ...link, correlation: '', job: '', jobType: '', ray: '', event: '', at: '', search: term });
+      updateLink({ ...link, correlation: '', job: '', jobType: '', ray: '', event: '', entry: '', at: '', search: term });
     }
     setServerFilter(term);
   };
@@ -88,7 +88,7 @@ export function LogViewer() {
             type="button"
             key={id}
             onClick={() => {
-              updateLink({ ...link, source: id, correlation: '', job: '', jobType: '', ray: '', event: '', at: '', search: '', minutes: '30' });
+              updateLink({ ...link, source: id, correlation: '', job: '', jobType: '', ray: '', event: '', entry: '', at: '', search: '', minutes: '30' });
               setServerFilter('');
               setSearch('');
             }}
@@ -102,13 +102,14 @@ export function LogViewer() {
           </button>
         ))}
       </div>
-      {(link.correlation || link.job || link.ray || link.event || link.at) && (
+      {(link.correlation || link.job || link.ray || link.event || link.entry || link.at) && (
         <div className="rounded-lg border border-[#303238] bg-[#191b20] px-3 py-2 text-xs text-slate-400">
           Investigação vinculada
           {link.correlation && <span className="ml-2 break-all">Correlação: {link.correlation}</span>}
           {link.job && <span className="ml-2 break-all">Job: {link.job}</span>}
           {link.ray && <span className="ml-2 break-all">Ray: {link.ray}</span>}
           {link.event && <span className="ml-2 break-all">Evento: {link.event}</span>}
+          {link.entry && <span className="ml-2 break-all">Registro: {link.entry}</span>}
           {link.at && <span className="ml-2">Ocorrido em {date(link.at)} (±15 min)</span>}
         </div>
       )}
@@ -267,6 +268,23 @@ export function LogViewer() {
                         title="Registro completo"
                       />
                     </details>
+                  )}
+                  {(item.insertId || item.id) && (
+                    <a
+                      href={logLinkPath({
+                        ...link,
+                        entry: String(item.insertId || item.id),
+                        at: (() => {
+                          const dateValue = new Date(item.timestamp);
+                          return Number.isNaN(dateValue.getTime()) ? '' : dateValue.toISOString();
+                        })(),
+                      })}
+                      className="inline-flex text-xs text-sky-300 underline underline-offset-4"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir este registro exato
+                    </a>
                   )}
                   <p className="text-[11px] text-slate-500">
                     {source === 'gcp'
