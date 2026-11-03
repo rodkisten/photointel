@@ -266,13 +266,24 @@ def login_readiness(settings: Settings) -> dict[str, Any]:
     try:
         encryption_key(settings)
     except AppError:
+        if settings.icloud_session_key is not None:
+            return {
+                "ready": False,
+                "code": "ICLOUD_SESSION_KEY_INVALID",
+                "message": (
+                    "A versão de ICLOUD_SESSION_KEY recebida pela API não contém "
+                    "32 bytes em Base64. Confira a versão do Secret Manager e as "
+                    "referências na API e no worker. Não use sua senha Apple nem "
+                    "substitua a chave existente sem recuperar os snapshots antigos."
+                ),
+            }
         return {
             "ready": False,
             "code": "ICLOUD_SESSION_KEY_UNAVAILABLE",
             "message": (
-                "A chave técnica de criptografia iCloud não está disponível para a API. "
-                "Corrija o acesso ao Secret Manager no workflow GCP. "
-                "Isso não tem relação com o tamanho da sua senha Apple."
+                "A chave AES do iCloud não chegou à API. Verifique a referência "
+                "ao Secret Manager e as permissões do serviço no GCP. "
+                "O tamanho da senha Apple não tem relação com essa chave."
             ),
         }
     return {
