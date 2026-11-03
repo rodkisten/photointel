@@ -31,3 +31,10 @@ export type SecretResult = {
   dispatches: Array<{ file: string; status: 'queued' | 'failed' }>;
   manual: string[];
 };
+export type SecretActivation = {
+  ok: boolean;
+  name: string;
+  activated_version: string;
+  dispatches: Array<{ file: string; status: 'queued' | 'failed' }>;
+  manual: string[];
+};
