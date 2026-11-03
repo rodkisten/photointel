@@ -18,7 +18,9 @@ export function Library() {
     return {
       sort,
       limit: 90,
-      ...(filters.length ? { filter: filters.length === 1 ? filters[0] : { op: 'and', children: filters } } : {}),
+      ...(filters.length
+        ? { filter: filters.length === 1 ? filters[0] : { op: 'and', children: filters } }
+        : {}),
     };
   }, [sort, media, preview]);
   function update(key: string, value: string) {
