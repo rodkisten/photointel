@@ -139,7 +139,16 @@ async def control_queue(
                 batch.status = "queued"
         for batch_id in sorted(batch_ids, key=str):
             await refresh_batch(session, batch_id)
-    dispatch = await _wake(session, touched) if action == "resume" else False
+    if action == "resume":
+        # Jobs created while the queue was paused are still queued, not
+        # "touched" by the resume transition. Wake them as well.
+        ready = list((await session.scalars(
+            select(Job).where(Job.status.in_(("queued", "retrying")))
+            .order_by(Job.created_at.desc(), Job.id.desc()).limit(200)
+        )).all())
+        dispatch = await _wake(session, [*touched, *ready])
+    else:
+        dispatch = False
     audit(session, identity, "jobs.queue." + action, affected=len(touched))
     await session.commit()
     await _after_commit(background_tasks, dispatch)
