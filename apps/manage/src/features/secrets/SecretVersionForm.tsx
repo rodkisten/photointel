@@ -26,7 +26,7 @@ export function SecretVersionForm({
   const [visible, setVisible] = useState(false);
   const [multiline, setMultiline] = useState(false);
   const [autoApply, setAutoApply] = useState(true);
-  const [updateReferences, setUpdateReferences] = useState(true);
+  const [updateReferences, setUpdateReferences] = useState(secret.name !== 'photointel-session-aead-key');
   const [confirm, setConfirm] = useState(false);
   const isIcloud = secret.name === 'photointel-session-aead-key';
   const pinned = secret.references.filter((ref) => ref.scope !== 'expected' && ref.version);
