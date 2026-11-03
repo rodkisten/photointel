@@ -14,6 +14,10 @@ if [[ " $* " == *" add-iam-policy-binding "* && " $* " != *" --condition=None "*
   echo "Adding a binding without specifying a condition to a policy containing conditions is prohibited in non-interactive mode." >&2
   exit 1
 fi
+if [[ "${FAKE_FIREBASE_DENIED:-false}" == true && "$*" == *"projects add-iam-policy-binding photointel-firebase"* ]]; then
+  echo 'PERMISSION_DENIED: Firebase target project IAM change denied' >&2
+  exit 1
+fi
 case "$*" in
   "iam workload-identity-pools providers describe "*)
     if [[ "${FAKE_WIF_DENIED:-false}" == true ]]; then echo 'PERMISSION_DENIED: WIF access denied' >&2; exit 1; fi
@@ -22,6 +26,7 @@ case "$*" in
   "auth list"*) echo fake-admin@testing.invalid; exit 0 ;;
   "services list"*)
     printf '%s\n' run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
+    if [[ "${FAKE_FCM_ENABLED:-false}" == true ]]; then printf '%s\n' fcm.googleapis.com; fi
     exit 0 ;;
   "artifacts repositories describe "*"--format=value(format)"*) echo DOCKER; exit 0 ;;
   "storage buckets describe "*"--format=value(location)"*) echo US; exit 0 ;;
@@ -146,5 +151,60 @@ fi
 if grep -q "iam service-accounts create" "$GCLOUD_TRACE"; then
   echo "ERROR: IAM-only mode created SA after inspection failed" >&2; exit 1
 fi
-echo "Bootstrap offline tests passed: plan, idempotence, Manage read-only grants/creation, IAM repair and denial."
+# Firebase lives in a different GCP project; only runtime api/jobs receive
+# the messaging role there. The permissions workflow also enables the FCM API
+# on sender and target, never creating broad resources or granting it to Manage.
+jq '.extra_environment.FCM_PROJECT_ID = "photointel-firebase" |
+    .extra_environment.FCM_JOB_EVENTS_ENABLED = "true"' \
+    "$ROOT/infra/gcp/config.example.json" > "$TMP/config-fcm.json"
+: > "$GCLOUD_TRACE"
+GCP_CONFIG_FILE="$TMP/config-fcm.json" BOOTSTRAP_MODE=permissions \
+  bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/fcm-permissions"
+for target in replace-project-id photointel-firebase; do
+  grep -F "services enable fcm.googleapis.com --project=$target" "$GCLOUD_TRACE" >/dev/null
+done
+for account in api jobs; do
+  grep -F 'projects add-iam-policy-binding photointel-firebase' "$GCLOUD_TRACE" |
+    grep -F -- "--member=serviceAccount:photointel-$account@replace-project-id.iam.gserviceaccount.com" |
+    grep -F -- '--role=roles/firebasecloudmessaging.admin' |
+    grep -Fq -- '--condition=None'
+done
+if grep -F 'roles/firebasecloudmessaging.admin' "$GCLOUD_TRACE" |
+   grep -Ev -- 'photointel-(api|jobs)@replace-project-id.iam.gserviceaccount.com' >/dev/null; then
+  echo "ERROR: unexpected service account granted FCM send permissions" >&2; exit 1
+fi
+if grep -F 'projects add-iam-policy-binding replace-project-id' "$GCLOUD_TRACE" |
+    grep -Fq 'roles/firebasecloudmessaging.admin'; then
+  echo "ERROR: FCM send role must only be granted in target Firebase project" >&2; exit 1
+fi
+if grep -E 'services enable|artifacts |storage |secrets create|providers update-oidc' "$GCLOUD_TRACE" |
+    grep -vF 'services enable fcm.googleapis.com' >/dev/null; then
+  echo "ERROR: FCM permissions mode provisioned unrelated infrastructure" >&2; exit 1
+fi
+: > "$GCLOUD_TRACE"
+FAKE_FCM_ENABLED=true GCP_CONFIG_FILE="$TMP/config-fcm.json" BOOTSTRAP_MODE=permissions \
+  bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/fcm-already-enabled"
+if grep -Fq 'services enable fcm.googleapis.com' "$GCLOUD_TRACE"; then
+  echo "ERROR: already-enabled FCM API unnecessarily enabled again" >&2; exit 1
+fi
+: > "$GCLOUD_TRACE"
+if FAKE_FIREBASE_DENIED=true GCP_CONFIG_FILE="$TMP/config-fcm.json" \
+  BOOTSTRAP_MODE=permissions bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/fcm-denied" 2>&1; then
+  echo "ERROR: Firebase project IAM permission denial ignored" >&2; exit 1
+fi
+grep -Fq 'resourcemanager.projects.setIamPolicy' "$TMP/fcm-denied"
+: > "$GCLOUD_TRACE"
+if GCP_CONFIG_FILE="$TMP/config-fcm.json" FCM_JOB_EVENTS_ENABLED=true \
+  BOOTSTRAP_MODE=plan bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/fcm-plan"; then
+  grep -Fq 'PLAN: FCM API' "$TMP/fcm-plan"
+fi
+if grep -Fq 'services enable fcm.googleapis.com' "$GCLOUD_TRACE"; then
+  echo "ERROR: Firebase plan mode mutated services" >&2; exit 1
+fi
+jq '.extra_environment.FCM_PROJECT_ID = "other-project"' "$TMP/config-fcm.json" > "$TMP/fcm-wrong-target.json"
+if GCP_CONFIG_FILE="$TMP/fcm-wrong-target.json" BOOTSTRAP_MODE=permissions \
+  bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/fcm-wrong-target" 2>&1; then
+  echo "ERROR: unapproved Firebase target was accepted" >&2; exit 1
+fi
+echo "Bootstrap offline tests passed: plan, idempotence, Manage IAM, FCM cross-project API/IAM and denial."
 
