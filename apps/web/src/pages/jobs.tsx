@@ -451,7 +451,7 @@ export function JobsPage() {
                     rel="noopener noreferrer"
                   >
                     <ExternalLink size={14} />
-                    Ver logs do job no GCP
+                    Ver logs do job no Manage
                   </a>
                   <button
                     type="button"
@@ -462,8 +462,7 @@ export function JobsPage() {
                     Copiar ID do job
                   </button>
                   <small>
-                    O link filtra os logs estruturados pelo ID do job e pelo correlation ID. Jobs antigos
-                    podem não ter identificadores nos logs.
+                    O Manage pesquisa pelo ID do job e pelo correlation ID, quando presentes. Jobs antigos podem não ter os identificadores registrados.
                   </small>
                 </div>
               </div>
