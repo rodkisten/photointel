@@ -251,10 +251,11 @@ export async function api(
       const data = await gh(env, base + '?per_page=100');
       return json({
         scope,
-        items: list(data, 'variables').map((entry) => ({
+        items: await Promise.all(list(data, 'variables').map(async (entry) => ({
           name: entry.name, value: entry.name === 'GCP_CONFIG_ENV' ? null : entry.value,
+          version: await digest(String(entry.value || '')),
           updated_at: entry.updated_at,
-        })),
+        }))),
       });
     }
     if (method === 'PUT') {
