@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "Preview, repair IAM and Manage identity, or reconcile all infrastructure"
+        description: "Preview, repair IAM (including Firebase FCM), or reconcile all infrastructure"
         type: choice
         required: true
         default: plan
