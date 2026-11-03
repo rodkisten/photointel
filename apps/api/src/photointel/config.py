@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     incremental_overlap_assets: int = Field(default=100, ge=1, le=10000)
     reconciliation_interval_hours: int = Field(default=168, ge=24, le=8760)
     ingestion_interval_minutes: int = Field(default=60, ge=5, le=10080)
+    auto_preview_repair_enabled: bool = True
+    auto_preview_repair_interval_minutes: int = Field(default=60, ge=10, le=10080)
+    auto_preview_repair_batch_size: int = Field(default=40, ge=1, le=250)
+    auto_preview_verify_batch_size: int = Field(default=15, ge=1, le=100)
+    auto_preview_repair_max_attempts_week: int = Field(default=3, ge=1, le=10)
     ingestion_import_limit: int = Field(default=100, ge=1, le=1_000_000)
     download_representation: Literal["medium", "thumb", "original"] = "medium"
     allow_original_fallback: bool = False

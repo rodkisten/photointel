@@ -46,6 +46,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
   const page = useApi<PreviewAuditPage>(
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
+  const automation = useApi<{ enabled: boolean }>('/v1/jobs/previews/automation', 60_000);
   const repair = useAction<{ created: boolean; message: string }>();
   const repairBatch = useAction<{
     scanned: number;
@@ -146,7 +147,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                <strong>Reparo em lote</strong>
+                <strong>Reparo em lote {automation.data?.enabled ? '· Automático' : ''}</strong>
                 <p className="field-help">
                   Enfileira até 100 fotos por vez em lotes de 25, respeitando jobs ativos, mídias bloqueadas e
                   os limites do worker. Nenhuma foto é considerada reparada antes de o processamento terminar.
