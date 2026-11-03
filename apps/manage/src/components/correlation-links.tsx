@@ -49,14 +49,10 @@ function ProviderLinks({ id }: { id: string }) {
     retry: false,
   });
   const sentry = correlationSentryUrl(id, meta?.sentry_org);
-  const gcp = correlationExplorerUrl(id, meta?.project);
-  const cloudflare = correlationCloudflareUrl(meta?.cloudflare_account_id);
   const links = [
     { title: 'Sentry · eventos com esta tag', url: sentry },
-    { title: 'Google Cloud · Logs Explorer', url: gcp },
-    { title: 'Cloudflare · Observability', url: cloudflare },
-    { title: 'Cloudflare · busca filtrada no Manage', url: correlationManageUrl(id, 'cloudflare') },
-    { title: 'GCP · busca filtrada no Manage', url: correlationManageUrl(id, 'gcp') },
+    { title: 'Cloudflare · logs no Manage', url: correlationManageUrl(id, 'cloudflare') },
+    { title: 'GCP · logs no Manage', url: correlationManageUrl(id, 'gcp') },
   ];
   return (
     <>
@@ -87,8 +83,7 @@ function ProviderLinks({ id }: { id: string }) {
         Copiar correlation ID
       </DropdownMenu.Item>
       <p className="px-3 pb-2 text-[11px] leading-4 text-slate-500">
-        Sentry pesquisa a tag correlation_id. Cloudflare abre o painel nativo;
-        a busca com ID pré-preenchido fica no Manage.
+        O Manage recebe o ID e abre o filtro do provedor selecionado.
       </p>
     </>
   );
