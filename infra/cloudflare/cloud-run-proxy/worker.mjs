@@ -109,9 +109,9 @@ font:15px/1.6 system-ui;display:grid;place-items:center;padding:20px">
 <h1>PhotoIntel temporariamente indisponível</h1>
 <p>O Cloudflare não conseguiu servir a interface. Os dados originais não foram alterados.</p>
 <p>Correlation ID: <code>${correlationId}</code></p>
-<a style="color:#bcd9bf" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages">
-Ver logs no Cloudflare</a>
-<p>Abra o Worker photointel, Observability, e filtre pelo correlation_id.</p>
+<a style="color:#bcd9bf" href="https://photos-manage.migos.club/?tab=logs&amp;source=cloudflare&amp;correlation=${encodeURIComponent(correlationId)}">
+Ver logs no Manage</a>
+<p>O Manage recebe o correlation ID para procurar o evento na Cloudflare.</p>
 <button type="button" onclick="location.reload()">Tentar novamente</button>
 </main></body></html>`;
   return new Response(html, {
