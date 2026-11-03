@@ -3201,3 +3201,9 @@ body {
 }
 
 /* Keep mobile layout fixes formatted by the shared frontend workflow. */
+
+@media (max-width: 720px) {
+  .jobs-drawer-job > .status {
+    flex: none;
+  }
+}
