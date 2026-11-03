@@ -65,7 +65,7 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-x-3 top-1/2 z-50 mx-auto max-w-md -trancarbon-y-1/2 rounded-2xl border border-[#34363b] bg-[#191b1e] p-5 shadow-2xl">
+        <Dialog.Content className="fixed inset-x-3 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2 rounded-2xl border border-[#34363b] bg-[#191b1e] p-5 shadow-2xl">
           <div className="flex justify-between gap-2">
             <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
             <Dialog.Close className="text-carbon-400">
