@@ -1,0 +1,26 @@
+name: "📦 Jobs Controls · One-time API Release"
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/temporary-jobs-control-production-dispatch.yml"
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    name: "🚀 Dispatch audited GCP production release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: "Request release of current main"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api -X POST "repos/$GH_REPO/actions/workflows/gcp-deploy.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[action]=release' \
+            -f 'inputs[migration_mode]=plan' \
+            -f 'inputs[migration_database]=unselected'
+          echo "Release dispatched; migrations were not requested."
