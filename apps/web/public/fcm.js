@@ -34,9 +34,11 @@ let registrationPromise = null;
 let currentInstallation = null;
 
 function emitState(state, message = '') {
-  window.dispatchEvent(new CustomEvent('photointel:fcm-state', {
-    detail: { state, message },
-  }));
+  window.dispatchEvent(
+    new CustomEvent('photointel:fcm-state', {
+      detail: { state, message },
+    }),
+  );
 }
 
 async function syncInstallation(installationId) {
