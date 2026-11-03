@@ -17,6 +17,9 @@ describe('bounded provider log queries', () => {
     expect(filter).toContain('SEARCH("' + correlation + '") OR SEARCH("' + job + '")');
     expect(filter).toContain('resource.type="cloud_run_job"');
     expect(filter).toContain('2026-11-03T10:45:00.000Z');
+    const exact = gcpLogFilter(parseLogRequest(new URLSearchParams({ entry: 'insert-9876', minutes: '15' }), now));
+    expect(exact).toContain('insertId="insert-9876"');
+    expect(exact).not.toContain('severity>=WARNING');
   });
   it('does not allow query injection, invalid IDs or excessive windows', () => {
     for (const params of [
