@@ -288,14 +288,42 @@ export function logsExplorer(env: Env, correlation: string): string {
     (env.GCP_PROJECT_ID || 'photointel')
   );
 }
+/** Cloud Logging can supply JSON, text, proto or HTTP-only entries. */
+function hasLogBody(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return true;
+}
+
 export function mapCloudLogs(items: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(items)) return [];
-  return items.slice(0, 70).map((e: any) => ({
-    timestamp: e.timestamp,
-    severity: e.severity,
-    resource: e.resource?.type,
-    service: e.resource?.labels?.service_name || e.resource?.labels?.job_name,
-    message: redact(e.jsonPayload || e.textPayload || {}).slice(0, 10000),
-    insertId: e.insertId,
-  }));
+  return items.slice(0, 70).map((e: any) => {
+    // A missing JSON payload must never become a visible empty {} tree.
+    const payload = [e.jsonPayload, e.textPayload, e.protoPayload].find(hasLogBody);
+    const http = e.httpRequest;
+    const fallback = hasLogBody(http)
+      ? {
+          httpRequest: {
+            method: http.requestMethod,
+            status: http.status,
+            latency: http.latency,
+            responseSize: http.responseSize,
+            protocol: http.protocol,
+            requestUrl: http.requestUrl,
+          },
+          operation: e.operation,
+          sourceLocation: e.sourceLocation,
+        }
+      : '';
+    const message = payload ?? fallback;
+    return {
+      timestamp: e.timestamp,
+      severity: e.severity,
+      resource: e.resource?.type,
+      service: e.resource?.labels?.service_name || e.resource?.labels?.job_name,
+      message: hasLogBody(message) ? redact(message).slice(0, 20000) : '',
+      insertId: e.insertId,
+    };
+  });
 }
