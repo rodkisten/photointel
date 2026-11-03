@@ -238,7 +238,7 @@ describe('private API and media', () => {
     fireEvent.error(screen.getByRole('img'));
     await user.click(screen.getByRole('button', { name: 'Ações da prévia' }));
     await user.click(screen.getByRole('button', { name: 'Inspecionar erro de mídia' }));
-    expect(await screen.findByRole('link', { name: 'Ver logs no GCP' })).toBeVisible();
+    expect(await screen.findByRole('link', { name: 'Ver logs no Manage' })).toBeVisible();
     expect(screen.getByText('NOT_FOUND')).toBeVisible();
   });
 

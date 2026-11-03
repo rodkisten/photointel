@@ -256,6 +256,7 @@ export function JobsDrawer({ hidden = false }: { hidden?: boolean }) {
                       typeof job.error_details?.correlation_id === 'string'
                         ? job.error_details.correlation_id
                         : undefined,
+                      job.finished_at || job.started_at || job.created_at,
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
