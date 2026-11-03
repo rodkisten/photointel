@@ -463,7 +463,8 @@ export function JobsPage() {
                     Copiar ID do job
                   </button>
                   <small>
-                    O Manage pesquisa pelo ID do job e pelo correlation ID, quando presentes. Jobs antigos podem não ter os identificadores registrados.
+                    O Manage pesquisa pelo ID do job e pelo correlation ID, quando presentes. Jobs antigos
+                    podem não ter os identificadores registrados.
                   </small>
                 </div>
               </div>

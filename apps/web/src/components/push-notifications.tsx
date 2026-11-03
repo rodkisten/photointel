@@ -38,10 +38,9 @@ export function PushNotifications() {
       const result = await request<{ sent: number }>('/v1/push/test', json('POST'));
       useUi.getState().notify(`Teste enviado para ${result.sent} dispositivo(s).`, 'success');
     } catch (error) {
-      useUi.getState().notify(
-        error instanceof Error ? error.message : 'Não foi possível enviar o teste FCM.',
-        'error',
-      );
+      useUi
+        .getState()
+        .notify(error instanceof Error ? error.message : 'Não foi possível enviar o teste FCM.', 'error');
     } finally {
       setTesting(false);
     }

@@ -62,7 +62,8 @@ export function DiagnosticActions({ incident, error }: { incident: Diagnostic; e
             Copiar filtro do GCP
           </button>
           <small>
-            O Manage pesquisa automaticamente o incidente. O filtro do GCP fica disponível para uma consulta avançada, se necessário.
+            O Manage pesquisa automaticamente o incidente. O filtro do GCP fica disponível para uma consulta
+            avançada, se necessário.
           </small>
         </>
       )}

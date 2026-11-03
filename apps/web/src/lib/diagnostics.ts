@@ -104,14 +104,23 @@ export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagno
 /** Centralized, URL-addressable investigations. Never include messages, stack traces or credentials. */
 export function manageLogsUrl(
   source: 'gcp' | 'cloudflare',
-  context: { correlation?: string; job?: string; jobType?: string; ray?: string; event?: string; at?: string } = {},
+  context: {
+    correlation?: string;
+    job?: string;
+    jobType?: string;
+    ray?: string;
+    event?: string;
+    at?: string;
+  } = {},
 ): string {
   const url = new URL('https://photos-manage.migos.club/');
   url.searchParams.set('tab', 'logs');
   url.searchParams.set('source', source);
-  if (context.correlation && UUID.test(context.correlation)) url.searchParams.set('correlation', context.correlation);
+  if (context.correlation && UUID.test(context.correlation))
+    url.searchParams.set('correlation', context.correlation);
   if (context.job && UUID.test(context.job)) url.searchParams.set('job', context.job);
-  if (context.jobType && /^[a-z0-9_]{1,48}$/.test(context.jobType)) url.searchParams.set('job_type', context.jobType);
+  if (context.jobType && /^[a-z0-9_]{1,48}$/.test(context.jobType))
+    url.searchParams.set('job_type', context.jobType);
   if (context.ray && /^[a-f0-9-]{8,64}$/i.test(context.ray)) url.searchParams.set('ray', context.ray);
   if (context.event && /^[a-f0-9]{32}$/i.test(context.event)) url.searchParams.set('event', context.event);
   if (context.at && !Number.isNaN(Date.parse(context.at))) {
@@ -154,12 +163,7 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
 }
 
 /** Directly opens a job-scoped investigation in Manage, including historical jobs. */
-export function jobLogsUrl(
-  jobType: string,
-  jobId?: string,
-  correlationId?: string,
-  at?: string,
-): string {
+export function jobLogsUrl(jobType: string, jobId?: string, correlationId?: string, at?: string): string {
   return manageLogsUrl('gcp', {
     job: jobId,
     correlation: correlationId,
