@@ -71,7 +71,8 @@ export function logLinkPath(link: LogLink): string {
     ['entry', link.entry],
     ['at', link.at],
     ['search', link.search],
-  ]) if (value) params.set(key, value);
+  ])
+    if (value) params.set(key, value);
   params.set('minutes', link.minutes);
   return '/?' + params.toString();
 }

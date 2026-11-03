@@ -83,27 +83,60 @@ button:disabled {
   }
 }
 
-
 /* Manage mobile containment: JSON viewers may never expand the app viewport. */
 html,
 body,
-#root { width: 100%; min-width: 0; max-width: 100%; }
+#root {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
 html,
-body { overflow-x: clip; }
+body {
+  overflow-x: clip;
+}
 main,
 main > *,
 [data-slot='scroll-area'],
-[data-slot='scroll-area-viewport'] { min-width: 0; max-width: 100%; }
-[data-slot='scroll-area-viewport'] > div { min-width: 0 !important; max-width: 100% !important; }
-.correlation-popover { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-.correlation-trigger { vertical-align: baseline; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+[data-slot='scroll-area-viewport'] {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-slot='scroll-area-viewport'] > div {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+.correlation-popover {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.correlation-trigger {
+  vertical-align: baseline;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
 @media (max-width: 767px) {
-  main { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
+  main {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
   main .flex.items-start.justify-between,
-  main .flex.items-start.justify-between > :first-child { min-width: 0; }
-  input, textarea, select { min-width: 0; max-width: 100%; }
-  .correlation-popover { max-width: calc(100vw - 24px); }
-  pre, code { overflow-wrap: anywhere; }
+  main .flex.items-start.justify-between > :first-child {
+    min-width: 0;
+  }
+  input,
+  textarea,
+  select {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .correlation-popover {
+    max-width: calc(100vw - 24px);
+  }
+  pre,
+  code {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Six mobile tabs: retain independent hit areas and legible labels. */

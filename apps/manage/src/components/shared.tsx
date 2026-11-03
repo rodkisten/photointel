@@ -69,7 +69,10 @@ export function IssueBanner({ error, className }: { error: unknown; className?: 
   return (
     <div
       role="alert"
-      className={cn("flex items-start gap-2 rounded-xl border border-red-900/50 bg-red-950/25 p-3 text-sm text-red-200", className)}
+      className={cn(
+        'flex items-start gap-2 rounded-xl border border-red-900/50 bg-red-950/25 p-3 text-sm text-red-200',
+        className,
+      )}
     >
       <AlertCircle size={17} className="mt-0.5 shrink-0" />
       <div>

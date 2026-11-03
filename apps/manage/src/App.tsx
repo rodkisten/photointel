@@ -1,6 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, CloudCog, Code2, KeyRound, Logs, Settings2, Shield, Workflow, Images, Apple } from 'lucide-react';
+import {
+  Activity,
+  CloudCog,
+  Code2,
+  KeyRound,
+  Logs,
+  Settings2,
+  Shield,
+  Workflow,
+  Images,
+  Apple,
+} from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
 import { IssueBanner, Spinner } from './components/shared';
@@ -120,7 +131,12 @@ export default function App() {
       {/* Top Header */}
       <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <button type="button" onClick={() => navigate('overview')} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
+          <button
+            type="button"
+            onClick={() => navigate('overview')}
+            aria-label="Ir para a home do Manage"
+            className="flex items-center gap-3 text-left"
+          >
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-slate-200 text-slate-900 shadow-sm">
               <CloudCog size={20} />
             </div>
@@ -131,7 +147,11 @@ export default function App() {
           </button>
 
           <div className="flex items-center gap-3 text-xs text-slate-400">
-            <a href="https://photos.migos.club/" className="inline-flex items-center gap-1 rounded-lg border border-slate-800 px-2.5 py-2 text-xs text-slate-300 hover:bg-slate-900" aria-label="Abrir PhotoIntel">
+            <a
+              href="https://photos.migos.club/"
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-800 px-2.5 py-2 text-xs text-slate-300 hover:bg-slate-900"
+              aria-label="Abrir PhotoIntel"
+            >
               <Images size={16} /> <span className="hidden sm:inline">Fotos</span>
             </a>
             <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>

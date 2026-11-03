@@ -18,7 +18,11 @@ export function ICloudPage() {
   const gates = useApi<VerificationGates>('/v1/verification/gates');
   const action = useAction();
   const connectionTest = useAction<{
-    state: string; valid: boolean; reauth_required: boolean; checked_at: string; message: string;
+    state: string;
+    valid: boolean;
+    reauth_required: boolean;
+    checked_at: string;
+    message: string;
   }>();
   const autoTested = useRef(false);
   useEffect(() => {
@@ -72,7 +76,8 @@ export function ICloudPage() {
           <Cloud size={16} />
         </div>
         <p className="muted">
-          Verifica a sessão criptografada atual diretamente na Apple, sem baixar fotos e sem solicitar sua senha.
+          Verifica a sessão criptografada atual diretamente na Apple, sem baixar fotos e sem solicitar sua
+          senha.
         </p>
         <div className="header-actions" style={{ marginTop: 12 }}>
           <Button
@@ -84,13 +89,15 @@ export function ICloudPage() {
             {connectionTest.isPending ? 'Verificando com a Apple…' : 'Testar sessão iCloud agora'}
           </Button>
           <Button asChild variant="outline">
-            <a href="https://photos-manage.migos.club/?tab=icloud">
-              Diagnóstico e renovação no Manage
-            </a>
+            <a href="https://photos-manage.migos.club/?tab=icloud">Diagnóstico e renovação no Manage</a>
           </Button>
         </div>
         {connectionTest.data && (
-          <div className={connectionTest.data.valid ? 'notice' : 'notice warning'} role="status" style={{ marginTop: 12 }}>
+          <div
+            className={connectionTest.data.valid ? 'notice' : 'notice warning'}
+            role="status"
+            style={{ marginTop: 12 }}
+          >
             {connectionTest.data.message}
           </div>
         )}

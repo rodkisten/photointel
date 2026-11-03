@@ -6,7 +6,8 @@ const job = '510e985c-fb17-4294-ac63-42b7ac1c1b3c';
 
 describe('Manage log URL contract', () => {
   it('opens the requested provider and keeps all exact identifiers', () => {
-    const params = '?tab=logs&source=gcp&correlation=' + correlation + '&job=' + job + '&job_type=thumbnail_generate';
+    const params =
+      '?tab=logs&source=gcp&correlation=' + correlation + '&job=' + job + '&job_type=thumbnail_generate';
     const link = readLogLink(params);
     expect(link.source).toBe('gcp');
     expect(link.correlation).toBe(correlation);
@@ -33,7 +34,9 @@ describe('Manage log URL contract', () => {
   });
   it('keeps a bounded event-time anchor and supports plain correlation links', () => {
     const at = new Date(Date.now() - 60000).toISOString();
-    const link = readLogLink('?source=cloudflare&correlation=' + correlation + '&at=' + encodeURIComponent(at));
+    const link = readLogLink(
+      '?source=cloudflare&correlation=' + correlation + '&at=' + encodeURIComponent(at),
+    );
     expect(link.at).toBe(at);
     expect(link.minutes).toBe('30');
     expect(apiLogParams(link, primaryTerm(link)).get('at')).toBe(at);

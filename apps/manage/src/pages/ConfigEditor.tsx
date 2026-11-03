@@ -125,9 +125,28 @@ export function ConfigEditor() {
               <span>CodeMirror 6 · {detectEnvironmentFormat(editor) === 'json' ? 'JSON' : 'dotenv'}</span>
               <span>{editor.split(/\r?\n/).length} linhas · comentários preservados</span>
             </div>
-            <div className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-800 p-1" role="group" aria-label="Modo do editor">
-              <Button type="button" size="sm" variant={editorMode === 'code' ? 'secondary' : 'ghost'} onClick={() => setEditorMode('code')}>Código</Button>
-              <Button type="button" size="sm" variant={editorMode === 'fields' ? 'secondary' : 'ghost'} onClick={() => setEditorMode('fields')} disabled={detectEnvironmentFormat(editor) === 'json'}>Chave e valor</Button>
+            <div
+              className="inline-flex flex-wrap gap-1 rounded-lg border border-slate-800 p-1"
+              role="group"
+              aria-label="Modo do editor"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant={editorMode === 'code' ? 'secondary' : 'ghost'}
+                onClick={() => setEditorMode('code')}
+              >
+                Código
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={editorMode === 'fields' ? 'secondary' : 'ghost'}
+                onClick={() => setEditorMode('fields')}
+                disabled={detectEnvironmentFormat(editor) === 'json'}
+              >
+                Chave e valor
+              </Button>
             </div>
             {editorMode === 'fields' && detectEnvironmentFormat(editor) === 'dotenv' ? (
               <DotenvFields value={editor} onChange={setEditor} />

@@ -134,7 +134,8 @@ function Highlight({
   correlationKey?: boolean;
 }) {
   const uuid = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
-  const labelled = /(?:correlation[_-]?id|correlationId)["']?\s*[:=]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
+  const labelled =
+    /(?:correlation[_-]?id|correlationId)["']?\s*[:=]\s*["']?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi;
   const matches: Array<{ id: string; start: number; end: number }> = [];
   if (correlationKey) {
     for (const match of text.matchAll(uuid)) {
@@ -153,7 +154,9 @@ function Highlight({
   for (const match of matches.slice(0, 40)) {
     if (match.start < cursor) continue;
     if (match.start > cursor) {
-      parts.push(<PlainHighlight key={'text-' + cursor} text={text.slice(cursor, match.start)} pattern={pattern} />);
+      parts.push(
+        <PlainHighlight key={'text-' + cursor} text={text.slice(cursor, match.start)} pattern={pattern} />,
+      );
     }
     parts.push(<CorrelationPopover key={'id-' + match.start} id={match.id} />);
     cursor = match.end;
@@ -222,7 +225,11 @@ function Node({ name, value, pattern, query, depth, defaultExpandDepth, path }: 
             </button>
           ) : (
             <span className={syntaxTone}>
-              <Highlight text={primitiveString} pattern={pattern} correlationKey={Boolean(name && isCorrelationKey(name))} />
+              <Highlight
+                text={primitiveString}
+                pattern={pattern}
+                correlationKey={Boolean(name && isCorrelationKey(name))}
+              />
             </span>
           )}
         </span>

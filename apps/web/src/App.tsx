@@ -149,16 +149,33 @@ function Shell() {
             <ChevronRight size={13} />
             <strong>{current?.label ?? 'Biblioteca'}</strong>
           </div>
-          <a className="topbar-manage-link" href="https://photos-manage.migos.club/" title="Abrir o centro de gestão" aria-label="Abrir Manage">
-            <ExternalLink size={15} /><span>Manage</span>
+          <a
+            className="topbar-manage-link"
+            href="https://photos-manage.migos.club/"
+            title="Abrir o centro de gestão"
+            aria-label="Abrir Manage"
+          >
+            <ExternalLink size={15} />
+            <span>Manage</span>
           </a>
           {needsICloudLogin && (
-            <a className="topbar-icloud-alert" href="https://photos-manage.migos.club/?tab=icloud" title="Verificar sessão iCloud">
+            <a
+              className="topbar-icloud-alert"
+              href="https://photos-manage.migos.club/?tab=icloud"
+              title="Verificar sessão iCloud"
+            >
               iCloud · reconectar
             </a>
           )}
           <div className="topbar-tools">
-            <button className="topbar-tools-trigger" type="button" aria-expanded={toolsOpen} aria-haspopup="true" aria-label="Notificações e ferramentas" onClick={() => setToolsOpen(!toolsOpen)}>
+            <button
+              className="topbar-tools-trigger"
+              type="button"
+              aria-expanded={toolsOpen}
+              aria-haspopup="true"
+              aria-label="Notificações e ferramentas"
+              onClick={() => setToolsOpen(!toolsOpen)}
+            >
               <Bell size={17} />
             </button>
             {toolsOpen && (

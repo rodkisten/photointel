@@ -59,36 +59,45 @@ export async function api(
     const [cloud, runs] = await Promise.allSettled([
       gcp(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
         resourceNames: ['projects/' + project],
-        filter: '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision") ' +
-          'AND timestamp>="' + new Date(Date.now() - 86400_000).toISOString() + '" ' +
+        filter:
+          '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision") ' +
+          'AND timestamp>="' +
+          new Date(Date.now() - 86400_000).toISOString() +
+          '" ' +
           'AND (SEARCH("icloud") OR SEARCH("apple") OR SEARCH("auth_expired"))',
         orderBy: 'timestamp desc',
         pageSize: 30,
       }),
       gh(env, '/actions/workflows/icloud-setup.yml/runs?per_page=5'),
     ]);
-    const events = cloud.status === 'fulfilled'
-      ? mapCloudLogs((cloud.value as { entries?: unknown }).entries)
-      : [];
+    const events =
+      cloud.status === 'fulfilled' ? mapCloudLogs((cloud.value as { entries?: unknown }).entries) : [];
     const sanitized = events.map((event) => ({
       timestamp: event.timestamp,
       service: event.service,
       severity: event.severity,
       message: redact(event.message).slice(0, 450),
     }));
-    const suspected = sanitized.some((item) => /ICLOUD_AUTH_EXPIRED|2fa|session.expired|authentication.failed|reauth/i.test(String(item.message)));
+    const suspected = sanitized.some((item) =>
+      /ICLOUD_AUTH_EXPIRED|2fa|session.expired|authentication.failed|reauth/i.test(String(item.message)),
+    );
     return json({
       checked_at: new Date().toISOString(),
       configuration: { project, region: env.GCP_REGION || 'us-central1' },
       apple_probe: 'not_performed',
       apple_session: 'unknown',
       recent_events: sanitized,
-      preflight_runs: runs.status === 'fulfilled'
-        ? list(runs.value, 'workflow_runs').map((run) => ({
-          id: run.id, name: run.name, status: run.status, conclusion: run.conclusion,
-          created_at: run.created_at, html_url: run.html_url,
-        }))
-        : [],
+      preflight_runs:
+        runs.status === 'fulfilled'
+          ? list(runs.value, 'workflow_runs').map((run) => ({
+              id: run.id,
+              name: run.name,
+              status: run.status,
+              conclusion: run.conclusion,
+              created_at: run.created_at,
+              html_url: run.html_url,
+            }))
+          : [],
       suggest_reauth: suspected,
       reason: suspected
         ? 'Os logs mostram indícios de sessão expirada. Recomenda-se testar e renovar a autenticação no terminal seguro.'
@@ -244,41 +253,57 @@ export async function api(
     const scope = url.searchParams.get('scope') || 'environment';
     if (scope !== 'environment' && scope !== 'repository')
       throw new ApiError(422, 'VARIABLE_SCOPE', 'Escolha repositório ou environment');
-    const base = scope === 'repository'
-      ? '/actions/variables'
-      : '/environments/' + encodeURIComponent(env.GITHUB_ENVIRONMENT || 'production') + '/variables';
+    const base =
+      scope === 'repository'
+        ? '/actions/variables'
+        : '/environments/' + encodeURIComponent(env.GITHUB_ENVIRONMENT || 'production') + '/variables';
     if (method === 'GET') {
       const data = await gh(env, base + '?per_page=100');
       return json({
         scope,
-        items: await Promise.all(list(data, 'variables').map(async (entry) => ({
-          name: entry.name, value: entry.name === 'GCP_CONFIG_ENV' ? null : entry.value,
-          version: await digest(String(entry.value || '')),
-          updated_at: entry.updated_at,
-        }))),
+        items: await Promise.all(
+          list(data, 'variables').map(async (entry) => ({
+            name: entry.name,
+            value: entry.name === 'GCP_CONFIG_ENV' ? null : entry.value,
+            version: await digest(String(entry.value || '')),
+            updated_at: entry.updated_at,
+          })),
+        ),
       });
     }
     if (method === 'PUT') {
       const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown }>(request, 130_000);
       const name = input.name;
       const value = input.value;
-      if (typeof name !== 'string' || !/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) ||
-        name === 'GCP_CONFIG_ENV' || typeof value !== 'string' ||
-        value.length > 120_000 || value.includes('\0') ||
-        /(?:github_pat_|ghp_|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----)/.test(value))
-        throw new ApiError(422, 'VARIABLE_VALUE', 'Nome ou valor inválido; use Secret Manager para credenciais');
+      if (
+        typeof name !== 'string' ||
+        !/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) ||
+        name === 'GCP_CONFIG_ENV' ||
+        typeof value !== 'string' ||
+        value.length > 120_000 ||
+        value.includes('\0') ||
+        /(?:github_pat_|ghp_|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----)/.test(value)
+      )
+        throw new ApiError(
+          422,
+          'VARIABLE_VALUE',
+          'Nome ou valor inválido; use Secret Manager para credenciais',
+        );
       const existing = await gh(env, base + '?per_page=100');
       const match = list(existing, 'variables').find((entry) => entry.name === name);
       if (match) {
-        if (typeof input.version !== 'string' || input.version !== await digest(String(match.value || '')))
+        if (typeof input.version !== 'string' || input.version !== (await digest(String(match.value || ''))))
           throw new ApiError(409, 'VARIABLE_CONFLICT', 'A variável foi alterada; recarregue antes de salvar');
         await gh(env, base + '/' + encodeURIComponent(name), 'PATCH', { name, value });
       } else {
-        if (input.version !== null) throw new ApiError(409, 'VARIABLE_CONFLICT', 'Nova variável exige versão vazia');
+        if (input.version !== null)
+          throw new ApiError(409, 'VARIABLE_CONFLICT', 'Nova variável exige versão vazia');
         await gh(env, base, 'POST', { name, value });
       }
       // No values in logs. Never dispatch workflows for unrelated GitHub variables.
-      console.log(JSON.stringify({ event: 'github_variable_updated', name, scope, operator: identity.email }));
+      console.log(
+        JSON.stringify({ event: 'github_variable_updated', name, scope, operator: identity.email }),
+      );
       return json({ ok: true, version: await digest(value) });
     }
   }

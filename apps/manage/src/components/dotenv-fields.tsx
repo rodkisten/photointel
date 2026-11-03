@@ -18,7 +18,10 @@ function findComment(raw: string): number {
   let quote = '';
   for (let index = 0; index < raw.length; index++) {
     const char = raw[index];
-    if (char === '\\' && quote === '"' && index + 1 < raw.length) { index++; continue; }
+    if (char === '\\' && quote === '"' && index + 1 < raw.length) {
+      index++;
+      continue;
+    }
     if ((char === '"' || char === "'") && (!quote || quote === char)) {
       quote = quote ? '' : char;
       continue;
@@ -36,24 +39,35 @@ export function parseDotenvFields(document: string): DotenvField[] {
     const commentAt = findComment(raw);
     const withSpacing = commentAt >= 0 ? raw.slice(0, commentAt) : raw;
     const value = withSpacing.trimEnd();
-    return [{
-      index, key: match[2], value, prefix: match[1], separator: match[3],
-      suffix: withSpacing.slice(value.length),
-      comment: commentAt >= 0 ? raw.slice(commentAt) : '',
-      lineEnding: match[5],
-    }];
+    return [
+      {
+        index,
+        key: match[2],
+        value,
+        prefix: match[1],
+        separator: match[3],
+        suffix: withSpacing.slice(value.length),
+        comment: commentAt >= 0 ? raw.slice(commentAt) : '',
+        lineEnding: match[5],
+      },
+    ];
   });
 }
 
 /** Replace exactly one assignment line; all other lines remain byte-for-byte intact. */
-export function updateDotenvField(document: string, index: number, patch: { key?: string; value?: string }): string {
+export function updateDotenvField(
+  document: string,
+  index: number,
+  patch: { key?: string; value?: string },
+): string {
   const lines = document.split('\n');
   const field = parseDotenvFields(document).find((item) => item.index === index);
   if (!field) return document;
   const key = patch.key ?? field.key;
   if (!/^[A-Za-z_][\w]*$/.test(key)) return document;
   const value = (patch.value ?? field.value).replace(/[\r\n]/g, '');
-  lines[index] = field.prefix + key + field.separator + value + field.suffix + field.comment + field.lineEnding;
+  lines[index] =
+    field.prefix + key + field.separator + value + field.suffix + field.comment + field.lineEnding;
   return lines.join('\n');
 }
 
@@ -75,34 +89,52 @@ export function DotenvFields({ value, onChange }: { value: string; onChange: (va
   return (
     <div className="space-y-3">
       <p className="text-xs leading-5 text-slate-400">
-        Edição estruturada: comentários, ordem, prefixo export, espaçamento e linhas em branco são preservados.
-        Para colar um .env completo, use a aba Código.
+        Edição estruturada: comentários, ordem, prefixo export, espaçamento e linhas em branco são
+        preservados. Para colar um .env completo, use a aba Código.
       </p>
       <div className="max-h-[min(58vh,520px)] space-y-2 overflow-y-auto pr-1">
         {fields.map((field) => (
-          <div key={field.index} className="grid min-w-0 grid-cols-[1fr_auto] gap-2 rounded-lg border border-slate-800 p-2 sm:grid-cols-[minmax(0,36%)_1fr_auto]">
+          <div
+            key={field.index}
+            className="grid min-w-0 grid-cols-[1fr_auto] gap-2 rounded-lg border border-slate-800 p-2 sm:grid-cols-[minmax(0,36%)_1fr_auto]"
+          >
             <Input
               aria-label={'Chave da linha ' + (field.index + 1)}
               value={field.key}
-              onChange={(event) => onChange(updateDotenvField(value, field.index, { key: event.target.value }))}
+              onChange={(event) =>
+                onChange(updateDotenvField(value, field.index, { key: event.target.value }))
+              }
               className="font-mono text-sm"
             />
             <Input
               aria-label={'Valor de ' + field.key}
               value={field.value}
-              onChange={(event) => onChange(updateDotenvField(value, field.index, { value: event.target.value }))}
+              onChange={(event) =>
+                onChange(updateDotenvField(value, field.index, { value: event.target.value }))
+              }
               className="col-start-1 min-w-0 font-mono text-sm sm:col-start-auto"
             />
             <Button
-              type="button" size="icon" variant="ghost"
+              type="button"
+              size="icon"
+              variant="ghost"
               aria-label={'Excluir variável ' + field.key}
               onClick={() => onChange(removeDotenvField(value, field.index))}
-            ><Trash2 size={15} /></Button>
-            {field.comment && <p className="col-span-full break-words font-mono text-xs text-slate-500">{field.comment}</p>}
+            >
+              <Trash2 size={15} />
+            </Button>
+            {field.comment && (
+              <p className="col-span-full break-words font-mono text-xs text-slate-500">{field.comment}</p>
+            )}
           </div>
         ))}
       </div>
-      <Button variant="outline" size="sm" type="button" onClick={() => onChange(appendDotenvField(value, 'NEW_KEY_' + (fields.length + 1)))}>
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        onClick={() => onChange(appendDotenvField(value, 'NEW_KEY_' + (fields.length + 1)))}
+      >
         <Plus size={15} /> Adicionar variável
       </Button>
     </div>

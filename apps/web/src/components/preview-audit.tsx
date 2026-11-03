@@ -47,18 +47,31 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
   const repair = useAction<{ created: boolean; message: string }>();
-  const repairBatch = useAction<{ scanned: number; queued: number; already_active: number; failed: number; next_cursor: string | null }>();
+  const repairBatch = useAction<{
+    scanned: number;
+    queued: number;
+    already_active: number;
+    failed: number;
+    next_cursor: string | null;
+  }>();
   const [batchRunning, setBatchRunning] = useState(false);
   const [nextRepairCursor, setNextRepairCursor] = useState<string | null | undefined>(undefined);
-  const [batchProgress, setBatchProgress] = useState({ scanned: 0, queued: 0, already_active: 0, failed: 0, batches: 0 });
+  const [batchProgress, setBatchProgress] = useState({
+    scanned: 0,
+    queued: 0,
+    already_active: 0,
+    failed: 0,
+    batches: 0,
+  });
 
   async function retryBatch() {
     setRepairError(null);
     setBatchRunning(true);
     let next = nextRepairCursor ?? null;
-    const totals = nextRepairCursor === undefined
-      ? { scanned: 0, queued: 0, already_active: 0, failed: 0, batches: 0 }
-      : { ...batchProgress };
+    const totals =
+      nextRepairCursor === undefined
+        ? { scanned: 0, queued: 0, already_active: 0, failed: 0, batches: 0 }
+        : { ...batchProgress };
     try {
       // A deliberate limit avoids an unbounded stream of external Apple downloads.
       for (let pageIndex = 0; pageIndex < 4; pageIndex++) {
@@ -145,14 +158,23 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                     onClick={() => void retryBatch()}
                   >
                     <RotateCcw size={14} />
-                    {batchRunning ? 'Solicitando lotes…' : nextRepairCursor ? 'Continuar reparo' : 'Reparar fotos em lote'}
+                    {batchRunning
+                      ? 'Solicitando lotes…'
+                      : nextRepairCursor
+                        ? 'Continuar reparo'
+                        : 'Reparar fotos em lote'}
                   </Button>
                   <span role="status" aria-live="polite" className="field-help">
-                    {batchProgress.scanned} verificadas · {batchProgress.queued} enfileiradas · {batchProgress.already_active} já ativas · {batchProgress.failed} bloqueadas/falhas
+                    {batchProgress.scanned} verificadas · {batchProgress.queued} enfileiradas ·{' '}
+                    {batchProgress.already_active} já ativas · {batchProgress.failed} bloqueadas/falhas
                   </span>
                 </div>
                 {batchProgress.failed > 0 && (
-                  <a href="https://photos-manage.migos.club/?tab=icloud" target="_blank" rel="noopener noreferrer">
+                  <a
+                    href="https://photos-manage.migos.club/?tab=icloud"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Diagnosticar conexão iCloud no Manage
                   </a>
                 )}

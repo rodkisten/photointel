@@ -26,8 +26,7 @@ export function correlationExplorerUrl(id: string, project = 'photointel'): stri
 
 export function correlationSentryUrl(id: string, org: string | undefined): string | null {
   if (!UUID.test(id) || !org || !ORG.test(org)) return null;
-  return 'https://' + org + '.sentry.io/issues/?query=' +
-    encodeURIComponent('tags[correlation_id]:' + id);
+  return 'https://' + org + '.sentry.io/issues/?query=' + encodeURIComponent('tags[correlation_id]:' + id);
 }
 
 export function correlationCloudflareUrl(accountId: string | undefined): string | null {
@@ -62,19 +61,21 @@ function ProviderLinks({ id }: { id: string }) {
       </div>
       <DropdownMenu.Separator className="my-1 h-px bg-slate-700/70" />
       {isPending && <p className="px-3 py-2 text-xs text-slate-400">Carregando integrações…</p>}
-      {links.filter((link) => link.url).map((link) => (
-        <DropdownMenu.Item key={link.title} asChild>
-          <a
-            href={link.url!}
-            target={link.url!.startsWith('/') ? '_self' : '_blank'}
-            rel="noopener noreferrer"
-            className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
-          >
-            <span>{link.title}</span>
-            <ExternalLink size={13} className="shrink-0" />
-          </a>
-        </DropdownMenu.Item>
-      ))}
+      {links
+        .filter((link) => link.url)
+        .map((link) => (
+          <DropdownMenu.Item key={link.title} asChild>
+            <a
+              href={link.url!}
+              target={link.url!.startsWith('/') ? '_self' : '_blank'}
+              rel="noopener noreferrer"
+              className="flex min-h-10 items-center justify-between gap-3 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
+            >
+              <span>{link.title}</span>
+              <ExternalLink size={13} className="shrink-0" />
+            </a>
+          </DropdownMenu.Item>
+        ))}
       <DropdownMenu.Item
         className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-xs text-slate-200 outline-none hover:bg-slate-800 focus:bg-slate-800"
         onSelect={() => void navigator.clipboard?.writeText(id)}

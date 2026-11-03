@@ -9,17 +9,17 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "run_worker_first": true,
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
   "observability": {
     "enabled": true,
-    "logs": { "enabled": true, "invocation_logs": false }
+    "logs": { "enabled": true, "invocation_logs": false },
   },
   "previews": {
     "vars": {
       "PHOTOINTEL_PREVIEW": "true",
       "FRONTEND_ORIGIN": "https://photos-preview.invalid",
-      "CLOUD_RUN_ORIGIN": "https://photointel-preview.run.app"
-    }
-  }
+      "CLOUD_RUN_ORIGIN": "https://photointel-preview.run.app",
+    },
+  },
 }

@@ -286,8 +286,11 @@ export function JobsPage() {
                   <a
                     className="job-name"
                     href={jobLogsUrl(
-                      item.job_type, item.id,
-                      typeof item.error_details?.correlation_id === 'string' ? item.error_details.correlation_id : undefined,
+                      item.job_type,
+                      item.id,
+                      typeof item.error_details?.correlation_id === 'string'
+                        ? item.error_details.correlation_id
+                        : undefined,
                       item.finished_at || item.started_at || item.created_at,
                     )}
                     target="_blank"
@@ -295,7 +298,9 @@ export function JobsPage() {
                     aria-label={'Investigar falha do job ' + item.id + ' no Manage'}
                     style={{ textAlign: 'left', color: 'inherit' }}
                   >
-                    <span className="job-icon"><Activity size={15} /></span>
+                    <span className="job-icon">
+                      <Activity size={15} />
+                    </span>
                     <span>
                       <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
                       <small>{item.id.slice(0, 8)} · falhou · abrir logs no Manage</small>
@@ -307,10 +312,14 @@ export function JobsPage() {
                     onClick={() => setJob(item)}
                     style={{ background: 'none', border: 0, padding: 0, textAlign: 'left', color: 'inherit' }}
                   >
-                    <span className="job-icon"><Activity size={15} /></span>
+                    <span className="job-icon">
+                      <Activity size={15} />
+                    </span>
                     <span>
                       <strong>{jobNames[item.job_type] ?? item.job_type}</strong>
-                      <small>{item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}</small>
+                      <small>
+                        {item.id.slice(0, 8)} · tentativa {item.attempts}/{item.maximum_attempts}
+                      </small>
                     </span>
                   </button>
                 )}
@@ -373,15 +382,22 @@ export function JobsPage() {
           <DetailList
             data={{
               throughput:
-                typeof stats.data?.jobs_per_second_observed === 'number' && stats.data.jobs_per_second_observed > 0
-                  ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(stats.data.jobs_per_second_observed) +
-                    ' jobs/s · janela ' + (stats.data.jobs_rate_window === '5min' ? '5 min' : '1 hora')
+                typeof stats.data?.jobs_per_second_observed === 'number' &&
+                stats.data.jobs_per_second_observed > 0
+                  ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 4 }).format(
+                      stats.data.jobs_per_second_observed,
+                    ) +
+                    ' jobs/s · janela ' +
+                    (stats.data.jobs_rate_window === '5min' ? '5 min' : '1 hora')
                   : 'Sem conclusões recentes',
               jobs_hour: number(stats.data?.jobs_completed_last_hour),
               average:
-                typeof stats.data?.average_job_duration_seconds === 'number' && Number(stats.data.duration_sample_size) > 0
-                  ? number(stats.data.average_job_duration_seconds) + ' s · ' +
-                    number(stats.data.duration_sample_size) + ' amostras (24h)'
+                typeof stats.data?.average_job_duration_seconds === 'number' &&
+                Number(stats.data.duration_sample_size) > 0
+                  ? number(stats.data.average_job_duration_seconds) +
+                    ' s · ' +
+                    number(stats.data.duration_sample_size) +
+                    ' amostras (24h)'
                   : 'Sem amostra de duração nas últimas 24h',
               pending: number(stats.data?.pending_processing),
               running: number(stats.data?.running_jobs),

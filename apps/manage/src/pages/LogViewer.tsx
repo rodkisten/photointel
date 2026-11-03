@@ -9,7 +9,15 @@ import { RunRow } from '../components/runs';
 import { api } from '../lib/client';
 import { date, cn, state } from '../lib/utils';
 import type { CloudLog, CfLog, Issue, Run } from '../types';
-import { apiLogParams, logLinkPath, primaryTerm, readLogLink, TERM, type LogLink, type LogSource } from '../log-deeplink';
+import {
+  apiLogParams,
+  logLinkPath,
+  primaryTerm,
+  readLogLink,
+  TERM,
+  type LogLink,
+  type LogSource,
+} from '../log-deeplink';
 
 type Source = LogSource;
 type ResponseData = {
@@ -63,9 +71,12 @@ export function LogViewer() {
   });
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    const linkedTerms = serverFilter === primaryTerm(link)
-      ? [link.correlation, link.job, link.ray, link.event, link.entry, link.search].filter(Boolean).map((term) => term.toLowerCase())
-      : [];
+    const linkedTerms =
+      serverFilter === primaryTerm(link)
+        ? [link.correlation, link.job, link.ray, link.event, link.entry, link.search]
+            .filter(Boolean)
+            .map((term) => term.toLowerCase())
+        : [];
     return (q.data?.items || []).filter((item) => {
       if (!needle) return true;
       const body = JSON.stringify(item).toLowerCase();
@@ -76,7 +87,17 @@ export function LogViewer() {
     const term = search.trim();
     if (term && !TERM.test(term)) return;
     if (term !== primaryTerm(link)) {
-      updateLink({ ...link, correlation: '', job: '', jobType: '', ray: '', event: '', entry: '', at: '', search: term });
+      updateLink({
+        ...link,
+        correlation: '',
+        job: '',
+        jobType: '',
+        ray: '',
+        event: '',
+        entry: '',
+        at: '',
+        search: term,
+      });
     }
     setServerFilter(term);
   };
@@ -88,7 +109,19 @@ export function LogViewer() {
             type="button"
             key={id}
             onClick={() => {
-              updateLink({ ...link, source: id, correlation: '', job: '', jobType: '', ray: '', event: '', entry: '', at: '', search: '', minutes: '30' });
+              updateLink({
+                ...link,
+                source: id,
+                correlation: '',
+                job: '',
+                jobType: '',
+                ray: '',
+                event: '',
+                entry: '',
+                at: '',
+                search: '',
+                minutes: '30',
+              });
               setServerFilter('');
               setSearch('');
             }}
@@ -294,7 +327,6 @@ export function LogViewer() {
                 </div>
               );
             })}
-
           </ScrollArea>
         </Card>
       )}

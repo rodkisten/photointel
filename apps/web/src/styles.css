@@ -2945,8 +2945,17 @@
     padding: 6px;
   }
 
-  .topbar-tools { position: relative; flex: none; margin-left: auto; }
-  .topbar-tools-trigger { border: 1px solid var(--gray-8); background: var(--gray-3); min-width: 36px; min-height: 36px; }
+  .topbar-tools {
+    position: relative;
+    flex: none;
+    margin-left: auto;
+  }
+  .topbar-tools-trigger {
+    border: 1px solid var(--gray-8);
+    background: var(--gray-3);
+    min-width: 36px;
+    min-height: 36px;
+  }
   .topbar-tools-dropdown {
     position: absolute;
     top: calc(100% + 9px);
@@ -2961,14 +2970,29 @@
     background: var(--surface-raised);
     box-shadow: 0 20px 45px rgb(0 0 0 / 55%);
   }
-  .topbar-icloud-alert { color: var(--gray-15); text-decoration: underline; text-underline-offset: 3px; }
-  .topbar-tools-dropdown .panel { margin-top: 12px !important; }
+  .topbar-icloud-alert {
+    color: var(--gray-15);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .topbar-tools-dropdown .panel {
+    margin-top: 12px !important;
+  }
   @media (max-width: 720px) {
     .topbar-manage-link span,
-    .topbar-icloud-alert { font-size: 0; }
-    .topbar-icloud-alert::after { content: 'iCloud'; font-size: 11px; }
-    .topbar-manage-link { padding: 4px; }
-    .connection { display: none; }
+    .topbar-icloud-alert {
+      font-size: 0;
+    }
+    .topbar-icloud-alert::after {
+      content: 'iCloud';
+      font-size: 11px;
+    }
+    .topbar-manage-link {
+      padding: 4px;
+    }
+    .connection {
+      display: none;
+    }
   }
 
   @media (min-width: 721px) {

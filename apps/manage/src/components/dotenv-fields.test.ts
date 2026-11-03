@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { appendDotenvField, parseDotenvFields, removeDotenvField, updateDotenvField } from './dotenv-fields';
 
 describe('lossless dotenv key-value editor', () => {
-  const source = '# production comments\n\nexport FIRST = "hello # world"  # inline\nSECOND=2\n# final comment\n';
+  const source =
+    '# production comments\n\nexport FIRST = "hello # world"  # inline\nSECOND=2\n# final comment\n';
   it('parses quoted hash signs and keeps original comments intact', () => {
     const fields = parseDotenvFields(source);
     expect(fields).toHaveLength(2);

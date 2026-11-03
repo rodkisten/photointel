@@ -329,7 +329,16 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                   </p>
                   <div className="mt-1 flex justify-between text-xs text-slate-600">
                     <span>{date(e.createTime)}</span>
-                    <External href={'/?tab=logs&source=gcp&search=' + encodeURIComponent(selectedJob) + '&at=' + encodeURIComponent(e.createTime) }>Logs no Manage</External>
+                    <External
+                      href={
+                        '/?tab=logs&source=gcp&search=' +
+                        encodeURIComponent(selectedJob) +
+                        '&at=' +
+                        encodeURIComponent(e.createTime)
+                      }
+                    >
+                      Logs no Manage
+                    </External>
                   </div>
                 </div>
               ))
