@@ -247,10 +247,11 @@ async def drain_job_notifications(*, limit: int = 200) -> dict[str, int | str]:
 
 
 async def safe_notify() -> None:
-    """Deliver the two independent providers in parallel after job commits."""
+    """Deliver independent push providers after commits, without blocking jobs."""
+    from photointel.services.fcm_notify import safe_notify as fcm_notify
     from photointel.services.telegram_notify import safe_notify as telegram_notify
 
-    await asyncio.gather(_safe_iphone_notify(), telegram_notify())
+    await asyncio.gather(_safe_iphone_notify(), telegram_notify(), fcm_notify())
 
 
 async def _safe_iphone_notify() -> None:
