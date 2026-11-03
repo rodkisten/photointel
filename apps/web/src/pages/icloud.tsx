@@ -1,5 +1,5 @@
 import { Cloud, Info, LockKeyhole, Pause, Play, ShieldCheck, Terminal } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAction, useApi } from '../api/client';
 import type { VerificationGates } from '../api/operations';
@@ -20,6 +20,13 @@ export function ICloudPage() {
   const connectionTest = useAction<{
     state: string; valid: boolean; reauth_required: boolean; checked_at: string; message: string;
   }>();
+  const autoTested = useRef(false);
+  useEffect(() => {
+    if (window.location.search.includes('test=1') && !autoTested.current) {
+      autoTested.current = true;
+      connectionTest.mutate({ url: '/v1/ingestion/connection-test' });
+    }
+  }, [connectionTest]);
   const [limit, setLimit] = useState(100);
   const [mode, setMode] = useState('backfill');
   const [continuous, setContinuous] = useState(false);
