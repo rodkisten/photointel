@@ -249,21 +249,50 @@ async def _publish(settings: Settings, result: dict[str, Any]) -> dict[str, Any]
     }
 
 
-async def start_login(settings: Settings, email: str, password: str) -> dict[str, Any]:
+def login_readiness(settings: Settings) -> dict[str, Any]:
+    """Expose only safe readiness flags, never Apple credentials or key material."""
     if not settings.icloud_account or not settings.icloud_library:
-        raise AppError(
-            ErrorCode.INVALID_REQUEST,
-            "Configure ICLOUD_ACCOUNT e ICLOUD_LIBRARY antes de autenticar.",
-            409,
-        )
+        return {
+            "ready": False,
+            "code": "ICLOUD_ACCOUNT_NOT_CONFIGURED",
+            "message": "Configure a conta e a biblioteca iCloud no ambiente de produção.",
+        }
     if settings.icloud_session_backend != "encrypted_object":
+        return {
+            "ready": False,
+            "code": "ICLOUD_SESSION_BACKEND_NOT_READY",
+            "message": "Configure o backend de sessões criptografadas antes do login.",
+        }
+    try:
+        encryption_key(settings)
+    except AppError:
+        return {
+            "ready": False,
+            "code": "ICLOUD_SESSION_KEY_UNAVAILABLE",
+            "message": (
+                "A chave técnica de criptografia iCloud não está disponível para a API. "
+                "Corrija o acesso ao Secret Manager no workflow GCP. "
+                "Isso não tem relação com o tamanho da sua senha Apple."
+            ),
+        }
+    return {
+        "ready": True,
+        "code": "READY",
+        "message": "Tudo pronto para entrar na Conta Apple e confirmar o código de dois fatores.",
+    }
+
+
+async def start_login(settings: Settings, email: str, password: str) -> dict[str, Any]:
+    # Check infrastructure *before* Apple receives the password and emits MFA.
+    # The required 32 bytes are the AES session key, NOT the Apple password.
+    state = login_readiness(settings)
+    if not state["ready"]:
         raise AppError(
-            ErrorCode.INVALID_REQUEST,
-            "Configure ICLOUD_SESSION_BACKEND=encrypted_object",
-            503,
+            state["code"], state["message"],
+            409 if state["code"] == "ICLOUD_ACCOUNT_NOT_CONFIGURED" else 503,
         )
     if not isinstance(password, str) or not 1 <= len(password) <= 512:
-        raise AppError(ErrorCode.INVALID_REQUEST, "Senha Apple ausente ou inválida", 422)
+        raise AppError(ErrorCode.INVALID_REQUEST, "Informe sua senha Apple", 422)
     try:
         result = await asyncio.wait_for(
             asyncio.to_thread(_begin_sync, settings, email, password), timeout=75,
