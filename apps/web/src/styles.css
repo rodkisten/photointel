@@ -1,8 +1,11 @@
 @import 'tailwindcss';
 @import './design-system.css';
 
+/* Native elements and typography. Tailwind utilities can override component styles. */
+@layer base {
 :root {
   font-family: var(--font-family-ui);
+  font-size: var(--text-16);
   color: var(--text-primary);
   background: var(--surface-base);
   font-synthesis: none;
@@ -68,12 +71,6 @@ h1 {
   letter-spacing: -1.1px;
 }
 
-@supports (font-size: calc(3vw * (18px / 16px))) {
-  h1 {
-    font-size: clamp(var(--text-25), calc(3vw * (var(--font-size-base) / 1rem)), var(--text-33));
-  }
-}
-
 h2 {
   font-size: var(--text-17);
   font-weight: 550;
@@ -92,7 +89,10 @@ p {
 small {
   font-size: var(--text-11);
 }
+}
 
+/* Source-compatible PhotoIntel component classes, all powered by @theme tokens. */
+@layer components {
 .muted {
   color: var(--muted);
   font-size: var(--text-13);
@@ -104,10 +104,6 @@ small {
   letter-spacing: 1.9px;
   color: var(--gray-13);
   margin-bottom: var(--space-3);
-}
-
-.sr-only {
-  @apply sr-only;
 }
 
 .skip-link {
@@ -122,17 +118,17 @@ small {
 }
 
 .app-shell {
-  @apply min-h-[100dvh];
+  @apply min-h-dvh;
 }
 
 .sidebar {
   @apply fixed flex flex-col;
   inset: 0 auto 0 0;
-  width: var(--sidebar-width);
+  @apply w-sidebar;
   background: var(--surface-sidebar);
   border-right: 1px solid var(--gray-6);
   padding: 27px var(--space-4);
-  z-index: var(--z-sidebar);
+  @apply z-sidebar;
 
   nav {
     @apply flex flex-col;
@@ -214,12 +210,12 @@ small {
 }
 
 .main-shell {
-  margin-left: var(--sidebar-width);
+  @apply ml-sidebar;
 }
 
 .topbar {
-  @apply flex items-center justify-between px-[35px];
-  height: var(--topbar-height);
+  @apply flex items-center justify-between px-page-gutter;
+  @apply h-topbar;
   border-bottom: 1px solid var(--gray-6);
   gap: var(--space-3);
 }
@@ -248,14 +244,13 @@ small {
   background: var(--gray-12);
 
   &.online {
-    background: var(--gray-13);
+    background: var(--state-success-text);
   }
 }
 
 main {
   @apply mx-auto outline-none;
-  padding: var(--page-gutter);
-  max-width: var(--page-max-width);
+  @apply p-page-gutter max-w-page-max;
 }
 
 .page-header {
@@ -275,7 +270,7 @@ main {
 
 .button {
   @apply inline-flex items-center justify-center whitespace-nowrap;
-  height: var(--button-height);
+  @apply h-button;
   gap: 7px;
   padding: 0 13px;
   border-radius: var(--radius-sm);
@@ -459,9 +454,9 @@ main {
 .status-completed,
 .status-verified,
 .status-valid {
-  color: var(--gray-14);
-  background: var(--gray-6);
-  border-color: var(--gray-9);
+  color: var(--state-success-text);
+  background: var(--state-success-bg);
+  border-color: var(--state-success-border);
 }
 
 .status-failed,
@@ -989,8 +984,8 @@ textarea.input {
 
 .dialog-overlay {
   @apply fixed inset-0 backdrop-blur-md;
-  background: var(--overlay-scrim);
-  z-index: var(--z-overlay);
+  @apply bg-scrim;
+  @apply z-overlay;
 }
 
 .dialog-content {
@@ -1001,7 +996,7 @@ textarea.input {
   border-radius: var(--radius-lg);
   width: min(520px, calc(100vw - 28px));
   padding: 23px;
-  z-index: var(--z-dialog);
+  @apply z-dialog;
 
   > .muted {
     margin-bottom: var(--space-5);
@@ -1476,7 +1471,7 @@ textarea.input {
   @apply fixed bottom-[25px] flex items-center shadow-2xl;
   left: calc(50% + 118px);
   transform: translateX(-50%);
-  z-index: var(--z-toast);
+  @apply z-toast;
   gap: var(--space-2-5);
   padding: var(--space-3) 15px;
   max-width: calc(100vw - 35px);
@@ -1738,7 +1733,7 @@ textarea.input {
 
   .bottom-nav {
     @apply fixed flex items-center justify-around inset-x-0 bottom-0 border-t backdrop-blur-md;
-    z-index: var(--z-navigation);
+    @apply z-navigation;
     height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
     padding: var(--space-1-5) 9px calc(7px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--surface-card) 95%, transparent);
@@ -2613,21 +2608,10 @@ textarea:focus-visible {
   input:not([type='checkbox']):not([type='radio']),
   select,
   textarea {
-    font-size: 16px !important;
+    font-size: max(16px, var(--text-12)) !important;
   }
 
-  .field > input:not([type='checkbox']):not([type='radio']),
-  .field > textarea,
-  .field > select,
-  input.input:not([type='checkbox']),
-  textarea.input {
-    --input-visual-scale: 0.875;
-    transform: scale(var(--input-visual-scale));
-    transform-origin: left top;
-    width: calc(100% / var(--input-visual-scale));
-    max-width: none;
-    margin-bottom: calc(-1 * (1 - var(--input-visual-scale)) * 40px);
-  }
+  /* iOS input sizes remain >= 16px without transform scaling. */
 
   input[type='checkbox'],
   input[type='radio'] {
@@ -3043,17 +3027,6 @@ body {
     right: auto;
   }
 
-  /* Safari: CSS transforms were expanding the inline field layout. */
-  .field > input:not([type='checkbox']):not([type='radio']),
-  .field > textarea,
-  .field > select,
-  input.input:not([type='checkbox']),
-  textarea.input {
-    transform: none;
-    width: 100%;
-    max-width: 100%;
-    margin-bottom: 0;
-  }
 
   /* Radix portal must cover the viewport, not retain the desktop left:50%. */
   .dialog-content.mobile-menu {
@@ -3206,4 +3179,5 @@ body {
   .jobs-drawer-job > .status {
     flex: none;
   }
+}
 }
