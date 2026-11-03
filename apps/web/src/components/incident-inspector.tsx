@@ -236,26 +236,22 @@ export function IncidentInspector() {
             </a>
           )}
           {source === 'gcp' && (
-            <>
-              <button type="button" onClick={() => copy(diagnosticLogsQuery(incident))}>
-                <ClipboardCopy size={15} />
-                Copiar filtro avançado
-              </button>
-              <a href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
-                <ExternalLink size={15} />
-                Abrir Google Cloud
-              </a>
-            </>
+            <button type="button" onClick={() => copy(diagnosticLogsQuery(incident))}>
+              <ClipboardCopy size={15} />
+              Copiar filtro avançado
+            </button>
           )}
+          <a href={diagnosticLogsUrl(incident)} target="_blank" rel="noopener noreferrer">
+            <ExternalLink size={15} />
+            Ver logs no Manage
+          </a>
           <button type="button" onClick={() => close()}>
             <RefreshCw size={15} />
             Voltar
           </button>
         </div>
         <p className="incident-help">
-          O campo de busca rápida do Google Cloud aceita apenas texto. Para filtros avançados, use o editor de
-          consultas, não a busca do topo. O inspetor acima dispensa ambas as etapas quando a API de logs está
-          disponível.
+          O Manage recebe o correlation ID e abre a investigação diretamente no provedor correspondente.
         </p>
       </div>
     </Dialog>
