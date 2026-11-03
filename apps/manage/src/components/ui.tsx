@@ -106,7 +106,7 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
     <input
       ref={ref}
       className={cn(
-        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors placeholder:text-carbon-500 focus-visible:border-carbon-500 md:text-sm',
+        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors placeholder:text-carbon-500 focus-visible:border-carbon-500 text-xs',
         className,
       )}
       {...props}
@@ -120,7 +120,7 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
     <select
       ref={ref}
       className={cn(
-        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors focus-visible:border-carbon-500 md:text-sm',
+        'flex h-10 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-white outline-none transition-colors focus-visible:border-carbon-500 text-xs',
         className,
       )}
       {...props}
