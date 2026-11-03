@@ -5,13 +5,13 @@ interface UiState {
   density: number;
   selected: Set<string>;
   selecting: boolean;
-  toast: { text: string; kind: 'success' | 'error'; incident?: Diagnostic; error?: Error } | null;
+  toast: { text: string; kind: 'success' | 'error' | 'info'; incident?: Diagnostic; error?: Error } | null;
   inspector: { incident: Diagnostic; error?: Error } | null;
   setDensity: (value: number) => void;
   toggle: (id: string) => void;
   clear: () => void;
   startSelection: () => void;
-  notify: (text: string, kind?: 'success' | 'error', incident?: Diagnostic, error?: Error) => void;
+  notify: (text: string, kind?: 'success' | 'error' | 'info', incident?: Diagnostic, error?: Error) => void;
   inspect: (incident: Diagnostic, error?: Error) => void;
   closeInspector: () => void;
   dismiss: () => void;

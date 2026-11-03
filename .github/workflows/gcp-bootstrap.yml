@@ -9,10 +9,16 @@ on:
       - 'infra/docker/**'
       - '.github/actions/gcp-config/**'
       - '.github/workflows/gcp-bootstrap.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/gcp/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/workflows/gcp-bootstrap.yml'
   workflow_dispatch:
     inputs:
       mode:
-        description: "Preview, repair IAM and Manage identity, or reconcile all infrastructure"
+        description: "Preview, repair IAM (including Firebase FCM), or reconcile all infrastructure"
         type: choice
         required: true
         default: plan
@@ -23,13 +29,13 @@ permissions:
 
 concurrency:
   # Push checks must not cancel or block manually authorized production operations.
-  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-bootstrap-push-check' || 'photointel-gcp-production' }}
+  group: ${{ github.event_name == 'workflow_dispatch' && 'photointel-gcp-production' || format('photointel-gcp-bootstrap-check-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
   push-check:
-    name: "🧪 GCP bootstrap plan (offline)"
-    if: github.event_name == 'push'
+    name: "🧪 GCP bootstrap and permissions (offline)"
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

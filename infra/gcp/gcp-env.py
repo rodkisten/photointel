@@ -107,7 +107,7 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
 
 
 def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, Any]:
-    """Accept Telegram fields and the public Manage Sentry DSN as top-level dotenv keys.
+    """Accept Telegram, Firebase and public Manage Sentry fields as dotenv keys.
 
     Top-level fields (decoded to lowercase) or the explicit EXTRA_ENVIRONMENT__
     prefix are supported. Canonical values live in extra_environment.
@@ -116,7 +116,8 @@ def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, An
     if not isinstance(extras, dict):
         return config
     for field in ("TELEGRAM_NOTIFICATION_API_TOKEN", "TELEGRAM_NOTIFICATION_URL",
-                  "TELEGRAM_NOTIFICATION_CHAT_ID", "MANAGE_SENTRY_DSN"):
+                  "TELEGRAM_NOTIFICATION_CHAT_ID", "MANAGE_SENTRY_DSN",
+                  "FCM_PROJECT_ID", "FCM_JOB_EVENTS_ENABLED"):
         # Dotenv's top-level names are lowercased by decode_config. JSON may
         # provide either spelling. The prefixed env key wins if both are set.
         for root_key in (field.lower(), field):
