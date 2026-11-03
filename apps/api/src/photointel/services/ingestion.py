@@ -648,6 +648,36 @@ class ICloudAdapter:
         album.offset = offset
         return iter(album.photos)
 
+    def fresh_photo(self, source_key: str, rank: int | None = None) -> Any | None:
+        """Fetch fresh CloudKit records after a signed media URL expires.
+
+        Never trust an index position alone: the photo ID must match. Old
+        manifests predate the saved rank, so give them a bounded lookup too.
+        This runs only on HTTP 410, not for ordinary successful downloads.
+        """
+        if self.library is None:
+            raise AppError(
+                ErrorCode.ICLOUD_ACCESS_DENIED,
+                "Biblioteca iCloud não conectada para renovar o recurso",
+                503,
+            )
+
+        def find(start: int, count: int) -> Any | None:
+            iterator = self.assets(start)
+            for _ in range(count):
+                candidate = next(iterator, None)
+                if candidate is None:
+                    break
+                if str(candidate.id) == source_key:
+                    return candidate
+            return None
+
+        if type(rank) is int and rank >= 0:
+            return find(max(0, rank - 48), 97)
+        # Legacy manifests have no rank. Cap this recovery to avoid an
+        # unbounded full-library scan for every failed media job.
+        return find(0, min(1000, self.settings.maximum_authorized_import_limit))
+
     def describe(self, photo: Any) -> RemoteAsset:
         """Read remote objects only on the blocking-adapter thread boundary."""
         from pyicloud_ipd.item_type import AssetItemType
@@ -757,11 +787,13 @@ class ICloudAdapter:
                 "expired",
                 "Autentique novamente no terminal",
             )
-        return AppError(
-            code,
-            f"Apple recusou o download (HTTP {status}); verifique sessão ou limite",
-            503,
-        )
+        if status_code == 410:
+            message = "URL temporária da foto expirou (HTTP 410); atualize o recurso iCloud"
+        elif status_code == 404:
+            message = "A representação não está disponível no iCloud (HTTP 404)"
+        else:
+            message = f"Apple recusou o download (HTTP {status}); verifique sessão ou limite"
+        return AppError(code, message, 503)
 
     def download(self, photo: Any, version: Any, target: Path) -> int:
         if version.size <= 0 or version.size > self.settings.max_download_bytes:
