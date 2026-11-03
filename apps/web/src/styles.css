@@ -989,7 +989,9 @@ textarea.input {
 }
 
 .dialog-content {
-  @apply fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 overflow-auto outline-none;
+  @apply fixed top-1/2 left-1/2 overflow-auto outline-none;
+  /* Use transform instead of Tailwind v4 individual translate so sheets can reset it. */
+  transform: translate(-50%, -50%);
   max-height: 90dvh;
   background: var(--gray-4);
   border: 1px solid var(--gray-9);
@@ -2219,7 +2221,9 @@ textarea.input {
   }
 
   .mobile-menu {
-    @apply bottom-0 left-0 w-full transform-none top-auto;
+    @apply bottom-0 left-0 w-full top-auto;
+    transform: none;
+    translate: none;
     border-radius: 17px 17px 0 0;
     max-height: 90dvh;
     padding: 22px var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
@@ -3032,13 +3036,17 @@ body {
   .dialog-content.mobile-menu {
     position: fixed;
     inset: auto 0 0 0;
+    /* Tailwind v4 -translate utilities used an independent translate property. */
+    translate: none;
     left: 0;
     top: auto;
     width: 100%;
     max-width: none;
     max-height: min(84dvh, 820px);
     margin: 0;
+    box-sizing: border-box;
     transform: none;
+    overscroll-behavior: contain;
     overflow-x: hidden;
     overflow-y: auto;
     border-radius: 18px 18px 0 0;
@@ -3058,6 +3066,7 @@ body {
   .dialog-content.viewer-dialog {
     position: fixed;
     inset: 0;
+    translate: none;
     left: 0;
     top: 0;
     width: 100%;
