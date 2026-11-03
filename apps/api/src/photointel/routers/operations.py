@@ -911,6 +911,58 @@ async def ingestion_health(session: Session) -> dict[str, Any]:
         "recovery": "Execute make icloud-auth por SSH se a sessão expirou.",
     }
 
+@router.post("/ingestion/connection-test", tags=["ingestion"])
+async def icloud_connection_test(session: Session, identity: Actor) -> dict[str, Any]:
+    """Perform an actual bounded Apple session probe, without accepting credentials.
+
+    Uses the same encrypted session restore path as ingestion, and never returns
+    photo data, session cookies, Apple errors, tokens or account identifiers.
+    """
+    from photointel.services.ingestion import ICloudAdapter
+    from photointel.services.session_store import session_directory
+
+    settings = await effective_settings(session)
+    if not settings.icloud_enabled or not settings.icloud_account:
+        return {
+            "state": "not_configured",
+            "valid": False,
+            "reauth_required": True,
+            "checked_at": utcnow().isoformat(),
+            "message": "Configure a conta e publique a sessão Apple no terminal seguro.",
+        }
+    try:
+        async with session_directory(settings) as restored:
+            current = settings.model_copy(update={"icloud_session_directory": restored})
+            await asyncio.wait_for(
+                asyncio.to_thread(ICloudAdapter(current).connect, require_library=False),
+                timeout=25,
+            )
+        return {
+            "state": "valid",
+            "valid": True,
+            "reauth_required": False,
+            "checked_at": utcnow().isoformat(),
+            "message": "A Apple aceitou a sessão restaurada. Nenhuma foto foi transferida.",
+        }
+    except TimeoutError:
+        return {
+            "state": "timeout",
+            "valid": False,
+            "reauth_required": False,
+            "checked_at": utcnow().isoformat(),
+            "message": "A Apple não respondeu no limite do teste. Verifique a rede e tente novamente.",
+        }
+    except Exception:
+        # Third-party Apple exceptions may contain secrets or signed URLs.
+        return {
+            "state": "verification_failed",
+            "valid": False,
+            "reauth_required": True,
+            "checked_at": utcnow().isoformat(),
+            "message": "Sessão Apple recusada ou indisponível. Reautentique no terminal seguro e teste novamente.",
+        }
+
+
 
 @router.get("/ingestion/runs", tags=["ingestion"])
 async def ingestion_runs(
