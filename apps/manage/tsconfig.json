@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -15,9 +11,7 @@
     "allowSyntheticDefaultImports": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "types": [
-      "vite/client"
-    ],
+    "types": ["vite/client"],
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
@@ -32,10 +26,5 @@
     "src/log-deeplink.ts",
     "vite.config.ts"
   ],
-  "exclude": [
-    "src/worker.ts",
-    "src/auth.ts",
-    "src/providers.ts",
-    "src/api.ts"
-  ]
+  "exclude": ["src/worker.ts", "src/auth.ts", "src/providers.ts", "src/api.ts"]
 }
