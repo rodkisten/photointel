@@ -41,7 +41,15 @@ const syntax = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  '&': { backgroundColor: '#101113', color: '#e5e7eb', height: 'min(64vh, 520px)', fontSize: '13px' },
+  '&': {
+    backgroundColor: '#101113',
+    color: '#e5e7eb',
+    height: 'calc(min(64vh, 520px) / 0.8125)',
+    width: 'calc(100% / 0.8125)',
+    fontSize: '16px',
+    transform: 'scale(0.8125)',
+    transformOrigin: 'top left',
+  },
   '.cm-scroller': {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
     overflow: 'auto',
@@ -135,6 +143,7 @@ export function CodeMirrorEnvEditor({
       ref={mount}
       data-testid="codemirror-env-editor"
       className="min-w-0 overflow-hidden rounded-lg border border-[#35383e] focus-within:border-[#656b73]"
+      style={{ height: 'min(64vh, 520px)' }}
     />
   );
 }
