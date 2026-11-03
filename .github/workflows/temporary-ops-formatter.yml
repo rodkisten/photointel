@@ -1,0 +1,35 @@
+name: "Temporary ops UI formatter"
+on:
+  push:
+    branches: [feat/manage-icloud-ops-ui-repairs]
+    paths:
+      - ".github/workflows/temporary-ops-formatter.yml"
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned prettier
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format web and manage exactly as repository requires
+        run: |
+          npm run format:web
+          npm run format:manage
+          npm run format:check:web
+          npm run format:check:manage
+      - name: Commit only formatting changes
+        run: |
+          git add apps/web apps/manage infra/cloudflare/cloud-run-proxy
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: normalize UI, CodeMirror and preview assets with pinned Prettier"
+          git push origin HEAD:refs/heads/feat/manage-icloud-ops-ui-repairs
