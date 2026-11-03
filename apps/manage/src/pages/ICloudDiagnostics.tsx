@@ -47,10 +47,10 @@ export function ICloudDiagnostics() {
       <ICloudLoginForm onConnected={() => void qc.invalidateQueries({ queryKey: ['icloud-diagnostics'] })} />
       <Card className="space-y-3 p-4">
         <div className="flex items-start gap-3">
-          <Apple size={20} className="mt-1 shrink-0 text-slate-300" />
+          <Apple size={20} className="mt-1 shrink-0 text-carbon-300" />
           <div className="space-y-2">
             <h2 className="text-base font-semibold">Conexão iCloud e sessão Apple</h2>
-            <p className="text-sm leading-6 text-slate-400">
+            <p className="text-sm leading-6 text-carbon-400">
               Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico
               abaixo também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade.
               A sessão só é publicada depois de confirmar o acesso à biblioteca.
@@ -95,11 +95,11 @@ export function ICloudDiagnostics() {
                     <ShieldAlert size={17} className="shrink-0" /> {q.data.reason}
                   </p>
                 ) : (
-                  <p className="flex items-start gap-2 text-sm text-slate-400">
+                  <p className="flex items-start gap-2 text-sm text-carbon-400">
                     <ShieldCheck size={17} className="shrink-0" /> {q.data.reason}
                   </p>
                 )}
-                <p className="text-xs leading-5 text-slate-400">
+                <p className="text-xs leading-5 text-carbon-400">
                   Use o formulário de senha e código Apple no topo desta página para renovar a sessão,
                   sem terminal. Se houver erro, confira os logs correlacionados abaixo.
                 </p>
@@ -115,16 +115,16 @@ export function ICloudDiagnostics() {
               title="Erros de iCloud recentes"
               detail="Eventos do Cloud Logging, sem credenciais nem dados privados"
             >
-              <Card className="divide-y divide-slate-800">
+              <Card className="divide-y divide-carbon-800">
                 {q.data.recent_events.length === 0 ? (
-                  <p className="p-4 text-sm text-slate-400">
+                  <p className="p-4 text-sm text-carbon-400">
                     Nenhum evento correspondente neste período. Isso não comprova que o acesso esteja válido.
                   </p>
                 ) : (
                   q.data.recent_events.map((event, index) => (
                     <div key={event.timestamp + ':' + index} className="space-y-2 p-3 text-xs">
-                      <span className="text-slate-400">{date(event.timestamp)}</span>
-                      <p className="break-all text-slate-200">
+                      <span className="text-carbon-400">{date(event.timestamp)}</span>
+                      <p className="break-all text-carbon-200">
                         {event.message || event.severity || event.service || 'Evento sem descrição'}
                       </p>
                     </div>
@@ -144,9 +144,9 @@ export function ICloudDiagnostics() {
               title="Preflight e validações"
               detail="Verificações de infraestrutura e código, não substituem login na Apple"
             >
-              <Card className="divide-y divide-slate-800">
+              <Card className="divide-y divide-carbon-800">
                 {q.data.preflight_runs.length === 0 && (
-                  <p className="p-3 text-sm text-slate-400">Nenhuma validação recente.</p>
+                  <p className="p-3 text-sm text-carbon-400">Nenhuma validação recente.</p>
                 )}
                 {q.data.preflight_runs.map((run) => (
                   <a
