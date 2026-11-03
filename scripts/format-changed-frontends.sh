@@ -20,8 +20,11 @@ esac
 case "$mode" in
   changed)
     if [[ -z "$base_ref" ]]; then
-      if ! base_ref="$(git rev-parse --verify HEAD^ 2>/dev/null)"; then
-        echo "::error::No parent commit found. Specify base_ref to compare."
+      # Compare the last ten commits by default; this includes code changes
+      # even when the latest commit only updates workflow definitions.
+      base_ref="$(git rev-list --max-count=11 HEAD | tail -n 1)"
+      if [[ -z "$base_ref" ]]; then
+        echo "::error::Unable to resolve repository history."
         exit 1
       fi
     fi
