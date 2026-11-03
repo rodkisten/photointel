@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.config import get_settings
-from photointel.models import IngestionRun, Job, JobBatch, JobEvent, WorkerState, utcnow
+from photointel.models import IngestionRun, Job, JobBatch, JobEvent, Setting, WorkerState, utcnow
 from photointel.observability import job_correlation
 from photointel.sentry_observability import trace_headers
 
@@ -164,6 +164,11 @@ async def claim_jobs(
     payload_mode: str | None = None,
 ) -> list[Job]:
     await recover_stale_jobs(session)
+    # One durable switch controls all workers, including finite Cloud Run Jobs.
+    # A paused queue may still receive new, durably staged jobs; none are claimed.
+    queue_state = await session.get(Setting, "jobs_paused")
+    if queue_state and queue_state.value:
+        return []
     paused_batch = exists(
         select(JobBatch.id).where(
             JobBatch.id == Job.batch_id,
