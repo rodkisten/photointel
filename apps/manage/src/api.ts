@@ -49,6 +49,8 @@ export async function api(
       sentry: Boolean(env.SENTRY_DSN),
       sentry_reader: Boolean(env.SENTRY_API_TOKEN),
       sentry_org: env.SENTRY_ORG || null,
+      cloudflare_account_id: env.CLOUDFLARE_ACCOUNT_ID || null,
+      gcp_region: env.GCP_REGION || 'us-central1',
     });
   if (method === 'GET' && path === '/api/diagnostics') return json(await runManageDiagnostics(env));
   if (method === 'GET' && path === '/api/overview') {
@@ -342,22 +344,12 @@ export async function api(
       view: 'events',
       dry: true,
       timeframe: { from: now - minutes * 60_000, to: now },
-      limit: 50,
+      limit: search ? 200 : 70,
       order: 'desc',
       parameters: {
         datasets: ['cloudflare-workers'],
-        ...(search
-          ? {
-              filters: [
-                {
-                  key: '$metadata.message',
-                  operation: 'includes',
-                  type: 'string',
-                  value: search,
-                },
-              ],
-            }
-          : {}),
+        // Search all event fields, including nested source correlation IDs.
+        ...(search ? { needle: { value: search, matchCase: false } } : {}),
       },
     });
     const result = (data as { result?: Record<string, unknown> }).result;
