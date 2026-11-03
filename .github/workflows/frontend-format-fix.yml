@@ -1,11 +1,7 @@
 name: "🧹 Frontends · ESLint + Prettier Fix"
-run-name: "🧹 Fix · ${{ inputs.target || 'web' }} · ${{ inputs.mode || 'changed' }} · ${{ github.ref_name }}"
+run-name: "🧹 Fix · ${{ inputs.target }} · ${{ inputs.mode }} · ${{ github.ref_name }}"
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/web/src/styles.css'
   workflow_dispatch:
     inputs:
       target:
@@ -75,8 +71,8 @@ jobs:
       - name: "🧹 ESLint --fix + Prettier --write"
         id: format
         env:
-          TARGET: ${{ inputs.target || 'web' }}
-          MODE: ${{ inputs.mode || 'changed' }}
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
           BASE_REF: ${{ inputs.base_ref }}
         run: bash scripts/format-changed-frontends.sh
 
