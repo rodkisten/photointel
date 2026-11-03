@@ -136,7 +136,19 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
     important(level, event, route, status, durationMs, correlationId);
   let config;
   try {
-    config = configuration(env, incoming.pathname.startsWith('/v1/'));
+    if (env.PHOTOINTEL_PREVIEW === 'true') {
+      // PR previews only expose bundled assets. Never proxy production APIs
+      // or accept Apple sign-in on unverified branch domains.
+      if (!incoming.hostname.endsWith('.workers.dev')) {
+        return failure(403, 'Preview hostname not allowed');
+      }
+      if (incoming.pathname.startsWith('/v1/') || incoming.pathname.startsWith('/auth/')) {
+        return failure(503, 'Preview is visual-only; no production API access');
+      }
+      config = { frontend: incoming.origin, origin: null };
+    } else {
+      config = configuration(env, incoming.pathname.startsWith('/v1/'));
+    }
   } catch {
     log('error', 'routing_config_invalid', 'configuration', 503);
     return failure(503, 'Routing not configured');
