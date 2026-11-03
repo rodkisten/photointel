@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../../../packages/design-tokens/carbon.css';
 @import './design-system.css';
 
 /* Native elements and typography. Tailwind utilities can override component styles. */
@@ -994,8 +995,8 @@
 
   .dialog-content {
     @apply fixed top-1/2 left-1/2 overflow-auto outline-none;
-    /* Use transform instead of Tailwind v4 individual translate so sheets can reset it. */
-    transform: translate(-50%, -50%);
+    /* Use transform instead of Tailwind v4 individual trancarbon so sheets can reset it. */
+    transform: trancarbon(-50%, -50%);
     max-height: 90dvh;
     background: var(--gray-4);
     border: 1px solid var(--gray-9);
@@ -1476,7 +1477,7 @@
   .toast {
     @apply fixed bottom-[25px] flex items-center shadow-2xl;
     left: calc(50% + 118px);
-    transform: translateX(-50%);
+    transform: trancarbonX(-50%);
     @apply z-toast;
     gap: var(--space-2-5);
     padding: var(--space-3) 15px;
@@ -2227,7 +2228,7 @@
     .mobile-menu {
       @apply bottom-0 left-0 w-full top-auto;
       transform: none;
-      translate: none;
+      trancarbon: none;
       border-radius: 17px 17px 0 0;
       max-height: 90dvh;
       padding: 22px var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
@@ -3134,8 +3135,8 @@
     .dialog-content.mobile-menu {
       position: fixed;
       inset: auto 0 0 0;
-      /* Tailwind v4 -translate utilities used an independent translate property. */
-      translate: none;
+      /* Tailwind v4 -trancarbon utilities used an independent trancarbon property. */
+      trancarbon: none;
       left: 0;
       top: auto;
       width: 100%;
@@ -3164,7 +3165,7 @@
     .dialog-content.viewer-dialog {
       position: fixed;
       inset: 0;
-      translate: none;
+      trancarbon: none;
       left: 0;
       top: 0;
       width: 100%;
