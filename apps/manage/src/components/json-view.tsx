@@ -112,7 +112,7 @@ function PlainHighlight({ text, pattern }: { text: string; pattern: RegExp | nul
     <>
       {parts.map((part, index) =>
         part.match ? (
-          <mark key={index} className="rounded-sm bg-amber-500/40 text-amber-100">
+          <mark key={index} className="rounded-sm bg-amber-500/40 text-amber-100 inline break-all">
             {part.value}
           </mark>
         ) : (
