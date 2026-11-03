@@ -237,7 +237,7 @@ class CloudRunCommandsTests(unittest.TestCase):
             self.assertIn("--message-body", command)
         self.assertEqual(
             len([cmd for cmd in updating.commands if cmd[:3] ==
-                 ["scheduler", "jobs", "pause"]]), 3
+                 ["scheduler", "jobs", "pause"]]), 0
         )
 
         # All absent jobs: creation still requires --headers.
@@ -257,6 +257,15 @@ class CloudRunCommandsTests(unittest.TestCase):
             len([cmd for cmd in creating.commands if cmd[:3] ==
                  ["scheduler", "jobs", "pause"]]), 3
         )
+
+    def test_scheduler_can_explicitly_resume_automatic_runs(self) -> None:
+        self.config["auto_resume_schedules"] = True
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            manage.scheduler(manage.Runner(self.config, apply=False))
+        plan = output.getvalue()
+        self.assertEqual(plan.count("scheduler jobs resume"), 3)
+        self.assertNotIn("scheduler jobs pause", plan)
 
     def test_job_invocation_rights_are_named_and_exclude_migration(self) -> None:
         output = io.StringIO()
