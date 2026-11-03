@@ -164,6 +164,7 @@ class FilterNode(Contract):
         "duplicate",
         "quality",
         "screenshots",
+        "has_preview",
     ]
     children: list["FilterNode"] = Field(default_factory=list, max_length=30)
     key: str | None = Field(default=None, max_length=64)
@@ -193,6 +194,8 @@ class FilterNode(Contract):
             and (not isinstance(self.value, bool))
         ):
             raise ValueError("Boolean filters need a boolean value")
+        if self.op == "has_preview" and not isinstance(self.value, bool):
+            raise ValueError("Preview availability requires true or false")
         if self.op == "number" and self.key not in {
             "width",
             "height",
