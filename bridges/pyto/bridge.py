@@ -33,7 +33,7 @@ UTC = timezone.utc  # noqa: UP017 - Pyto may embed Python 3.10.
 KEYCHAIN_SERVICE = "photo-intelligence-cloud.bridge"
 AUTHORIZATION = {
     0: "not_determined",
-    1: "denied",
+    1: "restricted",
     2: "denied",
     3: "authorized",
     4: "limited",
@@ -267,6 +267,12 @@ class KeychainStore:
             raise BridgeError(
                 "KEYCHAIN_LOCKED", "Desbloqueie o iPhone e execute Pyto em primeiro plano"
             )
+        if status == -34018:  # errSecMissingEntitlement
+            raise BridgeError(
+                "KEYCHAIN_ENTITLEMENT_MISSING",
+                "O Pyto não possui o entitlement Keychain necessário; "
+                "isso não pode ser corrigido por um script Python",
+            )
         raise BridgeError(
             "KEYCHAIN_UNAVAILABLE", f"Keychain recusou acesso (OSStatus {status})"
         )
@@ -459,6 +465,7 @@ class PhotoKitReader:
         self.options_class: Any = None
         self.descriptor_class: Any = None
         self.resource_class: Any = None
+        self.usage_description_present: bool | None = None
         try:
             if sys.platform != "ios" and platform.system() != "Darwin":
                 raise ImportError("PhotoKit requires iOS")
@@ -470,52 +477,89 @@ class PhotoKitReader:
             self.options_class = ObjCClass("PHFetchOptions")
             self.descriptor_class = ObjCClass("NSSortDescriptor")
             self.resource_class = ObjCClass("PHAssetResource")
+            try:
+                # Pyto owns this installed app's Info.plist, not Python.
+                bundle = ObjCClass("NSBundle").mainBundle
+                self.usage_description_present = bool(
+                    bundle.objectForInfoDictionaryKey_("NSPhotoLibraryUsageDescription")
+                )
+            except (AttributeError, TypeError):
+                self.usage_description_present = None
         except (ImportError, OSError, NameError, ValueError) as exc:
             self.error = type(exc).__name__
 
     def authorization(self) -> str:
+        """Check the explicit read/write grant, not the deprecated legacy status."""
         if self.library_class is None:
             return "unavailable"
         try:
-            return AUTHORIZATION.get(
-                int(self.library_class.authorizationStatus()), "unavailable"
-            )
-        except Exception:
+            # PHAccessLevelReadWrite = 2. Add-only cannot inventory media.
+            status = int(self.library_class.authorizationStatusForAccessLevel_(2))
+            return AUTHORIZATION.get(status, "unavailable")
+        except Exception as exc:
+            self.error = "authorization_" + type(exc).__name__
             return "unavailable"
 
     def request_authorization(self) -> str:
+        """Prompt only when undecided; report denied/restricted grants accurately."""
         if self.library_class is None:
             raise BridgeError(
-                "PHOTOKIT_PERMISSION_DENIED", "PhotoKit não está disponível neste runtime"
+                "PHOTOKIT_UNAVAILABLE", "PhotoKit não está disponível neste Pyto"
             )
-        # Keep the public API callback alive until the permission sheet responds.
+        current = self.authorization()
+        if current in {"authorized", "limited"}:
+            return current
+        if current == "restricted":
+            raise BridgeError(
+                "PHOTOKIT_RESTRICTED",
+                "O iOS restringiu Fotos; confira Tempo de Uso ou gestão do aparelho",
+            )
+        if current == "denied":
+            raise BridgeError(
+                "PHOTOKIT_PERMISSION_DENIED",
+                "Acesso negado; abra Ajustes > Privacidade e Segurança > Fotos > Pyto",
+            )
+        if current != "not_determined":
+            raise BridgeError(
+                "PHOTOKIT_UNAVAILABLE",
+                "Não foi possível consultar o estado de autorização do PhotoKit",
+            )
+        if self.usage_description_present is not True:
+            raise BridgeError(
+                "PHOTOKIT_USAGE_DESCRIPTION_MISSING",
+                "NSPhotoLibraryUsageDescription não está confirmada no "
+                "Info.plist do Pyto; Python não pode alterar o aplicativo instalado",
+            )
         try:
             from rubicon.objc import Block  # type: ignore[import-not-found]
         except ImportError as exc:
             raise BridgeError(
-                "PHOTOKIT_PERMISSION_DENIED",
-                "Rubicon Block não disponível; autorize Pyto em Ajustes",
+                "PHOTOKIT_UNAVAILABLE",
+                "Rubicon Block não está disponível nesta instalação do Pyto",
             ) from exc
+
         result: list[int] = []
 
         def receive(status: int) -> None:
             result.append(int(status))
 
-        callback = Block(receive, restype=None, argtypes=[ctypes.c_long])
+        # Rubicon uses Block(func, restype, *argtypes).
+        callback = Block(receive, None, ctypes.c_long)
         try:
-            self.library_class.requestAuthorization_(callback)
+            self.library_class.requestAuthorizationForAccessLevel_handler_(2, callback)
         except (AttributeError, TypeError, ctypes.ArgumentError) as exc:
             raise BridgeError(
-                "PHOTOKIT_PERMISSION_DENIED",
-                "Solicitação não disponível; autorize Pyto em Ajustes",
+                "PHOTOKIT_UNAVAILABLE",
+                "Esta versão do Pyto não conseguiu solicitar acesso de leitura/escrita",
             ) from exc
         deadline = time.monotonic() + 120
         while not result and time.monotonic() < deadline:
             time.sleep(0.1)
         if not result:
             raise BridgeError(
-                "PHOTOKIT_PERMISSION_DENIED",
-                "Permissão pendente; execute doctor novamente após responder",
+                "PHOTOKIT_PERMISSION_PENDING",
+                "A autorização não respondeu; volte ao Pyto em primeiro plano "
+                "e consulte doctor novamente",
             )
         return AUTHORIZATION.get(result[0], "unavailable")
 
@@ -528,6 +572,10 @@ class PhotoKitReader:
             "keywords_read": False,
             "keywords_write": False,
             "authorization": authorization,
+            "authorization_access_level": "read_write",
+            "photo_access_complete": authorization == "authorized",
+            "usage_description_present": self.usage_description_present,
+            "runtime_error_type": self.error,
             "platform": platform.platform()[:128],
             "adapter": "pyto-readonly-v1",
             "reason": (
@@ -930,8 +978,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         bridge = Bridge(arguments.config)
         if arguments.command == "doctor":
-            if arguments.request_permission:
+            requested_authorization = (
                 bridge.reader.request_authorization()
+                if arguments.request_permission
+                else None
+            )
             try:
                 KeychainStore().check_available()
                 keychain_status = "query_available"
@@ -943,6 +994,7 @@ def main(argv: list[str] | None = None) -> int:
                 "credential_storage": keychain_status,
                 "credential_storage_backend": "Security.framework",
                 "keyword_api_probe": keyword_api_probe(),
+                "requested_authorization": requested_authorization,
             }
         elif arguments.command == "capabilities":
             result = bridge.reader.capabilities()
