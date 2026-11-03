@@ -1,0 +1,100 @@
+name: "🧹 Frontends · ESLint + Prettier Fix"
+run-name: "🧹 Fix · ${{ inputs.target }} · ${{ inputs.mode }} · ${{ github.ref_name }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which frontend should be fixed?"
+        type: choice
+        required: true
+        default: both
+        options:
+          - both
+          - web
+          - manage
+      mode:
+        description: "Only changed files, or every tracked frontend file?"
+        type: choice
+        required: true
+        default: changed
+        options:
+          - changed
+          - all
+      base_ref:
+        description: "Optional base commit/ref for changed mode (default: previous commit)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: photointel-frontend-fix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    name: "🧹 Fix selected frontend files"
+    if: startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: "📥 Checkout branch and history"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: "🟢 Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+            apps/manage/package-lock.json
+
+      - name: "📦 Install shared Prettier"
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: "📦 Install Web ESLint"
+        if: inputs.target == 'web' || inputs.target == 'both'
+        run: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
+
+      - name: "📦 Install Manage ESLint"
+        if: inputs.target == 'manage' || inputs.target == 'both'
+        run: npm --prefix apps/manage ci --ignore-scripts --no-audit --no-fund
+
+      - name: "🧹 ESLint --fix + Prettier --write"
+        id: format
+        env:
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
+          BASE_REF: ${{ inputs.base_ref }}
+        run: bash scripts/format-changed-frontends.sh
+
+      - name: "💾 Commit and push fixes"
+        if: steps.format.outputs.has_files == 'true'
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git add --pathspec-from-file="$RUNNER_TEMP/photointel-format-paths.nul" --pathspec-file-nul
+          if git diff --cached --quiet; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --cached --stat
+          git commit -m "style(frontend): auto-fix selected files with ESLint and Prettier"
+          git push origin "HEAD:refs/heads/$BRANCH_NAME"
+
+      - name: "🔍 Report non-fixable issues"
+        if: steps.format.outputs.validation_ok != 'true'
+        run: |
+          echo "::error::ESLint or Prettier reported remaining issues. Applied fixes were committed where possible."
+          exit 1
