@@ -20,24 +20,40 @@ e `EXTRA_ENVIRONMENT__FCM_JOB_EVENTS_ENABLED`, mas não duplique as formas.
 O deploy passa ambas às instâncias de API e aos Cloud Run Jobs. Não configure
 chaves privadas Firebase nem tokens de servidor no frontend.
 
-**Permissões obrigatórias (projetos separados):** o serviço de envio roda em
-Cloud Run no projeto `photointel`; o Firebase de destino é
-`photointel-firebase`. Ative **Firebase Cloud Messaging API (HTTP v1)** no
-projeto Firebase e conceda `roles/firebasecloudmessaging.admin` *no projeto
-Firebase* às service accounts que executam a API e os Cloud Run Jobs.
+**Permissões automáticas (projetos separados):** o serviço de envio roda no
+Cloud Run do projeto `photointel`; o Firebase de destino é
+`photointel-firebase`. Em vez de configurar cada permissão manualmente,
+rode **Actions → 🧱 Setup GCP → Run workflow → mode: permissions** na branch
+`main`, depois de mesclar o PR e salvar as duas entradas .env acima.
 
-Exemplo (execute com uma identidade que possa alterar o IAM do projeto Firebase;
-substitua os e-mails pelas service accounts reais que estão em produção):
+O modo `permissions` de `.github/workflows/gcp-bootstrap.yml` chama
+`infra/gcp/bootstrap.sh`. Quando FCM está habilitado, o bootstrap:
 
-```bash
-gcloud services enable fcm.googleapis.com --project=photointel-firebase
-gcloud projects add-iam-policy-binding photointel-firebase \
-  --member="serviceAccount:API_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/firebasecloudmessaging.admin"
-gcloud projects add-iam-policy-binding photointel-firebase \
-  --member="serviceAccount:JOBS_SERVICE_ACCOUNT_EMAIL" \
-  --role="roles/firebasecloudmessaging.admin"
-```
+- Verifica e habilita `fcm.googleapis.com` no projeto remetente
+  `photointel` e no destino `photointel-firebase`;
+- Concede `roles/firebasecloudmessaging.admin` **somente** a
+  `photointel-api@photointel.iam.gserviceaccount.com` e
+  `photointel-jobs@photointel.iam.gserviceaccount.com`, no projeto
+  `photointel-firebase`;
+- Pode ser repetido sem recriar serviços. Não amplia permissões do
+  `photointel-deployer`, `photointel-manage` nem das contas de migração;
+- Rejeita IDs de projetos Firebase diferentes do esperado e falha com
+  mensagem explícita se faltarem privilégios para modificar o projeto alvo.
+
+**Pré-requisito de confiança entre projetos:** a identidade que executa esse
+workflow (`photointel-bootstrap@photointel.iam.gserviceaccount.com`) precisa
+**já estar autorizada** no projeto `photointel-firebase` para consultar e
+habilitar APIs (`serviceusage.services.list` e
+`serviceusage.services.enable`) e atualizar IAM
+(`resourcemanager.projects.getIamPolicy` e
+`resourcemanager.projects.setIamPolicy`). Se não estiver, um administrador
+**do projeto Firebase** deve estabelecer essa autorização inicial. A
+automação não pode conceder privilégios a si própria. Depois disso, as
+permissões do PhotoIntel ficam gerenciadas pelo workflow, sem comandos de
+configuração das contas de execução.
+
+O modo `apply` também reconcilia as mesmas permissões. O modo `plan`
+apenas descreve as mudanças, sem acessar ou modificar o Firebase.
 
 O servidor usa **Application Default Credentials**, com escopo
 `https://www.googleapis.com/auth/firebase.messaging`; não precisa de JSON de
