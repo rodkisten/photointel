@@ -121,7 +121,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          Ver logs do job no GCP
+                          Ver logs do job no Manage
                         </a>
                       )}
                     </div>
