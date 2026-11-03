@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, RefreshCcw, Search, RotateCcw } from 'lucide-react';
+import { KeyRound, Plus, RefreshCcw, Search, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ConfirmDialog } from '../../components/confirm-dialog';
 import { Badge, Button, Card, Input, Section } from '../../components/ui';
 import { Empty, IssueBanner, Spinner } from '../../components/shared';
@@ -16,7 +16,7 @@ import type {
 
 export function SecretManagerPage() {
   const qc = useQueryClient();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(() => new URLSearchParams(window.location.search).get('secret') || '');
   const [search, setSearch] = useState('');
   const [selectedVersion, setSelectedVersion] = useState('');
   const [pageToken, setPageToken] = useState('');
@@ -25,6 +25,7 @@ export function SecretManagerPage() {
   const [createdName, setCreatedName] = useState('');
   const [activateConfirm, setActivateConfirm] = useState(false);
   const [activated, setActivated] = useState<SecretActivation | null>(null);
+  const [permissionsConfirm, setPermissionsConfirm] = useState(false);
 
   const list = useQuery({
     queryKey: ['manage-secret-references'],
@@ -36,7 +37,7 @@ export function SecretManagerPage() {
   const filtered = items.filter((item) =>
     (item.name + ' ' + item.references.map((ref) => ref.key).join(' '))
       .toLowerCase().includes(search.toLowerCase().trim()));
-  const selected = items.find((item) => item.name === name) || filtered[0] || items[0];
+  const selected = filtered.find((item) => item.name === name || item.references.some((ref) => ref.key === name)) || filtered[0] || (search.trim() ? undefined : items[0]);
 
   const versions = useQuery({
     queryKey: ['manage-secret-versions', selected?.name, pageToken],
@@ -109,6 +110,14 @@ export function SecretManagerPage() {
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
+  const permissions = useMutation({
+    mutationFn: () => send<{ queued: true; workflow_url: string }>('/secrets/permissions', {
+      confirm: 'SINCRONIZAR IAM PHOTOINTEL',
+    }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
   const choose = (next: string) => {
     setName(next);
     setSelectedVersion('');
@@ -136,11 +145,32 @@ export function SecretManagerPage() {
             <Button size="sm" variant="outline" onClick={() => void list.refetch()} disabled={list.isFetching}>
               <RefreshCcw size={15} className={list.isFetching ? 'animate-spin' : ''} /> Atualizar
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setPermissionsConfirm(true)}>
+              <ShieldCheck size={15} /> Sincronizar IAM
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setNewOpen((value) => !value)}>
               <Plus size={15} /> Novo secret
             </Button>
           </div>
         </Card>
+        <ConfirmDialog
+          open={permissionsConfirm}
+          onOpenChange={setPermissionsConfirm}
+          title="Conceder acesso a todos os secrets?"
+          description="Solicita Setup GCP → permissions. A identidade administrativa do Manage poderá listar todos os segredos, consultar trechos dos valores e adicionar versões no projeto photointel. Não concede exclusão nem alteração do IAM pelo Worker."
+          label="Solicitar permissões"
+          busy={permissions.isPending}
+          onConfirm={() => permissions.mutate()}
+        />
+        {permissions.error && <IssueBanner error={permissions.error} />}
+        {permissions.data?.queued && (
+          <Card className="p-3 text-xs text-carbon-300">
+            Sincronização IAM solicitada, ainda não concluída.{' '}
+            <a className="underline" href={permissions.data.workflow_url} target="_blank" rel="noreferrer">
+              Acompanhar no GitHub Actions
+            </a>
+          </Card>
+        )}
         {newOpen && (
           <CreateSecretForm busy={creation.isPending} onCreate={(value) => creation.mutate(value)} />
         )}
