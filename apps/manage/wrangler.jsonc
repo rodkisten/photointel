@@ -11,8 +11,8 @@
       "GITHUB_ENVIRONMENT": "preview",
       "GCP_PROJECT_ID": "photointel-preview",
       "GCP_REGION": "us-central1",
-      "PHOTOINTEL_PREVIEW": "true"
-    }
+      "PHOTOINTEL_PREVIEW": "true",
+    },
   },
   "observability": {
     "enabled": true,
