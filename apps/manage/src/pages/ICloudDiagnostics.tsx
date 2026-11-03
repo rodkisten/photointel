@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Apple, ArrowUpRight, RefreshCcw, ShieldAlert, ShieldCheck, TestTube } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
+import { readLogLink, toLogSearch } from '../log-deeplink';
 import { Badge, Button, Card, Section } from '../components/ui';
 import { IssueBanner, Spinner } from '../components/shared';
 import { ICloudLoginForm } from '../components/icloud-login-form';
@@ -51,9 +53,9 @@ export function ICloudDiagnostics() {
           <div className="space-y-2">
             <h2 className="text-base font-semibold">Conexão iCloud e sessão Apple</h2>
             <p className="text-sm leading-6 text-carbon-400">
-              Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico
-              abaixo também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade.
-              A sessão só é publicada depois de confirmar o acesso à biblioteca.
+              Você pode digitar a senha e concluir a verificação Apple diretamente acima. O diagnóstico abaixo
+              também consulta logs recentes, pré-requisitos da infraestrutura e testes de conectividade. A
+              sessão só é publicada depois de confirmar o acesso à biblioteca.
             </p>
           </div>
         </div>
@@ -100,8 +102,8 @@ export function ICloudDiagnostics() {
                   </p>
                 )}
                 <p className="text-xs leading-5 text-carbon-400">
-                  Use o formulário de senha e código Apple no topo desta página para renovar a sessão,
-                  sem terminal. Se houver erro, confira os logs correlacionados abaixo.
+                  Use o formulário de senha e código Apple no topo desta página para renovar a sessão, sem
+                  terminal. Se houver erro, confira os logs correlacionados abaixo.
                 </p>
                 <a
                   href="https://photos.migos.club/icloud"
@@ -131,12 +133,13 @@ export function ICloudDiagnostics() {
                   ))
                 )}
                 <div className="p-3">
-                  <a
+                  <Link
+                    to="/logs"
+                    search={toLogSearch(readLogLink('?source=gcp&search=icloud&minutes=1440'))}
                     className="text-sm text-sky-300 underline"
-                    href="/?tab=logs&source=gcp&search=icloud&minutes=1440"
                   >
                     Investigar nos logs do Manage
-                  </a>
+                  </Link>
                 </div>
               </Card>
             </Section>

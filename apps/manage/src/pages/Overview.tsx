@@ -42,7 +42,7 @@ import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
-export function Overview({ openRun }: { openRun: (n: number) => void }) {
+export function Overview() {
   const q = useQuery({
     queryKey: ['overview'],
     queryFn: () =>
@@ -113,7 +113,7 @@ export function Overview({ openRun }: { openRun: (n: number) => void }) {
       >
         <Card className="overflow-hidden">
           {data.runs.length ? (
-            data.runs.slice(0, 10).map((r) => <RunRow key={r.id} run={r} onSelect={openRun} />)
+            data.runs.slice(0, 10).map((r) => <RunRow key={r.id} run={r} />)
           ) : (
             <div className="p-5">
               <Empty title="Sem execuções recentes" />

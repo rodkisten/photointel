@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, Check, ChevronRight, RotateCcw, Workflow } from 'lucide-react';
 
@@ -17,7 +18,6 @@ import { JsonView } from './json-view';
 
 interface RunRowProps {
   run: Run;
-  onSelect: (id: number) => void;
 }
 
 interface RunDetailProps {
@@ -117,13 +117,14 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
 // Componentes Principais
 // ==========================================
 
-export function RunRow({ run, onSelect }: RunRowProps) {
+export function RunRow({ run }: RunRowProps) {
   const status = run.conclusion || run.status;
   const currentTone = state(status);
 
   return (
-    <button
-      onClick={() => onSelect(run.id)}
+    <Link
+      to="/deploys/$runId"
+      params={{ runId: String(run.id) }}
       className="flex w-full items-center gap-3 border-b border-carbon-800 px-4 py-3.5 text-left transition-colors last:border-0 hover:bg-carbon-800/50"
     >
       <div
@@ -146,7 +147,7 @@ export function RunRow({ run, onSelect }: RunRowProps) {
 
       <Badge tone={currentTone}>{human(status)}</Badge>
       <ChevronRight size={15} className="shrink-0 text-carbon-600" />
-    </button>
+    </Link>
   );
 }
 

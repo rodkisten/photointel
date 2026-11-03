@@ -61,7 +61,7 @@ export function primaryTerm(link: LogLink): string {
 }
 
 export function logLinkPath(link: LogLink): string {
-  const params = new URLSearchParams({ tab: 'logs', source: link.source });
+  const params = new URLSearchParams({ source: link.source });
   for (const [key, value] of [
     ['correlation', link.correlation],
     ['job', link.job],
@@ -74,7 +74,23 @@ export function logLinkPath(link: LogLink): string {
   ])
     if (value) params.set(key, value);
   params.set('minutes', link.minutes);
-  return '/?' + params.toString();
+  return '/logs?' + params.toString();
+}
+
+/** Convert the validated model to URL/search keys (job_type is deliberately snake_case). */
+export function toLogSearch(link: LogLink) {
+  return {
+    source: link.source,
+    minutes: link.minutes,
+    ...(link.correlation ? { correlation: link.correlation } : {}),
+    ...(link.job ? { job: link.job } : {}),
+    ...(link.jobType ? { job_type: link.jobType } : {}),
+    ...(link.ray ? { ray: link.ray } : {}),
+    ...(link.event ? { event: link.event } : {}),
+    ...(link.entry ? { entry: link.entry } : {}),
+    ...(link.at ? { at: link.at } : {}),
+    ...(link.search ? { search: link.search } : {}),
+  };
 }
 
 /** Only identifiers and a bounded time window reach provider queries. */

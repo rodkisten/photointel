@@ -1,7 +1,8 @@
 import React, { Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import App from './App';
+import { RouterProvider } from '@tanstack/react-router';
+import { router } from './router';
 import { captureManageBrowserError, initManageSentry } from './lib/sentry';
 
 initManageSentry();
@@ -67,7 +68,7 @@ createRoot(element).render(
   <React.StrictMode>
     <ManageBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </ManageBoundary>
   </React.StrictMode>,
