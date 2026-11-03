@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, RefreshCcw, Search } from 'lucide-react';
+import { KeyRound, Plus, RefreshCcw, Search, RotateCcw } from 'lucide-react';
+import { ConfirmDialog } from '../../components/confirm-dialog';
 import { Badge, Button, Card, Input, Section } from '../../components/ui';
 import { Empty, IssueBanner, Spinner } from '../../components/shared';
 import { api, send } from '../../lib/client';
@@ -10,7 +11,7 @@ import { SecretVersionCard } from './SecretVersionCard';
 import { SecretVersionForm } from './SecretVersionForm';
 import { SecretVersionHistory } from './SecretVersionHistory';
 import type {
-  SecretPreview, SecretResult, SecretsList, SecretVersions,
+  SecretActivation, SecretPreview, SecretResult, SecretsList, SecretVersions,
 } from './types';
 
 export function SecretManagerPage() {
@@ -22,6 +23,8 @@ export function SecretManagerPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [result, setResult] = useState<SecretResult | null>(null);
   const [createdName, setCreatedName] = useState('');
+  const [activateConfirm, setActivateConfirm] = useState(false);
+  const [activated, setActivated] = useState<SecretActivation | null>(null);
 
   const list = useQuery({
     queryKey: ['manage-secret-references'],
@@ -91,12 +94,29 @@ export function SecretManagerPage() {
       void qc.invalidateQueries({ queryKey: ['manage-secret-references'] });
     },
   });
+  const activation = useMutation({
+    mutationFn: (version: string) => send<SecretActivation>('/secrets/' + selected!.name + '/activate', {
+      version,
+      config_version: list.data!.config_version,
+      confirm: 'ATIVAR ' + selected!.name + ' v' + version,
+      auto_apply: true,
+    }),
+    onSuccess: (response) => {
+      setActivated(response);
+      setResult(null);
+      void qc.invalidateQueries({ queryKey: ['manage-secret-references'] });
+      void qc.invalidateQueries({ queryKey: ['config'] });
+      void qc.invalidateQueries({ queryKey: ['runs'] });
+    },
+  });
   const choose = (next: string) => {
     setName(next);
     setSelectedVersion('');
     setPageToken('');
     setResult(null);
+    setActivated(null);
     mutation.reset();
+    activation.reset();
   };
 
   return (
@@ -188,6 +208,46 @@ export function SecretManagerPage() {
                             onNext={() => setPageToken(versions.data?.next_page_token || '')}
                             onFirst={() => setPageToken('')}
                           />
+                        )}
+                        {activeVersion &&
+                          versions.data?.items.some((item) =>
+                            item.version === activeVersion && item.state === 'ENABLED') &&
+                          pinnedVersions.length > 0 &&
+                          pinnedVersions.some((version) => version !== activeVersion) && (
+                            <Button
+                              variant="outline"
+                              className="w-full"
+                              disabled={activation.isPending}
+                              onClick={() => setActivateConfirm(true)}
+                            >
+                              <RotateCcw size={15} /> Ativar versão v{activeVersion} na produção
+                            </Button>
+                          )}
+                        <ConfirmDialog
+                          open={activateConfirm}
+                          onOpenChange={setActivateConfirm}
+                          title={'Ativar v' + activeVersion + ' de ' + selected.name + '?'}
+                          description={
+                            'Atualiza as referências no .env para usar a versão existente e ' +
+                            'solicita os deploys necessários. Não apaga versões antigas.' +
+                            (selected.name === 'photointel-session-aead-key'
+                              ? ' O iCloud só conseguirá ler dados criptografados com a chave dessa versão.'
+                              : '')
+                          }
+                          label="Ativar versão"
+                          busy={activation.isPending}
+                          onConfirm={() => activation.mutate(activeVersion)}
+                        />
+                        {activation.error && <IssueBanner error={activation.error} />}
+                        {activated?.name === selected.name && (
+                          <Card className="space-y-2 p-4 text-xs text-carbon-300">
+                            <Badge tone="success">Versão v{activated.activated_version} referenciada</Badge>
+                            {activated.dispatches.map((job) => (
+                              <p key={job.file}>{job.file}: {job.status === 'queued'
+                                ? 'deploy solicitado' : 'falha ao solicitar deploy'}</p>
+                            ))}
+                            {activated.manual.map((note) => <p key={note} className="text-amber-200">{note}</p>)}
+                          </Card>
                         )}
                         <SecretVersionForm
                           key={selected.name + ':' + (result?.created_version || pinnedVersions[0] || '')}
