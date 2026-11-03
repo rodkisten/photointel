@@ -281,7 +281,7 @@ def login_readiness(settings: Settings) -> dict[str, Any]:
             "ready": False,
             "code": "ICLOUD_SESSION_KEY_UNAVAILABLE",
             "message": (
-                "A chave AES do iCloud não chegou à API. Verifique a referência "
+                "A chave técnica AES do iCloud não chegou à API. Verifique a referência "
                 "ao Secret Manager e as permissões do serviço no GCP. "
                 "O tamanho da senha Apple não tem relação com essa chave."
             ),
