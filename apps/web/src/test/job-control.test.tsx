@@ -35,7 +35,12 @@ const snapshot = {
   terminal: 83,
   by_status: { queued: 24, retrying: 2, running: 4, paused: 13 },
   batch_progress: {
-    total: 100, finished: 40, completed: 35, failed: 3, skipped: 2, percent: 40,
+    total: 100,
+    finished: 40,
+    completed: 35,
+    failed: 3,
+    skipped: 2,
+    percent: 40,
   },
   count_scope: 'all_jobs',
 };
@@ -62,11 +67,14 @@ describe('whole queue and per-job controls', () => {
       const path = String(input);
       if (path === '/v1/jobs/control') return Response.json(snapshot);
       if (path === '/v1/jobs/control/pause') return Response.json({ ...snapshot, changed: 30, paused: true });
-      if (path === '/v1/jobs/control/cancel') return Response.json({ ...snapshot, changed: 43, paused: true, open: 0 });
-      if (path.includes('/v1/jobs/') && path.endsWith('/pause')) return Response.json({ ...activeJob, status: 'paused' });
+      if (path === '/v1/jobs/control/cancel')
+        return Response.json({ ...snapshot, changed: 43, paused: true, open: 0 });
+      if (path.includes('/v1/jobs/') && path.endsWith('/pause'))
+        return Response.json({ ...activeJob, status: 'paused' });
       if (path.startsWith('/v1/jobs?')) return Response.json({ items: [activeJob], next_cursor: null });
       if (path === '/v1/system/statistics') return Response.json({ job_counts: { running: 4 } });
-      if (path === '/v1/system/capabilities') return Response.json({ gpu_inference: { state: 'not_configured' } });
+      if (path === '/v1/system/capabilities')
+        return Response.json({ gpu_inference: { state: 'not_configured' } });
       if (path === '/v1/system/status') return Response.json({ workers: [] });
       if (init?.method === 'POST') return Response.json({});
       return Response.json({ items: [], next_cursor: null });
@@ -112,9 +120,7 @@ describe('whole queue and per-job controls', () => {
     await user.click(screen.getByRole('button', { name: 'Cancelar todos' }));
     const dialog = screen.getByRole('dialog', { name: 'Cancelar todos os jobs pendentes?' });
     expect(within(dialog).getByText(/43 jobs serão cancelados/)).toBeVisible();
-    expect(fetcher).not.toHaveBeenCalledWith(
-      '/v1/jobs/control/cancel', expect.anything(),
-    );
+    expect(fetcher).not.toHaveBeenCalledWith('/v1/jobs/control/cancel', expect.anything());
     await user.click(within(dialog).getByRole('button', { name: 'Confirmar cancelamento' }));
     await waitFor(() =>
       expect(fetcher).toHaveBeenCalledWith(
