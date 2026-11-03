@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import json
 import logging
 import os
@@ -81,7 +82,7 @@ def open_pending(settings: Settings, email: str, challenge: str) -> tuple[bytes,
         if len(archive) > STAGE_MAX_BYTES + 128 * 1024 + 10240:
             raise ValueError("oversized")
         return archive, item["mode"]
-    except (ValueError, TypeError, KeyError, InvalidTag, UnicodeError, json.JSONDecodeError):
+    except (ValueError, TypeError, KeyError, InvalidTag, UnicodeError, binascii.Error):
         raise AppError(
             ErrorCode.VERIFICATION_REQUIRED,
             "Código ou sessão de verificação expirado. Comece novamente com a senha.",
