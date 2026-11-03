@@ -159,7 +159,7 @@ FAKE_CREATOR_ROLE_MISSING=true GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTR
 grep -F "iam roles create photointelManageSecretCreator" "$GCLOUD_TRACE" |
   grep -Fq -- "--permissions=secretmanager.secrets.create"
 if grep -F "iam roles create photointelManageSecretCreator" "$GCLOUD_TRACE" |
-   grep -E "(delete|destroy|setIamPolicy|versions.access)" >/dev/null; then
+   grep -E -- "--permissions=[^ ]*(delete|destroy|setIamPolicy|versions.access)" >/dev/null; then
   echo "ERROR: custom Manage creator role is overprivileged" >&2; exit 1
 fi
 if grep -F "iam service-accounts create " "$GCLOUD_TRACE" | grep -v "photointel-manage" >/dev/null; then
