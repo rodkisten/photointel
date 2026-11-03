@@ -49,12 +49,15 @@ async def dispatch_ready_worker_followup(
 
     from photointel.config import get_settings
     from photointel.database import SessionLocal
-    from photointel.models import Job, utcnow
+    from photointel.models import Job, Setting, utcnow
     from photointel.services.outbox import drain_outbox, enqueue_dispatch
 
     if get_settings().execution_platform != "cloud_run":
         return {"status": "not_cloud_run"}
     async with SessionLocal() as session:
+        state = await session.get(Setting, "jobs_paused")
+        if state and state.value:
+            return {"status": "queue_paused"}
         pending = await session.scalar(
             select(Job.id)
             .where(
