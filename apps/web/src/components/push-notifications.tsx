@@ -4,14 +4,7 @@ import { json, request, useApi } from '../api/client';
 import { Button } from './ui/button';
 import { useUi } from '../lib/store';
 
-type PushState =
-  | 'idle'
-  | 'unsupported'
-  | 'registering'
-  | 'registered'
-  | 'unregistered'
-  | 'offline'
-  | 'error';
+type PushState = 'idle' | 'unsupported' | 'registering' | 'registered' | 'unregistered' | 'offline' | 'error';
 type PushStatus = { enabled: boolean; registered_devices: number };
 type PushEvent = CustomEvent<{ state: PushState; message?: string }>;
 
