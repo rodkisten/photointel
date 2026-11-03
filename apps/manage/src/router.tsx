@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { z } from 'zod';
 import {
   createRootRoute,
   createRoute,
@@ -14,7 +15,7 @@ import { IssueBanner, Spinner } from './components/shared';
 import { RunDetail } from './components/runs';
 import { SecretManagerPage } from './features/secrets/SecretManagerPage';
 import { api } from './lib/client';
-import { readLogLink, type LogLink } from './log-deeplink';
+import { readLogLink, toLogSearch } from './log-deeplink';
 import { ConfigEditor } from './pages/ConfigEditor';
 import { Deploys } from './pages/Deploys';
 import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
@@ -65,13 +66,27 @@ function SystemPage() {
   return <SystemInfo meta={data} />;
 }
 
-function validatedLogSearch(search: Record<string, unknown>): LogLink {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(search)) {
-    if (typeof value === 'string') params.set(key, value);
-  }
-  return readLogLink(params.toString());
-}
+// Zod v4 keeps URL inputs optional while exposing a fully normalized LogLink to the page.
+const logSearchSchema = z
+  .object({
+    source: z.string().optional(),
+    correlation: z.string().optional(),
+    job: z.string().optional(),
+    job_type: z.string().optional(),
+    ray: z.string().optional(),
+    event: z.string().optional(),
+    entry: z.string().optional(),
+    at: z.string().optional(),
+    search: z.string().optional(),
+    minutes: z.string().optional(),
+  })
+  .transform((raw) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') params.set(key, value);
+    }
+    return readLogLink(params.toString());
+  });
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -83,7 +98,7 @@ const indexRoute = createRoute({
       case 'logs':
         throw redirect({
           to: '/logs',
-          search: readLogLink(location.searchStr),
+          search: toLogSearch(readLogLink(location.searchStr)),
           replace: true,
         });
       case 'deploy':
@@ -118,7 +133,7 @@ const runRoute = createRoute({
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/logs',
-  validateSearch: validatedLogSearch,
+  validateSearch: logSearchSchema,
   component: LogViewer,
 });
 
