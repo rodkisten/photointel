@@ -344,7 +344,7 @@ export async function api(
       view: 'events',
       dry: true,
       timeframe: { from: now - minutes * 60_000, to: now },
-      limit: search ? 200 : 70,
+      limit: search ? 100 : 70,
       order: 'desc',
       parameters: {
         datasets: ['cloudflare-workers'],
