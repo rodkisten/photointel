@@ -101,13 +101,23 @@ export function reportDiagnostic(error: unknown, phase: DiagnosticPhase): Diagno
   return incident;
 }
 
-/** Official Logs Explorer deep link: query and duration are path parameters. */
-function gcpLogsUrl(query: string): string {
-  return (
-    'https://console.cloud.google.com/logs/query;query=' +
-    encodeURIComponent(query) +
-    ';duration=P7D?project=photointel'
-  );
+/** Centralized, URL-addressable investigations. Never include messages, stack traces or credentials. */
+export function manageLogsUrl(
+  source: 'gcp' | 'cloudflare',
+  context: { correlation?: string; job?: string; jobType?: string; ray?: string; event?: string; at?: string } = {},
+): string {
+  const url = new URL('https://photos-manage.migos.club/');
+  url.searchParams.set('tab', 'logs');
+  url.searchParams.set('source', source);
+  if (context.correlation && UUID.test(context.correlation)) url.searchParams.set('correlation', context.correlation);
+  if (context.job && UUID.test(context.job)) url.searchParams.set('job', context.job);
+  if (context.jobType && /^[a-z0-9_]{1,48}$/.test(context.jobType)) url.searchParams.set('job_type', context.jobType);
+  if (context.ray && /^[a-f0-9-]{8,64}$/i.test(context.ray)) url.searchParams.set('ray', context.ray);
+  if (context.event && /^[a-f0-9]{32}$/i.test(context.event)) url.searchParams.set('event', context.event);
+  if (context.at && !Number.isNaN(Date.parse(context.at))) {
+    url.searchParams.set('at', new Date(context.at).toISOString());
+  }
+  return url.toString();
 }
 
 /** Copyable Logs Explorer query: avoids WebKit/in-app browsers dropping the
@@ -122,12 +132,11 @@ export function diagnosticLogsQuery(incident: Diagnostic): string {
 }
 
 export function diagnosticLogsUrl(incident: Diagnostic): string {
-  if (incident.source === 'gcp') {
-    return gcpLogsUrl(diagnosticLogsQuery(incident));
-  }
-  // Without an account ID, route to the official Workers page and let the
-  // operator select PhotoIntel > Observability and filter correlation_id.
-  return 'https://dash.cloudflare.com/?to=/:account/workers-and-pages';
+  return manageLogsUrl(incident.source, {
+    correlation: incident.id,
+    ray: incident.rayId,
+    event: incident.eventId,
+  });
 }
 
 export function diagnosticClipboardText(incident: Diagnostic): string {
@@ -144,19 +153,17 @@ export function diagnosticClipboardText(incident: Diagnostic): string {
   ].join('\n');
 }
 
-/** Worker/job IDs are emitted as safe structured fields by the Python runner. */
-export function jobLogsUrl(jobType: string, jobId?: string, correlationId?: string): string {
-  const jobName = jobType === 'icloud_discovery' ? 'photointel-discover' : 'photointel-worker';
-  const ids = [jobId, correlationId].filter((id): id is string => Boolean(id && UUID.test(id)));
-  const filter = ids.length
-    ? '\n(' +
-      ids
-        .map(
-          (id, index) => (index === 0 ? 'jsonPayload.job_id="' : 'jsonPayload.correlation_id="') + id + '"',
-        )
-        .join(' OR ') +
-      ')'
-    : '';
-  const query = 'resource.type="cloud_run_job"\nresource.labels.job_name="' + jobName + '"' + filter;
-  return gcpLogsUrl(query);
+/** Directly opens a job-scoped investigation in Manage, including historical jobs. */
+export function jobLogsUrl(
+  jobType: string,
+  jobId?: string,
+  correlationId?: string,
+  at?: string,
+): string {
+  return manageLogsUrl('gcp', {
+    job: jobId,
+    correlation: correlationId,
+    jobType,
+    at,
+  });
 }
