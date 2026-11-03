@@ -107,6 +107,22 @@ async def _queue_repair(
     )
     if busy is not None:
         return "busy"
+    latest = await session.scalar(
+        select(Job).where(
+            Job.asset_id == asset_id,
+            Job.job_type.in_(PIPELINE),
+        ).order_by(Job.created_at.desc(), Job.id.desc()).limit(1)
+    )
+    # A cancelled task is an explicit operator stop, not an invitation for
+    # the next automatic sweep to resurrect that same content revision.
+    if (
+        latest is not None
+        and latest.status == "cancelled"
+        and (latest.payload or {}).get("content_revision") in (
+            None, asset.content_revision
+        )
+    ):
+        return "blocked"
     recent = await session.scalar(
         select(func.count(Job.id)).where(
             Job.asset_id == asset_id,
@@ -143,6 +159,7 @@ async def _queue_repair(
                 DiscoveryManifest.asset_id == asset_id,
                 DiscoveryManifest.content_revision == asset.content_revision,
                 DiscoveryManifest.attempts < DiscoveryManifest.maximum_attempts,
+                DiscoveryManifest.status.not_in(("quarantined", "failed")),
             ).limit(1)
         ))
     kind = repair_stage(
