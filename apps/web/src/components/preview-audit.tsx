@@ -33,20 +33,10 @@ type PreviewAuditPage = {
   verification: 'catalog_metadata';
 };
 
-type PreviewAutomationStatus = {
+type PreviewAutomation = {
   enabled: boolean;
-  interval_minutes: number;
-  catalog_batch_size: number;
-  storage_batch_size: number;
-  weekly_attempt_limit: number;
-  last_started_at: string | null;
-  last_finished_at: string | null;
   next_run_at: string | null;
-  last_result?: {
-    status: string;
-    catalog?: { scanned: number; queued: number; cooldown: number };
-    storage?: { checked: number; missing_objects: number; queued: number };
-  } | null;
+  last_result: { catalog?: { queued: number } } | null;
 };
 
 const labels: Record<string, string> = {
@@ -62,7 +52,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
   const page = useApi<PreviewAuditPage>(
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
-  const automation = useApi<PreviewAutomationStatus>('/v1/jobs/previews/automation', 60_000);
+  const automation = useApi<PreviewAutomation>('/v1/jobs/previews/automation', 60_000);
   const repair = useAction<{ created: boolean; message: string }>();
   const repairBatch = useAction<{
     scanned: number;
@@ -162,39 +152,14 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 Auditoria dos registros do catálogo, inclusive falhas sem job recente. Não verifica objetos do
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
-              <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                <strong>Recuperação automática</strong>
-                {automation.error ? (
-                  <p className="field-help" role="status">
-                    Não foi possível consultar o agendamento da recuperação. Os jobs podem continuar normalmente.
-                  </p>
-                ) : automation.data ? (
-                  <>
-                    <p className="field-help">
-                      {automation.data.enabled ? 'Ativada' : 'Desativada'} · A cada{' '}
-                      {automation.data.interval_minutes} minutos · Até{' '}
-                      {automation.data.catalog_batch_size} fotos do catálogo e{' '}
-                      {automation.data.storage_batch_size} verificações no R2 por ciclo.
-                    </p>
-                    {automation.data.last_result && (
-                      <p className="field-help" role="status">
-                        Última varredura: {automation.data.last_result.catalog?.scanned ?? 0} avaliadas,{' '}
-                        {automation.data.last_result.catalog?.queued ?? 0} reparos enfileirados,{' '}
-                        {automation.data.last_result.storage?.missing_objects ?? 0} objetos ausentes no R2.
-                      </p>
-                    )}
-                    {automation.data.next_run_at && (
-                      <p className="field-help">
-                        Próxima verificação prevista:{' '}
-                        {new Date(automation.data.next_run_at).toLocaleString('pt-BR')}.
-                        A execução depende do worker e do Cloud Scheduler estarem ativos.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="field-help">Consultando a programação automática…</p>
-                )}
-              </div>
+              {automation.data && (
+                <p className="field-help">
+                  Reparo automático: {automation.data.enabled ? 'ativo' : 'desativado'}.
+                  {automation.data.last_result && (
+                    <span> {automation.data.last_result.catalog?.queued ?? 0} reparos enfileirados na última auditoria.</span>
+                  )}
+                </p>
+              )}
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
                 <strong>Reparo em lote</strong>
                 <p className="field-help">
