@@ -52,8 +52,9 @@ a cada 10 minutos: o horário de próximo ciclo fica persistido no banco.
 Configurações aplicadas via `GCP_CONFIG_ENV` devem conter as chaves adicionais
 no bloco de ambiente do Cloud Run (`extra_environment`), se diferentes dos
 defaults acima. Faça o deploy tanto dos Jobs quanto da API. Para ativar os
-agendamentos no arquivo de configuração GCP, use
-`auto_resume_schedules=true` e execute a fase Scheduler.
+agendamentos no arquivo de configuração GCP, use a linha
+`AUTO_RESUME_SCHEDULES=json:true` no `GCP_CONFIG_ENV` (ou
+`auto_resume_schedules=true` no JSON) e execute a fase Scheduler.
 A criação é pausada por padrão para evitar importação/custos não autorizados;
 **uma atualização de Scheduler preserva o estado existente**, sem pausar
 agendamentos já ativos. A opção de retomada é explícita, não é alterada
