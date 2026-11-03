@@ -17,7 +17,7 @@ BUILDER="serviceAccount:photointel-builder@$PROJECT.iam.gserviceaccount.com"
 DEPLOYER="serviceAccount:photointel-deployer@$PROJECT.iam.gserviceaccount.com"
 # The Terminal build runs as this administrative WIF identity (not deployer).
 BOOTSTRAP="serviceAccount:photointel-bootstrap@$PROJECT.iam.gserviceaccount.com"
-# Dedicated, read-only identity for the separate Cloudflare Manage Worker.
+# Dedicated Access-allowlisted admin identity for the Cloudflare Manage Worker.
 MANAGE_ID="photointel-manage"
 MANAGE_EMAIL="$MANAGE_ID@$PROJECT.iam.gserviceaccount.com"
 MANAGE="serviceAccount:$MANAGE_EMAIL"
@@ -149,7 +149,7 @@ ensure_manage_identity() {
   ensure "Manage service account $MANAGE_EMAIL" \
     iam service-accounts describe "$MANAGE_EMAIL" \
     @@CREATE@@ iam service-accounts create "$MANAGE_ID" \
-    "--display-name=PhotoIntel Manage (read-only)"
+    "--display-name=PhotoIntel Manage (Access protected admin)"
 }
 reconcile_manage_federation() {
   # Only configure external federation if a distinct Manage admin allowlist exists.
@@ -158,22 +158,21 @@ reconcile_manage_federation() {
   fi
 }
 reconcile_manage_access() {
-  # Project-wide viewer privileges exclude secrets and mutations.
-  # Never grant run.invoker/run.admin, IAM admin or tokenCreator.
-  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer; do
+  # Access-protected administrative editor: metadata for all secrets, value previews
+  # and new versions. Never grant Secret Manager Admin/Editor or destructive rights.
+  # A custom project role permits only creation of empty secret containers.
+  local role_id="photointelManageSecretCreator"
+  ensure "Manage secret container creator role" \
+    iam roles describe "$role_id" \
+    @@CREATE@@ iam roles create "$role_id" \
+      "--title=PhotoIntel Manage Secret Creator" \
+      "--description=Create secret containers only; no delete or IAM changes" \
+      --permissions=secretmanager.secrets.create --stage=GA
+  for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/secretmanager.viewer roles/secretmanager.secretAccessor \
+    roles/secretmanager.secretVersionAdder "projects/$PROJECT/roles/$role_id"; do
     change projects add-iam-policy-binding "$PROJECT" \
       "--member=$MANAGE" "--role=$role" --condition=None --format=none
-  done
-  # Secret editing is granted per existing, explicitly referenced MANAGE_*
-  # workflow secret. No project-wide Secret Manager roles or data-plane keys.
-  # The Worker can read a small preview and ADD a new version, but cannot
-  # delete, disable, destroy, create containers, or edit IAM permissions.
-  for key in "${!WORKFLOW_NAMES[@]}"; do
-    [[ "$key" == MANAGE_* ]] || continue
-    for role in roles/secretmanager.secretAccessor roles/secretmanager.secretVersionAdder; do
-      change secrets add-iam-policy-binding "${WORKFLOW_NAMES[$key]}" \
-        "--member=$MANAGE" "--role=$role" --condition=None --format=none
-    done
   done
 }
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
