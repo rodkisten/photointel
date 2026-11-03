@@ -54,23 +54,28 @@ function providerFault(url: string, status: number, body: string, responseHeader
     );
   if (host === 'api.github.com') {
     const permissions = (responseHeaders.get('X-Accepted-GitHub-Permissions') || '').trim();
-    const allowedPermissions = /^[a-z_]+=(?:read|write|admin)(?:(?:,|;)[ ]?[a-z_]+=(?:read|write|admin))*$/i.test(permissions)
-      ? permissions.slice(0, 180) : '';
+    const allowedPermissions =
+      /^[a-z_]+=(?:read|write|admin)(?:(?:,|;)[ ]?[a-z_]+=(?:read|write|admin))*$/i.test(permissions)
+        ? permissions.slice(0, 180)
+        : '';
     let upstreamMessage = '';
     try {
       const parsed = JSON.parse(body) as { message?: unknown };
       if (typeof parsed.message === 'string') upstreamMessage = parsed.message.toLowerCase();
-    } catch { /* untrusted provider body */ }
-    const classification = status === 401 || upstreamMessage.includes('bad credentials')
-      ? 'GitHub rejeitou a credencial instalada no Worker.'
-      : responseHeaders.has('X-GitHub-SSO')
-        ? 'GitHub exige autorização SSO para esta credencial.'
-        : upstreamMessage.includes('resource not accessible by personal access token') ||
-          upstreamMessage.includes('resource not accessible by integration')
-          ? 'O token foi reconhecido, mas falta acesso a esta operação ou a este repositório.'
-          : status === 403
-            ? 'GitHub recusou o acesso (403). Confirme permissões e visibilidade do repositório.'
-            : 'GitHub API recusou a operação (HTTP ' + status + ').';
+    } catch {
+      /* untrusted provider body */
+    }
+    const classification =
+      status === 401 || upstreamMessage.includes('bad credentials')
+        ? 'GitHub rejeitou a credencial instalada no Worker.'
+        : responseHeaders.has('X-GitHub-SSO')
+          ? 'GitHub exige autorização SSO para esta credencial.'
+          : upstreamMessage.includes('resource not accessible by personal access token') ||
+              upstreamMessage.includes('resource not accessible by integration')
+            ? 'O token foi reconhecido, mas falta acesso a esta operação ou a este repositório.'
+            : status === 403
+              ? 'GitHub recusou o acesso (403). Confirme permissões e visibilidade do repositório.'
+              : 'GitHub API recusou a operação (HTTP ' + status + ').';
     return new ApiError(
       503,
       'GITHUB_' + status,
@@ -78,8 +83,11 @@ function providerFault(url: string, status: number, body: string, responseHeader
     );
   }
   if (host === 'api.cloudflare.com' && numericCode === '9106')
-    return new ApiError(503, 'CLOUDFLARE_400_9106',
-      'Cloudflare não reconheceu a autenticação (9106). O token do Manage pode estar inválido, desatualizado ou sem header Authorization no provedor.');
+    return new ApiError(
+      503,
+      'CLOUDFLARE_400_9106',
+      'Cloudflare não reconheceu a autenticação (9106). O token do Manage pode estar inválido, desatualizado ou sem header Authorization no provedor.',
+    );
   if (host === 'api.cloudflare.com')
     return new ApiError(
       503,
@@ -96,8 +104,7 @@ export async function provider(url: string, token: string, init: RequestInit = {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   headers.set('Content-Type', 'application/json');
-  if (new URL(url).hostname === 'api.github.com')
-    headers.set('User-Agent', 'PhotoIntel-Manage');
+  if (new URL(url).hostname === 'api.github.com') headers.set('User-Agent', 'PhotoIntel-Manage');
   if (token?.trim()) headers.set('Authorization', 'Bearer ' + token.trim());
   const response = await fetch(url, {
     ...init,
@@ -181,9 +188,10 @@ export function validateConfig(value: string): void {
     throw new ApiError(422, 'INLINE_SECRET', 'Guarde credenciais no Secret Manager');
   // Telegram relay tokens may be supplied inline in GCP_CONFIG_ENV.
   // This is an explicit exception; other secrets still require Secret Manager.
-  const inlineTelegram = value.match(
-    /^\s*(?:EXTRA_ENVIRONMENT__)?TELEGRAM_NOTIFICATION_API_TOKEN\s*=\s*(.*)$/m,
-  )?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const inlineTelegram = value
+    .match(/^\s*(?:EXTRA_ENVIRONMENT__)?TELEGRAM_NOTIFICATION_API_TOKEN\s*=\s*(.*)$/m)?.[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
   if (inlineTelegram !== undefined && inlineTelegram.length === 0)
     throw new ApiError(422, 'TELEGRAM_TOKEN_SIZE', 'O token do Telegram não pode estar vazio.');
   if (value.trim().startsWith('{')) {

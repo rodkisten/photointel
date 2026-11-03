@@ -50,8 +50,7 @@ export async function api(
       sentry_reader: Boolean(env.SENTRY_API_TOKEN),
       sentry_org: env.SENTRY_ORG || null,
     });
-  if (method === 'GET' && path === '/api/diagnostics')
-    return json(await runManageDiagnostics(env));
+  if (method === 'GET' && path === '/api/diagnostics') return json(await runManageDiagnostics(env));
   if (method === 'GET' && path === '/api/overview') {
     const tasks = await Promise.allSettled([
       gh(env, '/actions/runs?per_page=12'),
@@ -213,7 +212,11 @@ export async function api(
     try {
       plan = planConfigChange(current.value, input.value);
     } catch {
-      throw new ApiError(422, 'CONFIG_DIFF', 'Não foi possível interpretar o .env para determinar os workflows. Revise a sintaxe.');
+      throw new ApiError(
+        422,
+        'CONFIG_DIFF',
+        'Não foi possível interpretar o .env para determinar os workflows. Revise a sintaxe.',
+      );
     }
     const version = await digest(input.value);
     if (plan.changed.length === 0) {
@@ -223,7 +226,8 @@ export async function api(
       return json({ ok: true, version, updated_at: new Date().toISOString(), plan, dispatches: [] });
     }
     await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
-    const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> = [];
+    const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> =
+      [];
     // Structural IAM/identity changes must not be published before administrator approval.
     const requiresAdmin = plan.blocked;
     if (input.auto_apply !== false && !requiresAdmin) {
@@ -231,9 +235,10 @@ export async function api(
         try {
           await gh(env, '/actions/workflows/' + workflow.file + '/dispatches', 'POST', {
             ref: 'main',
-            inputs: workflow.file === 'config-sync.yml'
-              ? { ...workflow.inputs, config_version: version }
-              : workflow.inputs,
+            inputs:
+              workflow.file === 'config-sync.yml'
+                ? { ...workflow.inputs, config_version: version }
+                : workflow.inputs,
           });
           dispatches.push({ file: workflow.file, label: workflow.label, status: 'queued' });
         } catch (error) {
@@ -247,14 +252,16 @@ export async function api(
         }
       }
     }
-    console.log(JSON.stringify({
-      event: 'manage_config_updated',
-      operator: identity.email,
-      changed_keys: plan.changed.length,
-      auto_apply: input.auto_apply !== false,
-      dispatched: dispatches.map((item) => ({ file: item.file, status: item.status })),
-      requires_admin: requiresAdmin,
-    }));
+    console.log(
+      JSON.stringify({
+        event: 'manage_config_updated',
+        operator: identity.email,
+        changed_keys: plan.changed.length,
+        auto_apply: input.auto_apply !== false,
+        dispatched: dispatches.map((item) => ({ file: item.file, status: item.status })),
+        requires_admin: requiresAdmin,
+      }),
+    );
     return json({
       ok: true,
       version,
@@ -390,8 +397,8 @@ export async function api(
     // Never return a token, only whether it is present in the deployed env.
     const tokenBound = Boolean(
       (typeof token?.value === 'string' && token.value.length > 0) ||
-      token?.valueSource?.secretKeyRef ||
-      token?.valueFrom?.secretKeyRef,
+        token?.valueSource?.secretKeyRef ||
+        token?.valueFrom?.secretKeyRef,
     );
     return json({
       enabled,
@@ -508,14 +515,12 @@ export async function api(
     });
   }
   if (method === 'GET' && path === '/api/sentry/issues') {
-    if (!env.SENTRY_ORG)
-      return json({ items: [], read_enabled: false, dashboard_url: null });
+    if (!env.SENTRY_ORG) return json({ items: [], read_enabled: false, dashboard_url: null });
     if (!/^[a-z0-9-]{1,64}$/.test(env.SENTRY_ORG))
       throw new ApiError(503, 'SENTRY_ORG', 'Organização inválida');
     const dashboardUrl = 'https://' + env.SENTRY_ORG + '.sentry.io/issues/';
     // Ingestion via SENTRY_DSN works independently of this optional read token.
-    if (!env.SENTRY_API_TOKEN)
-      return json({ items: [], read_enabled: false, dashboard_url: dashboardUrl });
+    if (!env.SENTRY_API_TOKEN) return json({ items: [], read_enabled: false, dashboard_url: dashboardUrl });
     const items = await provider(
       'https://sentry.io/api/0/organizations/' +
         env.SENTRY_ORG +

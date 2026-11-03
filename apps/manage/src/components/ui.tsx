@@ -26,9 +26,9 @@ const buttonVariants = cva(
         lg: 'h-11 px-5',
       },
     },
-    defaultVariants: { 
-      variant: 'default', 
-      size: 'default' 
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
     },
   },
 );
@@ -42,14 +42,8 @@ export interface ButtonProps
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ asChild = false, variant, size, className, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
-    return (
-      <Comp
-        ref={ref}
-        className={cn(buttonVariants({ variant, size, className }))}
-        {...props}
-      />
-    );
-  }
+    return <Comp ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  },
 );
 Button.displayName = 'Button';
 
@@ -61,13 +55,10 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn(
-        'rounded-xl border border-slate-800 bg-slate-950 shadow-lg shadow-black/20',
-        className
-      )}
+      className={cn('rounded-xl border border-slate-800 bg-slate-950 shadow-lg shadow-black/20', className)}
       {...props}
     />
-  )
+  ),
 );
 Card.displayName = 'Card';
 
@@ -95,14 +86,14 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         className={cn(
           'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium tracking-wide',
           badgeColors[tone],
-          className
+          className,
         )}
         {...props}
       >
         {children}
       </span>
     );
-  }
+  },
 );
 Badge.displayName = 'Badge';
 
@@ -116,11 +107,11 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
       ref={ref}
       className={cn(
         'flex h-10 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 text-base text-white outline-none transition-colors placeholder:text-slate-500 focus-visible:border-slate-500 md:text-sm',
-        className
+        className,
       )}
       {...props}
     />
-  )
+  ),
 );
 Input.displayName = 'Input';
 
@@ -130,26 +121,27 @@ export const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttrib
       ref={ref}
       className={cn(
         'flex h-10 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-900 px-3 text-base text-white outline-none transition-colors focus-visible:border-slate-500 md:text-sm',
-        className
+        className,
       )}
       {...props}
     />
-  )
+  ),
 );
 Select.displayName = 'Select';
 
-export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
-  ({ className, ...props }, ref) => (
-    <textarea
-      ref={ref}
-      className={cn(
-        'flex min-h-[80px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-3 font-mono text-[13px] leading-6 text-slate-200 outline-none transition-colors focus-visible:border-slate-500',
-        className
-      )}
-      {...props}
-    />
-  )
-);
+export const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className, ...props }, ref) => (
+  <textarea
+    ref={ref}
+    className={cn(
+      'flex min-h-[80px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-3 font-mono text-[13px] leading-6 text-slate-200 outline-none transition-colors focus-visible:border-slate-500',
+      className,
+    )}
+    {...props}
+  />
+));
 Textarea.displayName = 'Textarea';
 
 // ==========================================
@@ -176,6 +168,6 @@ export const Section = React.forwardRef<HTMLElement, SectionProps>(
         {children}
       </section>
     );
-  }
+  },
 );
 Section.displayName = 'Section';

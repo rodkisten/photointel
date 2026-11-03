@@ -65,7 +65,7 @@ function JobSteps({ steps }: { steps: Job['steps'] }) {
 
 function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
   const status = item.conclusion || item.status;
-  
+
   // A query de logs agora fica encapsulada no próprio Item
   const logsQuery = useQuery({
     queryKey: ['run-job-logs', runId, item.id],
@@ -80,7 +80,7 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
         <span className="truncate text-sm font-medium text-slate-200">{item.name}</span>
         <Badge tone={state(status)}>{human(status)}</Badge>
       </div>
-      
+
       <div className="mt-2 flex items-center gap-4">
         <External href={item.html_url}>GitHub</External>
         <button
@@ -100,11 +100,11 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
           ) : logsQuery.error ? (
             <IssueBanner error={logsQuery.error} />
           ) : (
-            <JsonView 
-              data={logsQuery.data?.text || 'Nenhum log disponível'} 
+            <JsonView
+              data={logsQuery.data?.text || 'Nenhum log disponível'}
               title="Logs do job"
-              defaultExpandDepth={1} 
-              maxHeight={430} 
+              defaultExpandDepth={1}
+              maxHeight={430}
             />
           )}
         </div>
@@ -131,19 +131,19 @@ export function RunRow({ run, onSelect }: RunRowProps) {
           'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
           currentTone === 'success' && 'bg-emerald-500/10 text-emerald-400',
           currentTone === 'danger' && 'bg-red-500/10 text-red-400',
-          currentTone !== 'success' && currentTone !== 'danger' && 'bg-slate-800 text-slate-400'
+          currentTone !== 'success' && currentTone !== 'danger' && 'bg-slate-800 text-slate-400',
         )}
       >
         <RunIcon status={status} />
       </div>
-      
+
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-slate-200">{run.name}</p>
         <p className="mt-0.5 truncate text-xs text-slate-500">
           #{run.run_number} · {date(run.created_at)} · {run.event || 'manual'}
         </p>
       </div>
-      
+
       <Badge tone={currentTone}>{human(status)}</Badge>
       <ChevronRight size={15} className="shrink-0 text-slate-600" />
     </button>
@@ -177,11 +177,11 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
           <ArrowLeft size={15} className="mr-1.5" />
           Voltar
         </Button>
-        
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => setShowConfirm(true)} 
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowConfirm(true)}
           disabled={retryMutation.isPending}
           className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
         >
@@ -199,12 +199,12 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
         ) : (
           <Card className="overflow-hidden border-slate-800 bg-slate-950">
             {data?.items.map((item) => (
-              <JobItem 
+              <JobItem
                 key={item.id}
                 runId={id}
                 item={item}
                 isActive={activeJobId === item.id}
-                onToggleLog={() => setActiveJobId(prev => prev === item.id ? null : item.id)}
+                onToggleLog={() => setActiveJobId((prev) => (prev === item.id ? null : item.id))}
               />
             ))}
           </Card>
@@ -221,10 +221,8 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
         busy={retryMutation.isPending}
         onConfirm={() => retryMutation.mutate()}
       />
-      
-      {retryMutation.error && (
-        <IssueBanner error={retryMutation.error} className="mt-4" />
-      )}
+
+      {retryMutation.error && <IssueBanner error={retryMutation.error} className="mt-4" />}
     </div>
   );
 }

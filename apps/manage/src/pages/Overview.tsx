@@ -1,7 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleAlert, Cloud, CloudCog, Code2, Copy, ExternalLink, GitBranch, History, LoaderCircle, Logs, Menu, Play, RefreshCcw, RotateCcw, Save, Search, Server, Settings2, Shield, Terminal, Workflow, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  Cloud,
+  CloudCog,
+  Code2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  History,
+  LoaderCircle,
+  Logs,
+  Menu,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Save,
+  Search,
+  Server,
+  Settings2,
+  Shield,
+  Terminal,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';

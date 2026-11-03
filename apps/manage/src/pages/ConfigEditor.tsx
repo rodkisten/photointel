@@ -1,7 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleAlert, Cloud, CloudCog, Code2, Copy, ExternalLink, GitBranch, History, LoaderCircle, Logs, Menu, Play, RefreshCcw, RotateCcw, Save, Search, Server, Settings2, Shield, Terminal, Workflow, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  Cloud,
+  CloudCog,
+  Code2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  History,
+  LoaderCircle,
+  Logs,
+  Menu,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Save,
+  Search,
+  Server,
+  Settings2,
+  Shield,
+  Terminal,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
@@ -92,14 +122,18 @@ export function ConfigEditor() {
               <span>CodeMirror 6 · {detectEnvironmentFormat(editor) === 'json' ? 'JSON' : 'dotenv'}</span>
               <span>{editor.split(/\r?\n/).length} linhas · comentários preservados</span>
             </div>
-            <CodeMirrorEnvEditor value={editor} onChange={setEditor}
-              format={detectEnvironmentFormat(editor)} ariaLabel="Editar GCP_CONFIG_ENV" />
+            <CodeMirrorEnvEditor
+              value={editor}
+              onChange={setEditor}
+              format={detectEnvironmentFormat(editor)}
+              ariaLabel="Editar GCP_CONFIG_ENV"
+            />
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
-                Chaves repetidas: {duplicates.map((item) =>
-                  item.key + ' (linhas ' + item.lines.join(', ') + ')').join('; ')}.
-                Valores idênticos são preservados; valores conflitantes impedem o salvamento.
-                Nenhum comentário ou linha será excluído automaticamente.
+                Chaves repetidas:{' '}
+                {duplicates.map((item) => item.key + ' (linhas ' + item.lines.join(', ') + ')').join('; ')}.
+                Valores idênticos são preservados; valores conflitantes impedem o salvamento. Nenhum
+                comentário ou linha será excluído automaticamente.
               </p>
             )}
             {validation && <p className="text-xs text-red-300">{validation}</p>}
@@ -169,10 +203,10 @@ export function ConfigEditor() {
               </Button>
             </div>
             <p className="text-xs leading-5 text-slate-500">
-              O painel edita uma variável do GitHub, não um secret. O Telegram aceita token diretamente
-              no .env, mas o valor poderá ser visto por quem tem acesso às variáveis do repositório e à configuração
-              do Cloud Run. Prefira um GitHub Environment Secret ou Secret Manager se precisar de sigilo forte.
-              Alterações de runtime sincronizam sem reconstruir Docker.
+              O painel edita uma variável do GitHub, não um secret. O Telegram aceita token diretamente no
+              .env, mas o valor poderá ser visto por quem tem acesso às variáveis do repositório e à
+              configuração do Cloud Run. Prefira um GitHub Environment Secret ou Secret Manager se precisar de
+              sigilo forte. Alterações de runtime sincronizam sem reconstruir Docker.
             </p>
             {update.error && <IssueBanner error={update.error} />}
             {lastSave && (
@@ -189,8 +223,7 @@ export function ConfigEditor() {
                 {lastSave.dispatches.map((item) => (
                   <p key={item.file} className={item.status === 'failed' ? 'text-red-300' : 'text-slate-300'}>
                     {item.status === 'queued' ? '✓ Solicitado' : '✕ Falha ao solicitar'}: {item.label}
-                    {item.error ? ' · ' + item.error : ''}
-                    {' '}
+                    {item.error ? ' · ' + item.error : ''}{' '}
                     <a
                       href={'https://github.com/rodkisten/photointel/actions/workflows/' + item.file}
                       target="_blank"
@@ -202,7 +235,9 @@ export function ConfigEditor() {
                   </p>
                 ))}
                 {lastSave.plan.manual.map((reason) => (
-                  <p key={reason} className="text-amber-300">Revisão manual: {reason}</p>
+                  <p key={reason} className="text-amber-300">
+                    Revisão manual: {reason}
+                  </p>
                 ))}
                 {lastSave.plan.changed.length === 0 && (
                   <p className="text-slate-400">Somente formatação alterada; nenhum workflow necessário.</p>

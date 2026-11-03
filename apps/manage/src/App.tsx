@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { 
-  Activity, CloudCog, Code2, KeyRound, Logs, 
-  Settings2, Shield, Workflow 
-} from 'lucide-react';
+import { Activity, CloudCog, Code2, KeyRound, Logs, Settings2, Shield, Workflow } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
 import { IssueBanner, Spinner } from './components/shared';
@@ -50,11 +47,15 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 export default function App() {
   const [tab, setTab] = useState<Tab>('overview');
   const [openedRunId, setOpenedRunId] = useState<number | null>(null);
-  
-  const { data: meta, isPending, error } = useQuery({ 
-    queryKey: ['meta'], 
-    queryFn: () => api<Meta>('/meta'), 
-    retry: false 
+
+  const {
+    data: meta,
+    isPending,
+    error,
+  } = useQuery({
+    queryKey: ['meta'],
+    queryFn: () => api<Meta>('/meta'),
+    retry: false,
   });
 
   const navigate = (nextTab: Tab) => {
@@ -64,10 +65,10 @@ export default function App() {
   };
 
   // --- Helpers de Renderização e UI ---
-  
+
   const currentNav = NAV.find((n) => n.id === tab);
   const isViewingRun = openedRunId !== null;
-  
+
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
   const pageDescription = isViewingRun ? 'Etapas e logs técnicos' : TAB_DESCRIPTIONS[tab];
 
@@ -87,19 +88,25 @@ export default function App() {
     }
 
     switch (tab) {
-      case 'overview': return <Overview openRun={setOpenedRunId} />;
-      case 'deploy': return <Deploys openRun={setOpenedRunId} />;
-      case 'logs': return <LogViewer />;
-      case 'config': return <ConfigEditor />;
-      case 'secrets': return <SecretManagerPage />;
-      case 'settings': return <SystemInfo meta={meta!} />;
-      default: return null;
+      case 'overview':
+        return <Overview openRun={setOpenedRunId} />;
+      case 'deploy':
+        return <Deploys openRun={setOpenedRunId} />;
+      case 'logs':
+        return <LogViewer />;
+      case 'config':
+        return <ConfigEditor />;
+      case 'secrets':
+        return <SecretManagerPage />;
+      case 'settings':
+        return <SystemInfo meta={meta!} />;
+      default:
+        return null;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-slate-800">
-      
       {/* Top Header */}
       <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -108,15 +115,11 @@ export default function App() {
               <CloudCog size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-slate-100">
-                PhotoIntel
-              </p>
-              <p className="text-[11px] font-medium tracking-wider text-slate-500">
-                CONTROL CENTER
-              </p>
+              <p className="text-sm font-semibold leading-tight tracking-tight text-slate-100">PhotoIntel</p>
+              <p className="text-[11px] font-medium tracking-wider text-slate-500">CONTROL CENTER</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3 text-xs text-slate-400">
             <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>
             <Shield size={17} className={meta ? 'text-emerald-400' : 'text-slate-600'} />
@@ -127,7 +130,6 @@ export default function App() {
 
       {/* Main Layout */}
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
-        
         {/* Desktop Sidebar */}
         <aside className="hidden w-48 shrink-0 md:block">
           <nav className="sticky top-24 space-y-1">
@@ -141,7 +143,7 @@ export default function App() {
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-slate-800/80 text-slate-100 shadow-sm'
-                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                      : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
                   )}
                 >
                   <n.icon size={17} className={isActive ? 'text-slate-200' : 'text-slate-500'} />
@@ -154,7 +156,6 @@ export default function App() {
 
         {/* Content Area */}
         <main className="min-w-0 flex-1 space-y-6">
-          
           {/* Page Header */}
           <div className="flex items-start justify-between">
             <div className="space-y-1">
@@ -164,13 +165,9 @@ export default function App() {
               <h1 className="text-2xl font-semibold tracking-tight text-slate-100 sm:text-3xl">
                 {pageTitle}
               </h1>
-              <p className="text-sm text-slate-400">
-                {pageDescription}
-              </p>
+              <p className="text-sm text-slate-400">{pageDescription}</p>
             </div>
-            {currentNav && !isViewingRun && (
-              <currentNav.icon size={20} className="mt-3 text-slate-600" />
-            )}
+            {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-slate-600" />}
           </div>
 
           {/* Dynamic Content */}
@@ -197,7 +194,7 @@ export default function App() {
               aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] transition-colors',
-                isActive ? 'text-slate-200' : 'text-slate-500 hover:text-slate-400'
+                isActive ? 'text-slate-200' : 'text-slate-500 hover:text-slate-400',
               )}
             >
               <n.icon size={21} className={isActive ? 'text-slate-300' : 'opacity-80'} />
@@ -206,7 +203,6 @@ export default function App() {
           );
         })}
       </nav>
-
     </div>
   );
 }

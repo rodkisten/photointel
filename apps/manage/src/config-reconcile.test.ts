@@ -9,7 +9,9 @@ const BASE = [
 
 describe('automatic configuration impact planner', () => {
   it('preserves harmless repeated dotenv values and their comment lines', () => {
-    const before = BASE + '\n# Sentry for UI\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' +
+    const before =
+      BASE +
+      '\n# Sentry for UI\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' +
       '# Sentry for Manage\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club';
     const next = before + '\nMANAGE_SENTRY_DSN=https://0123456789abcdef@o1.ingest.sentry.io/456';
     const repeated = findDuplicateConfigKeys(before);
@@ -22,8 +24,8 @@ describe('automatic configuration impact planner', () => {
   });
 
   it('rejects conflicting duplicate values rather than silently overwriting', () => {
-    const conflicted = BASE + '\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' +
-      'EXTRA_ENVIRONMENT__SENTRY_ORG=other-org';
+    const conflicted =
+      BASE + '\nEXTRA_ENVIRONMENT__SENTRY_ORG=migos-club\n' + 'EXTRA_ENVIRONMENT__SENTRY_ORG=other-org';
     expect(() => planConfigChange(BASE, conflicted)).toThrow(/duplicada/);
   });
 
@@ -82,8 +84,9 @@ describe('automatic configuration impact planner', () => {
   });
 
   it('supports protected auth metadata and detects malformed dotenv', () => {
-    expect(planConfigChange(BASE, BASE + '\nGCP_WORKLOAD_IDENTITY_PROVIDER=projects/1').manual)
-      .toContain('Identidade GitHub/GCP: requer revisão do Workload Identity Federation.');
+    expect(planConfigChange(BASE, BASE + '\nGCP_WORKLOAD_IDENTITY_PROVIDER=projects/1').manual).toContain(
+      'Identidade GitHub/GCP: requer revisão do Workload Identity Federation.',
+    );
     expect(() => planConfigChange(BASE, BASE + '\nBROKEN LINE')).toThrow();
   });
 
@@ -98,7 +101,10 @@ describe('automatic configuration impact planner', () => {
   });
 
   it('selects an isolated Manage publish for Manage workflow secrets', () => {
-    const a = { project_id: 'photointel', workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '1' } } };
+    const a = {
+      project_id: 'photointel',
+      workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '1' } },
+    };
     const b = { ...a, workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '2' } } };
     expect(planConfigChange(JSON.stringify(a), JSON.stringify(b)).targets).toEqual(['manage']);
   });

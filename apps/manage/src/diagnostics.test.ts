@@ -9,23 +9,33 @@ describe('read-only runtime credential diagnostics', () => {
     const githubToken = 'github-secret-value-never-returned';
     const cloudflareToken = 'cloudflare-secret-value-never-returned';
     const requested: Array<{ path: string; auth: string }> = [];
-    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
-      const path = String(url);
-      const auth = new Headers(options.headers).get('Authorization') || '';
-      requested.push({ path, auth });
-      expect(options.method).toBe('GET');
-      if (path.includes('actions/runs')) {
-        return new Response(JSON.stringify({ message: 'Resource not accessible by personal access token' }), {
-          status: 403, headers: { 'X-Accepted-GitHub-Permissions': 'actions=read' },
-        });
-      }
-      if (path.includes('workers/scripts')) {
-        return new Response(JSON.stringify({ errors: [{ code: 9106, message: 'Authentication failed' }] }), {
-          status: 400,
-        });
-      }
-      return Response.json({ ok: true });
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, options: RequestInit) => {
+        const path = String(url);
+        const auth = new Headers(options.headers).get('Authorization') || '';
+        requested.push({ path, auth });
+        expect(options.method).toBe('GET');
+        if (path.includes('actions/runs')) {
+          return new Response(
+            JSON.stringify({ message: 'Resource not accessible by personal access token' }),
+            {
+              status: 403,
+              headers: { 'X-Accepted-GitHub-Permissions': 'actions=read' },
+            },
+          );
+        }
+        if (path.includes('workers/scripts')) {
+          return new Response(
+            JSON.stringify({ errors: [{ code: 9106, message: 'Authentication failed' }] }),
+            {
+              status: 400,
+            },
+          );
+        }
+        return Response.json({ ok: true });
+      }),
+    );
     const env = {
       GITHUB_REPO: 'rodkisten/photointel',
       GITHUB_ENVIRONMENT: 'production',

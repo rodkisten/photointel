@@ -7,7 +7,10 @@ const org = import.meta.env.VITE_MANAGE_SENTRY_ORG as string | undefined;
 function safe(value: string): string {
   return value
     .replace(/\b(?:https?|ftp|s3|gs):\/\/[^\s"'<>]+/gi, '[URL redigida]')
-    .replace(/\b(authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token|cookie|signature)\s*[:=]\s*[^\s,;]+/gi, '$1=[redigido]')
+    .replace(
+      /\b(authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token|cookie|signature)\s*[:=]\s*[^\s,;]+/gi,
+      '$1=[redigido]',
+    )
     .replace(/\bbearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [redigido]')
     .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[JWT redigido]')
     .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, '[email redigido]')
@@ -18,8 +21,9 @@ function safe(value: string): string {
 export function sentryIssueSearch(correlationId: string | undefined): string | undefined {
   if (!org || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(org)) return undefined;
   if (!correlationId || !/^[a-f0-9-]{36}$/i.test(correlationId)) return undefined;
-  return 'https://' + org + '.sentry.io/issues/?query=' +
-    encodeURIComponent('correlation_id:' + correlationId);
+  return (
+    'https://' + org + '.sentry.io/issues/?query=' + encodeURIComponent('correlation_id:' + correlationId)
+  );
 }
 
 export function initManageSentry(): void {

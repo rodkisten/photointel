@@ -175,19 +175,15 @@ export function ErrorState({ error, retry }: { error: Error; retry?: () => void 
           </details>
         )}
       </div>
-      
+
       {retry && (
         <Button variant="outline" onClick={retry}>
           <RefreshCw size={15} />
           Tentar novamente
         </Button>
       )}
-      
-      {isAuthError && (
-        <Button onClick={() => window.location.assign('/auth/login')}>
-          Entrar novamente
-        </Button>
-      )}
+
+      {isAuthError && <Button onClick={() => window.location.assign('/auth/login')}>Entrar novamente</Button>}
     </div>
   );
 }
@@ -197,7 +193,7 @@ export function ErrorState({ error, retry }: { error: Error; retry?: () => void 
 // ==========================================
 
 /**
- * Diálogo isolado para lidar com polling de status, diagnóstico 
+ * Diálogo isolado para lidar com polling de status, diagnóstico
  * e reparo de imagens, aliviando o estado de renderização da PrivateImage.
  */
 function PreviewDiagnosticDialog({
@@ -227,16 +223,16 @@ function PreviewDiagnosticDialog({
   // Polling Effect - Só executa quando o dialog está aberto
   useEffect(() => {
     if (!open || !assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
-    
+
     let cancelled = false;
-    
+
     const refresh = async () => {
       try {
         const state = await request<PreviewState>(`/v1/jobs/assets/${assetId}/preview`);
         if (cancelled) return;
-        
+
         setPreviewState(state);
-        
+
         if (state.status === 'ready') {
           onOverrideSrc(`/v1/assets/${assetId}/media/thumbnail_medium`);
         }
@@ -247,10 +243,10 @@ function PreviewDiagnosticDialog({
         }
       }
     };
-    
+
     void refresh();
     const timer = setInterval(refresh, 8000);
-    
+
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -268,20 +264,27 @@ function PreviewDiagnosticDialog({
           correlation_id: string | null;
           error_code: string | null;
         }>(`/v1/observability/assets/${assetId}/latest-error`);
-        
+
         if (latest.found && latest.sentry_event_id) {
           throw new ApiError(
             'Falha registrada no worker de processamento',
             500,
             latest.error_code || 'MEDIA_PROCESSING_FAILED',
             latest.correlation_id || undefined,
-            { source: 'gcp', eventId: latest.sentry_event_id, method: 'GET', path: '/v1/observability/assets/latest-error' }
+            {
+              source: 'gcp',
+              eventId: latest.sentry_event_id,
+              method: 'GET',
+              path: '/v1/observability/assets/latest-error',
+            },
           );
         }
       }
-      
+
       if (!currentUrl) {
-        throw new ApiError('Prévia ainda não gerada', 404, 'PREVIEW_NOT_GENERATED', undefined, { source: 'gcp' });
+        throw new ApiError('Prévia ainda não gerada', 404, 'PREVIEW_NOT_GENERATED', undefined, {
+          source: 'gcp',
+        });
       }
 
       const response = await fetch(apiUrl(currentUrl), {
@@ -290,15 +293,15 @@ function PreviewDiagnosticDialog({
         cache: 'no-store',
         headers: { Range: 'bytes=0-0' },
       });
-      
+
       if (!response.ok) throw await responseError(response, currentUrl, 'GET');
-      
+
       throw new ApiError(
         'Prévia retornada, mas o navegador não conseguiu decodificá-la',
         response.status,
         'MEDIA_RENDER_FAILED',
         response.headers.get('X-Correlation-ID') ?? undefined,
-        { source: 'gcp', method: 'GET', path: currentUrl }
+        { source: 'gcp', method: 'GET', path: currentUrl },
       );
     } catch (error) {
       setLastError(error instanceof Error ? error : new Error('Falha no diagnóstico'));
@@ -311,17 +314,17 @@ function PreviewDiagnosticDialog({
   async function repair(event: MouseEvent) {
     event.stopPropagation();
     if (!assetId || !/^[a-f0-9-]{36}$/i.test(assetId)) return;
-    
+
     setRepairing(true);
     try {
       const result = await request<{ created: boolean; status: string; message: string }>(
         `/v1/jobs/assets/${assetId}/preview/repair`,
-        json('POST')
+        json('POST'),
       );
       setPreviewMessage(result.message);
       setIncident(null);
       setLastError(null);
-      
+
       const state = await request<PreviewState>(`/v1/jobs/assets/${assetId}/preview`);
       setPreviewState(state);
     } catch (error) {
@@ -350,7 +353,7 @@ function PreviewDiagnosticDialog({
             <RefreshCw size={15} /> Recarregar imagem
           </Button>
         )}
-        
+
         {assetId && (
           <Button
             variant="outline"
@@ -361,13 +364,13 @@ function PreviewDiagnosticDialog({
             {repairing ? 'Enfileirando…' : 'Solicitar reparo da prévia'}
           </Button>
         )}
-        
+
         {originalSrc && (
           <Button variant="ghost" disabled={diagnosing} onClick={diagnose}>
             {diagnosing ? 'Consultando…' : 'Inspecionar erro de mídia'}
           </Button>
         )}
-        
+
         {previewState && (
           <div className="preview-repair-state" role="status">
             <strong>{previewState.message}</strong>
@@ -377,9 +380,13 @@ function PreviewDiagnosticDialog({
               {previewState.job && (
                 <>
                   <dt>Job</dt>
-                  <dd>{previewState.job.type} · {previewState.job.status}</dd>
+                  <dd>
+                    {previewState.job.type} · {previewState.job.status}
+                  </dd>
                   <dt>Tentativas</dt>
-                  <dd>{previewState.job.attempts}/{previewState.job.max_attempts}</dd>
+                  <dd>
+                    {previewState.job.attempts}/{previewState.job.max_attempts}
+                  </dd>
                   {previewState.job.error_code && (
                     <>
                       <dt>Última falha</dt>
@@ -399,7 +406,8 @@ function PreviewDiagnosticDialog({
                   <dt>Despacho do worker</dt>
                   <dd>
                     {previewState.worker_dispatch.status}
-                    {previewState.worker_dispatch.error_code && ` · ${previewState.worker_dispatch.error_code}`}
+                    {previewState.worker_dispatch.error_code &&
+                      ` · ${previewState.worker_dispatch.error_code}`}
                   </dd>
                 </>
               )}
@@ -407,7 +415,7 @@ function PreviewDiagnosticDialog({
             {previewMessage && <p>{previewMessage}</p>}
           </div>
         )}
-        
+
         {incident && (
           <div className="preview-diagnostic">
             <strong>{incident.code}</strong>
@@ -415,7 +423,7 @@ function PreviewDiagnosticDialog({
             <DiagnosticActions incident={incident} error={lastError ?? undefined} />
           </div>
         )}
-        
+
         <p className="muted">
           O reparo desperta um job existente ou cria somente a etapa faltante. O status é atualizado
           automaticamente enquanto este painel estiver aberto.
@@ -445,18 +453,18 @@ export function PrivateImage({
   const candidates = useMemo(() => {
     const effective = overrideSrc ?? src;
     if (!effective) return [];
-    
+
     const result = [effective];
     const match = effective.match(
-      /^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)(\?[^#]*)?$/i
+      /^(\/v1\/assets\/[0-9a-f-]{16,}\/media\/)(preview_large|thumbnail_medium)(\?[^#]*)?$/i,
     );
-    
+
     if (match) {
       const query = match[3] ?? '';
       if (match[2] === 'preview_large') result.push(match[1] + 'thumbnail_medium' + query);
       result.push(match[1] + 'thumbnail_small' + query);
     }
-    
+
     return result;
   }, [src, overrideSrc]);
 
@@ -477,7 +485,7 @@ export function PrivateImage({
       <div className={`image-unavailable ${className ?? ''}`.trim()}>
         <Camera size={16} aria-hidden="true" />
         <span>{failed ? 'Prévia indisponível' : 'Prévia pendente'}</span>
-        
+
         <button
           type="button"
           className="preview-action-button"
@@ -491,7 +499,7 @@ export function PrivateImage({
         </button>
 
         <div onClick={(e) => e.stopPropagation()}>
-          <PreviewDiagnosticDialog 
+          <PreviewDiagnosticDialog
             open={actionsOpen}
             onOpenChange={setActionsOpen}
             assetId={assetId}
@@ -517,29 +525,29 @@ export function PrivateImage({
 
   // Lógica de construção da URL Final + Cache Busting
   const url = attempt ? `${current}${current.includes('?') ? '&' : '?'}retry=${attempt}` : current;
-  
+
   const sourceMatch = (overrideSrc ?? src)?.match(
-    /^(\/v1\/assets\/[0-9a-f-]{36}\/media\/)(?:thumbnail_small|thumbnail_medium|preview_large)(\?[^#]*)?$/i
+    /^(\/v1\/assets\/[0-9a-f-]{36}\/media\/)(?:thumbnail_small|thumbnail_medium|preview_large)(\?[^#]*)?$/i,
   );
-  
+
   const base = sourceMatch?.[1];
   const sourceQuery = sourceMatch?.[2] ?? '';
-  
+
   const variantUrl = (name: string) =>
     apiUrl(`${base}${name}${sourceQuery}${attempt ? `${sourceQuery ? '&' : '?'}retry=${attempt}` : ''}`);
 
-  const responsive = base && variant === 0
-    ? [
-        `${variantUrl('thumbnail_small')} 240w`,
-        `${variantUrl('thumbnail_medium')} 640w`,
-        ...(priority ? [`${variantUrl('preview_large')} 1600w`] : []),
-      ].join(', ')
-    : undefined;
+  const responsive =
+    base && variant === 0
+      ? [
+          `${variantUrl('thumbnail_small')} 240w`,
+          `${variantUrl('thumbnail_medium')} 640w`,
+          ...(priority ? [`${variantUrl('preview_large')} 1600w`] : []),
+        ].join(', ')
+      : undefined;
 
-  const imageSizes = sizes ?? (priority 
-    ? '(max-width: 720px) 100vw, 70vw' 
-    : '(max-width: 600px) 33vw, (max-width: 1200px) 20vw, 14vw'
-  );
+  const imageSizes =
+    sizes ??
+    (priority ? '(max-width: 720px) 100vw, 70vw' : '(max-width: 600px) 33vw, (max-width: 1200px) 20vw, 14vw');
 
   const blurred = base
     ? variantUrl('thumbnail_small')

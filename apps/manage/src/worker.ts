@@ -13,9 +13,11 @@ function shouldReport(error: unknown): boolean {
   if (!(error instanceof ApiError)) return true;
   // A missing login, invalid user input and CSRF attempts are expected client errors.
   // Invalid Access credentials and upstream token failures are actionable.
-  return error.status >= 500 ||
+  return (
+    error.status >= 500 ||
     (error.code.startsWith('ACCESS_') && error.code !== 'ACCESS_REQUIRED') ||
-    error.code === 'ACCESS_DENIED';
+    error.code === 'ACCESS_DENIED'
+  );
 }
 
 function withIncidentHeaders(response: Response, correlationId: string, eventId?: string): Response {
@@ -30,7 +32,11 @@ function withIncidentHeaders(response: Response, correlationId: string, eventId?
 }
 
 export default {
-  async fetch(request: Request, env: Env, context?: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    context?: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<Response> {
     const path = new URL(request.url).pathname;
     const route = routeGroup(path);
     const method = request.method.toUpperCase();
@@ -74,24 +80,30 @@ export default {
       const eventId = report(error);
       const status = error instanceof ApiError ? error.status : 502;
       const code = error instanceof ApiError ? error.code : 'UPSTREAM_FAILURE';
-      const message = error instanceof ApiError
-        ? error.message
-        : 'Falha na integração. Verifique credenciais e permissões do provedor.';
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Falha na integração. Verifique credenciais e permissões do provedor.';
       // Do not include secrets, upstream response bodies, JWTs, or raw stacks.
-      console.error(JSON.stringify({
-        event: 'manage_request_failed',
-        code,
-        kind: error instanceof Error ? error.name : 'UnknownError',
-        route,
-        correlation_id: correlationId,
-        sentry_event_id: eventId || null,
-      }));
-      const response = json({
-        error: code,
-        message,
-        correlation_id: correlationId,
-        sentry_event_id: eventId || null,
-      }, status);
+      console.error(
+        JSON.stringify({
+          event: 'manage_request_failed',
+          code,
+          kind: error instanceof Error ? error.name : 'UnknownError',
+          route,
+          correlation_id: correlationId,
+          sentry_event_id: eventId || null,
+        }),
+      );
+      const response = json(
+        {
+          error: code,
+          message,
+          correlation_id: correlationId,
+          sentry_event_id: eventId || null,
+        },
+        status,
+      );
       return withIncidentHeaders(response, correlationId, eventId);
     }
   },

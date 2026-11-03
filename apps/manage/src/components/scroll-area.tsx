@@ -39,7 +39,9 @@ export function ScrollBar({
       orientation={orientation}
       className={cn(
         'z-10 flex touch-none select-none p-[2px] transition-colors',
-        orientation === 'vertical' ? 'h-full w-2.5 border-l border-transparent' : 'h-2.5 flex-col border-t border-transparent',
+        orientation === 'vertical'
+          ? 'h-full w-2.5 border-l border-transparent'
+          : 'h-2.5 flex-col border-t border-transparent',
         className,
       )}
       {...props}

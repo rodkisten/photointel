@@ -18,9 +18,9 @@ describe('Manage Secret Manager safe version editor', () => {
   it('lists only explicitly allowlisted MANAGE_ workflow secrets', () => {
     const result = listReferences(dotenv);
     expect(result).toHaveLength(2);
-    expect(result.every(x => x.key.startsWith('MANAGE_'))).toBe(true);
-    expect(result.map(x => x.name)).toContain('photointel-manage-cloudflare-token');
-    expect(result.map(x => x.name)).not.toContain('photointel-pages-token');
+    expect(result.every((x) => x.key.startsWith('MANAGE_'))).toBe(true);
+    expect(result.map((x) => x.name)).toContain('photointel-manage-cloudflare-token');
+    expect(result.map((x) => x.name)).not.toContain('photointel-pages-token');
   });
 
   it('preserves comments, other references and line endings when updating a pinned version', () => {
@@ -29,8 +29,12 @@ describe('Manage Secret Manager safe version editor', () => {
     expect(updated).toContain('WORKFLOW_SECRETS__MANAGE_GITHUB_API_TOKEN__VERSION=2');
     expect(updated).toContain('# Production comments stay byte-for-byte intact');
     expect(updated).toContain('# End-of-file stays intact');
-    expect(updated.replace('WORKFLOW_SECRETS__MANAGE_CLOUDFLARE_API_TOKEN__VERSION=3',
-      'WORKFLOW_SECRETS__MANAGE_CLOUDFLARE_API_TOKEN__VERSION=1')).toBe(dotenv);
+    expect(
+      updated.replace(
+        'WORKFLOW_SECRETS__MANAGE_CLOUDFLARE_API_TOKEN__VERSION=3',
+        'WORKFLOW_SECRETS__MANAGE_CLOUDFLARE_API_TOKEN__VERSION=1',
+      ),
+    ).toBe(dotenv);
     const crlf = dotenv.replaceAll('\n', '\r\n');
     expect(replaceReference(crlf, 'MANAGE_CLOUDFLARE_API_TOKEN', '1', '3')).toContain('\r\n');
   });

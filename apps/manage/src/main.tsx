@@ -6,19 +6,20 @@ import { captureManageBrowserError, initManageSentry } from './lib/sentry';
 
 initManageSentry();
 
-window.addEventListener('error', (event) => {
-  if (event.error) captureManageBrowserError(event.error, 'window.error');
-  else if (event.target === window)
-    captureManageBrowserError(new Error('Erro de script sem exception acessível'), 'window.error');
-}, true);
+window.addEventListener(
+  'error',
+  (event) => {
+    if (event.error) captureManageBrowserError(event.error, 'window.error');
+    else if (event.target === window)
+      captureManageBrowserError(new Error('Erro de script sem exception acessível'), 'window.error');
+  },
+  true,
+);
 window.addEventListener('unhandledrejection', (event) => {
   captureManageBrowserError(event.reason, 'promise');
 });
 
-class ManageBoundary extends Component<
-  React.PropsWithChildren,
-  { error: Error | null; id?: string }
-> {
+class ManageBoundary extends Component<React.PropsWithChildren, { error: Error | null; id?: string }> {
   state: { error: Error | null; id?: string } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
@@ -35,7 +36,9 @@ class ManageBoundary extends Component<
     return (
       <main style={{ minHeight: '100vh', padding: 24, background: '#0d0e10', color: 'white' }}>
         <h1>PhotoIntel Manage encontrou um erro</h1>
-        <p>{this.state.error.name}: {this.state.error.message}</p>
+        <p>
+          {this.state.error.name}: {this.state.error.message}
+        </p>
         {this.state.id && <p>Correlation ID: {this.state.id}</p>}
         <button onClick={() => window.location.reload()}>Recarregar painel</button>
       </main>

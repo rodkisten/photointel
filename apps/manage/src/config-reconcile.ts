@@ -32,8 +32,7 @@ function parseDotenv(raw: string): Record<string, string> {
     if (!match) throw new Error('Linha .env não reconhecida; não é seguro aplicar automaticamente.');
     const name = match[1];
     let value = match[2];
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     } else {
       value = value.replace(/\s+#.*$/, '').trimEnd();
@@ -59,8 +58,7 @@ export function findDuplicateConfigKeys(raw: string): Array<{ key: string; lines
     lines.push(index + 1);
     seen.set(match[1], lines);
   });
-  return [...seen.entries()].filter(([, lines]) => lines.length > 1)
-    .map(([key, lines]) => ({ key, lines }));
+  return [...seen.entries()].filter(([, lines]) => lines.length > 1).map(([key, lines]) => ({ key, lines }));
 }
 
 export function parseConfiguration(raw: string): Record<string, string> {
@@ -85,7 +83,11 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       add('manage');
       continue;
     }
-    if (/^(?:gcp_(?:bootstrap_)?(?:workload_identity_provider|service_account)|bootstrap_)/.test(key.toLowerCase())) {
+    if (
+      /^(?:gcp_(?:bootstrap_)?(?:workload_identity_provider|service_account)|bootstrap_)/.test(
+        key.toLowerCase(),
+      )
+    ) {
       manual.add('Identidade GitHub/GCP: requer revisão do Workload Identity Federation.');
       blocked = true;
       continue;
@@ -96,12 +98,15 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       continue;
     }
     if (/^(?:scheduler_timezone|discovery_schedule|worker_schedule|maintenance_schedule)$/.test(normalized)) {
-      manual.add('Agendamentos Cloud Scheduler: executar Scheduler manualmente para evitar pausas inesperadas.');
+      manual.add(
+        'Agendamentos Cloud Scheduler: executar Scheduler manualmente para evitar pausas inesperadas.',
+      );
       continue;
     }
     if (normalized.startsWith('workflow_secrets.')) {
       if (/^workflow_secrets\.manage_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('manage');
-      else if (/^workflow_secrets\.cloudflare_[a-z0-9_]+\.(?:name|version)$/.test(normalized)) add('worker', 'manage');
+      else if (/^workflow_secrets\.cloudflare_[a-z0-9_]+\.(?:name|version)$/.test(normalized))
+        add('worker', 'manage');
       else manual.add('Referências de credenciais de workflow: verificar IAM/Secret Manager manualmente.');
       if (/\.name$/.test(normalized)) {
         manual.add('Novos containers de credenciais de workflow exigem IAM antes de publicar.');
@@ -158,7 +163,10 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
     if (normalized === 'frontend_origin') add('api', 'jobs', 'worker');
     else if (/^(?:access_team_domain|access_audience|access_allowed_emails)$/.test(normalized))
       add('api', 'jobs', 'worker', 'manage');
-    else if (normalized === 'api_origin' || /^(?:storage_|database_|icloud_|enable_|catalog_)/.test(normalized))
+    else if (
+      normalized === 'api_origin' ||
+      /^(?:storage_|database_|icloud_|enable_|catalog_)/.test(normalized)
+    )
       add('api', 'jobs');
     else {
       // Unsupported/unknown schema field: save is allowed, but avoid guessing an
@@ -172,16 +180,22 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
   const workflows: ConfigPlan['workflows'] = [];
   if (targets.has('api') || targets.has('jobs')) {
     workflows.push({
-      file: 'config-sync.yml', label: 'Cloud Run · configuração sem Docker',
+      file: 'config-sync.yml',
+      label: 'Cloud Run · configuração sem Docker',
       inputs: {
         targets: [targets.has('jobs') ? 'jobs' : '', targets.has('api') ? 'api' : '']
-          .filter(Boolean).join(','),
+          .filter(Boolean)
+          .join(','),
       },
     });
   }
   if (targets.has('worker'))
     workflows.push({ file: 'deploy-worker.yml', label: 'Cloudflare · frontend e Worker', inputs: {} });
   if (targets.has('manage'))
-    workflows.push({ file: 'manage-deploy.yml', label: 'Manage · publicar painel', inputs: { mode: 'apply' } });
+    workflows.push({
+      file: 'manage-deploy.yml',
+      label: 'Manage · publicar painel',
+      inputs: { mode: 'apply' },
+    });
   return { changed, targets: selected, manual: [...manual], blocked, workflows };
 }

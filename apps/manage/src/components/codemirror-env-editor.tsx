@@ -42,7 +42,10 @@ const syntax = HighlightStyle.define([
 
 const theme = EditorView.theme({
   '&': { backgroundColor: '#101113', color: '#e5e7eb', height: 'min(64vh, 520px)', fontSize: '16px' },
-  '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'auto' },
+  '.cm-scroller': {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+    overflow: 'auto',
+  },
   '.cm-content': { minHeight: '320px', caretColor: '#ffffff', padding: '12px 2px' },
   '.cm-gutters': { backgroundColor: '#101113', color: '#737781', borderRight: '1px solid #292b30' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#25272d80' },
@@ -57,10 +60,15 @@ const theme = EditorView.theme({
 });
 
 export function CodeMirrorEnvEditor({
-  value, onChange, format, ariaLabel = 'Editar GCP_CONFIG_ENV',
+  value,
+  onChange,
+  format,
+  ariaLabel = 'Editar GCP_CONFIG_ENV',
 }: {
-  value: string; onChange: (value: string) => void;
-  format: EnvironmentFormat; ariaLabel?: string;
+  value: string;
+  onChange: (value: string) => void;
+  format: EnvironmentFormat;
+  ariaLabel?: string;
 }) {
   const mount = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -78,20 +86,27 @@ export function CodeMirrorEnvEditor({
         basicSetup,
         drawSelection(),
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({ 'aria-label': ariaLabel, spellcheck: 'false',
-          autocapitalize: 'off', autocorrect: 'off' }),
+        EditorView.contentAttributes.of({
+          'aria-label': ariaLabel,
+          spellcheck: 'false',
+          autocapitalize: 'off',
+          autocorrect: 'off',
+        }),
         theme,
         syntaxHighlighting(syntax),
         languageRef.current.of(format === 'json' ? json() : dotenvLanguage),
         lintRef.current.of(format === 'json' ? linter(jsonParseLinter()) : []),
-        EditorView.updateListener.of(update => {
+        EditorView.updateListener.of((update) => {
           if (update.docChanged) callbackRef.current(update.state.doc.toString());
         }),
       ],
     });
     const view = new EditorView({ state, parent: mount.current });
     viewRef.current = view;
-    return () => { view.destroy(); viewRef.current = null; };
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
   }, [ariaLabel]);
 
   useEffect(() => {
@@ -99,10 +114,12 @@ export function CodeMirrorEnvEditor({
     if (!view) return;
     if (activeFormat.current !== format) {
       activeFormat.current = format;
-      view.dispatch({ effects: [
-        languageRef.current.reconfigure(format === 'json' ? json() : dotenvLanguage),
-        lintRef.current.reconfigure(format === 'json' ? linter(jsonParseLinter()) : []),
-      ] });
+      view.dispatch({
+        effects: [
+          languageRef.current.reconfigure(format === 'json' ? json() : dotenvLanguage),
+          lintRef.current.reconfigure(format === 'json' ? linter(jsonParseLinter()) : []),
+        ],
+      });
     }
     const current = view.state.doc.toString();
     if (current !== value) {
@@ -113,6 +130,11 @@ export function CodeMirrorEnvEditor({
     }
   }, [value, format]);
 
-  return <div ref={mount} data-testid="codemirror-env-editor"
-    className="min-w-0 overflow-hidden rounded-lg border border-[#35383e] focus-within:border-[#656b73]" />;
+  return (
+    <div
+      ref={mount}
+      data-testid="codemirror-env-editor"
+      className="min-w-0 overflow-hidden rounded-lg border border-[#35383e] focus-within:border-[#656b73]"
+    />
+  );
 }

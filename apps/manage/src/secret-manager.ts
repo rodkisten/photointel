@@ -36,7 +36,8 @@ export function listReferences(raw: string): SecretReference[] {
 function pick(raw: string, key: string): SecretReference {
   if (!KEY.test(key)) throw new ApiError(422, 'SECRET_KEY', 'Secret fora do escopo autorizado');
   const ref = listReferences(raw).find((candidate) => candidate.key === key);
-  if (!ref) throw new ApiError(404, 'SECRET_NOT_REFERENCED', 'Secret do Manage não encontrado na configuração');
+  if (!ref)
+    throw new ApiError(404, 'SECRET_NOT_REFERENCED', 'Secret do Manage não encontrado na configuração');
   return ref;
 }
 
@@ -53,8 +54,10 @@ export function replaceReference(raw: string, key: string, oldVersion: string, n
   }
   // Change *only* the VERSION assignment, preserving all other .env lines,
   // comments, blank lines, CRLFs and repeated identical references.
-  const pattern = new RegExp('^([ \\t]*WORKFLOW_SECRETS__' + key +
-    '__VERSION[ \\t]*=[ \\t]*)([0-9]+)([ \\t]*(?:#.*)?)$', 'gm');
+  const pattern = new RegExp(
+    '^([ \\t]*WORKFLOW_SECRETS__' + key + '__VERSION[ \\t]*=[ \\t]*)([0-9]+)([ \\t]*(?:#.*)?)$',
+    'gm',
+  );
   let matches = 0;
   const updated = raw.replace(pattern, (_line, prefix: string, value: string, suffix: string) => {
     if (value !== oldVersion) throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referência desatualizada');
@@ -79,14 +82,21 @@ export async function listManageSecrets(env: Env): Promise<{
   return { items: listReferences(config.value), config_version: config.version };
 }
 
-export async function previewSecret(env: Env, identity: Identity, key: string): Promise<{
-  key: string; name: string; version: string; fragment: string;
+export async function previewSecret(
+  env: Env,
+  identity: Identity,
+  key: string,
+): Promise<{
+  key: string;
+  name: string;
+  version: string;
+  fragment: string;
 }> {
   const config = await readConfig(env);
   const ref = pick(config.value, key);
   const token = await gcpToken(env, identity);
   // No catch with raw provider body: provider() sanitizes upstream errors.
-  const result = await provider(GCP + ref.name + '/versions/' + ref.version + ':access', token) as {
+  const result = (await provider(GCP + ref.name + '/versions/' + ref.version + ':access', token)) as {
     payload?: { data?: unknown };
   };
   if (typeof result.payload?.data !== 'string' || result.payload.data.length > 10000)
@@ -120,17 +130,28 @@ export async function createSecretVersion(
   config_updated: boolean;
   dispatches: Array<{ file: string; status: 'queued' | 'failed' }>;
 }> {
-  if (typeof input.key !== 'string' || !KEY.test(input.key) ||
-      typeof input.value !== 'string' || input.value.length < 1 || input.value.length > 4096 ||
-      /[\r\n\0]/.test(input.value) ||
-      typeof input.current_version !== 'string' || !VERSION.test(input.current_version) ||
-      typeof input.config_version !== 'string' || !/^[a-f0-9]{64}$/.test(input.config_version) ||
-      input.confirm !== 'ROTACIONAR ' + input.key ||
-      (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean'))
+  if (
+    typeof input.key !== 'string' ||
+    !KEY.test(input.key) ||
+    typeof input.value !== 'string' ||
+    input.value.length < 1 ||
+    input.value.length > 4096 ||
+    /[\r\n\0]/.test(input.value) ||
+    typeof input.current_version !== 'string' ||
+    !VERSION.test(input.current_version) ||
+    typeof input.config_version !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(input.config_version) ||
+    input.confirm !== 'ROTACIONAR ' + input.key ||
+    (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean')
+  )
     throw new ApiError(422, 'SECRET_FIELDS', 'Informe um valor de uma linha e confirme a rotação');
   const original = await readConfig(env);
   if (original.version !== input.config_version)
-    throw new ApiError(409, 'CONFIG_CONFLICT', 'O .env mudou; recarregue para evitar sobrescrever alterações');
+    throw new ApiError(
+      409,
+      'CONFIG_CONFLICT',
+      'O .env mudou; recarregue para evitar sobrescrever alterações',
+    );
   const ref = pick(original.value, input.key);
   if (ref.version !== input.current_version)
     throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Outra versão está referenciada; recarregue');
@@ -138,10 +159,10 @@ export async function createSecretVersion(
   const token = await gcpToken(env, identity);
   const bytes = new TextEncoder().encode(input.value);
   const encoded = btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
-  const created = await provider(GCP + ref.name + ':addVersion', token, {
+  const created = (await provider(GCP + ref.name + ':addVersion', token, {
     method: 'POST',
     body: JSON.stringify({ payload: { data: encoded } }),
-  }) as { name?: unknown };
+  })) as { name?: unknown };
   const version = typeof created.name === 'string' ? created.name.split('/').pop() || '' : '';
   if (!VERSION.test(version))
     throw new ApiError(502, 'SECRET_CREATE', 'Google Cloud não confirmou o número da nova versão');
@@ -150,18 +171,30 @@ export async function createSecretVersion(
   // version available in GCP and do not overwrite someone's configuration.
   const latest = await readConfig(env);
   if (latest.version !== original.version)
-    throw new ApiError(409, 'SECRET_CREATED_CONFIG_CONFLICT',
-      'Versão ' + version + ' criada, mas o .env mudou. Atualize manualmente a referência.');
+    throw new ApiError(
+      409,
+      'SECRET_CREATED_CONFIG_CONFLICT',
+      'Versão ' + version + ' criada, mas o .env mudou. Atualize manualmente a referência.',
+    );
 
   const updated = replaceReference(original.value, input.key, ref.version, version);
   const plan = planConfigChange(original.value, updated);
-  if (plan.blocked) throw new ApiError(409, 'SECRET_CREATED_MANUAL',
-    'Versão ' + version + ' criada; o plano exige atualização manual da referência.');
+  if (plan.blocked)
+    throw new ApiError(
+      409,
+      'SECRET_CREATED_MANUAL',
+      'Versão ' + version + ' criada; o plano exige atualização manual da referência.',
+    );
   try {
     await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: updated });
   } catch {
-    throw new ApiError(502, 'SECRET_CREATED_GITHUB_FAILED',
-      'Versão ' + version + ' criada no GCP, mas a referência GitHub não foi atualizada. Atualize manualmente.');
+    throw new ApiError(
+      502,
+      'SECRET_CREATED_GITHUB_FAILED',
+      'Versão ' +
+        version +
+        ' criada no GCP, mas a referência GitHub não foi atualizada. Atualize manualmente.',
+    );
   }
 
   const dispatches: Array<{ file: string; status: 'queued' | 'failed' }> = [];
@@ -170,8 +203,10 @@ export async function createSecretVersion(
       try {
         await gh(env, '/actions/workflows/' + workflow.file + '/dispatches', 'POST', {
           ref: 'main',
-          inputs: workflow.file === 'config-sync.yml'
-            ? { ...workflow.inputs, config_version: await digest(updated) } : workflow.inputs,
+          inputs:
+            workflow.file === 'config-sync.yml'
+              ? { ...workflow.inputs, config_version: await digest(updated) }
+              : workflow.inputs,
         });
         dispatches.push({ file: workflow.file, status: 'queued' });
       } catch {
@@ -179,16 +214,22 @@ export async function createSecretVersion(
       }
     }
   }
-  console.log(JSON.stringify({
-    event: 'manage_secret_version_created',
+  console.log(
+    JSON.stringify({
+      event: 'manage_secret_version_created',
+      key: input.key,
+      version,
+      operator: identity.email,
+      config_updated: true,
+      dispatches,
+    }),
+  );
+  return {
+    ok: true,
     key: input.key,
-    version,
-    operator: identity.email,
+    name: ref.name,
+    created_version: version,
     config_updated: true,
     dispatches,
-  }));
-  return {
-    ok: true, key: input.key, name: ref.name, created_version: version,
-    config_updated: true, dispatches,
   };
 }

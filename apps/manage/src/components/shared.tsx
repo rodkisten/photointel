@@ -1,7 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleAlert, Cloud, CloudCog, Code2, Copy, ExternalLink, GitBranch, History, LoaderCircle, Logs, Menu, Play, RefreshCcw, RotateCcw, Save, Search, Server, Settings2, Shield, Terminal, Workflow, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  Cloud,
+  CloudCog,
+  Code2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  History,
+  LoaderCircle,
+  Logs,
+  Menu,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Save,
+  Search,
+  Server,
+  Settings2,
+  Shield,
+  Terminal,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
@@ -47,7 +77,12 @@ export function IssueBanner({ error }: { error: unknown }) {
         {e.code && <p className="mt-1 text-xs opacity-65">{e.code}</p>}
         {e.correlationId && <p className="mt-1 break-all text-xs opacity-70">ID: {e.correlationId}</p>}
         {sentryUrl && e.sentryEventId && (
-          <a href={sentryUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs underline">
+          <a
+            href={sentryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block text-xs underline"
+          >
             Ver erro no Sentry
           </a>
         )}

@@ -1,7 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Activity, AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, CircleAlert, Cloud, CloudCog, Code2, Copy, ExternalLink, GitBranch, History, LoaderCircle, Logs, Menu, Play, RefreshCcw, RotateCcw, Save, Search, Server, Settings2, Shield, Terminal, Workflow, X } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  Cloud,
+  CloudCog,
+  Code2,
+  Copy,
+  ExternalLink,
+  GitBranch,
+  History,
+  LoaderCircle,
+  Logs,
+  Menu,
+  Play,
+  RefreshCcw,
+  RotateCcw,
+  Save,
+  Search,
+  Server,
+  Settings2,
+  Shield,
+  Terminal,
+  Workflow,
+  X,
+} from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
@@ -16,26 +46,30 @@ export function SystemInfo({ meta }: { meta: Meta }) {
   const [selectedJob, setSelectedJob] = useState('');
   const credentials = useQuery({
     queryKey: ['manage-credential-diagnostics'],
-    queryFn: () => api<{
-      github_secret_version: string | null;
-      checked_at: string;
-      checks: Array<{
-        provider: 'github' | 'cloudflare';
-        check: string;
-        ok: boolean;
-        status: number;
-        reason: string;
-        hint: string;
-        accepted_permissions?: string;
-      }>;
-    }>('/diagnostics'),
+    queryFn: () =>
+      api<{
+        github_secret_version: string | null;
+        checked_at: string;
+        checks: Array<{
+          provider: 'github' | 'cloudflare';
+          check: string;
+          ok: boolean;
+          status: number;
+          reason: string;
+          hint: string;
+          accepted_permissions?: string;
+        }>;
+      }>('/diagnostics'),
     enabled: false,
     retry: false,
     staleTime: 0,
   });
   const health = useQuery({
     queryKey: ['overview'],
-    queryFn: () => api<{ providers: string[]; provider_events?: Array<string | undefined>; correlation_id?: string }>('/overview'),
+    queryFn: () =>
+      api<{ providers: string[]; provider_events?: Array<string | undefined>; correlation_id?: string }>(
+        '/overview',
+      ),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -116,8 +150,18 @@ export function SystemInfo({ meta }: { meta: Meta }) {
               ['GitHub', ...check(0), true],
               ['Cloudflare', ...check(1), true],
               ['Google Cloud', ...check(2), true],
-              ['Sentry · envio', meta.sentry ? 'DSN configurado · capturas habilitadas' : 'DSN não configurado', meta.sentry, true],
-              ['Sentry · leitura', meta.sentry_reader ? 'Token de leitura configurado' : 'Token de leitura opcional ausente', Boolean(meta.sentry_reader), false],
+              [
+                'Sentry · envio',
+                meta.sentry ? 'DSN configurado · capturas habilitadas' : 'DSN não configurado',
+                meta.sentry,
+                true,
+              ],
+              [
+                'Sentry · leitura',
+                meta.sentry_reader ? 'Token de leitura configurado' : 'Token de leitura opcional ausente',
+                Boolean(meta.sentry_reader),
+                false,
+              ],
             ] as Array<[string, string, boolean, boolean]>
           ).map(([name, detail, ok, verified]) => (
             <div key={name} className="flex items-center justify-between gap-2 px-4 py-3">
@@ -132,7 +176,11 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                         <External href={sentryIssueSearch(health.data?.correlation_id)}>Ver exceção</External>
                       )}
                       <span className="text-slate-600">
-                        {health.data?.provider_events?.[['GitHub', 'Cloudflare', 'Google Cloud'].indexOf(name)]}
+                        {
+                          health.data?.provider_events?.[
+                            ['GitHub', 'Cloudflare', 'Google Cloud'].indexOf(name)
+                          ]
+                        }
                       </span>
                     </div>
                   )}
@@ -142,15 +190,26 @@ export function SystemInfo({ meta }: { meta: Meta }) {
           ))}
         </Card>
       </Section>
-      <Section title="Diagnóstico de credenciais" detail="O próprio Worker testa os secrets instalados, sem expor ou receber tokens do navegador">
+      <Section
+        title="Diagnóstico de credenciais"
+        detail="O próprio Worker testa os secrets instalados, sem expor ou receber tokens do navegador"
+      >
         <Card className="space-y-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-slate-400">
               GitHub: repositório, Actions e variável de ambiente; Cloudflare: Workers
             </p>
-            <Button variant="outline" size="sm" disabled={credentials.isFetching}
-              onClick={() => void credentials.refetch()}>
-              {credentials.isFetching ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={credentials.isFetching}
+              onClick={() => void credentials.refetch()}
+            >
+              {credentials.isFetching ? (
+                <LoaderCircle size={15} className="animate-spin" />
+              ) : (
+                <RefreshCcw size={15} />
+              )}
               Testar credenciais
             </Button>
           </div>
@@ -176,15 +235,13 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                         Permissões exigidas: {item.accepted_permissions}
                       </p>
                     )}
-                    {!item.ok && (
-                      <p className="text-[11px] text-slate-600">Diagnóstico: {item.reason}</p>
-                    )}
+                    {!item.ok && <p className="text-[11px] text-slate-600">Diagnóstico: {item.reason}</p>}
                   </div>
                 ))}
               </div>
               <p className="text-xs leading-5 text-slate-500">
-                Teste somente de leitura. A versão indica a referência usada no último deploy,
-                não confirma o conteúdo do token. Nenhuma credencial é retornada.
+                Teste somente de leitura. A versão indica a referência usada no último deploy, não confirma o
+                conteúdo do token. Nenhuma credencial é retornada.
               </p>
             </>
           )}

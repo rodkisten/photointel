@@ -33,10 +33,17 @@ describe('Manage Sentry transport', () => {
   });
 
   it('strips credentials, signed URLs, identities and private paths', () => {
-    const message = 'Request https://example.org/path?token=SECRET failed: Bearer secret ' +
+    const message =
+      'Request https://example.org/path?token=SECRET failed: Bearer secret ' +
       'password=PRIVATE user@example.org /home/rod/private/file.heic';
     const clean = safeManageMessage(message);
-    for (const secret of ['token=SECRET', 'Bearer secret', 'password=PRIVATE', 'user@example.org', '/home/rod']) {
+    for (const secret of [
+      'token=SECRET',
+      'Bearer secret',
+      'password=PRIVATE',
+      'user@example.org',
+      '/home/rod',
+    ]) {
       expect(clean).not.toContain(secret);
     }
     expect(clean).toContain('failed');
@@ -47,9 +54,13 @@ describe('Manage Sentry transport', () => {
   it('does not send errors without the DSN', () => {
     const send = vi.fn();
     vi.stubGlobal('fetch', send);
-    expect(captureManageError({} as Env, new Error('unavailable'), {
-      correlationId: crypto.randomUUID(), route: '/api/overview', method: 'GET',
-    })).toBeUndefined();
+    expect(
+      captureManageError({} as Env, new Error('unavailable'), {
+        correlationId: crypto.randomUUID(),
+        route: '/api/overview',
+        method: 'GET',
+      }),
+    ).toBeUndefined();
     expect(send).not.toHaveBeenCalled();
   });
 });
