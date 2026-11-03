@@ -44,6 +44,7 @@ import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
 import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
 import { DotenvFields } from '../components/dotenv-fields';
+import { RepositoryVariables } from './RepositoryVariables';
 export function ConfigEditor() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -257,6 +258,7 @@ export function ConfigEditor() {
           </Card>
         )}
       </Section>
+      <RepositoryVariables />
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
