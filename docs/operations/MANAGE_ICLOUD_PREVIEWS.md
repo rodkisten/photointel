@@ -8,25 +8,29 @@ including correlation ID and execution time when available.
 
 ## Apple iCloud sessions
 
-Manage's **iCloud** tab diagnoses the last 24 hours of sanitized Cloud Run logs,
-displays recent iCloud preflight runs and links to an actual authenticated Apple
-session probe in Photos. The probe reopens the same encrypted session as the
-ingestion worker, checks Apple connectivity with a 25-second timeout, and never
-downloads photos or returns Apple cookies/passwords/errors.
+The Manage **iCloud** tab now provides a native browser login:
 
-For a session renewal, open the secure GCP terminal, run:
+1. Enter the password of the **existing configured Apple account**.
+2. If Apple requests MFA, type the six-digit code shown on a trusted device.
+3. The backend tests live access to the configured Photos library before replacing
+   the active encrypted session. No media import or download is scheduled.
+4. The intermediate 2FA cookie bundle is AES-256-GCM encrypted, bound to the
+   authenticated Manage admin identity and configured Apple account, carried
+   only in short-lived browser memory, and expires after ten minutes. The
+   account password is not stored by the Manage Worker or PhotoIntel.
+5. The Manage Worker forwards credentials only to the private, fixed Cloud Run
+   API origin discovered with the authenticated GCP control plane. The backend
+   verifies the signed Access JWT and separate Manage admin email allowlist.
 
-```sh
-python3 infra/scripts/icloud_terminal.py prepare
-python3 infra/scripts/icloud_terminal.py setup
-python3 infra/scripts/icloud_terminal.py verify
-```
+The existing CLI method remains available only as an optional recovery fallback;
+it is **not required** for ordinary login in the Manage UI. Never add Apple
+passwords to GitHub Variables, Secret Manager, Actions workflows, URL parameters,
+browser storage or logs. The backend masks expected authentication failures.
 
-Complete the interactive Apple password and 2FA prompts **in that terminal**;
-the existing pipeline encrypts the resulting session. The Manage UI intentionally
-does not accept an Apple password: it cannot safely publish a refreshed session
-or complete 2FA by simply storing a form value. Never add Apple passwords
-to GitHub variables, secrets exposed as logs, URLs, query parameters or the browser.
+Apple may require additional security challenges not exposed by icloudpd 1.32.3
+or disallow programmatic iCloud access under Advanced Data Protection/security
+key policies. Those cases must show a real error instead of claiming the
+session was renewed.
 
 The UI offers a proactive reauthentication link when the ingestion status
 reports `expired`, `verification_required` or `not_configured`; the log

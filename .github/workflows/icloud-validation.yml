@@ -41,7 +41,12 @@ jobs:
           python-version: '3.12'
       - name: "Unit contracts without credentials"
         run: python3 -m unittest discover -s infra/gcp/tests -p test_icloud_setup.py -v
+      # The legacy terminal-only installer downloads a mutable, unversioned
+      # upstream archive; its pinned hash can change without any code change.
+      # Test that network installation only when explicitly dispatched, not
+      # during browser-based Apple authentication pull requests.
       - name: "Verify official gcloud archive and isolated Linux installation"
+        if: github.event_name == 'workflow_dispatch'
         run: |
           python3 - <<'PY'
           import importlib.util

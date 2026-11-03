@@ -133,6 +133,54 @@ async def validate_access_token(token: str, settings: Settings) -> Identity:
     return Identity(subject=subject, email=email.casefold())
 
 
+async def require_manage_identity(request: Request) -> Identity:
+    """Accept only a signed Cloudflare Access identity for the Manage admin allowlist.
+
+    A Manage Worker validates the *exact application audience* before forwarding
+    its JWT. We independently verify issuer, signature, expiration and dedicated
+    admin email allowlist. Do not use the regular Photos Access cookie here.
+    """
+    settings = get_settings()
+    check_origin(request, settings)
+    if settings.auth_mode == "local" and settings.app_env in {"test", "development"}:
+        return Identity(subject="local-manage", email=settings.local_identity_email)
+    allowed = {
+        email.strip().casefold() for email in settings.manage_access_allowed_emails
+        if isinstance(email, str) and email.strip()
+    }
+    if not allowed:
+        raise AppError(ErrorCode.UNAUTHORIZED, "Allowlist do Manage não configurada", 503)
+    token = request.headers.get("cf-access-jwt-assertion", "")
+    if not token or len(token) > 16384:
+        raise AppError(ErrorCode.UNAUTHORIZED, "Autenticação do Manage necessária", 401)
+    try:
+        unverified = jwt.decode(
+            token, options={"verify_signature": False, "verify_exp": False,
+                            "verify_aud": False, "verify_iss": False}
+        )
+        audience = unverified.get("aud")
+        if isinstance(audience, list) and len(audience) == 1:
+            audience = audience[0]
+        if (
+            not isinstance(audience, str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{20,256}", audience)
+            or audience == settings.access_audience
+        ):
+            raise ValueError("unexpected audience")
+    except (jwt.PyJWTError, ValueError, TypeError):
+        raise AppError(ErrorCode.UNAUTHORIZED, "Sessão do Manage inválida", 401) from None
+    claims = await validate_jwt(
+        token, settings, audience,
+        ["exp", "iat", "iss", "aud", "sub", "email"],
+    )
+    email, subject = claims.get("email"), claims.get("sub")
+    if not isinstance(subject, str) or not subject or not isinstance(email, str):
+        raise AppError(ErrorCode.UNAUTHORIZED, "Identidade inválida", 401)
+    if email.strip().casefold() not in allowed:
+        raise AppError(ErrorCode.FORBIDDEN, "Administrador não autorizado", 403)
+    return Identity(subject=subject, email=email.strip().casefold())
+
+
 async def require_bridge_access(request: Request) -> None:
     """Validate the edge service identity even through the direct Cloud Run URL.
 
