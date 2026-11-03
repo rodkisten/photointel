@@ -292,6 +292,10 @@ def create_app() -> FastAPI:
     from photointel.routers.observability import router as observability
 
     app.include_router(observability, prefix="/v1")
+    # Register static /jobs/control before dynamic /jobs/{job_id}. 
+    from photointel.routers.job_control import router as job_control
+
+    app.include_router(job_control, prefix="/v1")
     app.include_router(operations, prefix="/v1")
     from photointel.routers.icloud_web_auth import router as icloud_web_auth
 

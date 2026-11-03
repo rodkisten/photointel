@@ -263,6 +263,7 @@ async def _heartbeat_many_loop(
     stopped: asyncio.Event,
     fence_tokens: dict[UUID, int] | None = None,
     asset_leases: list[tuple[str, int]] | None = None,
+    owner_task: asyncio.Task[Any] | None = None,
 ) -> None:
     while not stopped.is_set():
         try:
@@ -270,12 +271,18 @@ async def _heartbeat_many_loop(
                 renewed = await heartbeat_many(session, job_ids, worker_id, fence_tokens)
                 if renewed != len(job_ids):
                     stopped.set()
+                    # A UI pause/cancel has revoked the durable fence. Interrupt
+                    # ongoing async I/O, not just the final SQL commit.
+                    if owner_task and not owner_task.done():
+                        owner_task.cancel()
                     return
                 for key, token in asset_leases or []:
                     if not await renew_lease(
                         session, key, worker_id, token, get_settings().job_lease_seconds
                     ):
                         stopped.set()
+                        if owner_task and not owner_task.done():
+                            owner_task.cancel()
                         return
                 await worker_seen(session, worker_id, job_ids[0] if job_ids else None)
                 await session.commit()
@@ -586,6 +593,7 @@ async def _execute_claimed(job_ids: list[UUID], worker_id: str, *, batch: bool) 
                     stopped,
                     {job.id: job.fence_token for job in jobs},
                     leases,
+                    asyncio.current_task(),
                 )
             )
             with continue_job_trace(jobs[0].payload):

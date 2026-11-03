@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '../../../packages/design-tokens/carbon.css';
 @import './design-system.css';
+@import './jobs-control.css';
 
 /* Native elements and typography. Tailwind utilities can override component styles. */
 @layer base {
