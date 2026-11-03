@@ -1,7 +1,7 @@
 import { ApiError, bodyJson, json } from '../auth';
 import type { Env, Identity } from '../auth';
 import {
-  createSecret, createSecretVersion, listManageSecrets, listSecretVersions, previewSecret,
+  activateSecretVersion, createSecret, createSecretVersion, listManageSecrets, listSecretVersions, previewSecret,
 } from '../secret-manager';
 
 /** All routes require Cloudflare Access allowlist and same-origin CSRF checks at the Worker boundary. */
@@ -23,6 +23,12 @@ export async function secretRoutes(request: Request, env: Env, identity: Identit
   if (preview) {
     if (method !== 'GET') throw new ApiError(405, 'METHOD', 'Método não permitido');
     return json(await previewSecret(env, identity, preview[1], preview[2]));
+  }
+  const activate = /^\/api\/secrets\/([A-Za-z0-9_-]{1,255})\/activate$/.exec(path);
+  if (activate) {
+    if (method !== 'POST') throw new ApiError(405, 'METHOD', 'Método não permitido');
+    const input = await bodyJson<Record<string, unknown>>(request, 2000);
+    return json(await activateSecretVersion(env, identity, activate[1], input));
   }
   const versions = /^\/api\/secrets\/([A-Za-z0-9_-]{1,255})\/versions$/.exec(path);
   if (versions) {
