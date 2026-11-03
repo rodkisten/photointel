@@ -305,7 +305,7 @@ export function JsonView({
           <div className="relative min-w-[120px] flex-1 sm:max-w-64">
             <Search
               size={14}
-              className="pointer-events-none absolute left-2.5 top-1/2 -trancarbon-y-1/2 text-carbon-500"
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-carbon-500"
             />
             <Input
               className="h-7 pl-8 text-sm sm:text-xs bg-carbon-900 border-carbon-700 focus:border-carbon-600"
