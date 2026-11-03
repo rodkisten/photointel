@@ -933,16 +933,25 @@ def scheduler(runner: Runner) -> None:
                 "1",
             ]
         )
-        runner.command(
-            [
-                "scheduler",
-                "jobs",
-                "pause",
-                name,
-                "--location",
-                config["region"],
-            ]
-        )
+        # Updating a live scheduler must NOT pause it on every deploy.
+        # Newly created schedules stay paused unless the operator explicitly opts in.
+        if config.get("auto_resume_schedules", False):
+            action = "resume"
+        elif command == "create":
+            action = "pause"
+        else:
+            action = None
+        if action:
+            runner.command(
+                [
+                    "scheduler",
+                    "jobs",
+                    action,
+                    name,
+                    "--location",
+                    config["region"],
+                ]
+            )
 
 
 def smoke(config: dict[str, Any], origin: str) -> dict[str, Any]:
