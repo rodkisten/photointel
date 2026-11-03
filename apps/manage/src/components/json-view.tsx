@@ -282,14 +282,21 @@ export function JsonView({
   const value = useMemo(() => asStructuredData(data), [data]);
 
   const isStructured = value !== null && typeof value === 'object';
+  // Includes the literal string "{}" after asStructuredData() parses it.
+  const isEmpty =
+    value == null ||
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'object' && Object.keys(value).length === 0);
 
   const handleCopy = () => {
     const textToCopy = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     navigator.clipboard?.writeText(textToCopy);
   };
 
+  if (isEmpty) return null;
+
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900/50 px-3 py-2">
         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-400">{title}</span>
@@ -323,11 +330,11 @@ export function JsonView({
       </div>
 
       {/* Content */}
-      <ScrollArea className="w-full" style={{ height: Math.min(maxHeight, 500) }}>
+      <ScrollArea className="w-full min-w-0 max-w-full" style={{ maxHeight: Math.min(maxHeight, 500) }}>
         <div
           role={isStructured ? 'tree' : undefined}
           aria-label={title}
-          className="min-w-0 p-3 font-mono text-[13px] text-slate-300"
+          className="w-full min-w-0 max-w-full p-2.5 font-mono text-[12px] leading-5 text-slate-300"
         >
           {isStructured ? (
             <Node
