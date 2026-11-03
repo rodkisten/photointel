@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     access_bridge_audience: str = ""
     access_bridge_service_tokens: list[str] = Field(default_factory=list)
     access_allowed_emails: list[str] = Field(default_factory=list)
+    # Dedicated Cloudflare Access admin allowlist already used by the Manage Worker.
+    manage_access_allowed_emails: list[str] = Field(default_factory=list)
     access_jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
     local_identity_email: str = "local@photointel.invalid"
     storage_backend: Literal["local", "s3", "r2"] = "local"
