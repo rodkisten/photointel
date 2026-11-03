@@ -77,6 +77,22 @@ export function logLinkPath(link: LogLink): string {
   return '/logs?' + params.toString();
 }
 
+/** Convert the validated model to URL/search keys (job_type is deliberately snake_case). */
+export function toLogSearch(link: LogLink) {
+  return {
+    source: link.source,
+    minutes: link.minutes,
+    ...(link.correlation ? { correlation: link.correlation } : {}),
+    ...(link.job ? { job: link.job } : {}),
+    ...(link.jobType ? { job_type: link.jobType } : {}),
+    ...(link.ray ? { ray: link.ray } : {}),
+    ...(link.event ? { event: link.event } : {}),
+    ...(link.entry ? { entry: link.entry } : {}),
+    ...(link.at ? { at: link.at } : {}),
+    ...(link.search ? { search: link.search } : {}),
+  };
+}
+
 /** Only identifiers and a bounded time window reach provider queries. */
 export function apiLogParams(link: LogLink, editedTerm: string): URLSearchParams {
   const params = new URLSearchParams({ minutes: link.minutes });
