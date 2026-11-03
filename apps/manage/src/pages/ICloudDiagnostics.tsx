@@ -52,6 +52,11 @@ export function ICloudDiagnostics() {
             <TestTube size={15} /> Testar infraestrutura iCloud
           </Button>
           <Button variant="outline" size="sm" asChild>
+            <a href="https://photos.migos.club/icloud?test=1" target="_blank" rel="noopener noreferrer">
+              <TestTube size={15} /> Testar sessão Apple ao vivo <ArrowUpRight size={14} />
+            </a>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
             <a href="https://github.com/rodkisten/photointel/actions/workflows/gcp-terminal.yml" target="_blank" rel="noopener noreferrer">
               <Terminal size={15} /> Abrir terminal seguro <ArrowUpRight size={14} />
             </a>
@@ -74,7 +79,7 @@ export function ICloudDiagnostics() {
                 <p className="flex items-start gap-2 text-sm text-slate-400"><ShieldCheck size={17} className="shrink-0" /> {q.data.reason}</p>
               )}
               <p className="text-xs leading-5 text-slate-400">
-                Para renovar com segurança: abra o terminal, execute <code>python3 infra/scripts/icloud_terminal.py</code>
+                Para renovar com segurança: abra o terminal, execute <code>python3 infra/scripts/icloud_terminal.py setup</code>
                 com o comando de autenticação recomendado pela documentação e conclua o desafio 2FA.
                 Não cole a senha em campos de ambiente, commits, Actions ou logs.
               </p>
