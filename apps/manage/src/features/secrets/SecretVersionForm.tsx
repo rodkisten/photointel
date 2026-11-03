@@ -20,14 +20,14 @@ export function SecretVersionForm({
   return (
     <Card className="space-y-3 p-4">
       <div className="flex items-center gap-2">
-        <ShieldCheck size={17} className="text-slate-400" />
+        <ShieldCheck size={17} className="text-carbon-400" />
         <h3 className="text-sm font-semibold">Criar nova versão</h3>
       </div>
-      <p className="text-xs leading-5 text-slate-400">
+      <p className="text-xs leading-5 text-carbon-400">
         A versão atual permanece no Google Cloud. O novo valor será enviado ao servidor somente ao confirmar.
         Não é necessário copiar a versão anterior.
       </p>
-      <label htmlFor="manage-secret-new" className="block text-xs text-slate-400">
+      <label htmlFor="manage-secret-new" className="block text-xs text-carbon-400">
         Novo valor para {secret.key}
       </label>
       <div className="flex gap-2">
@@ -53,7 +53,7 @@ export function SecretVersionForm({
           {visible ? <EyeOff size={16} /> : <Eye size={16} />}
         </Button>
       </div>
-      <label className="flex items-start gap-2 text-xs leading-5 text-slate-400">
+      <label className="flex items-start gap-2 text-xs leading-5 text-carbon-400">
         <input
           type="checkbox"
           checked={autoApply}
@@ -69,7 +69,7 @@ export function SecretVersionForm({
       >
         <Save size={16} /> Criar versão e atualizar referência
       </Button>
-      <p className="text-xs text-slate-600">
+      <p className="text-xs text-carbon-600">
         Para trocar o secret, o servidor deve ter as permissões de leitura e adição de versões concedidas pelo
         bootstrap GCP.
       </p>
