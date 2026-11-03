@@ -16,6 +16,7 @@ import type { Capabilities, Info, Page, Asset } from '../api/types';
 import { ErrorState, PageHeader, PrivateImage, Skeleton, Status } from '../components/common';
 import { Button } from '../components/ui/button';
 import { SetupStatusPanel } from '../components/setup-status';
+import { PushNotifications } from '../components/push-notifications';
 import { bytes, date, number, obj, text } from '../lib/format';
 
 export function Overview() {
@@ -206,14 +207,7 @@ export function Overview() {
           <p className="muted">As fotografias aparecerão aqui após a primeira importação.</p>
         )}
       </section>
-      <button
-        type="button"
-        onClick={() => {
-          document.dispatchEvent(new Event('photointel:enable-notifications'));
-        }}
-      >
-        Ativar notificações
-      </button>
+      <PushNotifications />
       {system.error && <ErrorState error={system.error} retry={() => void system.refetch()} />}
       {system.data?.environment === 'test' && (
         <div className="notice warning" style={{ marginTop: 18 }}>
