@@ -216,7 +216,6 @@
   --color-border: var(--border-default);
 }
 
-
 /* Compact density works on root or a scoped container. */
 :root[data-density='compact'],
 [data-density='compact'],
@@ -441,17 +440,36 @@
   --default-transition-timing-function: var(--pi-ease-standard);
 }
 
-@utility z-sidebar { z-index: var(--z-sidebar); }
-@utility z-drawer { z-index: var(--z-drawer); }
-@utility z-navigation { z-index: var(--z-navigation); }
-@utility z-overlay { z-index: var(--z-overlay); }
-@utility z-dialog { z-index: var(--z-dialog); }
-@utility z-toast { z-index: var(--z-toast); }
-@utility duration-fast { transition-duration: var(--duration-fast); }
-@utility duration-normal { transition-duration: var(--duration-normal); }
-@utility duration-slow { transition-duration: var(--duration-slow); }
-@utility bg-photo-overlay { background-image: var(--overlay-photo); }
-
+@utility z-sidebar {
+  z-index: var(--z-sidebar);
+}
+@utility z-drawer {
+  z-index: var(--z-drawer);
+}
+@utility z-navigation {
+  z-index: var(--z-navigation);
+}
+@utility z-overlay {
+  z-index: var(--z-overlay);
+}
+@utility z-dialog {
+  z-index: var(--z-dialog);
+}
+@utility z-toast {
+  z-index: var(--z-toast);
+}
+@utility duration-fast {
+  transition-duration: var(--duration-fast);
+}
+@utility duration-normal {
+  transition-duration: var(--duration-normal);
+}
+@utility duration-slow {
+  transition-duration: var(--duration-slow);
+}
+@utility bg-photo-overlay {
+  background-image: var(--overlay-photo);
+}
 
 /* Override primary root values at runtime, e.g. document.documentElement.style.
  * setProperty('--ui-contrast', '1.4'), setProperty('--ui-gray-tone', '5%'),

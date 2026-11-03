@@ -4,9 +4,7 @@ import { expect, test } from '@playwright/test';
  * Navigation sheets must stay inside the visual viewport on iPhone.
  * This is a regression test for Tailwind v4's independent translate property.
  */
-test('mobile workspace menu opens as a bottom sheet inside the viewport', async ({
-  page,
-}, testInfo) => {
+test('mobile workspace menu opens as a bottom sheet inside the viewport', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.name.startsWith('iphone'), 'Mobile-only navigation');
 
   await page.goto('/');
