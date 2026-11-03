@@ -294,11 +294,7 @@ export function LogViewer() {
                 </div>
               );
             })}
-            {q.data?.console_url && (
-              <div className="p-4">
-                <External href={q.data.console_url}>Abrir Logs Explorer</External>
-              </div>
-            )}
+
           </ScrollArea>
         </Card>
       )}
