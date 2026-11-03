@@ -55,6 +55,7 @@ from photointel.serializers import decode_uuid_cursor, encode_cursor, row_dict
 from photointel.services.catalog import audit
 from photointel.services.import_policy import authorize_import
 from photointel.services.job_notify import safe_notify
+from photointel.services.job_control import transition_job
 from photointel.services.runtime_settings import effective_settings
 
 router = APIRouter(dependencies=[Depends(require_identity)])
@@ -702,13 +703,10 @@ async def cancel_job(
     job = await session.scalar(select(Job).where(Job.id == job_id).with_for_update())
     if not job:
         raise AppError(ErrorCode.NOT_FOUND, "Job não encontrado", 404)
-    if job.status == "completed":
-        raise AppError(ErrorCode.INVALID_REQUEST, "Job já foi concluído", 409)
-    job.status = "cancelled"
-    job.finished_at = datetime.now(UTC)
-    job.lease_until = None
-    job.worker_id = None
-    emit_job_event(session, job)
+    changed = transition_job(job, "cancel")
+    if changed:
+        emit_job_event(session, job)
+        await refresh_batch(session, job.batch_id)
     audit(session, identity, "job.cancel", job.asset_id, job_id=str(job.id))
     await session.commit()
     background_tasks.add_task(safe_notify)
@@ -762,8 +760,14 @@ async def change_batch(
     )
     if not batch:
         raise AppError(ErrorCode.NOT_FOUND, "Lote não encontrado", 404)
+    if batch.status in ("completed", "failed", "cancelled"):
+        raise AppError(ErrorCode.INVALID_REQUEST, "Lote já finalizado", 409)
+    if not pause:
+        setting = await session.get(Setting, "jobs_paused")
+        if setting and setting.value:
+            raise AppError(ErrorCode.INVALID_REQUEST, "Retome primeiro a fila global", 409)
     batch.status = "paused" if pause else "queued"
-    eligible = ["queued", "retrying"] if pause else ["paused"]
+    eligible = ["queued", "retrying", "preparing", "running"] if pause else ["paused"]
     affected = (
         await session.scalars(
             select(Job)
@@ -772,8 +776,9 @@ async def change_batch(
         )
     ).all()
     for job in affected:
-        job.status = "paused" if pause else "queued"
-        emit_job_event(session, job)
+        if transition_job(job, "pause" if pause else "resume"):
+            emit_job_event(session, job)
+    await refresh_batch(session, batch_id)
     audit(
         session,
         identity,
