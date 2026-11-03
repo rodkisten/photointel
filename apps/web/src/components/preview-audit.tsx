@@ -33,12 +33,6 @@ type PreviewAuditPage = {
   verification: 'catalog_metadata';
 };
 
-type PreviewAutomation = {
-  enabled: boolean;
-  next_run_at: string | null;
-  last_result: { catalog?: { queued: number } } | null;
-};
-
 const labels: Record<string, string> = {
   thumbnail_small: 'Miniatura pequena',
   thumbnail_medium: 'Miniatura média',
@@ -52,7 +46,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
   const page = useApi<PreviewAuditPage>(
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
-  const automation = useApi<PreviewAutomation>('/v1/jobs/previews/automation', 60_000);
+  const automation = useApi<{ enabled: boolean }>('/v1/jobs/previews/automation', 60_000);
   const repair = useAction<{ created: boolean; message: string }>();
   const repairBatch = useAction<{
     scanned: number;
@@ -152,16 +146,8 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 Auditoria dos registros do catálogo, inclusive falhas sem job recente. Não verifica objetos do
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
-              {automation.data && (
-                <p className="field-help">
-                  Reparo automático: {automation.data.enabled ? 'ativo' : 'desativado'}.
-                  {automation.data.last_result && (
-                    <span> {automation.data.last_result.catalog?.queued ?? 0} reparos enfileirados na última auditoria.</span>
-                  )}
-                </p>
-              )}
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                <strong>Reparo em lote</strong>
+                <strong>Reparo em lote {automation.data?.enabled ? '· Automático' : ''}</strong>
                 <p className="field-help">
                   Enfileira até 100 fotos por vez em lotes de 25, respeitando jobs ativos, mídias bloqueadas e
                   os limites do worker. Nenhuma foto é considerada reparada antes de o processamento terminar.
