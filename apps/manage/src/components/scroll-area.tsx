@@ -17,7 +17,7 @@ export function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="h-full w-full min-w-0 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-slate-500"
+        className="h-full w-full min-w-0 rounded-[inherit] outline-none focus-visible:ring-2 focus-visible:ring-carbon-500"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
