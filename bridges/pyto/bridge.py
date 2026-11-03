@@ -816,15 +816,68 @@ class Client:
                 if exc.code >= 500
                 else "BACKEND_REJECTED"
             )
+            # Edge Access can return a 403 HTML page instead of a 302 redirect.
+            # The FastAPI origin returns a structured JSON error envelope.
+            content_type = (exc.headers.get("Content-Type", "") if exc.headers else "").lower()
+            ray = exc.headers.get("CF-Ray", "") if exc.headers else ""
+            correlation = exc.headers.get("X-Correlation-ID", "") if exc.headers else ""
+            details: list[str] = []
+            if isinstance(ray, str) and 0 < len(ray) <= 96 and all(
+                char.isalnum() or char in "-_" for char in ray
+            ):
+                details.append("CF-Ray: " + ray)
             try:
-                server_code = json.loads(exc.read(16384)).get("error", {}).get("code")
-                if exc.code < 500 and exc.code != 429 and server_code:
-                    code = str(server_code)
-            except (ValueError, TypeError, AttributeError):
-                pass
-            raise BridgeError(
-                code, f"Backend recusou operação (HTTP {exc.code})"
-            ) from exc
+                payload = json.loads(exc.read(16384))
+                if not isinstance(payload, dict):
+                    payload = None
+            except (ValueError, TypeError, UnicodeDecodeError):
+                payload = None
+
+            origin_error = payload.get("error") if isinstance(payload, dict) else None
+            if isinstance(origin_error, dict):
+                server_code = origin_error.get("code")
+                if (
+                    isinstance(server_code, str)
+                    and 1 <= len(server_code) <= 64
+                    and server_code.isascii()
+                    and all(char.isupper() or char.isdigit() or char == "_" for char in server_code)
+                ):
+                    code = server_code
+                message = origin_error.get("message")
+                if message in {
+                    "Serviço Bridge não autorizado",
+                    "Origem da requisição não autorizada",
+                    "Origem obrigatória para operações de escrita",
+                    "Autenticação Access necessária",
+                    "Token de serviço Access inválido",
+                    "Código expirado ou já utilizado",
+                    "Access do Bridge não configurado",
+                }:
+                    details.append(message)
+                reported_id = origin_error.get("correlation_id")
+                if isinstance(reported_id, str):
+                    correlation = reported_id
+            elif exc.code in {401, 403}:
+                # Non-API responses commonly originate in Access, WAF, or the
+                # Cloudflare Worker. Do not echo untrusted HTML or response bodies.
+                if "application/json" in content_type and isinstance(payload, dict):
+                    code = "WORKER_ACCESS_REJECTED"
+                    details.append("Verifique a autenticação e o Origin na borda")
+                else:
+                    code = "CLOUDFLARE_ACCESS_REQUIRED"
+                    details.append(
+                        "Verifique Service Auth para /v1/bridge/*, "
+                        "Client ID, Client Secret e política Cloudflare"
+                    )
+            if isinstance(correlation, str) and 0 < len(correlation) <= 96 and all(
+                char.isalnum() or char in "-_" for char in correlation
+            ):
+                details.append("Correlation ID: " + correlation)
+            hint = "; ".join(details)
+            message = f"Operação recusada (HTTP {exc.code})"
+            if hint:
+                message += ": " + hint
+            raise BridgeError(code, message) from exc
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
             raise BridgeError(
                 "BACKEND_UNAVAILABLE",
