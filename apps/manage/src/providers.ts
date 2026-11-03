@@ -83,6 +83,16 @@ function providerFault(url: string, status: number, body: string, responseHeader
       classification + (allowedPermissions ? ' Permissões exigidas: ' + allowedPermissions + '.' : ''),
     );
   }
+  if (host === 'secretmanager.googleapis.com') {
+    const reason = status === 403
+      ? 'Secret Manager recusou o acesso. Execute Setup GCP → permissions para atualizar as permissões do Manage.'
+      : status === 404
+        ? 'Secret ou versão não encontrada no projeto photointel.'
+        : status === 409
+          ? 'Esse secret já existe ou há conflito com outra operação.'
+          : 'Google Secret Manager recusou a operação (HTTP ' + status + ').';
+    return new ApiError(503, 'GCP_SECRET_MANAGER_' + status, reason);
+  }
   if (host === 'api.cloudflare.com' && numericCode === '9106')
     return new ApiError(
       503,
