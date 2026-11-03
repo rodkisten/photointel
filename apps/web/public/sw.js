@@ -56,13 +56,13 @@ try {
 
 if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function') {
   firebase.initializeApp({
-    apiKey: 'AIzaSyAnhQBb9OHKyg93cCyNxlPY4Ny5HW25vHY',
-    authDomain: 'photointel-firebase.firebaseapp.com',
-    projectId: 'photointel-firebase',
-    storageBucket: 'photointel-firebase.firebasestorage.app',
-    messagingSenderId: '723658488603',
-    appId: '1:723658488603:web:64c64e34743b9aabe431be',
-    measurementId: 'G-RE93MWG6FN',
+    apiKey: "AIzaSyD3SeCdsCKawqwt-GiEit6CdbiJglE2c-4",
+    authDomain: "photointel.firebaseapp.com",
+    projectId: "photointel",
+    storageBucket: "photointel.firebasestorage.app",
+    messagingSenderId: "799387180206",
+    appId: "1:799387180206:web:2ded804bd6f1e6d6baa13f",
+    measurementId: "G-9735SK07XP",
   });
 
   const messaging = firebase.messaging();
