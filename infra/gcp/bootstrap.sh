@@ -29,7 +29,7 @@ if [[ "$FCM_ENABLED" == true && "$FCM_PROJECT" != "$PROJECT" ]]; then
   echo "::error::FCM_PROJECT_ID must match GCP project_id ($PROJECT); refusing cross-project IAM changes" >&2
   exit 2
 fi
-APIS=(run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
+APIS=(bigquery.googleapis.com run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
 gcp() { gcloud "$@" "--project=$PROJECT" --quiet; }
 change() { if [[ "$MODE" != "plan" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
@@ -169,6 +169,7 @@ reconcile_manage_access() {
       "--description=Create secret containers only; no delete or IAM changes" \
       --permissions=secretmanager.secrets.create --stage=GA
   for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/bigquery.jobUser roles/bigquery.dataViewer \
     roles/secretmanager.viewer roles/secretmanager.secretAccessor \
     roles/secretmanager.secretVersionAdder "projects/$PROJECT/roles/$role_id"; do
     change projects add-iam-policy-binding "$PROJECT" \
