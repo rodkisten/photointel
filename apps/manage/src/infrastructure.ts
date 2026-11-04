@@ -43,10 +43,10 @@ function asItems(value: RecordValue, key: string): RecordValue[] {
 function issue(reason: unknown) {
   return reason instanceof ApiError ? reason.message : 'Integração GCP indisponível';
 }
-async function settled(promise: Promise<RecordValue[] | RecordValue>): Promise<Source> {
+async function settled(promise: Promise<unknown>): Promise<Source> {
   try {
     const data = await promise;
-    return { status: 'ok', items: Array.isArray(data) ? data : [data] };
+    return { status: 'ok', items: Array.isArray(data) ? data as RecordValue[] : [data as RecordValue] };
   } catch (error) {
     return { status: 'error', items: [], message: issue(error) };
   }
@@ -133,7 +133,6 @@ function logItems(raw: RecordValue) {
       timestamp: item.timestamp || '',
       severity: String(item.severity || 'INFO'),
       message: redact(text).slice(0, 6000),
-      structured: typeof payload === 'object' && payload ? JSON.parse(redact(payload).slice(0, 6000)) : null,
       id: String(item.insertId || ''),
     };
   });
@@ -149,9 +148,9 @@ export async function infrastructureRoute(req: Request, env: Env, identity: Iden
 
   if (req.method === 'GET' && path === '/api/infrastructure') {
     const [vm, services, jobs, scheduler, builds, globalBuilds, triggers, globalTriggers] = await Promise.all([
-      settled(readVm(token) as Promise<RecordValue>),
+      settled(readVm(token)),
       settled(request(token, 'https://run.googleapis.com/v2/projects/' + PROJECT + '/locations/' + REGION + '/services')
-        .then((r) => asItems(r, 'services').map((x) => ({ name: x.name, uri: x.uri, reconciling: x.reconciling, condition: x.terminalCondition?.state })))),
+        .then((r) => asItems(r, 'services').map((x) => ({ name: x.name, uri: x.uri, reconciling: x.reconciling, condition: (x.terminalCondition as RecordValue | undefined)?.state })))),
       settled(request(token, 'https://run.googleapis.com/v2/projects/' + PROJECT + '/locations/' + REGION + '/jobs')
         .then((r) => asItems(r, 'jobs').map((x) => ({ name: x.name, latest: x.latestCreatedExecution, reconciling: x.reconciling })))),
       settled(request(token, 'https://cloudscheduler.googleapis.com/v1/projects/' + PROJECT + '/locations/' + REGION + '/jobs?pageSize=100')
