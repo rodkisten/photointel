@@ -15,8 +15,8 @@ from photointel.auth import require_identity
 from photointel.database import get_session
 from photointel.models import Asset, AssetResource, DiscoveryManifest, Job, Setting
 from photointel.serializers import decode_uuid_cursor, encode_cursor
-from photointel.services.runtime_settings import effective_settings
 from photointel.services.preview_repair import manifest_recoverable, repair_stage
+from photointel.services.runtime_settings import effective_settings
 
 router = APIRouter(dependencies=[Depends(require_identity)])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -225,7 +225,10 @@ async def audit_previews(
         blocked = stage is None
         pending = bool(latest and latest["status"] in ACTIVE_STATES)
         repair_reason = (
-            "AUTH_REQUIRED" if blocked and manifest and manifest.failure_category == "authentication_required"
+            "AUTH_REQUIRED"
+            if blocked
+            and manifest
+            and manifest.failure_category == "authentication_required"
             else "ICLOUD_PAUSED" if blocked and ingestion_paused
             else "SOURCE_NOT_FOUND" if blocked and not manifest and asset.id not in source_by_asset
             else "SOURCE_NOT_RECOVERABLE" if blocked
