@@ -191,7 +191,8 @@ async function validSignature(request: Request, secret: string, body: string): P
 }
 export async function githubHook(request: Request, env: Env, context: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
   if (request.method !== 'POST') throw new ApiError(405, 'METHOD', 'Webhook requer POST');
-  if (!env.GITHUB_WEBHOOK_SECRET) throw new ApiError(503, 'WEBHOOK_SECRET', 'Configure GITHUB_WEBHOOK_SECRET');
+  if (!env.GITHUB_WEBHOOK_SECRET || env.GITHUB_WEBHOOK_SECRET.length < 32)
+    throw new ApiError(503, 'WEBHOOK_SECRET', 'Configure GITHUB_WEBHOOK_SECRET de pelo menos 32 caracteres');
   if (Number(request.headers.get('Content-Length') || 0) > 600_000)
     throw new ApiError(413, 'BODY_LIMIT', 'Payload muito grande');
   const body = await request.text();
@@ -240,7 +241,8 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
 }
 export async function cloudBuildCallback(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') throw new ApiError(405, 'METHOD', 'Callback requer POST');
-  if (!env.GCP_BUILD_CALLBACK_SECRET) throw new ApiError(503, 'CALLBACK_SECRET', 'Callback não configurado');
+  if (!env.GCP_BUILD_CALLBACK_SECRET || env.GCP_BUILD_CALLBACK_SECRET.length < 32)
+    throw new ApiError(503, 'CALLBACK_SECRET', 'Configure um callback secret aleatório de pelo menos 32 caracteres');
   const token = request.headers.get('Authorization') || '';
   const input = new TextEncoder();
   const a = await crypto.subtle.digest('SHA-256', input.encode(token));
