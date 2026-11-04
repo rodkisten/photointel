@@ -19,6 +19,7 @@ import { readLogLink, toLogSearch } from './log-deeplink';
 import { ConfigEditor } from './pages/ConfigEditor';
 import { Deploys } from './pages/Deploys';
 import { Infrastructure } from './pages/Infrastructure';
+import { DeployTriggers } from './pages/DeployTriggers';
 import { CostsPage } from './pages/Costs';
 import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
 import { LogViewer } from './pages/LogViewer';
@@ -105,6 +106,8 @@ const indexRoute = createRoute({
         });
       case 'deploy':
         throw redirect({ to: '/deploys', replace: true });
+      case 'triggers':
+        throw redirect({ to: '/triggers', replace: true });
       case 'infrastructure':
         throw redirect({ to: '/infrastructure', replace: true });
       case 'costs':
@@ -140,6 +143,12 @@ const infrastructureRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/infrastructure',
   component: Infrastructure,
+});
+
+const triggersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/triggers',
+  component: DeployTriggers,
 });
 
 const costsRoute = createRoute({
@@ -183,6 +192,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   deploysRoute,
   infrastructureRoute,
+  triggersRoute,
   costsRoute,
   runRoute,
   logsRoute,
