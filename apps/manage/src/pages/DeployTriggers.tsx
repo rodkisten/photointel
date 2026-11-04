@@ -33,6 +33,9 @@ export function DeployTriggers() {
   const qc = useQueryClient();
   const snapshot = useQuery({ queryKey: ['deploy-router'], queryFn: () => api<Snapshot>('/deploy-router'),
     refetchInterval: 10000, retry: false });
+  const providerTargets = useQuery({ queryKey: ['deploy-router-providers'],
+    queryFn: () => api<{ cloudflare: Array<{ id: string; name: string; script: string }> }>('/deploy-router/providers'),
+    retry: false });
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState(empty);
   const [inspect, setInspect] = useState<Inspect | null>(null);
@@ -124,7 +127,17 @@ export function DeployTriggers() {
               </Select> :
               <Input id="route-target" placeholder="UUID do trigger de Workers Builds"
                 value={draft.target} onChange={(e) => setDraft((x) => ({ ...x, target: e.target.value }))} />}
-            <p className="mt-1 text-xs text-carbon-500">GCP: URL secreta associada ao destino no Worker. Cloudflare: UUID de um build trigger conectado ao mesmo repositório.</p>
+            {draft.provider === 'cloudflare' && Boolean(providerTargets.data?.cloudflare.length) &&
+              <div className="mt-2">
+                <label className="field-label" htmlFor="route-trigger-list">Triggers Cloudflare encontrados</label>
+                <Select id="route-trigger-list" value={draft.target}
+                  onChange={(e) => setDraft((x) => ({ ...x, target: e.target.value }))}>
+                  <option value="">Selecionar trigger</option>
+                  {providerTargets.data?.cloudflare.map((item) =>
+                    <option key={item.id} value={item.id}>{item.script} · {item.name}</option>)}
+                </Select>
+              </div>}
+            <p className="mt-1 text-xs text-carbon-500">GCP: webhook pré-configurado. Cloudflare: UUID de um build trigger conectado ao repositório.</p>
           </div>
           <div>
             <label className="field-label" htmlFor="route-patterns">Paths (um por linha)</label>
