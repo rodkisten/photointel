@@ -22,12 +22,20 @@ iPhone/PWA aberto.
    provedor não são tratadas como objetos ausentes. Objetos realmente ausentes
    recebem status `invalid`, o que permite reconstrução.
 5. Uma foto é enfileirada apenas se não tem job ativo/pausado e a versão da
-   origem ainda é a mesma. Prefere recurso persistido privado no R2, senão
-   somente baixa do iCloud com manifesto da revisão vigente e ingestão habilitada.
+   origem ainda é a mesma. Fotos históricas `failed/quarantined` agora podem
+   retornar ao `metadata_extract` se a representação privada estiver retida
+   no R2, ou ao `media_download` se houver manifesto iCloud autorizado.
+   Falhas remotas transitórias (inclusive URL assinada 410 expirada) podem
+   rearmar seu manifesto com cooldown; alterações permanentes da representação
+   e falta de autenticação nunca são rearmadas silenciosamente.
    Não remove originais e não escreve na Apple.
 6. O limite de **uma tentativa automática por seis horas e até três por sete
    dias por asset/revisão** impede loop permanente. Erros definitivos permanecem
-   visíveis e exigem recuperação manual ou correção do acesso iCloud. Jobs têm
+   visíveis, inclusive `AUTH_REQUIRED`, `SOURCE_NOT_FOUND` e
+   `SOURCE_NOT_RECOVERABLE`; exigem reconectar Apple ou nova descoberta.
+   A varredura de storage verifica também originais privados e imagens com
+   apenas parte das variantes, marcando como inválidos objetos R2 realmente
+   ausentes sem apagar dados da Apple. Jobs têm
    também suas próprias tentativas limitadas e backoff.
 7. Um worker invocado após a descoberta ou maintenance acorda os jobs já
    enfileirados através do outbox; a fila, cursores, leases e resultados
@@ -55,6 +63,13 @@ defaults acima. Faça o deploy tanto dos Jobs quanto da API. Para ativar os
 agendamentos no arquivo de configuração GCP, use a linha
 `AUTO_RESUME_SCHEDULES=json:true` no `GCP_CONFIG_ENV` (ou
 `auto_resume_schedules=true` no JSON) e execute a fase Scheduler.
+A nova salvaguarda `.github/workflows/gcp-deploy.yml` usa GitHub Actions
+`23 * * * *` (UTC) para chamar o Cloud Run Job **finito**
+`photointel-maintenance` quando seu agendamento nativo estiver pausado ou
+não existir. Se o Scheduler estiver `ENABLED`, não faz chamadas duplicadas.
+A salvaguarda depende de Actions ativos, WIF/GCP IAM, do Job já publicado e da
+configuração `production/GCP_CONFIG_ENV`; não executa o serviço API em background.
+
 A criação é pausada por padrão para evitar importação/custos não autorizados;
 **uma atualização de Scheduler preserva o estado existente**, sem pausar
 agendamentos já ativos. A opção de retomada é explícita, não é alterada
@@ -75,3 +90,10 @@ status 200. A confirmação de integridade SHA-256 das fontes armazenadas ocorre
 no pipeline de download/processamento. Um R2 fora do ar, iCloud com sessão
 expirada ou fila/scheduler pausados impede progresso normal, mas não apaga o
 catálogo. Vídeos continuam apenas catalogados na versão atual.
+
+**Atualização importante:** alterações neste código exigem um novo `release`
+manual de `gcp-deploy.yml` antes de terem efeito na API e nos Cloud Run Jobs.
+Um push na main executa somente testes offline, não um deploy de produção.
+Os jobs agendados não ignoram falhas de autenticação Apple nem o limite
+configurado de fotos no banco. Ajustar `DATABASE_CATALOG_LIMIT` exige avaliação
+da capacidade contratada; o reparo de fotos já catalogadas independe do aumento.
