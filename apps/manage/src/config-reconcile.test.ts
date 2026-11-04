@@ -108,4 +108,19 @@ describe('automatic configuration impact planner', () => {
     const b = { ...a, workflow_secrets: { MANAGE_GITHUB_API_TOKEN: { name: 'pat', version: '2' } } };
     expect(planConfigChange(JSON.stringify(a), JSON.stringify(b)).targets).toEqual(['manage']);
   });
+  it('updates Manage billing configuration without redeploying Cloud Run or Worker', () => {
+    const fields = [
+      'MANAGE_GITHUB_ACTIONS_INCLUDED_USD=12',
+      'MANAGE_GITHUB_BILLING_OWNER=rodkisten',
+      'MANAGE_GCP_BILLING_TABLE=photointel.billing.gcp_billing_export_v1_FAKE',
+      'MANAGE_MODAL_BILLING_URL=https://billing-example.modal.run/report',
+    ];
+    for (const field of fields) {
+      const plan = planConfigChange(BASE, BASE + '\nEXTRA_ENVIRONMENT__' + field);
+      expect(plan.blocked).toBe(false);
+      expect(plan.targets).toEqual(['manage']);
+      expect(plan.workflows.map((item) => item.file)).toEqual(['manage-deploy.yml']);
+    }
+  });
+
 });

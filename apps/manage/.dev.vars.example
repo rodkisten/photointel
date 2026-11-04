@@ -15,3 +15,14 @@ SENTRY_API_TOKEN=YOUR_SENTRY_READ_ONLY_TOKEN
 # Only new value needed for the independent Manage error project.
 # Public ingest DSN (not an API token); source: Sentry > Project Settings > Client Keys.
 SENTRY_DSN=https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456
+
+# Cost observability (optional, read-only)
+# GitHub billing API may require account-level billing permissions.
+GITHUB_BILLING_OWNER=rodkisten
+GITHUB_BILLING_SCOPE=users
+GITHUB_ACTIONS_INCLUDED_USD=12
+# Enable Cloud Billing export to BigQuery and use its full table ID.
+GCP_BILLING_TABLE=photointel.billing.gcp_billing_export_v1_ACCOUNT_ID
+# Modal needs the authenticated gpu/modal_billing.py endpoint and shared token.
+# MODAL_BILLING_URL=https://YOUR-BILLING-ENDPOINT.modal.run/report
+# MODAL_BILLING_TOKEN=LONG_RANDOM_TOKEN_FROM_MODAL_SECRET

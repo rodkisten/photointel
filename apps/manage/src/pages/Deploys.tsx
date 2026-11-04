@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Activity,
@@ -41,6 +42,9 @@ import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
+import type { RunCostsResponse } from '../components/run-cost';
+import type { CostSource } from './Costs';
+import { money } from './Costs';
 import { ConfirmDialog } from '../components/confirm-dialog';
 export function Deploys() {
   const qc = useQueryClient();
@@ -49,6 +53,20 @@ export function Deploys() {
     queryKey: ['runs'],
     queryFn: () => api<{ items: Run[] }>('/runs'),
     refetchInterval: 20_000,
+  });
+  const ids = runs.data?.items.slice(0, 40).map((run) => run.id) || [];
+  const estimates = useQuery({
+    queryKey: ['run-costs', ids.join(',')],
+    queryFn: () => api<RunCostsResponse>('/costs/runs?ids=' + ids.join(',')),
+    enabled: ids.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const quota = useQuery({
+    queryKey: ['github-billing-quota'],
+    queryFn: () => api<{ source: CostSource }>('/costs/github'),
+    staleTime: 10 * 60_000,
+    retry: false,
   });
   const [selected, setSelected] = useState('');
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -135,6 +153,19 @@ export function Deploys() {
           {mutation.error && <IssueBanner error={mutation.error} />}
         </Card>
       </Section>
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-sm font-medium text-carbon-200">Cota do GitHub Actions</p>
+          <p className="mt-1 text-xs text-carbon-400">
+            {quota.data?.source?.quota
+              ? money(quota.data.source.quota.used_usd) + ' consumidos (brutos) · ' +
+                (quota.data.source.quota.included_usd === null
+                  ? 'cota não configurada' : money(quota.data.source.quota.included_usd) + ' de crédito')
+              : quota.isPending ? 'Consultando faturamento...' : 'Faturamento indisponível: verifique a permissão Billing.'}
+          </p>
+        </div>
+        <Link to="/costs" className="text-xs text-carbon-200 underline underline-offset-4">Ver painel de custos</Link>
+      </Card>
       <Section
         title="Histórico"
         detail="Abra uma execução para inspecionar steps e logs"
@@ -151,7 +182,7 @@ export function Deploys() {
         ) : (
           <Card className="overflow-hidden">
             {runs.data?.items.slice(0, 40).map((r) => (
-              <RunRow key={r.id} run={r} />
+              <RunRow key={r.id} run={r} estimate={estimates.data?.items[String(r.id)]} />
             ))}
           </Card>
         )}

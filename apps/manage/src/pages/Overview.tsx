@@ -41,6 +41,7 @@ import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
 import { External, Spinner, Empty, IssueBanner } from '../components/shared';
 import { RunRow, RunDetail } from '../components/runs';
+import type { RunCostsResponse } from '../components/run-cost';
 import { ConfirmDialog } from '../components/confirm-dialog';
 export function Overview() {
   const q = useQuery({
@@ -60,6 +61,14 @@ export function Overview() {
         checked_at: string;
       }>('/overview'),
     refetchInterval: 30_000,
+  });
+  const ids = q.data?.runs.slice(0, 10).map((run) => run.id) || [];
+  const estimates = useQuery({
+    queryKey: ['run-costs', ids.join(',')],
+    queryFn: () => api<RunCostsResponse>('/costs/runs?ids=' + ids.join(',')),
+    enabled: ids.length > 0,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
   if (q.isPending) return <Spinner />;
   if (q.error) return <IssueBanner error={q.error} />;
@@ -113,7 +122,9 @@ export function Overview() {
       >
         <Card className="overflow-hidden">
           {data.runs.length ? (
-            data.runs.slice(0, 10).map((r) => <RunRow key={r.id} run={r} />)
+            data.runs.slice(0, 10).map((r) => (
+              <RunRow key={r.id} run={r} estimate={estimates.data?.items[String(r.id)]} />
+            ))
           ) : (
             <div className="p-5">
               <Empty title="Sem execuções recentes" />
