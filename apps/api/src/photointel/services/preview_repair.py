@@ -69,8 +69,11 @@ def repair_stage(
     icloud_enabled: bool,
     ingestion_paused: bool,
     source_retained: bool = False,
+    source_invalid: bool = False,
 ) -> str | None:
     """Resume a historical failed source without changing the original."""
+    if source_invalid and manifest and icloud_enabled and not ingestion_paused:
+        return "media_download"
     if ingestion_status == "completed" and retained:
         return "thumbnail_generate"
     if source_retained and ingestion_status in {
@@ -190,6 +193,14 @@ async def _queue_repair(
         )
     )).all())
     source_retained = "source_download" in retained_resources
+    source_invalid = bool(await session.scalar(
+        select(AssetResource.id).where(
+            AssetResource.asset_id == asset_id,
+            AssetResource.resource_type == "source_download",
+            AssetResource.revision == asset.content_revision,
+            AssetResource.status == "invalid",
+        ).limit(1)
+    ))
     manifest = None
     if settings.icloud_enabled and not ingestion_paused:
         manifest = await session.scalar(
@@ -209,6 +220,7 @@ async def _queue_repair(
         ingestion_status=asset.ingestion_status,
         retained=bool(retained_resources),
         source_retained=source_retained,
+        source_invalid=source_invalid,
         manifest=has_manifest,
         icloud_enabled=settings.icloud_enabled,
         ingestion_paused=ingestion_paused,
