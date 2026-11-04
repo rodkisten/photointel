@@ -19,6 +19,13 @@ export interface Env {
   SENTRY_API_TOKEN?: string;
   /** Public DSN for the independent Manage Sentry project, not an API token. */
   SENTRY_DSN?: string;
+  /** Optional billing integrations, all credentials remain server-side. */
+  GITHUB_BILLING_OWNER?: string;
+  GITHUB_BILLING_SCOPE?: string;
+  GITHUB_ACTIONS_INCLUDED_USD?: string;
+  GCP_BILLING_TABLE?: string;
+  MODAL_BILLING_URL?: string;
+  MODAL_BILLING_TOKEN?: string;
 }
 export type Identity = { email: string; jwt: string };
 export class ApiError extends Error {
