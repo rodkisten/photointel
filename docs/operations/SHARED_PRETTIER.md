@@ -1,5 +1,7 @@
 # Prettier compartilhado: PhotoIntel Web, Manage e Workers
 
+> **Nota de revisão arquitetural (04/11/2026):** Os frontends PhotoIntel e Manage mantêm `package.json` e lockfiles próprios e compartilham a política raiz de Prettier. Formatação não substitui TypeScript/ESLint, Vitest ou testes de Worker em CI. Consulte [a referência técnica](../architecture/COMPONENTS_AND_STACK.md).
+
 A configuração reside **apenas na raiz** do repositório: `.prettierrc.json`,
 `.prettierignore` e `package.json`. Os dois frontends usam a **mesma versão
 fixa, Prettier 3.6.2**, sem instalações nem configurações divergentes.

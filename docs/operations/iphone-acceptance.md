@@ -1,5 +1,7 @@
 # Aceitação em iPhone físico — v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** Validação WebKit/simulação não substitui Safari físico no iPhone. Cache de service worker não inclui `/v1/*`, mídias privadas ou sessão; teste explicitamente Access, FCM, teclado, safe areas e mídia autenticada. Consulte [a referência técnica](../architecture/FRONTENDS_AND_BRIDGE.md).
+
 Este protocolo exige o aparelho real e a implantação privada. Playwright/WebKit
 no Linux não comprova Safari, instalação PWA, Keychain, PhotoKit nem autenticação
 na conta Cloudflare. Nenhum item abaixo está marcado como aprovado por testes

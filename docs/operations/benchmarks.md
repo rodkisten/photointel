@@ -1,5 +1,7 @@
 # Benchmarks e planos de consulta
 
+> **Nota de revisão arquitetural (04/11/2026):** Benchmarks e tempos registrados refletem **ambiente/revisão dos ensaios**, não latência ou custo real da cloud atual. Diferencie medições de CPU, GPU, Neon, Apple e Cloud Run. Consulte [a referência técnica](../architecture/DATA_AND_INFERENCE.md).
+
 Execute em um PostgreSQL descartável com as migrações aplicadas. Não é necessário
 configurar iCloud, Modal ou GPU. A CLI recusa `APP_ENV=production`. Os dados são
 sintéticos; somente um relatório produzido pela execução representa medição.

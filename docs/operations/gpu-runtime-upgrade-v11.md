@@ -1,5 +1,7 @@
 # Atualização segura do runtime de inferência v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** O app Modal fixa versões de imagem **separadamente** do grupo Python `gpu`; alterações de Transformers/PyTorch exigem validação de contrato, revisões, dimensão 768 e custo GPU real. Consulte [a referência técnica](../architecture/DATA_AND_INFERENCE.md).
+
 O scan adicional de dependências encontrou advisories no Transformers 4.57.6.
 Esta release fixa **Transformers 5.10.2**, Hugging Face Hub 1.33.0 e mantém os
 commits imutáveis dos checkpoints JoyTag/SigLIP 2. A versão 5.10.0 não foi usada:

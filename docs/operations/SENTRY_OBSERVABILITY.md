@@ -1,5 +1,7 @@
 # Sentry + Cloud Logging: PhotoIntel end-to-end diagnostics
 
+> **Nota de revisão arquitetural (04/11/2026):** `correlation_id`, `sentry_event_id`, Ray ID, execução Cloud Run e run GitHub são chaves **distintas**. Abrir a issue agregada não equivale a abrir o evento exato; a correlação exige dado e permissão reais do provedor. Consulte [a referência técnica](../architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 The same operation has **two identifiers**:
 - `correlation_id`: a canonical UUID from the Cloudflare edge, passed through FastAPI and PostgreSQL jobs. Search in Google Cloud Logs Explorer.
 - `sentry_event_id`: a 32-character hexadecimal ID for a **specific exception**. Every failing job attempt can have its own event. The app's **Ver erro exato no Sentry** button uses an authenticated resolver and the official Sentry API.

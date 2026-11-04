@@ -1,5 +1,7 @@
 # Validação manual dos modelos em CPU
 
+> **Nota de revisão arquitetural (04/11/2026):** Provas de inferência CPU com pesos reais não validam automaticamente Modal/CUDA, latência, billing ou dados Apple reais. Mantenha pins dos modelos e do pré-processamento compatíveis com o schema pgvector. Consulte [a referência técnica](../architecture/DATA_AND_INFERENCE.md).
+
 O workflow **Real models on CPU (manual)** executa os checkpoints reais fixados
 de JoyTag e SigLIP 2 em um runner Linux AMD64 comum, sem reservar GPU nem chamar
 Modal. Não depende de secrets, iCloud ou fotos particulares. Ele só inicia por

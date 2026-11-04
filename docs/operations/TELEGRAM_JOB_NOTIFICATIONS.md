@@ -1,5 +1,7 @@
 # PhotoIntel → Telegram · jobs, progress and failures
 
+> **Nota de revisão arquitetural (04/11/2026):** O notificardor de Telegram percorre eventos duráveis e pode atualizar mensagem por escopo quando o relay suporta edição. A ausência de credenciais/relay ou indisponibilidade de rede não deve abortar processamento de fotos. Consulte [a referência técnica](../architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 PhotoIntel now sends **durable job lifecycle events** to the xtelegram sender at
 POST /notifications/send. This is independent of Notify! Live Activities.
 The sender is server-to-server; never put the bearer token in frontend builds.
