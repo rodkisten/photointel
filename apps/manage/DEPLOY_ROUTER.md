@@ -24,7 +24,7 @@ push-triggered deployments before enabling these rules or you may get duplicates
 9. Access-protected UI: `https://photos-manage.migos.club/triggers`.
 
 **IMPORTANT**: The Cloud Build webhook must have a repository-backed **main**
-source, using GitHub 2nd-generation connection, and `_RUN_ID=$(body.run_id)`
+source, using GitHub 2nd-generation connection, and `_RUN_ID=$(body.run_id)` and `_EVENT_SHA=$(body.after)` and `_EVENT_SHA=$(body.after)`
 as a substitution. Without this substitution, the build can run but Manage
 cannot associate its callbacks; the record remains `submitted`. A rapid
 subsequent push may cause a branch-based Cloud Build trigger to checkout a newer
@@ -121,7 +121,7 @@ Go to **GitHub repository → Settings → Webhooks → Add webhook**.
 - Secret: the same value as `GITHUB_WEBHOOK_SECRET`
 - Events: **Just the push event**; Active
 
-The Worker rejects missing/wrong HMAC, unknown GitHub repo, non-main refs,
+At most five matching rules may dispatch for one push, to cap surprise spend.\nThe Worker rejects missing/wrong HMAC, unknown GitHub repo, non-main refs,
 malformed delivery IDs or unbounded/truncated compare responses. Replay of the
 same GitHub delivery cannot create another deployment; routes and deliveries
 are persisted with unique keys. Provider request timeouts are marked failed,
@@ -150,11 +150,11 @@ private GitHub repository, branch main):
 - `release`: `infra/gcp/cloudbuild-manage-release.yaml` (API image, Cloud Run
   Jobs, API, Scheduler). It does not apply Neon migrations.
 - `provision`: `infra/gcp/cloudbuild-manage-provision.yaml`
-  (default `_MODE=permissions` and `_AUTHORIZE_CHARGES=false`; setup/permissions
-  changes must be explicitly approved outside the rule editor).
+  (default `_MODE=permissions` only; privileged provisioning and API enablement
+  must be performed through the administrative GCP setup path, not push events).
 
 For each trigger configure substitution
-`_RUN_ID=$(body.run_id)`, copy the generated authenticated `:webhook`
+`_RUN_ID=$(body.run_id)` and `_EVENT_SHA=$(body.after)`, copy the generated authenticated `:webhook`
 URL to the corresponding pinned Secret Manager entry above.
 Create the `photointel-gcp-config` and
 `photointel-gcp-build-callback` secrets with enabled versions; grant the
@@ -163,7 +163,7 @@ Artifact Registry Writer, Cloud Run admin, scheduler permissions and
 `iam.serviceAccounts.actAs` as appropriate, keeping bootstrap separate
 from deployment.
 
-The final Cloud Build step posts `success` / `failed` to the Manage
+The configuration step verifies that the checked-out Cloud Build source SHA matches\n`_EVENT_SHA=$(body.after)`; a mismatch never deploys. The final Cloud Build step posts `success` / `failed` to the Manage
 callback and fails the build if an earlier step failed. A failure before
 Cloud Build creates a build (e.g., source access or missing secrets) may not
 produce a callback; check the Google Cloud console.
