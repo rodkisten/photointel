@@ -1,4 +1,6 @@
-# Arquitetura v1.1
+# Arquitetura Photo Intelligence Cloud · implementação auditada
+
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/SYSTEM_OVERVIEW.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
 
 A migração mantém FastAPI, React/Vite, schema PostgreSQL, fila durável, JoyTag,
 SigLIP 2, R2, taxonomia, Bridge e design existentes. Cloud Run/Neon tornam-se o
@@ -35,6 +37,21 @@ flowchart LR
     Secrets --> Worker
     Bridge[Pyto: PhotoKit opcional] --> Access
 ```
+
+
+## Sumário técnico navegável
+
+| Área | Documento auditado |
+|---|---|
+| Arquitetura e confiança | [SYSTEM_OVERVIEW](docs/architecture/SYSTEM_OVERVIEW.md) |
+| Componentes, dependências, pastas | [COMPONENTS_AND_STACK](docs/architecture/COMPONENTS_AND_STACK.md) |
+| Descoberta iCloud, manifests, pipeline e autorreparo | [INGESTION_AND_RECOVERY](docs/architecture/INGESTION_AND_RECOVERY.md) |
+| Cloudflare, GCP, Neon, R2, Modal e workflows | [INFRASTRUCTURE_AND_DEPLOY](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md) |
+| Banco, recursos, busca e embeddings | [DATA_AND_INFERENCE](docs/architecture/DATA_AND_INFERENCE.md) |
+| JWT, IAM, segredos, sessões e R2 | [SECURITY_AND_SECRETS](docs/architecture/SECURITY_AND_SECRETS.md) |
+| Logs, Sentry, Notify, Telegram e custos | [OBSERVABILITY_AND_OPERATIONS](docs/architecture/OBSERVABILITY_AND_OPERATIONS.md) |
+| Web, Manage, PWA e Apple Bridge | [FRONTENDS_AND_BRIDGE](docs/architecture/FRONTENDS_AND_BRIDGE.md) |
+| Evidências e lacunas | [IMPLEMENTATION_REFERENCE](docs/architecture/IMPLEMENTATION_REFERENCE.md) |
 
 ## Fronteira de estado e execução
 

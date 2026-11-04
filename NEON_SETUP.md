@@ -1,5 +1,7 @@
 # Neon PostgreSQL e perfis de capacidade
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/DATA_AND_INFERENCE.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 O banco continua compatível com PostgreSQL padrão. Neon é um destino de produção,
 sem dependência de sua API proprietária. A criação do projeto e a escolha de um
 plano exigem acesso à conta e autorização de cobrança; os scripts não criam um

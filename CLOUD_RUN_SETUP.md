@@ -1,5 +1,7 @@
 # Google Cloud Run + Neon — implantação controlada pelo iPhone
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 **[Comece pelo guia completo: do zero ao deploy](docs/deployment/CLOUD_RUN_FROM_ZERO.md).** Ele traz os comandos e configurações atuais de Cloud Shell, GCP IAM, WIF com GitHub, Artifact Registry, Cloud Build, Secret Manager, Cloudflare, BUILD_CA_FILE e GitHub Actions, incluindo diagnóstico de erros já encontrados.
 
 Este documento aprofunda migração/rollback, recursos finitos e autenticação. **O estado de contas Google, permissões, domínio e bancos deve ser confirmado no Console e pelos logs de cada execução:** repositório versionado ou teste offline não prova que a produção está operacional. Criar recursos pode gerar cobranças.

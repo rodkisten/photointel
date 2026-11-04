@@ -1,5 +1,7 @@
 # Cloudflare: Workers, Tunnel, Access e R2
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 **Configuração automatizada recomendada:** execute o workflow **☁️ Cloudflare Setup**
 (`plan` → `apply`). Ele usa Wrangler + API oficial, resolve o AUD automaticamente
 e reutiliza GCP_CONFIG_ENV. Veja [o guia do fluxo único](docs/deployment/CLOUDFLARE_AUTOMATION.md).

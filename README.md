@@ -1,11 +1,13 @@
 # Photo Intelligence Cloud v1.1
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [o índice técnico](docs/README.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 Catálogo privado de fotos e vídeos, preparado para bibliotecas grandes, com tags
 revisáveis, busca textual e vetorial, álbuns, fila persistente, diagnóstico de
 duplicatas e integração opcional com iCloud. Os originais permanecem no serviço
 de origem: o projeto trabalha com representações limitadas e derivados privados.
 
-O destino principal de produção é Cloudflare Pages + Google Cloud Run
+O destino principal de produção é Cloudflare Worker unificado (SPA e relay /v1) + Google Cloud Run
 Service/Jobs + Neon PostgreSQL + R2 privado + Modal. Compose continua o ambiente
 local e Oracle/VPS permanece como fallback. A migração preserva o catálogo,
 contratos e design existentes, sem reconstruir a aplicação.
@@ -20,6 +22,11 @@ Status verificado: **Local development ready**. Consulte o
 [relatório final v1.1](docs/audit/FINAL_REPORT_V11.md) e a
 [validação executada](VALIDATION.md) para resultados, commit testado e pré-requisitos
 externos. A validação local não aprova a biblioteca completa nem gastos cloud.
+
+
+## Mapa técnico do projeto (implementação 2026)
+
+A arquitetura vigente usa **Cloudflare Worker único para a SPA e `/v1/*`**, **Manage Worker independente**, **Cloud Run Service e Jobs finitos**, **Neon + pgvector**, **R2 privado**, integração **iCloud opcional** e **Modal GPU opcional**. A documentação extensiva, com fluxogramas Mermaid, diagramas de sequência e rastreabilidade para os módulos de código, está em [docs/README.md](docs/README.md). Os principais diagramas estão em [arquitetura geral](docs/architecture/SYSTEM_OVERVIEW.md), [ingestão e recuperação](docs/architecture/INGESTION_AND_RECOVERY.md) e [infraestrutura e deploy](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md). O frontend principal usa React Router; o Manage usa TanStack Router. Guias de versões anteriores podem mencionar Pages e gates que já não representam o fluxo atual.
 
 ## Início local
 
@@ -107,7 +114,7 @@ As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis.
 
 Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
 
-O `gcp-validation.yml` testa offline, sem credenciais Google. O `gcp-deploy.yml` só executa manualmente na `main` com confirmação de projeto, ambiente `production` e autorização explícita de custos. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
+O `gcp-validation.yml` testa offline. No `gcp-deploy.yml`, pushes em caminhos monitorados executam verificações, o agendamento horário acorda a manutenção de segurança quando necessário e a publicação segue `workflow_dispatch` em `main`/`production`; migrações continuam separadas. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
 
 ## Comandos
 
