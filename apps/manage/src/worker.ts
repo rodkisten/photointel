@@ -2,6 +2,7 @@ import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
 import { captureManageError } from './sentry';
+import { githubHook, cloudBuildCallback, tick } from './deploy-router/service';
 
 function routeGroup(path: string): string {
   const segments = path.split('/').filter(Boolean);
@@ -37,7 +38,8 @@ export default {
     env: Env,
     context?: { waitUntil(promise: Promise<unknown>): void },
   ): Promise<Response> {
-    const path = new URL(request.url).pathname;
+    const location = new URL(request.url);
+    const path = location.pathname;
     const route = routeGroup(path);
     const method = request.method.toUpperCase();
     // Always server-generated. Never accept correlation identifiers from the client.
@@ -51,6 +53,15 @@ export default {
     if (method === 'OPTIONS')
       return withIncidentHeaders(failure(405, 'CORS', 'CORS desabilitado'), correlationId);
     try {
+      if (location.hostname === 'photos-hooks.migos.club') {
+        if (path === '/hooks/github') {
+          if (!context) throw new ApiError(503, 'WORKER_CONTEXT', 'Contexto indisponível');
+          return withIncidentHeaders(await githubHook(request, env, context), correlationId);
+        }
+        if (path === '/hooks/cloud-build')
+          return withIncidentHeaders(await cloudBuildCallback(request, env), correlationId);
+        return withIncidentHeaders(failure(404, 'HOOK_PATH', 'Rota não encontrada'), correlationId);
+      }
       const identity = await verifyAccess(request, env);
       if (method !== 'GET' && method !== 'HEAD') requireOrigin(request);
       if (path.startsWith('/api/')) {
@@ -106,5 +117,8 @@ export default {
       );
       return withIncidentHeaders(response, correlationId, eventId);
     }
+  },
+  async scheduled(_event: unknown, env: Env, context: { waitUntil(promise: Promise<unknown>): void }): Promise<void> {
+    context.waitUntil(tick(env));
   },
 };
