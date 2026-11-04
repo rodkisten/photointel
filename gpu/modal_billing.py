@@ -9,7 +9,6 @@ No Modal token or invoice contents are sent to the browser beyond totals.
 """
 from __future__ import annotations
 
-import calendar
 import hmac
 import os
 import re
