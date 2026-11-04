@@ -107,6 +107,8 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
     let id: string | null = null;
     let url: string | null = null;
     if (run.provider === 'cloudflare') {
+      if (!(await cloudflareTriggers(env)).some((x) => x.id === run.target))
+        throw new ApiError(403, 'BUILD_TRIGGER_REVOKED', 'Trigger fora do repositório autorizado');
       const response = (await cf(env, '/builds/triggers/' + run.target + '/builds', 'POST',
         { commit_hash: run.sha })) as { result?: { build_uuid?: string; status?: string; build_outcome?: string } };
       id = response.result?.build_uuid || null;
@@ -252,8 +254,12 @@ async function cloudflareTriggers(env: Env): Promise<Array<{ id: string; name: s
   const candidates = (scripts.result || []).filter((x) => x.tag && x.id).slice(0, 24);
   const attempts = await Promise.allSettled(candidates.map(async (script) => {
     const data = (await cf(env, '/builds/workers/' + encodeURIComponent(script.tag!) + '/triggers')) as {
-      result?: Array<{ trigger_uuid?: string; trigger_name?: string }> };
-    return (data.result || []).filter((x) => x.trigger_uuid && UUID.test(x.trigger_uuid))
+      result?: Array<{ trigger_uuid?: string; trigger_name?: string;
+        repo_connection?: { repo_name?: string; provider_account_name?: string; provider_type?: string } }> };
+    return (data.result || []).filter((x) => x.trigger_uuid && UUID.test(x.trigger_uuid) &&
+      x.repo_connection?.repo_name === 'photointel' &&
+      x.repo_connection?.provider_account_name === 'rodkisten' &&
+      x.repo_connection?.provider_type === 'github')
       .map((x) => ({ id: x.trigger_uuid!, name: x.trigger_name || 'Build trigger', script: script.id! }));
   }));
   return attempts.flatMap((x) => x.status === 'fulfilled' ? x.value : []);
