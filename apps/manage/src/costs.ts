@@ -43,26 +43,36 @@ async function githubCosts(env: Env, month: string): Promise<Source> {
   if (!env.GITHUB_API_TOKEN) return unavailable('Token do GitHub ausente.', 'unconfigured');
   const [year, m] = month.split('-');
   const endpoint = 'https://api.github.com/' + scope + '/' + owner +
-    '/settings/billing/usage/summary?year=' + year + '&month=' + Number(m) +
-    '&repository=' + encodeURIComponent(repo);
-  const data = await provider(endpoint, env.GITHUB_API_TOKEN, {
-    headers: { 'X-GitHub-Api-Version': '2026-03-10' },
-  }) as { usageItems?: Array<Record<string, unknown>> };
+    '/settings/billing/usage/summary?year=' + year + '&month=' + Number(m);
+  const headers = { 'X-GitHub-Api-Version': '2026-03-10' };
+  const [repoResult, accountResult] = await Promise.allSettled([
+    provider(endpoint + '&repository=' + encodeURIComponent(repo), env.GITHUB_API_TOKEN, { headers }),
+    provider(endpoint, env.GITHUB_API_TOKEN, { headers }),
+  ]);
+  if (repoResult.status === 'rejected') throw repoResult.reason;
+  const data = repoResult.value as { usageItems?: Array<Record<string, unknown>> };
   if (!Array.isArray(data.usageItems)) return unavailable('GitHub não retornou usageItems.');
   const actions = data.usageItems.filter((x) => String(x.product || '').toLowerCase() === 'actions');
   if (!actions.length)
-    return unavailable('O endpoint de billing não trouxe uso do Actions para esta conta. Não é possível afirmar que o custo foi zero.');
+    return unavailable('O endpoint de billing não trouxe uso do Actions para este repositório. Não é possível afirmar que o custo foi zero.');
   const gross = round(actions.reduce((sum, x) => sum + (asNumber(x.grossAmount) || 0), 0));
   const net = round(actions.reduce((sum, x) => sum + (asNumber(x.netAmount) || 0), 0));
   const credit = asNumber(env.GITHUB_ACTIONS_INCLUDED_USD);
   const included = credit !== null && credit >= 0 ? credit : null;
+  const account = accountResult.status === 'fulfilled'
+    ? accountResult.value as { usageItems?: Array<Record<string, unknown>> }
+    : null;
+  const accountActions = account?.usageItems?.filter((x) => String(x.product || '').toLowerCase() === 'actions');
+  const accountGross = accountActions && accountActions.length
+    ? round(accountActions.reduce((sum, x) => sum + (asNumber(x.grossAmount) || 0), 0))
+    : null;
   return {
     status: 'ok', currency: 'USD', total: net, gross_total: gross,
-    quota: {
-      used_usd: gross,
+    quota: accountGross === null ? undefined : {
+      used_usd: accountGross,
       included_usd: included,
-      percent: included && included > 0 ? round(gross / included * 100) : null,
-      unit: 'USD em compute',
+      percent: included && included > 0 ? round(accountGross / included * 100) : null,
+      unit: 'USD em compute da conta',
     },
     items: actions.map((x) => ({
       name: String(x.sku || 'Actions'),
@@ -71,7 +81,7 @@ async function githubCosts(env: Env, month: string): Promise<Source> {
       units: asNumber(x.grossQuantity),
     })),
     url: 'https://github.com/settings/billing',
-    note: 'Valores oficiais agregados do GitHub. A cota é configurável; não é uma fatura por workflow.',
+    note: 'Custo oficial restrito ao repositório; cota baseada no consumo bruto da conta inteira, quando permitido. A cota é configurável e não é a fatura por workflow.',
   };
 }
 
