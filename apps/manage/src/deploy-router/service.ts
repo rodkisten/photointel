@@ -247,6 +247,17 @@ export async function cloudBuildCallback(request: Request, env: Env): Promise<Re
   await announce(env, updated, body.status!);
   return json({ accepted: true });
 }
+async function cloudflareTriggers(env: Env): Promise<Array<{ id: string; name: string; script: string }>> {
+  const scripts = (await cf(env, '/workers/scripts')) as { result?: Array<{ id?: string; tag?: string }> };
+  const candidates = (scripts.result || []).filter((x) => x.tag && x.id).slice(0, 24);
+  const attempts = await Promise.allSettled(candidates.map(async (script) => {
+    const data = (await cf(env, '/builds/workers/' + encodeURIComponent(script.tag!) + '/triggers')) as {
+      result?: Array<{ trigger_uuid?: string; trigger_name?: string }> };
+    return (data.result || []).filter((x) => x.trigger_uuid && UUID.test(x.trigger_uuid))
+      .map((x) => ({ id: x.trigger_uuid!, name: x.trigger_name || 'Build trigger', script: script.id! }));
+  }));
+  return attempts.flatMap((x) => x.status === 'fulfilled' ? x.value : []);
+}
 export async function routerApi(request: Request, env: Env, identity: Identity): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (!path.startsWith('/api/deploy-router')) return null;
@@ -260,6 +271,9 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         gcp_provision: Boolean(env.GCP_BUILD_WEBHOOK_PROVISION_URL),
         cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
+  }
+  if (request.method === 'GET' && path === '/api/deploy-router/providers') {
+    return json({ cloudflare: await cloudflareTriggers(env) });
   }
   if (request.method === 'GET' && path === '/api/deploy-router/tree') {
     const tree = await getTree(env);
@@ -285,6 +299,9 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
     const input = validatedInput(await bodyJson<Record<string, unknown>>(request));
     const checks = checkPaths(input.patterns, await getTree(env));
     if (!checks.every((x) => x.exists)) throw new ApiError(422, 'PATH_NOT_FOUND', 'Alguns caminhos não existem no GitHub; valide antes de salvar');
+    if (input.provider === 'cloudflare' &&
+      !(await cloudflareTriggers(env)).some((x) => x.id === input.target))
+      throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado entre os Workers conectados');
     const id = crypto.randomUUID(), stamp = now();
     await database.prepare('INSERT INTO deploy_rules (id,name,enabled,provider,target,patterns_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
       .bind(id, input.name, Number(input.enabled), input.provider, input.target,
@@ -303,6 +320,9 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
       const input = validatedInput(await bodyJson<Record<string, unknown>>(request));
       const checks = checkPaths(input.patterns, await getTree(env));
       if (!checks.every((x) => x.exists)) throw new ApiError(422, 'PATH_NOT_FOUND', 'Alguns caminhos não existem no GitHub');
+      if (input.provider === 'cloudflare' &&
+        !(await cloudflareTriggers(env)).some((x) => x.id === input.target))
+        throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado');
       await database.prepare('UPDATE deploy_rules SET name=?,enabled=?,provider=?,target=?,patterns_json=?,updated_at=? WHERE id=?')
         .bind(input.name, Number(input.enabled), input.provider, input.target,
           JSON.stringify(input.patterns), now(), route[1]).run();
