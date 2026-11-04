@@ -50,6 +50,17 @@ def test_historical_failures_with_valid_manifest_can_redownload_safely() -> None
     ) is None
 
 
+def test_missing_original_verified_by_r2_prefers_icloud_recovery() -> None:
+    assert repair_stage(
+        ingestion_status="completed", retained=True, source_invalid=True,
+        manifest=True, icloud_enabled=True, ingestion_paused=False,
+    ) == "media_download"
+    assert repair_stage(
+        ingestion_status="completed", retained=True, source_invalid=True,
+        manifest=True, icloud_enabled=True, ingestion_paused=True,
+    ) == "thumbnail_generate"
+
+
 def test_no_source_without_valid_manifest_stays_blocked() -> None:
     assert repair_stage(
         ingestion_status="failed", retained=False, manifest=False,
