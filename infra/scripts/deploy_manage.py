@@ -210,6 +210,27 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         raise SetupError(
             "Manage GCP WIF must use the dedicated photointel-manage pool/provider and read-only SA"
         )
+    # Public cost integration settings are independent of deployment secrets.
+    billing_table = str(extra.get("MANAGE_GCP_BILLING_TABLE") or "").strip()
+    if billing_table and not re.fullmatch(
+        r"[a-z][a-z0-9-]{4,62}\\.[A-Za-z_][A-Za-z0-9_]{0,1023}\\.gcp_billing_export_(?:resource_)?v1_[A-Za-z0-9_]+",
+        billing_table,
+    ):
+        raise SetupError("MANAGE_GCP_BILLING_TABLE must reference a standard/detailed billing export table")
+    github_credit = str(extra.get("MANAGE_GITHUB_ACTIONS_INCLUDED_USD") or "").strip()
+    if github_credit and not re.fullmatch(r"\\d{1,7}(?:\\.\\d{1,2})?", github_credit):
+        raise SetupError("MANAGE_GITHUB_ACTIONS_INCLUDED_USD must be a nonnegative USD amount")
+    github_scope = str(extra.get("MANAGE_GITHUB_BILLING_SCOPE") or "users")
+    if github_scope not in ("users", "organizations"):
+        raise SetupError("MANAGE_GITHUB_BILLING_SCOPE must be users or organizations")
+    github_owner = str(extra.get("MANAGE_GITHUB_BILLING_OWNER") or "rodkisten")
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,39}", github_owner):
+        raise SetupError("MANAGE_GITHUB_BILLING_OWNER is invalid")
+    modal_url = str(extra.get("MANAGE_MODAL_BILLING_URL") or "").strip()
+    if modal_url:
+        parsed_modal = urllib.parse.urlparse(modal_url)
+        if parsed_modal.scheme != "https" or not re.fullmatch(r"[a-z0-9-]+\\.modal\\.run", parsed_modal.hostname or "") or parsed_modal.username or parsed_modal.password:
+            raise SetupError("MANAGE_MODAL_BILLING_URL must be an HTTPS modal.run URL")
     # Only used by this management Worker, never the public PhotoIntel Worker
     # or the Cloud Run API/Jobs. No JSON service-account keys are created.
     wrangler = {
@@ -240,6 +261,11 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
                 str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"]),
             "GCP_PROJECT_ID": "photointel",
             "GCP_REGION": config.get("region", "us-central1"),
+            "GITHUB_BILLING_OWNER": github_owner,
+            "GITHUB_BILLING_SCOPE": github_scope,
+            **({"GITHUB_ACTIONS_INCLUDED_USD": github_credit} if github_credit else {}),
+            **({"GCP_BILLING_TABLE": billing_table} if billing_table else {}),
+            **({"MODAL_BILLING_URL": modal_url} if modal_url else {}),
             **({"CLOUDFLARE_ACCOUNT_ID": cf_account}),
             **({"GCP_WIF_AUDIENCE": wif} if wif else {}),
             **({"GCP_IMPERSONATE_SERVICE_ACCOUNT": impersonate} if impersonate else {}),
@@ -261,6 +287,8 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         run(["npx", "--yes", "wrangler@4", "deploy", "--config", str(temp_path)], env=env)
         secrets = {"GITHUB_API_TOKEN": gh_token,
                    "CLOUDFLARE_API_TOKEN": cf_token}
+        if "MANAGE_MODAL_BILLING_TOKEN" in config.get("workflow_secrets", {}):
+            secrets["MODAL_BILLING_TOKEN"] = secret_value(config, "MANAGE_MODAL_BILLING_TOKEN")
         if "MANAGE_SENTRY_API_TOKEN" in config.get("workflow_secrets", {}):
             secrets["SENTRY_API_TOKEN"] = secret_value(config, "MANAGE_SENTRY_API_TOKEN")
         # stdin avoids storing secrets in arguments, config files or CLI logs.
