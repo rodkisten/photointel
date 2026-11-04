@@ -332,7 +332,9 @@ pelo Cloudflare Zero Trust Access.
 
 ## Estrutura modular do frontend
 
-`src/App.tsx` é o layout persistente com topbar, sidebar e bottom nav.\n`src/router.tsx` define as rotas tipadas usando TanStack Router (configuração em código,\nsem geração automática). Telas em `src/pages/`,
+`src/App.tsx` é o layout persistente com topbar, sidebar e bottom nav.
+`src/router.tsx` define as rotas tipadas usando TanStack Router (configuração em código,
+sem geração automática). Telas em `src/pages/`,
 componentes comuns em `src/components/` e o editor de Secret Manager
 em `src/features/secrets/` (lista, cartão da versão, formulário,
 orquestração e tipos). O backend do editor fica separado entre
@@ -430,9 +432,12 @@ Execuções self-hosted ou runners sem tarifa identificável permanecem indispon
 subtotal parcial é identificado por `≥`.
 
 **GitHub:** o Worker consulta a Billing Usage Summary API (com filtro por repositório)
-e só exibe valor oficial quando encontra itens de Actions. Consulta separadamente o\nconsumo de Actions de toda a conta para calcular a cota, sem somar outros\nrepositórios ao gasto do PhotoIntel. Conta pessoal pode
+e só exibe valor oficial quando encontra itens de Actions. Consulta separadamente o
+consumo de Actions de toda a conta para calcular a cota, sem somar outros
+repositórios ao gasto do PhotoIntel. Conta pessoal pode
 não disponibilizar esses dados nesta API. Use um token que tenha também o acesso
-de Billing exigido pela conta ou organização (Plan:read para conta pessoal,\nAdministration:read para organização). Os endpoints antigos `/timing`
+de Billing exigido pela conta ou organização (Plan:read para conta pessoal,
+Administration:read para organização). Os endpoints antigos `/timing`
 não são usados porque foram descontinuados. Em `GCP_CONFIG_ENV` no formato dotenv:
 
 ```dotenv
