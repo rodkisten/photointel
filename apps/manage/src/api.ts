@@ -1,4 +1,5 @@
 import { ApiError, bodyJson, json, redact } from './auth';
+import { costRoute } from './costs';
 import { planConfigChange } from './config-reconcile';
 import { runManageDiagnostics } from './diagnostics';
 import { parseLogRequest, gcpLogFilter } from './log-query';
@@ -37,6 +38,10 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  if (path.startsWith('/api/costs')) {
+    const response = await costRoute(request, env, identity);
+    if (response) return response;
+  }
   if (path.startsWith('/api/secrets')) {
     const response = await secretRoutes(request, env, identity);
     if (response) return response;
