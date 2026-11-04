@@ -654,7 +654,10 @@ async def repair_preview_batch(
             (accepted if outcome["created"] else reused).append(str(identifier))
         except AppError as exc:
             await session.rollback()
-            failures.append({"asset_id": str(identifier), "code": str(exc.code)})
+            failures.append({
+                "asset_id": str(identifier),
+                "code": str(exc.details.get("reason") or exc.code),
+            })
     return {
         "scanned": len(identifiers),
         "queued": len(accepted),
