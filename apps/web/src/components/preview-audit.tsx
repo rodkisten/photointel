@@ -22,6 +22,8 @@ type PreviewFinding = {
   available_variants: string[];
   status: 'blocked' | 'processing' | 'failed' | 'missing';
   repairable: boolean;
+  repair_stage?: string | null;
+  repair_reason?: string | null;
   job: PreviewJob | null;
 };
 
@@ -46,7 +48,17 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
   const page = useApi<PreviewAuditPage>(
     `/v1/jobs/previews/audit?limit=30${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
   );
-  const automation = useApi<{ enabled: boolean }>('/v1/jobs/previews/automation', 60_000);
+  const automation = useApi<{
+    enabled: boolean;
+    interval_minutes: number;
+    last_finished_at: string | null;
+    next_run_at: string | null;
+    last_result?: {
+      status: string;
+      catalog?: { scanned: number; queued: number; blocked: number; cooldown: number };
+      storage?: { checked: number; queued: number; missing_objects: number };
+    } | null;
+  }>('/v1/jobs/previews/automation', 60_000);
   const repair = useAction<{ created: boolean; message: string }>();
   const repairBatch = useAction<{
     scanned: number;
@@ -54,8 +66,10 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
     already_active: number;
     failed: number;
     next_cursor: string | null;
+    failed_items?: Array<{ asset_id: string; code: string }>;
   }>();
   const [batchRunning, setBatchRunning] = useState(false);
+  const [lastBatchFailures, setLastBatchFailures] = useState<Record<string, number>>({});
   const [nextRepairCursor, setNextRepairCursor] = useState<string | null | undefined>(undefined);
   const [batchProgress, setBatchProgress] = useState({
     scanned: 0,
@@ -68,6 +82,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
   async function retryBatch() {
     setRepairError(null);
     setBatchRunning(true);
+    const reasons: Record<string, number> = {};
     let next = nextRepairCursor ?? null;
     const totals =
       nextRepairCursor === undefined
@@ -84,6 +99,10 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
         totals.queued += outcome.queued;
         totals.already_active += outcome.already_active;
         totals.failed += outcome.failed;
+        for (const item of outcome.failed_items || []) {
+          reasons[item.code] = (reasons[item.code] || 0) + 1;
+        }
+        setLastBatchFailures({ ...reasons });
         totals.batches++;
         setBatchProgress({ ...totals });
         next = outcome.next_cursor;
@@ -147,7 +166,22 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                <strong>Reparo em lote {automation.data?.enabled ? '· Automático' : ''}</strong>
+                <strong>Reparo de mídia {automation.data?.enabled ? '· Automação configurada' : '· Automação desativada'}</strong>
+                <p className="field-help" role="status">
+                  {automation.data?.last_finished_at
+                    ? `Última varredura: ${new Date(automation.data.last_finished_at).toLocaleString('pt-BR')}. `
+                    : 'Nenhuma varredura concluída registrada. '}
+                  {automation.data?.next_run_at
+                    ? `Próxima verificação prevista: ${new Date(automation.data.next_run_at).toLocaleString('pt-BR')}.`
+                    : 'Confirme se worker/maintenance estão sendo executados pelo Cloud Scheduler.'}
+                  {automation.data?.last_result?.catalog && (
+                    <>
+                      {' '}Último ciclo: {automation.data.last_result.catalog.queued} enfileiradas,
+                      {' '}{automation.data.last_result.catalog.blocked} sem fonte recuperável,
+                      {' '}{automation.data.last_result.catalog.cooldown} em cooldown.
+                    </>
+                  )}
+                </p>
                 <p className="field-help">
                   Enfileira até 100 fotos por vez em lotes de 25, respeitando jobs ativos, mídias bloqueadas e
                   os limites do worker. Nenhuma foto é considerada reparada antes de o processamento terminar.
@@ -170,6 +204,13 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                     {batchProgress.already_active} já ativas · {batchProgress.failed} bloqueadas/falhas
                   </span>
                 </div>
+                {Object.keys(lastBatchFailures).length > 0 && (
+                  <p className="field-help">
+                    Motivos: {Object.entries(lastBatchFailures)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([code, count]) => `${code} (${count})`).join(' · ')}
+                  </p>
+                )}
                 {batchProgress.failed > 0 && (
                   <a
                     href="https://photos-manage.migos.club/?tab=icloud"
@@ -199,6 +240,14 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                         </p>
                       )}
                       {finding.job?.error_code && <p>Erro: {finding.job.error_code}</p>}
+                      {finding.repair_reason && <p>Fonte: {finding.repair_reason}</p>}
+                      {finding.repair_stage && !finding.repair_reason && (
+                        <p>Recuperação possível: {finding.repair_stage === 'media_download'
+                          ? 'reobter a representação do iCloud'
+                          : finding.repair_stage === 'metadata_extract'
+                            ? 'processar o original preservado no R2'
+                            : 'reconstruir as prévias armazenadas'}</p>
+                      )}
                       {finding.job?.status === 'failed' && (
                         <a
                           href={jobLogsUrl(finding.job.job_type, finding.job.id)}
@@ -255,8 +304,9 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
         )}
         {repairError && <ErrorState error={repairError} />}
         <p className="field-help">
-          <FileSearch size={13} /> Os itens bloqueados por falha de ingestão precisam ser tratados na origem
-          antes do reparo da prévia.
+          <FileSearch size={13} /> Falhas transitórias com representação recuperável entram na fila
+          automaticamente. Fotos sem manifesto ou original no R2, ou com sessão Apple expirada,
+          precisam primeiro da recuperação da origem. A auditoria não altera os arquivos Apple.
         </p>
       </div>
     </Dialog>
