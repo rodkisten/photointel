@@ -87,6 +87,7 @@ async def audit_previews(
     total_assets = await session.scalar(
         select(func.count(Asset.id)).where(*all_images)
     ) or 0
+    catalog_count = await session.scalar(select(func.count(Asset.id))) or 0
     total_issues = await session.scalar(
         select(func.count(Asset.id)).where(*conditions)
     ) or 0
@@ -242,6 +243,11 @@ async def audit_previews(
     return {
         "total_assets": total_assets,
         "total_issues": total_issues,
+        "catalog_capacity": {
+            "used": catalog_count,
+            "limit": settings.catalog_asset_limit,
+            "at_limit": catalog_count >= settings.catalog_asset_limit,
+        },
         "items": findings,
         "next_cursor": (
             encode_cursor({"id": assets[-1].id}) if len(rows) > limit and assets else None
