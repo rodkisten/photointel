@@ -430,9 +430,9 @@ Execuções self-hosted ou runners sem tarifa identificável permanecem indispon
 subtotal parcial é identificado por `≥`.
 
 **GitHub:** o Worker consulta a Billing Usage Summary API (com filtro por repositório)
-e só exibe valor oficial quando encontra itens de Actions. Conta pessoal pode
+e só exibe valor oficial quando encontra itens de Actions. Consulta separadamente o\nconsumo de Actions de toda a conta para calcular a cota, sem somar outros\nrepositórios ao gasto do PhotoIntel. Conta pessoal pode
 não disponibilizar esses dados nesta API. Use um token que tenha também o acesso
-de Billing exigido pela conta ou organização. Os endpoints antigos `/timing`
+de Billing exigido pela conta ou organização (Plan:read para conta pessoal,\nAdministration:read para organização). Os endpoints antigos `/timing`
 não são usados porque foram descontinuados. Em `GCP_CONFIG_ENV` no formato dotenv:
 
 ```dotenv
