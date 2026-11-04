@@ -131,7 +131,19 @@ export function DeployTriggers() {
             <Textarea id="route-patterns" rows={5} spellCheck={false} value={draft.patterns}
               placeholder={'apps/api/\ninfra/gcp/**/*.py\napps/manage/src/worker.ts'}
               onChange={(e) => setDraft((x) => ({ ...x, patterns: e.target.value }))} />
-            <p className="mt-1 text-xs text-carbon-500">Suporte a arquivos, diretórios e glob * / ** / ?. Exclusões podem ser configuradas com regras distintas.</p>
+            <p className="mt-1 text-xs text-carbon-500">Arquivos, diretórios e globs *, ** e ?. As regras são verificadas na árvore do GitHub.</p>
+            <div className="mt-3">
+              <label className="field-label" htmlFor="route-search">Buscar arquivo ou diretório</label>
+              <Input id="route-search" value={search} placeholder="apps/api/"
+                onChange={(e) => setSearch(e.target.value)} />
+              {tree.data && <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-carbon-800">
+                {tree.data.entries.slice(0, 24).map((entry) =>
+                  <button type="button" key={entry.path} className="block w-full break-all border-b border-carbon-800 px-3 py-2 text-left font-mono text-xs text-carbon-300 hover:bg-carbon-900"
+                    onClick={() => { setDraft((x) => ({ ...x, patterns: x.patterns + (x.patterns ? '\\n' : '') + entry.path + (entry.type === 'tree' ? '/' : '') })); setSearch(''); }}>
+                    {entry.type === 'tree' ? '📁 ' : '📄 '}{entry.path}
+                  </button>)}
+              </div>}
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-carbon-300">
             <input type="checkbox" checked={draft.enabled}
