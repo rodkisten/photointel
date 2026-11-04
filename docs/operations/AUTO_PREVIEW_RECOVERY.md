@@ -1,5 +1,7 @@
 # Recuperação automática de thumbnails e previews
 
+> **Nota de revisão arquitetural (04/11/2026):** O reparador automático atual executa passagens separadas de catálogo e R2, usa advisory lock e cursor persistido e pode rearmar manifests recuperáveis. O watchdog do GitHub não transforma o processamento em serviço residente. **Fonte realmente perdida, sessão expirada e quota** continuam podendo bloquear um reparo. Veja [implementação e fluxogramas](../architecture/INGESTION_AND_RECOVERY.md).
+
 A execução é parte dos Cloud Run Jobs finitos `photointel-worker` e
 `photointel-maintenance`. Não há cron dentro da API nem dependência de manter o
 iPhone/PWA aberto.

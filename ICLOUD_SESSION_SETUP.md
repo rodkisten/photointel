@@ -1,5 +1,7 @@
 # Sessão iCloud em Cloud Run
 
+> **Nota de revisão arquitetural (04/11/2026):** A sessão Apple usa snapshot cifrado, ponteiro versionado, lease/CAS e chave externa ao banco. O Manage possui rota de reconexão pelo navegador, mas **nunca** deve logar senha, cookie ou snapshot em texto claro. Veja [implementação e fluxogramas](docs/architecture/SECURITY_AND_SECRETS.md).
+
 A senha Apple nunca entra na API, no `.env`, no Secret Manager nem em argumentos
 `--password`. O login inicial continua interativo, em Codespaces ou Cloud Shell,
 com `icloudpd==1.32.3`. Apple pode exigir senha específica, 2FA, desbloqueio de

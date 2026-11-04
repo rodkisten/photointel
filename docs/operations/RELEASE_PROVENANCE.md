@@ -1,5 +1,7 @@
 # Proveniência de release
 
+> **Nota de revisão arquitetural (04/11/2026):** O SHA do Worker web, a revisão/digest da API e o schema Alembic são provas **independentes**; não assuma que um deploy do frontend atualizou a API, Jobs ou migração. Confirme o manifesto e a revisão operacional em cada provedor. Veja [implementação e fluxogramas](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 Um relatório de uma versão anterior não comprova a versão instalada. O manifesto
 v1.1 associa informações somente ao SHA de origem, sem segredos e sem afirmar que
 houve implantação ou inferência real.

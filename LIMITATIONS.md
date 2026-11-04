@@ -1,5 +1,7 @@
 # Limitações e pré-requisitos externos v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** A classificação de estado distingue módulo implementado, integração configurável e **execução real comprovada**. Nenhuma das ferramentas de diagnóstico, fixtures, testes locais ou CI comprova por si só Apple, GPU, FCM no iPhone, capacidade Neon ou Cloudflare em produção. Veja [implementação e fluxogramas](docs/architecture/IMPLEMENTATION_REFERENCE.md).
+
 O código implementa contratos e mecanismos locais. Disponibilidade real de
 iCloud, PhotoKit, Modal, Google Cloud, Neon, Cloudflare e Oracle depende de conta, autenticação,
 permissões, rede, cotas e hardware. Não se declara uma integração operacional

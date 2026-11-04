@@ -1,5 +1,7 @@
 # Validação da v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** Este documento preserva o escopo e a data dos ensaios informados. Não estenda provas de testes sintéticos locais à release ou aos recursos externos em produção sem evidência do mesmo SHA e ambiente. Veja [implementação e fluxogramas](docs/architecture/IMPLEMENTATION_REFERENCE.md).
+
 Esta revisão valida uma aplicação local com PostgreSQL/pgvector, storage privado
 S3 compatível, API, workers e PWA. Contas Apple, Google Cloud, Neon, Cloudflare e
 Modal reais, assim como um iPhone físico, exigem verificações externas separadas.

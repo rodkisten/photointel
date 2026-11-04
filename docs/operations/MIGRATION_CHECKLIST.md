@@ -1,5 +1,7 @@
 # Checklist de migração pelo iPhone — v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** O deploy **não executa Alembic automaticamente** no startup. O gate atual do release verifica a revisão do schema em modo leitura; `gcp-migrate.yml` controla alterações reais do banco em etapa separada. Veja [implementação e fluxogramas](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 Use Safari, GitHub Codespaces/Cloud Shell e dashboards oficiais. Não exige Mac,
 Windows ou Xcode. Nenhum comando desta lista foi executado contra conta cloud
 nesta implementação. Criação/publicação depende de autorização explícita do

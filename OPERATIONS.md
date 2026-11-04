@@ -1,5 +1,7 @@
 # Operação e recuperação v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** Para triagem atual, priorize os IDs de correlação entre edge/API/Jobs, a observabilidade do Manage e a fila no PostgreSQL. Cloud Run opera com **Jobs finitos**, não com worker permanente na instância da API. Veja [implementação e fluxogramas](docs/architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 Comece com 100 mídias e GPU desativada. Aumente ingestão depois de observar bytes,
 latência, erros, disco, fila e custo. Lote 8/concorrência 1 são limites prudentes;
 não representam throughput medido para 176 mil mídias.

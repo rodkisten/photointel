@@ -1,5 +1,7 @@
 # Configurar iCloud com segurança
 
+> **Nota de revisão arquitetural (04/11/2026):** A descoberta usa **manifestos persistidos, cursor com âncoras e jobs por asset**. Login e 2FA reais, disponibilidade Apple, orçamento de bytes e capacidade Neon continuam sendo pré-requisitos, mesmo quando o fluxo local passa nos testes. Veja [implementação e fluxogramas](docs/architecture/INGESTION_AND_RECOVERY.md).
+
 O downloader usa `icloudpd` numa execução finita, agendada pelo serviço de
 ingestão a cada 60 minutos. Ele lê o iCloud e baixa uma representação permitida;
 não recebe opções de exclusão de mídia remota ou local. `ICLOUD_ENABLED=false`
