@@ -33,6 +33,7 @@ type PreviewAuditPage = {
   items: PreviewFinding[];
   next_cursor: string | null;
   verification: 'catalog_metadata';
+  catalog_capacity?: { used: number; limit: number; at_limit: boolean };
 };
 
 const labels: Record<string, string> = {
@@ -165,6 +166,17 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                 Auditoria dos registros do catálogo, inclusive falhas sem job recente. Não verifica objetos do
                 R2 que ainda aparecem como disponíveis no banco.
               </p>
+              {page.data.catalog_capacity?.at_limit && (
+                <div className="panel" role="alert" style={{ padding: 12, marginBottom: 12 }}>
+                  <strong>Catálogo atingiu o limite configurado</strong>
+                  <p className="field-help">
+                    {page.data.catalog_capacity.used} de {page.data.catalog_capacity.limit} fotos/ativos
+                    cadastrados. Isso impede a descoberta de novas fotos, mas não deve bloquear
+                    o reparo das já existentes. Verifique DATABASE_PROFILE e CATALOG_ASSET_LIMIT
+                    na configuração de produção antes de ampliar a capacidade do banco.
+                  </p>
+                </div>
+              )
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
                 <strong>Reparo de mídia {automation.data?.enabled ? '· Automação configurada' : '· Automação desativada'}</strong>
                 <p className="field-help" role="status">
