@@ -119,16 +119,26 @@ export function Infrastructure() {
   const [live, setLive] = useState(true);
   const [confirm, setConfirm] = useState<'start' | 'stop' | 'build' | null>(null);
   const vm = overview.data?.vm.status === 'ok' ? overview.data.vm.items[0] as Vm | undefined : undefined;
-  const builds = [...(overview.data?.builds.items || []), ...(overview.data?.global_builds.items || [])] as Build[];
-  const triggers = [...(overview.data?.triggers.items || []), ...(overview.data?.global_triggers.items || [])] as Trigger[];
-  const authorized = triggers.filter((x) => x.authorized && !x.disabled);
+  const regionalBuilds = overview.data?.builds.items;
+  const globalBuilds = overview.data?.global_builds.items;
+  const regionalTriggers = overview.data?.triggers.items;
+  const globalTriggers = overview.data?.global_triggers.items;
+  const builds = useMemo(
+    () => [...(regionalBuilds || []), ...(globalBuilds || [])] as Build[],
+    [regionalBuilds, globalBuilds],
+  );
+  const triggers = useMemo(
+    () => [...(regionalTriggers || []), ...(globalTriggers || [])] as Trigger[],
+    [regionalTriggers, globalTriggers],
+  );
+  const authorized = useMemo(() => triggers.filter((x) => x.authorized && !x.disabled), [triggers]);
   useEffect(() => {
     if (authorized.length && !authorized.some((x) => x.location + ':' + x.id === selectedTrigger))
       setSelectedTrigger(authorized[0].location + ':' + authorized[0].id);
-  }, [authorized.map((x) => x.location + x.id).join(','), selectedTrigger]);
+  }, [authorized, selectedTrigger]);
   useEffect(() => {
     if (builds.length && !builds.some((x) => x.id === buildId)) setBuildId(builds[0].id);
-  }, [builds.map((x) => x.id).join(','), buildId]);
+  }, [builds, buildId]);
 
   const mutation = useMutation({
     mutationFn: async (action: 'start' | 'stop' | 'build') => {
