@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from photointel.auth import require_identity
 from photointel.database import get_session
-from photointel.models import Asset, AssetResource, Job
+from photointel.models import Asset, AssetResource, DiscoveryManifest, Job, Setting
 from photointel.serializers import decode_uuid_cursor, encode_cursor
+from photointel.services.runtime_settings import effective_settings
+from photointel.services.preview_repair import manifest_recoverable, repair_stage
 
 router = APIRouter(dependencies=[Depends(require_identity)])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -93,6 +95,8 @@ async def audit_previews(
     asset_ids: list[UUID] = [asset.id for asset in assets]
     resources_by_asset: dict[UUID, dict[str, AssetResource]] = {}
     latest_by_asset: dict[UUID, dict] = {}
+    source_by_asset: set[UUID] = set()
+    manifests_by_asset: dict[UUID, DiscoveryManifest] = {}
     if asset_ids:
         resources = (
             await session.execute(
@@ -107,6 +111,29 @@ async def audit_previews(
         ).all()
         for resource, asset in resources:
             resources_by_asset.setdefault(asset.id, {})[resource.resource_type] = resource
+
+        persisted = (await session.scalars(
+            select(AssetResource.asset_id)
+            .join(Asset, AssetResource.asset_id == Asset.id)
+            .where(
+                Asset.id.in_(asset_ids),
+                AssetResource.resource_type == "source_download",
+                AssetResource.revision == Asset.content_revision,
+                AssetResource.status == "available",
+                AssetResource.object_key.is_not(None),
+                AssetResource.object_key != "",
+            )
+        )).all()
+        source_by_asset.update(persisted)
+        manifests = (await session.scalars(
+            select(DiscoveryManifest)
+            .join(Asset, DiscoveryManifest.asset_id == Asset.id)
+            .where(
+                Asset.id.in_(asset_ids),
+                DiscoveryManifest.content_revision == Asset.content_revision,
+            )
+        )).all()
+        manifests_by_asset = {manifest.asset_id: manifest for manifest in manifests}
 
         ranked = (
             select(
@@ -147,6 +174,9 @@ async def audit_previews(
                 "error_code": error_code,
             }
 
+    settings = await effective_settings(session)
+    pause = await session.get(Setting, "ingestion_paused")
+    ingestion_paused = bool(pause and pause.value)
     findings = []
     for asset in assets:
         variants = resources_by_asset.get(asset.id, {})
@@ -160,8 +190,28 @@ async def audit_previews(
         ]
         missing = [name for name in VARIANTS if name not in available]
         latest = latest_by_asset.get(asset.id)
-        blocked = asset.ingestion_status in ("failed", "quarantined")
+        manifest = manifests_by_asset.get(asset.id)
+        can_fetch = bool(manifest and manifest_recoverable(
+            manifest.status, manifest.failure_category,
+            manifest.attempts, manifest.maximum_attempts,
+        ))
+        stage = repair_stage(
+            ingestion_status=asset.ingestion_status,
+            retained=("preview_large" in available or asset.id in source_by_asset),
+            source_retained=asset.id in source_by_asset,
+            manifest=can_fetch,
+            icloud_enabled=settings.icloud_enabled,
+            ingestion_paused=ingestion_paused,
+        )
+        blocked = stage is None
         pending = bool(latest and latest["status"] in ACTIVE_STATES)
+        repair_reason = (
+            "AUTH_REQUIRED" if blocked and manifest and manifest.failure_category == "authentication_required"
+            else "ICLOUD_PAUSED" if blocked and ingestion_paused
+            else "SOURCE_NOT_FOUND" if blocked and not manifest and asset.id not in source_by_asset
+            else "SOURCE_NOT_RECOVERABLE" if blocked
+            else None
+        )
         findings.append(
             {
                 "asset_id": str(asset.id),
@@ -179,6 +229,8 @@ async def audit_previews(
                     "missing"
                 ),
                 "repairable": not blocked and not pending,
+                "repair_stage": stage,
+                "repair_reason": repair_reason,
                 "job": latest,
             }
         )
