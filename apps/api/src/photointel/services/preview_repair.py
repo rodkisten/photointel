@@ -26,10 +26,14 @@ VARIANTS = ("thumbnail_small", "thumbnail_medium", "preview_large")
 ACTIVE = ("queued", "preparing", "running", "retrying", "paused")
 PIPELINE = ("media_download", "metadata_extract", "thumbnail_generate")
 
-RECOVERABLE_MANIFEST_FAILURES = frozenset({
-    "remote_asset_unavailable", "transient_network_error", "storage_error",
-    "rate_limited",
-})
+RECOVERABLE_MANIFEST_FAILURES = frozenset(
+    {
+        "remote_asset_unavailable",
+        "transient_network_error",
+        "storage_error",
+        "rate_limited",
+    }
+)
 
 
 def manifest_recoverable(
@@ -52,13 +56,15 @@ async def rearm_manifest(session: AsyncSession, manifest: DiscoveryManifest) -> 
         manifest.attempts, manifest.maximum_attempts,
     ):
         return False
-    if manifest.status in {"quarantined", "failed", "completed"} or manifest.attempts >= manifest.maximum_attempts:
+    if (
+        manifest.status in {"quarantined", "failed", "completed"}
+        or manifest.attempts >= manifest.maximum_attempts
+    ):
         manifest.status = "retrying"
         manifest.attempts = 0
         manifest.last_error = None
         manifest.failure_category = None
     return True
-
 
 
 def repair_stage(
@@ -227,8 +233,9 @@ async def _queue_repair(
     )
     if kind is None:
         return "blocked"
-    if kind == "media_download" and manifest and not await rearm_manifest(session, manifest):
-        return "blocked"
+    if kind == "media_download" and manifest:
+        if not await rearm_manifest(session, manifest):
+            return "blocked"
     # At most one automatic attempt per six-hour slot, and a bounded weekly
     # budget. enqueue_job's UNIQUE key also protects concurrent schedulers.
     slot = int(now.timestamp()) // (6 * 3600)
