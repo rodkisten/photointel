@@ -38,7 +38,8 @@ def manifest_recoverable(
     """Resurrect exhausted remote sources only for transient failures."""
     if status in {"quarantined", "failed"} or attempts >= maximum:
         return category in RECOVERABLE_MANIFEST_FAILURES
-    return status != "completed"
+    # A completed manifest can restore a lost private source from iCloud.
+    return True
 
 
 async def rearm_manifest(session: AsyncSession, manifest: DiscoveryManifest) -> bool:
@@ -48,7 +49,7 @@ async def rearm_manifest(session: AsyncSession, manifest: DiscoveryManifest) -> 
         manifest.attempts, manifest.maximum_attempts,
     ):
         return False
-    if manifest.status in {"quarantined", "failed"} or manifest.attempts >= manifest.maximum_attempts:
+    if manifest.status in {"quarantined", "failed", "completed"} or manifest.attempts >= manifest.maximum_attempts:
         manifest.status = "retrying"
         manifest.attempts = 0
         manifest.last_error = None
