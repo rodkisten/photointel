@@ -124,10 +124,20 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
       if (!response.ok) throw new ApiError(502, 'GCP_HOOK_FAILED', 'Cloud Build webhook HTTP ' + response.status);
       url = 'https://console.cloud.google.com/cloud-build/builds?project=photointel';
     }
-    await announce(env, await setState(database, run, 'submitted', id, url), 'submitted');
+    // A very fast Cloud Build callback can finish before the dispatch response.
+    // Never revert an already-terminal run to submitted.
+    const committed = await database.prepare(
+      "UPDATE deploy_runs SET state='submitted',provider_id=COALESCE(?,provider_id),status_url=COALESCE(?,status_url),updated_at=? WHERE id=? AND state='dispatching'")
+      .bind(id, url, now(), run.id).run();
+    if (committed.meta?.changes === 1)
+      await announce(env, { ...run, state: 'submitted', provider_id: id, status_url: url }, 'submitted');
   } catch (error) {
     const code = error instanceof ApiError ? error.code : 'PROVIDER_FAILURE';
-    await announce(env, await setState(database, run, 'failed', null, null, code), 'failed');
+    const failed = await database.prepare(
+      "UPDATE deploy_runs SET state='failed',detail=?,updated_at=? WHERE id=? AND state='dispatching'")
+      .bind(code, now(), run.id).run();
+    if (failed.meta?.changes === 1)
+      await announce(env, { ...run, state: 'failed', detail: code }, 'failed');
   }
 }
 function result(data: unknown): Record<string, unknown> {
@@ -207,6 +217,8 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
   const database = db(env);
   const changed = await changedFiles(env, before, after);
   const selected = matchRules(await rules(database), changed);
+  if (selected.length > 5)
+    throw new ApiError(422, 'TOO_MANY_DEPLOYS', 'Mais de 5 regras disparariam neste push. Desative algumas para limitar custos.');
   const stamp = now();
   const inserted = await database.prepare('INSERT OR IGNORE INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
     .bind(delivery, after, JSON.stringify(changed), stamp).run();
@@ -214,9 +226,10 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
   const runs: Run[] = [];
   for (const { rule } of selected) {
     const id = crypto.randomUUID();
-    await database.prepare(
+    const insertedRun = await database.prepare(
       "INSERT OR IGNORE INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
       .bind(id, delivery, rule.id, rule.name, rule.provider, rule.target, after, stamp, stamp).run();
+    if (insertedRun.meta?.changes !== 1) continue;
     runs.push({ id, delivery_id: delivery, rule_id: rule.id, rule_name: rule.name,
       provider: rule.provider, target: rule.target, sha: after, state: 'queued',
       provider_id: null, status_url: null, detail: null, created_at: stamp, updated_at: stamp });
