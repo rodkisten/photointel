@@ -26,6 +26,46 @@ VARIANTS = ("thumbnail_small", "thumbnail_medium", "preview_large")
 ACTIVE = ("queued", "preparing", "running", "retrying", "paused")
 PIPELINE = ("media_download", "metadata_extract", "thumbnail_generate")
 
+RECOVERABLE_MANIFEST_FAILURES = frozenset(
+    {
+        "remote_asset_unavailable",
+        "transient_network_error",
+        "storage_error",
+        "rate_limited",
+    }
+)
+
+
+def manifest_recoverable(
+    status: str, category: str | None, attempts: int, maximum: int
+) -> bool:
+    """Resurrect exhausted remote sources only for transient failures."""
+    # Previously downloaded/processed sources can be re-fetched if a copy
+    # disappears later. Their successful manifest is not a failed attempt.
+    if status in {"completed", "downloaded", "processing"}:
+        return True
+    if status in {"quarantined", "failed"} or attempts >= maximum:
+        return category in RECOVERABLE_MANIFEST_FAILURES
+    return True
+
+
+async def rearm_manifest(session: AsyncSession, manifest: DiscoveryManifest) -> bool:
+    """Preserve encrypted source identity while resetting recoverable retry budgets."""
+    if not manifest_recoverable(
+        manifest.status, manifest.failure_category,
+        manifest.attempts, manifest.maximum_attempts,
+    ):
+        return False
+    if (
+        manifest.status in {"quarantined", "failed", "completed"}
+        or manifest.attempts >= manifest.maximum_attempts
+    ):
+        manifest.status = "retrying"
+        manifest.attempts = 0
+        manifest.last_error = None
+        manifest.failure_category = None
+    return True
+
 
 def repair_stage(
     *,
@@ -34,12 +74,19 @@ def repair_stage(
     manifest: bool,
     icloud_enabled: bool,
     ingestion_paused: bool,
+    source_retained: bool = False,
+    source_invalid: bool = False,
 ) -> str | None:
-    """No implicit Apple fetch without a valid source manifest and an enabled sync."""
-    if ingestion_status != "completed":
-        return None
-    if retained:
+    """Resume a historical failed source without changing the original."""
+    if source_invalid and manifest and icloud_enabled and not ingestion_paused:
+        return "media_download"
+    if ingestion_status == "completed" and retained:
         return "thumbnail_generate"
+    if source_retained and ingestion_status in {
+        "downloaded", "processing", "queued", "retrying",
+        "failed", "quarantined", "pending",
+    }:
+        return "metadata_extract"
     if manifest and icloud_enabled and not ingestion_paused:
         return "media_download"
     return None
@@ -94,9 +141,7 @@ async def _queue_repair(
     )
     if asset is None:
         return "busy"
-    if asset.media_type != "image" or asset.visibility_status == "archived":
-        return "blocked"
-    if asset.ingestion_status != "completed":
+    if asset.media_type == "video" or asset.visibility_status == "archived":
         return "blocked"
     busy = await session.scalar(
         select(Job.id).where(
@@ -134,8 +179,9 @@ async def _queue_repair(
     ) or 0
     if recent >= settings.auto_preview_repair_max_attempts_week:
         return "cooldown"
-    retained = await session.scalar(
-        select(AssetResource.id).where(
+
+    retained_resources = set((await session.scalars(
+        select(AssetResource.resource_type).where(
             AssetResource.asset_id == asset_id,
             AssetResource.status == "available",
             AssetResource.object_key.is_not(None),
@@ -150,27 +196,46 @@ async def _queue_repair(
                     & (AssetResource.revision == asset.representation_revision)
                 )
             ),
+        )
+    )).all())
+    source_retained = "source_download" in retained_resources
+    source_invalid = bool(await session.scalar(
+        select(AssetResource.id).where(
+            AssetResource.asset_id == asset_id,
+            AssetResource.resource_type == "source_download",
+            AssetResource.revision == asset.content_revision,
+            AssetResource.status == "invalid",
         ).limit(1)
-    )
-    manifest = False
-    if retained is None and settings.icloud_enabled and not ingestion_paused:
-        manifest = bool(await session.scalar(
-            select(DiscoveryManifest.id).where(
+    ))
+    manifest = None
+    if settings.icloud_enabled and not ingestion_paused:
+        manifest = await session.scalar(
+            select(DiscoveryManifest).where(
                 DiscoveryManifest.asset_id == asset_id,
                 DiscoveryManifest.content_revision == asset.content_revision,
-                DiscoveryManifest.attempts < DiscoveryManifest.maximum_attempts,
-                DiscoveryManifest.status.not_in(("quarantined", "failed")),
-            ).limit(1)
-        ))
+            ).with_for_update()
+        )
+    has_manifest = bool(
+        manifest
+        and manifest_recoverable(
+            manifest.status, manifest.failure_category,
+            manifest.attempts, manifest.maximum_attempts,
+        )
+    )
     kind = repair_stage(
         ingestion_status=asset.ingestion_status,
-        retained=retained is not None,
-        manifest=manifest,
+        retained=bool(retained_resources),
+        source_retained=source_retained,
+        source_invalid=source_invalid,
+        manifest=has_manifest,
         icloud_enabled=settings.icloud_enabled,
         ingestion_paused=ingestion_paused,
     )
     if kind is None:
         return "blocked"
+    if kind == "media_download" and manifest:
+        if not await rearm_manifest(session, manifest):
+            return "blocked"
     # At most one automatic attempt per six-hour slot, and a bounded weekly
     # budget. enqueue_job's UNIQUE key also protects concurrent schedulers.
     slot = int(now.timestamp()) // (6 * 3600)
@@ -228,12 +293,15 @@ async def _catalog_pass(
 async def _storage_pass(
     settings: Settings, cursor: UUID | None, now: datetime, paused: bool
 ) -> tuple[UUID | None, dict[str, int]]:
-    """Rotate through the completed catalog without unbounded R2 requests."""
+    """Verify partial previews and preserved sources, not only complete triplets."""
     limit = settings.auto_preview_verify_batch_size
     async with SessionLocal() as session:
         query = select(Asset.id).where(
-            Asset.media_type == "image",
-            Asset.ingestion_status == "completed",
+            Asset.media_type != "video",
+            Asset.ingestion_status.in_((
+                "completed", "downloaded", "failed", "quarantined",
+                "processing", "retrying",
+            )),
             Asset.visibility_status != "archived",
         )
         if cursor:
@@ -251,20 +319,30 @@ async def _storage_pass(
                 if asset is None:
                     continue
                 revision = asset.representation_revision
+                content_revision = asset.content_revision
                 resources = list((await session.scalars(select(AssetResource).where(
                     AssetResource.asset_id == asset_id,
-                    AssetResource.revision == revision,
-                    AssetResource.resource_type.in_(VARIANTS),
                     AssetResource.status == "available",
                     AssetResource.object_key.is_not(None),
+                    AssetResource.object_key != "",
                     AssetResource.byte_size > 0,
+                    (
+                        (
+                            (AssetResource.resource_type.in_(VARIANTS))
+                            & (AssetResource.revision == revision)
+                        )
+                        | (
+                            (AssetResource.resource_type == "source_download")
+                            & (AssetResource.revision == content_revision)
+                        )
+                    ),
                 ))).all())
                 busy = await session.scalar(select(Job.id).where(
                     Job.asset_id == asset_id,
                     Job.job_type.in_(PIPELINE),
                     Job.status.in_(ACTIVE),
                 ).limit(1))
-                if busy is not None or len(resources) != len(VARIANTS):
+                if busy is not None or not resources:
                     continue
                 snapshots = [(resource.id, resource.object_key) for resource in resources]
                 await session.commit()
@@ -279,7 +357,11 @@ async def _storage_pass(
                 asset = await session.scalar(
                     select(Asset).where(Asset.id == asset_id).with_for_update(skip_locked=True)
                 )
-                if asset is None or asset.representation_revision != revision:
+                if (
+                    asset is None
+                    or asset.representation_revision != revision
+                    or asset.content_revision != content_revision
+                ):
                     continue
                 busy = await session.scalar(select(Job.id).where(
                     Job.asset_id == asset_id,

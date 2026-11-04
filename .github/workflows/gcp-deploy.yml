@@ -2,6 +2,10 @@ name: "🚀 Deploy"
 run-name: "🚀 Deploy · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
+  # Hourly safety net: if the worker Cloud Scheduler is paused or missing,
+  # wake the finite maintenance Job without keeping the API alive.
+  schedule:
+    - cron: '23 * * * *'
   push:
     branches: [main]
     paths:
@@ -64,10 +68,68 @@ env:
 
 concurrency:
   # Push checks must not cancel or block manually authorized production operations.
-  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || 'photointel-gcp-production' }}
+  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || github.event_name == 'schedule' && 'photointel-preview-watchdog' || 'photointel-gcp-production' }}
   cancel-in-progress: false
 
 jobs:
+  preview-watchdog:
+    name: "🩹 Ensure automatic preview recovery"
+    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: "⚙️ Verify production config"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "🩹 Wake maintenance when worker Scheduler is not active"
+        env:
+          PROJECT: photointel
+          REGION: us-central1
+        run: |
+          set -euo pipefail
+          gcloud run jobs describe photointel-maintenance \
+            --project="$PROJECT" --region="$REGION" --format='value(name)' >/dev/null
+          state_file="$(mktemp)"
+          if gcloud scheduler jobs describe photointel-worker \
+              --project="$PROJECT" --location="$REGION" \
+              --format='value(state)' >"$state_file" 2>"$state_file.err"; then
+            state="$(tr -d '\r\n' < "$state_file")"
+          elif grep -qiE 'NOT_FOUND|not found|404' "$state_file.err"; then
+            state="MISSING"
+          else
+            echo "::error::Cannot check maintenance Scheduler state without valid IAM."
+            exit 1
+          fi
+          if [[ "$state" == "ENABLED" ]]; then
+            echo "Worker Scheduler already drives regular audits; no duplicate maintenance invocation."
+            exit 0
+          fi
+          echo "::notice::Worker Scheduler is $state; waking finite repair runner."
+          gcloud run jobs execute photointel-maintenance \
+            --project="$PROJECT" --region="$REGION" --async
+          echo "🩹 Automatic preview repair wakeup requested (Worker Scheduler: $state)" >> "$GITHUB_STEP_SUMMARY"
+      - name: "🧹 Erase prepared configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
+
   push-check:
     name: "🧪 Cloud Run release config (offline)"
     if: github.event_name == 'push'

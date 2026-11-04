@@ -476,13 +476,6 @@ async def repair_preview(
             "Prévia de vídeo requer outro pipeline", 422,
             {"reason": "VIDEO_PREVIEW_UNSUPPORTED"},
         )
-    if asset.ingestion_status in {"quarantined", "failed"}:
-        raise AppError(
-            ErrorCode.MEDIA_DOWNLOAD_FAILED,
-            "O download anterior falhou ou foi colocado em quarentena. "
-            "Consulte as falhas de ingestão antes de repetir.",
-            409, {"reason": "MEDIA_SOURCE_BLOCKED"},
-        )
     settings = await effective_settings(session)
     if (
         settings.execution_platform == "cloud_run"
@@ -503,39 +496,83 @@ async def repair_preview(
     )
     created = False
     if job is None:
-        # A completed asset with a retained preview or durable source can be
-        # decoded without downloading from Apple again. If neither exists,
-        # first recover the remote source and follow the normal staged pipeline.
-        retained = await session.scalar(
-            select(AssetResource.id).where(
+        # One shared policy for interactive and scheduled repair. Failed
+        # historical imports are not permanently condemned if an authorized
+        # remote manifest or a durable source is still available.
+        from photointel.services.preview_repair import (
+            manifest_recoverable, rearm_manifest, repair_stage,
+        )
+
+        resources = set((await session.scalars(
+            select(AssetResource.resource_type).where(
                 AssetResource.asset_id == asset_id,
                 AssetResource.status == "available",
+                AssetResource.object_key.is_not(None),
+                AssetResource.object_key != "",
                 or_(
-                    and_(AssetResource.resource_type == "source_download",
-                         AssetResource.revision == asset.content_revision),
-                    and_(AssetResource.resource_type == "preview_large",
-                         AssetResource.revision == asset.representation_revision),
+                    and_(
+                        AssetResource.resource_type == "source_download",
+                        AssetResource.revision == asset.content_revision,
+                    ),
+                    and_(
+                        AssetResource.resource_type == "preview_large",
+                        AssetResource.revision == asset.representation_revision,
+                    ),
                 ),
-            ).limit(1)
-        )
-        job_type = (
-            "thumbnail_generate"
-            if asset.ingestion_status == "completed" and retained is not None
-            else "media_download"
-        )
-        if job_type == "media_download" and not asset.source_metadata.get("fixture"):
-            manifest = await session.scalar(
-                select(DiscoveryManifest.id).where(
-                    DiscoveryManifest.asset_id == asset_id,
-                    DiscoveryManifest.content_revision == asset.content_revision,
-                ).limit(1)
             )
-            if manifest is None:
+        )).all())
+        source_invalid = bool(await session.scalar(
+            select(AssetResource.id).where(
+                AssetResource.asset_id == asset_id,
+                AssetResource.resource_type == "source_download",
+                AssetResource.revision == asset.content_revision,
+                AssetResource.status == "invalid",
+            ).limit(1)
+        ))
+        manifest = await session.scalar(
+            select(DiscoveryManifest).where(
+                DiscoveryManifest.asset_id == asset_id,
+                DiscoveryManifest.content_revision == asset.content_revision,
+            ).with_for_update()
+        )
+        paused = await session.get(Setting, "ingestion_paused")
+        ingestion_paused = bool(paused and paused.value)
+        eligible_manifest = bool(
+            manifest and manifest_recoverable(
+                manifest.status, manifest.failure_category,
+                manifest.attempts, manifest.maximum_attempts,
+            )
+        )
+        job_type = repair_stage(
+            ingestion_status=asset.ingestion_status,
+            retained=bool(resources),
+            source_retained="source_download" in resources,
+            source_invalid=source_invalid,
+            manifest=eligible_manifest,
+            icloud_enabled=settings.icloud_enabled,
+            ingestion_paused=ingestion_paused,
+        )
+        if job_type is None:
+            reason = (
+                "ICLOUD_AUTH_REQUIRED"
+                if manifest and manifest.failure_category == "authentication_required"
+                else "SOURCE_MANIFEST_MISSING"
+                if not manifest and not resources
+                else "SOURCE_UNRECOVERABLE"
+            )
+            raise AppError(
+                ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                "Não há representação local recuperável ou manifesto remoto autorizado. "
+                "Se a conexão iCloud expirou, autentique novamente no Manage. "
+                "Em outros casos, refaça a descoberta para renovar a fonte.",
+                409, {"reason": reason},
+            )
+        if job_type == "media_download" and manifest:
+            if not await rearm_manifest(session, manifest):
                 raise AppError(
                     ErrorCode.MEDIA_DOWNLOAD_FAILED,
-                    "Não há manifesto de origem para recuperar esta foto. "
-                    "Execute uma reconciliação do iCloud antes do reparo.",
-                    409, {"reason": "SOURCE_MANIFEST_MISSING"},
+                    "Manifesto remoto não pode ser recuperado automaticamente.",
+                    409, {"reason": "SOURCE_UNRECOVERABLE"},
                 )
         job = await enqueue_job(
             session, job_type=job_type, asset_id=asset_id,
@@ -617,7 +654,10 @@ async def repair_preview_batch(
             (accepted if outcome["created"] else reused).append(str(identifier))
         except AppError as exc:
             await session.rollback()
-            failures.append({"asset_id": str(identifier), "code": str(exc.code)})
+            failures.append({
+                "asset_id": str(identifier),
+                "code": str(exc.details.get("reason") or exc.code),
+            })
     return {
         "scanned": len(identifiers),
         "queued": len(accepted),
