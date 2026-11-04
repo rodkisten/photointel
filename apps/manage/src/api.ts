@@ -1,4 +1,5 @@
 import { ApiError, bodyJson, json, redact } from './auth';
+import { routerApi } from './deploy-router/service';
 import { costRoute } from './costs';
 import { infrastructureRoute } from './infrastructure';
 import { planConfigChange } from './config-reconcile';
@@ -39,6 +40,10 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  if (path.startsWith('/api/deploy-router')) {
+    const response = await routerApi(request, env, identity);
+    if (response) return response;
+  }
   if (path.startsWith('/api/infrastructure')) {
     const response = await infrastructureRoute(request, env, identity);
     if (response) return response;
