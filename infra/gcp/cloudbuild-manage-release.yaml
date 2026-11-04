@@ -1,0 +1,48 @@
+# Manual Cloud Build trigger, connected to rodkisten/photointel main.
+# Builds immutable API image then reconciles Cloud Run API, jobs and scheduler.
+# Does not automatically apply database migrations.
+steps:
+  - id: configuration
+    name: python:3.12-slim
+    entrypoint: bash
+    secretEnv: [GCP_CONFIG_ENV]
+    args:
+      - -ceu
+      - |
+        python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4
+        export CONFIRM_PROJECT=photointel
+        export RELEASE_SHA="$COMMIT_SHA"
+        python3 infra/gcp/gcp-env.py
+  - id: image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=infra/docker/api.Dockerfile
+      - --label=org.opencontainers.image.revision=$COMMIT_SHA
+      - --tag=us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
+      - .
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        export CONFIRM_PROJECT=photointel
+        python3 infra/gcp/manage.py render
+        python3 infra/gcp/manage.py jobs-deploy --apply --authorize-charges --confirm-project photointel
+        python3 infra/gcp/manage.py deploy --apply --authorize-charges --confirm-project photointel
+        python3 infra/gcp/manage.py scheduler --apply --authorize-charges --confirm-project photointel
+availableSecrets:
+  secretManager:
+    - versionName: projects/photointel/secrets/photointel-gcp-config/versions/latest
+      env: GCP_CONFIG_ENV
+images:
+  - us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 2700s

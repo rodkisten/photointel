@@ -13,6 +13,8 @@ export interface Env {
   CLOUDFLARE_ACCOUNT_ID?: string;
   GCP_PROJECT_ID?: string;
   GCP_REGION?: string;
+  /** Location:trigger-id allowlist. Only these connected Cloud Build triggers can be executed. */
+  GCP_CLOUDBUILD_ALLOWED_TRIGGERS?: string;
   GCP_WIF_AUDIENCE?: string;
   GCP_IMPERSONATE_SERVICE_ACCOUNT?: string;
   SENTRY_ORG?: string;

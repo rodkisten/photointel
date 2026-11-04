@@ -231,6 +231,20 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         parsed_modal = urlsplit(modal_url)
         if parsed_modal.scheme != "https" or not re.fullmatch(r"[a-z0-9-]+\.modal\.run", parsed_modal.hostname or "") or parsed_modal.username or parsed_modal.password:
             raise SetupError("MANAGE_MODAL_BILLING_URL must be an HTTPS modal.run URL")
+    # Explicit allowlist for manual Cloud Build triggers. A trigger ID alone is
+    # not authorization: Cloudflare Access and this deployment configuration
+    # must both approve it. Never accept arbitrary build definitions from UI.
+    build_triggers = str(extra.get("MANAGE_CLOUDBUILD_ALLOWED_TRIGGERS") or "").strip()
+    if build_triggers:
+        allowed = [entry.strip() for entry in build_triggers.split(",") if entry.strip()]
+        if len(allowed) > 20 or not all(
+            re.fullmatch(
+                r"(us-central1|global):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                entry, re.I,
+            ) for entry in allowed
+        ):
+            raise SetupError("MANAGE_CLOUDBUILD_ALLOWED_TRIGGERS must contain location:trigger-UUID values")
+        build_triggers = ",".join(dict.fromkeys(allowed))
     # Only used by this management Worker, never the public PhotoIntel Worker
     # or the Cloud Run API/Jobs. No JSON service-account keys are created.
     wrangler = {
@@ -261,6 +275,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
                 str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"]),
             "GCP_PROJECT_ID": "photointel",
             "GCP_REGION": config.get("region", "us-central1"),
+            **({"GCP_CLOUDBUILD_ALLOWED_TRIGGERS": build_triggers} if build_triggers else {}),
             "GITHUB_BILLING_OWNER": github_owner,
             "GITHUB_BILLING_SCOPE": github_scope,
             **({"GITHUB_ACTIONS_INCLUDED_USD": github_credit} if github_credit else {}),

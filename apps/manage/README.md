@@ -12,6 +12,15 @@ require verified Access; no unauthenticated static assets.
 This admin panel does not share PhotoIntel's public Worker, routes, assets,
 deploy frequency, browser tokens or runtime authorization.
 
+## Infraestrutura GCP
+
+A interface `/infrastructure` acompanha builds, Cloud Run, Cloud Scheduler e o
+terminal `photointel-terminal`. O provisionamento via Cloud Build requer
+triggers GitHub conectados e autorizados. Consulte
+**[o guia de ativação e segurança](./INFRASTRUCTURE.md)** para o passo a passo,
+permissões, configuração no `GCP_CONFIG_ENV`, ciclo de vida da VM e limitações
+dos logs.
+
 ## Available operations
 
 | Screen | Integration |

@@ -26,3 +26,7 @@ GCP_BILLING_TABLE=photointel.billing.gcp_billing_export_v1_ACCOUNT_ID
 # Modal needs the authenticated gpu/modal_billing.py endpoint and shared token.
 # MODAL_BILLING_URL=https://YOUR-BILLING-ENDPOINT.modal.run/report
 # MODAL_BILLING_TOKEN=LONG_RANDOM_TOKEN_FROM_MODAL_SECRET
+
+# Cloud Build triggers connected to GitHub, allowlisted for Manage execution.
+# Comma-separated location:trigger-uuid (only connected and audited production triggers).
+# GCP_CLOUDBUILD_ALLOWED_TRIGGERS=us-central1:00000000-0000-0000-0000-000000000001
