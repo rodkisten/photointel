@@ -1,6 +1,6 @@
 import { ApiError, bodyJson, json, redact } from '../auth';
 import type { Env, Identity } from '../auth';
-import { cf, gh } from '../providers';
+import { cf, gh, gcpToken, provider } from '../providers';
 import { checkPaths, matchRules, validatePatterns, validateTarget } from './matching';
 import type { DeployRule, TreeEntry } from './matching';
 
@@ -339,10 +339,24 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
   if (request.method === 'GET' && runLogs && UUID.test(runLogs[1])) {
     const run = await database.prepare(SQL_RUNS + ' WHERE id=?').bind(runLogs[1]).first<Run>();
     if (!run) throw new ApiError(404, 'RUN_NOT_FOUND', 'Execução não encontrada');
-    if (run.provider !== 'cloudflare' || !run.provider_id)
-      return json({ message: 'Consulte o Cloud Build no GCP; logs não disponíveis neste provedor', entries: [] });
-    const raw = await cf(env, '/builds/builds/' + run.provider_id + '/logs');
-    return json({ entries: [redact(raw).slice(0, 80_000)] });
+    if (!run.provider_id || !UUID.test(run.provider_id))
+      return json({ message: 'O provedor ainda não informou um ID de execução', entries: [] });
+    if (run.provider === 'cloudflare') {
+      const raw = await cf(env, '/builds/builds/' + run.provider_id + '/logs');
+      return json({ entries: [redact(raw).slice(0, 80_000)] });
+    }
+    const token = await gcpToken(env, identity);
+    const raw = await provider('https://logging.googleapis.com/v2/entries:list', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        resourceNames: ['projects/photointel'],
+        filter: 'resource.type="build" AND resource.labels.build_id="' + run.provider_id + '"',
+        orderBy: 'timestamp desc',
+        pageSize: 80,
+      }),
+    }) as { entries?: unknown[] };
+    return json({ entries: Array.isArray(raw.entries) ?
+      raw.entries.map((entry) => JSON.parse(redact(entry).slice(0, 30_000))) : [] });
   }
   if (request.method === 'POST' && path === '/api/deploy-router/refresh') {
     const waiting = await database.prepare(SQL_RUNS +
