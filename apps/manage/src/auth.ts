@@ -1,5 +1,20 @@
 /* Verify signed Cloudflare Access JWT before serving any asset or API route. */
+export interface D1Statement {
+  bind(...values: (string | number | null)[]): D1Statement;
+  run(): Promise<{ meta?: { changes?: number } }>;
+  first<T>(): Promise<T | null>;
+  all<T>(): Promise<{ results: T[] }>;
+}
+export interface D1Binding { prepare(sql: string): D1Statement; }
 export interface Env {
+  DEPLOY_DB?: D1Binding;
+  GITHUB_WEBHOOK_SECRET?: string;
+  GCP_BUILD_WEBHOOK_RELEASE_URL?: string;
+  GCP_BUILD_WEBHOOK_PROVISION_URL?: string;
+  GCP_BUILD_CALLBACK_SECRET?: string;
+  XRELAY_NOTIFICATION_URL?: string;
+  XRELAY_NOTIFICATION_TOKEN?: string;
+  XRELAY_CHAT_ID?: string;
   ASSETS: { fetch(r: Request): Promise<Response> };
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUDIENCE: string;
