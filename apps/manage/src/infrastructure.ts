@@ -7,7 +7,7 @@ type Source = { status: 'ok' | 'error'; items: RecordValue[]; message?: string }
 const PROJECT = 'photointel';
 const VM = 'photointel-terminal';
 const ZONE = 'us-central1-a';
-const UUID = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPERATION = /^[A-Za-z0-9_-]{1,128}$/;
 const REGION = 'us-central1';
 
@@ -52,7 +52,7 @@ async function settled(promise: Promise<unknown>): Promise<Source> {
   }
 }
 
-function parseVm(raw: RecordValue) {
+export function parseVm(raw: RecordValue) {
   const labels = (raw.labels || {}) as Record<string, unknown>;
   if (raw.name !== VM || labels.app !== 'photointel' || labels.purpose !== 'terminal')
     throw new ApiError(409, 'VM_IDENTITY', 'A VM não corresponde à instância terminal gerenciada');
@@ -100,14 +100,14 @@ function buildInfo(raw: RecordValue) {
     id: String(raw.id || ''), status: String(raw.status || 'UNKNOWN'),
     create_time: raw.createTime || null, start_time: raw.startTime || null,
     finish_time: raw.finishTime || null, log_url: raw.logUrl || null,
-    substitutions: raw.substitutions || {}, images: raw.images || [],
+    images: raw.images || [],
     steps: Array.isArray(raw.steps) ? raw.steps.map((step: RecordValue) => ({
       id: step.id || step.name, name: step.name, status: step.status || 'QUEUED',
       timing: step.timing || null,
     })) : [],
   };
 }
-function safeSerial(raw: unknown, boot?: string | null) {
+export function safeSerial(raw: unknown, boot?: string | null) {
   const content = typeof raw === 'string' ? raw : '';
   const bootMs = boot ? Date.parse(boot) : NaN;
   return content.split(/\r?\n/).filter((line) => {
