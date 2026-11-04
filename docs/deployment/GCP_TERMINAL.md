@@ -1,5 +1,7 @@
 # Terminal persistente no iPhone
 
+> **Nota de revisão arquitetural (04/11/2026):** Terminal e Cloud Shell não são requisito de execução diária: publicação e diagnóstico têm workflows e Manage. Não exponha secrets, cookies Apple ou tokens em logs de terminal, issue ou captura. Veja [arquitetura e evidências](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 ## Build separado das operações
 
 O dropdown agora inclui `build`. `provision`, `start`, `stop` e `status` **não

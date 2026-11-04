@@ -1,5 +1,7 @@
 # Entrega técnica — Photo Intelligence Cloud v1.0
 
+> **Nota de revisão arquitetural (04/11/2026):** Este documento descreve uma entrega/revisão anterior. A arquitetura auditada em 04/11/2026 usa Worker unificado para PhotoIntel e outro para Manage; verifique o estado atual dos deploys antes de usar resultados históricos como evidência. Veja [arquitetura e evidências](architecture/IMPLEMENTATION_REFERENCE.md).
+
 ## A. Implementação
 
 Monorepo com API FastAPI, PWA React/Vite, PostgreSQL/pgvector, storage privado,

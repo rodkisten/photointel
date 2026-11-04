@@ -1,5 +1,7 @@
 # Bootstrap GCP idempotente via GitHub Actions
 
+> **Nota de revisão arquitetural (04/11/2026):** O bootstrap diferencia identidades de provisionamento, deploy, API, Jobs, migration e Manage. O modo `permissions` também reconcilia privilégios de FCM no projeto `photointel` quando solicitado. Veja [arquitetura e evidências](../architecture/SECURITY_AND_SECRETS.md).
+
 O provisionamento administrativo **não** faz parte do workflow normal de deploy. Use:
 
 - [🧱 Google Cloud administrative bootstrap](https://github.com/rodkisten/photointel/actions/workflows/gcp-bootstrap.yml): um fluxo manual, com modos `plan` (sem mutação) e `apply` (reconciliação).

@@ -1,5 +1,7 @@
 # Setup iCloud pelo terminal
 
+> **Nota de revisão arquitetural (04/11/2026):** iCloud depende de login real, 2FA, SDK não oficial e snapshot AES-GCM; `icloud-setup.yml` verifica pré-condições sem comprovar importação de fotos reais. O pipeline preserva progresso parcial por asset. Veja [arquitetura e evidências](../architecture/INGESTION_AND_RECOVERY.md).
+
 O setup autentica, escolhe a biblioteca e publica uma sessão criptografada no R2.
 Não inicia importações, GPU, Scheduler nem altera fotos na Apple.
 

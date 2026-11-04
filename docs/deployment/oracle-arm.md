@@ -1,5 +1,7 @@
 # Instalação Linux ARM na Oracle
 
+> **Nota de revisão arquitetural (04/11/2026):** Oracle/VPS permanece opção de fallback por Compose. A implantação principal descrita no código usa Cloudflare Worker + Cloud Run/Jobs + Neon/R2; recursos de VPS não devem ser confundidos com componentes ativos em produção. Veja [arquitetura e evidências](../architecture/SYSTEM_OVERVIEW.md).
+
 Prefira uma VM ARM quando sua conta tiver capacidade; avalie o plano atual no
 console Oracle. Não se assume cota Always Free, preço zero, número de OCPUs,
 24 GB de RAM ou 200 GB de disco. Para 176 mil mídias, dimensione banco/índices,
