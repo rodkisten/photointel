@@ -356,7 +356,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
       }),
     }) as { entries?: unknown[] };
     return json({ entries: Array.isArray(raw.entries) ?
-      raw.entries.map((entry) => JSON.parse(redact(entry).slice(0, 30_000))) : [] });
+      raw.entries.map((entry) => redact(entry).slice(0, 30_000)) : [] });
   }
   if (request.method === 'POST' && path === '/api/deploy-router/refresh') {
     const waiting = await database.prepare(SQL_RUNS +
