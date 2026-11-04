@@ -172,7 +172,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                   <p className="field-help">
                     {page.data.catalog_capacity.used} de {page.data.catalog_capacity.limit} fotos/ativos
                     cadastrados. Isso impede a descoberta de novas fotos, mas não deve bloquear
-                    o reparo das já existentes. Verifique DATABASE_PROFILE e CATALOG_ASSET_LIMIT
+                    o reparo das já existentes. Verifique DATABASE_PROFILE e DATABASE_CATALOG_LIMIT
                     na configuração de produção antes de ampliar a capacidade do banco.
                   </p>
                 </div>
