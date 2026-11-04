@@ -1,5 +1,7 @@
 # Armazenamento S3 local
 
+> **Nota de revisão arquitetural (04/11/2026):** O modo local e MinIO/volumes Compose são alternativas de desenvolvimento. Em Cloud Run, `/tmp` é efêmero; fonte retida e derivados duráveis pertencem ao R2 privado e ao catálogo PostgreSQL. Veja [arquitetura e evidências](../architecture/DATA_AND_INFERENCE.md).
+
 Produção usa R2 privado; o ambiente local e os testes de integração usam o
 servidor MinIO real. Imagens publicadas em registros do fornecedor podem ficar
 indisponíveis. Para tornar a instalação reproduzível, o projeto compila a fonte

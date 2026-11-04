@@ -1,5 +1,7 @@
 # API HTTP
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/COMPONENTS_AND_STACK.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 O contrato executável é o OpenAPI da aplicação e a cópia gerada em
 `packages/contracts/openapi.json`. As rotas de produto ficam sob `/v1`; tipos
 do frontend são derivados desse contrato. Consulte `/docs` somente após passar

@@ -1,5 +1,7 @@
 # Validação de navegação com WebKit
 
+> **Nota de revisão arquitetural (04/11/2026):** Screenshots e automações Safari/WebKit devem informar aparelho, build e sessão Access; não comprovam notificação push em segundo plano, reconexão iCloud ou disponibilidade da biblioteca. Consulte [a referência técnica](../architecture/FRONTENDS_AND_BRIDGE.md).
+
 O projeto Playwright `iphone-webkit` usa o WebKit distribuído pelo Playwright no
 Linux, com dimensões, touch e user agent do perfil `iPhone 13`. Ele complementa
 os projetos Chromium `iphone` e `desktop`. Só é incluído quando

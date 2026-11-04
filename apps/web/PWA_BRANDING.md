@@ -1,5 +1,7 @@
 # PhotoIntel PWA, branding e iOS
 
+> **Nota de revisão arquitetural (04/11/2026):** O Worker unificado serve a SPA e seus assets de release. Service worker faz precache de shell e estáticos, **não de imagens privadas e `/v1`**, e deve lidar com atualizações de build sem deixar HTML antigo mascarar JS. Confira [a referência de código e fluxos](../../docs/architecture/FRONTENDS_AND_BRIDGE.md).
+
 O frontend instala um service worker no ambiente de produção. Ele armazena o documento
 `/index.html` e **todos os assets públicos do build** (JS, CSS, SVG, PNG, fontes,
 manifesto, telas de abertura). Cada build injeta sua lista e fingerprint no `sw.js`,

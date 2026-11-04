@@ -1,5 +1,7 @@
 # Checkpoints e configuração
 
+> **Nota de revisão arquitetural (04/11/2026):** Metadados/pins de checkpoints e revisões de pré-processamento fazem parte da identidade dos embeddings de 768D. Alterar checkpoint exige validar a API, a GPU/CPU e os índices associados. Confira [a referência de código e fluxos](../../docs/architecture/DATA_AND_INFERENCE.md).
+
 model-pins.json registra os commits imutáveis conferidos em metadados públicos
 em 15/10/2026. As cópias pequenas em checkpoints/ permitem auditar a seleção.
 Nenhum peso de modelo ou fotografia é incluído no repositório.

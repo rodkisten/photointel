@@ -1,5 +1,7 @@
 # Processamento de mídia privada
 
+> **Nota de revisão arquitetural (04/11/2026):** O processador executável está em `apps/api/src/photointel/services/media.py` e gera variantes/qualidade, com storage privado. Este README é um contrato/visão de módulo, não um deploy autônomo. Confira [a referência de código e fluxos](../../docs/architecture/DATA_AND_INFERENCE.md).
+
 Implementação: `photointel.services.media`. Pillow + pillow-heif leem HEIC/HEIF,
 JPEG, PNG, WebP e TIFF conforme codecs instalados. RAW sem representação derivada
 não é falsamente declarado decodificável. Vídeos são entradas do catálogo.

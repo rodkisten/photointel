@@ -1,5 +1,7 @@
 # Cloudflare Worker: assets e logs importantes
 
+> **Nota de revisão arquitetural (04/11/2026):** O Worker PhotoIntel usa `infra/cloudflare/cloud-run-proxy/worker.mjs`; o Manage usa Worker independente. Logs devem ser consultados por origem/correlation ID sem presumir `jsonPayload` para todos os providers ou expor payloads privados. Consulte [a referência técnica](../architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 O deploy publica o código Worker e os arquivos de `apps/web/dist` como Static
 Assets via binding `ASSETS`. O editor mostrar somente `worker.js` não comprova
 que os assets estejam ausentes: os arquivos estáticos não são módulos JavaScript

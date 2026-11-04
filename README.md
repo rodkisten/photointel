@@ -1,11 +1,13 @@
 # Photo Intelligence Cloud v1.1
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [o índice técnico](docs/README.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 Catálogo privado de fotos e vídeos, preparado para bibliotecas grandes, com tags
 revisáveis, busca textual e vetorial, álbuns, fila persistente, diagnóstico de
 duplicatas e integração opcional com iCloud. Os originais permanecem no serviço
 de origem: o projeto trabalha com representações limitadas e derivados privados.
 
-O destino principal de produção é Cloudflare Pages + Google Cloud Run
+O destino principal de produção é Cloudflare Worker unificado (SPA e relay /v1) + Google Cloud Run
 Service/Jobs + Neon PostgreSQL + R2 privado + Modal. Compose continua o ambiente
 local e Oracle/VPS permanece como fallback. A migração preserva o catálogo,
 contratos e design existentes, sem reconstruir a aplicação.
@@ -20,6 +22,11 @@ Status verificado: **Local development ready**. Consulte o
 [relatório final v1.1](docs/audit/FINAL_REPORT_V11.md) e a
 [validação executada](VALIDATION.md) para resultados, commit testado e pré-requisitos
 externos. A validação local não aprova a biblioteca completa nem gastos cloud.
+
+
+## Mapa técnico do projeto (implementação 2026)
+
+A arquitetura vigente usa **Cloudflare Worker único para a SPA e `/v1/*`**, **Manage Worker independente**, **Cloud Run Service e Jobs finitos**, **Neon + pgvector**, **R2 privado**, integração **iCloud opcional** e **Modal GPU opcional**. A documentação extensiva, com fluxogramas Mermaid, diagramas de sequência e rastreabilidade para os módulos de código, está em [docs/README.md](docs/README.md). Os principais diagramas estão em [arquitetura geral](docs/architecture/SYSTEM_OVERVIEW.md), [ingestão e recuperação](docs/architecture/INGESTION_AND_RECOVERY.md) e [infraestrutura e deploy](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md). O frontend principal usa React Router; o Manage usa TanStack Router. Guias de versões anteriores podem mencionar Pages e gates que já não representam o fluxo atual.
 
 ## Início local
 
@@ -77,11 +84,11 @@ Use o [workflow independente de bootstrap](https://github.com/rodkisten/photoint
 
 ## 📱 Notify! Live Activities e notificações por step
 
-Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, validações e testes não geram alertas. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone com **fases concluídas (ex.: 2/4), sem cronômetro**, e um botão que abre o step do GitHub ou os logs GCP quando aplicável. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
+Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, validações e testes não geram alertas. Os workflows **GCP Bootstrap** e **GCP Deploy** incluem integração best-effort de Live Activity no iPhone com **fases concluídas (ex.: 2/4), sem cronômetro**, e um botão que abre o step do GitHub ou os logs GCP quando aplicável. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
 
 ## 🧭 GitHub Actions: workflows, ambientes e segredos
 
-A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
+O **[catálogo histórico e documentação dos workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
 
 ## 🚀 Publicação simplificada: um clique para o release
 
@@ -89,7 +96,7 @@ No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/g
 
 As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis. **`migrate` e `scheduler` são separados**, jamais disparados pelo `release`. O release publica as definições dos Cloud Run Jobs, mas não os executa e não inicia ingestão ou GPU.
 
-**Segurança:** `database_ready` começa desmarcado. Confirme-o somente depois de migrar e validar Neon, versões dos secrets e Cloudflare Access. Na primeira instalação, configure a infraestrutura, execute a migração explicitamente quando necessária e só então use `release`. [Guia e restrições](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
+**Segurança:** a fase `gate` do release realiza verificação **somente leitura** da versão Alembic no Neon, substituindo o antigo checkbox `database_ready`. Migrações são explícitas, separadas e devem ser feitas após validar banco, backup, versões dos segredos e Cloudflare Access. [Guia e restrições](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Google Cloud Run: do zero ao deploy
 
@@ -102,12 +109,12 @@ As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis.
 3. Rodar **`bootstrap` como operador administrativo no Cloud Shell**; ele cria o repositório Docker, bucket, seis service accounts e políticas IAM. Não manter papéis administrativos na identidade CI.
 4. Preencher os secrets com prompts ocultos, configurar o pool `github-actions` / provider `photo-intelligence` e conceder WIF **somente** ao repo `rodkisten/photointel`, `main` e ambiente `production`.
 5. No GitHub `Settings → Environments → production → Environment variables`, definir a variável multiline **`GCP_CONFIG_ENV`**. O workflow `gcp-deploy.yml` usa `vars.GCP_CONFIG_ENV`, **não** `GCP_CONFIG_JSON`.
-6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
+6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker unificado + Access → `scheduler` (cron jobs começam pausados).
 7. Testar autenticação e rotas privadas e revisar custos. Lotes iCloud de até 1.000 fotos não exigem gates manuais; acima desse volume, a autorização de escala F continua obrigatória.
 
 Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
 
-O `gcp-validation.yml` testa offline, sem credenciais Google. O `gcp-deploy.yml` só executa manualmente na `main` com confirmação de projeto, ambiente `production` e autorização explícita de custos. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
+O `gcp-validation.yml` testa offline. No `gcp-deploy.yml`, pushes em caminhos monitorados executam verificações, o agendamento horário acorda a manutenção de segurança quando necessário e a publicação segue `workflow_dispatch` em `main`/`production`; migrações continuam separadas. Consulte também [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md) para migrações, Cloudflare e rollback.
 
 ## Comandos
 

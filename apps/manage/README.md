@@ -1,5 +1,7 @@
 # PhotoIntel Manage · Operational Control Center
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](../../docs/architecture/FRONTENDS_AND_BRIDGE.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 **Separate Cloudflare Worker:** photointel-manage  
 **Private URL:** https://photos-manage.migos.club  
 **Code:** apps/manage/  
@@ -15,7 +17,7 @@ deploy frequency, browser tokens or runtime authorization.
 | Screen | Integration |
 | --- | --- |
 | Visão geral | GitHub Actions, Cloudflare Workers, Cloud Run service inventory and provider status |
-| Deploys | Fixed allowlist of workflow_dispatch actions, input choices, confirmation, runs, jobs and step-level logs, retry failed |
+| Deploys | Allowlist de workflow_dispatch, seleção de inputs, confirmações por ação, runs, jobs e logs por step; retry de falhas |
 | Logs | Cloudflare Workers Observability query API, GCP Cloud Logging (optional OIDC federation), GitHub job logs, recent unresolved Sentry issues |
 | Ambiente | Edit the *environment variable* production/GCP_CONFIG_ENV (JSON or dotenv) via GitHub REST, with optimistic SHA-256 version checks and project validation |
 | Sistema | Access identity, provider configuration, GCP jobs, Cloudflare worker domain inventory |

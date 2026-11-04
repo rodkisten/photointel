@@ -1,5 +1,7 @@
 # Capacidade do catálogo v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** As medidas de capacidade são evidências do dataset/ambiente descritos no relatório, **não** cota garantida de Neon, Cloud Run, Apple ou R2. Reavalie índices pgvector/HNSW, conexões e armazenamento para o catálogo de produção. Veja [implementação e fluxogramas](docs/architecture/DATA_AND_INFERENCE.md).
+
 Medições locais de desenvolvimento em 19/10/2026. O catálogo de 100.000 ativos
 foi populado e consultado com vetores completos e 30 tags por foto. A execução
 de 176.000 ativos **não ocorreu**: a preflight recusou a criação do banco para

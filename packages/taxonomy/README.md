@@ -1,5 +1,7 @@
 # Taxonomia 1.0.0
 
+> **Nota de revisão arquitetural (04/11/2026):** Taxonomia e suas migrações não devem ser confundidas com propostas probabilísticas do JoyTag. Intervenções manuais, rejeições e tags sensíveis possuem regras de persistência diferentes. Confira [a referência de código e fluxos](../../docs/architecture/DATA_AND_INFERENCE.md).
+
 O mapeamento executável versionado está em
 `apps/api/src/photointel/services/taxonomy.py`. Ele conserva todas as chaves JoyTag,
 inclui as 14 categorias, traduções pt-BR revisáveis e regras compostas declarativas.

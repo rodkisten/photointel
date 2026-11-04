@@ -1,5 +1,7 @@
 # Configuração única dos workflows via GCP_CONFIG_ENV
 
+> **Nota de revisão arquitetural (04/11/2026):** `GCP_CONFIG_ENV` no Environment `production` pode ser convertido de dotenv ou JSON pelas actions/scripts, mas deve conter **configuração não sensível e referências**. Valores reais de segredos devem permanecer no Secret Manager/credenciais de runtime. Consulte [a referência técnica](../architecture/SECURITY_AND_SECRETS.md).
+
 Em GitHub → Settings → Environments → production → Variables, mantenha **uma única variável `GCP_CONFIG_ENV`**. Ela pode conter um objeto JSON ou o dotenv legado. Apenas metadados não sensíveis e **referências** a Secret Manager pertencem a essa variável.
 
 Adicione ao objeto existente de `infra/gcp/config.example.json` as seguintes propriedades (trecho ilustrativo, não é o JSON completo):

@@ -1,5 +1,7 @@
 # Validação do caminho local completo
 
+> **Nota de revisão arquitetural (04/11/2026):** Docker Compose é desenvolvimento/fallback; passar validação Compose não demonstra que Cloud Run, R2, Cloudflare Access, Neon e iCloud estejam configurados ou acessíveis em produção. Consulte [a referência técnica](../architecture/SYSTEM_OVERVIEW.md).
+
 O workflow `Validate developer Compose` executa o caminho documentado em um runner
 isolado do GitHub Actions. Ele só inicia por `workflow_dispatch` ou push na branch
 `validation/compose`; não implanta produção, não usa credenciais externas, não

@@ -1,5 +1,7 @@
 # Evidências de validação
 
+> **Nota de revisão arquitetural (04/11/2026):** Resultados de validação pertencem ao commit e ambiente registrados no teste. Não reinterpretar capturas ou fixtures como disponibilidade atual de Apple, GCP, R2, Neon ou Modal. Veja [arquitetura e evidências](architecture/IMPLEMENTATION_REFERENCE.md).
+
 Este registro distingue implementação, execução controlada e integração externa.
 As suítes locais controladas passaram; a existência do código não comprova o
 cenário de aceitação completo com iCloud, GPU e PhotoKit reais.

@@ -1,5 +1,7 @@
 # Retenção e limpeza de artefatos: GitHub Actions, Cloud Build e Artifact Registry
 
+> **Nota de revisão arquitetural (04/11/2026):** Retenção de imagens no Artifact Registry, objetos GCS, runs GitHub e buckets R2 tem políticas distintas. Um plano versionado não significa que exclusões/limpezas foram aplicadas nos recursos reais. Veja [arquitetura e evidências](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 A palavra *artifact* identifica coisas distintas neste projeto. Não confunda relatórios ZIP de Actions, arquivos de staging do Cloud Build e imagens Docker usadas por Cloud Run.
 
 ## Política adotada no repositório

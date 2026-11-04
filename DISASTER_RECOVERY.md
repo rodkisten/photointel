@@ -1,5 +1,7 @@
 # Backup e recuperação completos
 
+> **Nota de revisão arquitetural (04/11/2026):** Um backup verificável precisa do catálogo PostgreSQL **e** dos bytes privados relevantes do R2. Backup legado do banco sem objetos não constitui recuperação de imagens; versões de segredos e os originais do iCloud são dependências distintas. Veja [implementação e fluxogramas](docs/architecture/DATA_AND_INFERENCE.md).
+
 O backup novo inclui **bytes reais dos derivados privados**, além do dump
 PostgreSQL. Um inventário R2 sozinho não preserva o conteúdo dos objetos. O
 comando legado `make backup` continua disponível para compatibilidade; seu

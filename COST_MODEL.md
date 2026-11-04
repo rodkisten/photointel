@@ -1,5 +1,7 @@
 # Modelo de custos e limites operacionais
 
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/OBSERVABILITY_AND_OPERATIONS.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
+
 Não há promessa de custo zero. Cotas e preços variam por região, provedor, data e
 conta. Nenhum recurso Google pago é criado durante instalação, testes unitários,
 benchmarks locais ou build. Publicação requer autorização explícita, projeto com
@@ -17,7 +19,7 @@ billing e os comandos documentados em [CLOUD_RUN_SETUP.md](CLOUD_RUN_SETUP.md).
 | Neon | compute ativo, armazenamento, branches, índices e transferência |
 | R2 | bytes persistentes, operações Class A/B, versões e cópia de backup |
 | Modal | GPU, CPU/RAM, cold starts, volumes de modelos e transferência |
-| Cloudflare Pages / Workers | build, requests e execução do proxy autenticado |
+| Cloudflare Workers | requests, assets e execução de proxy/Manage; Pages legado apenas se existir deploy separado |
 
 Cloud Run mínimo zero evita uma instância web ociosa permanentemente alocada;
 Jobs agendados ainda consomem recursos. Evite NAT, VPC connector, IP estático e

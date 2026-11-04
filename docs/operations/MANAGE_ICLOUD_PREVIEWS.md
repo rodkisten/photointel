@@ -1,5 +1,7 @@
 # PhotoIntel + Manage: diagnostics, bulk repair and PR previews
 
+> **Nota de revisão arquitetural (04/11/2026):** O Manage usa **TanStack Router** com rota canônica `/icloud`, `/logs` e `/secrets`; query `?tab=` é redirecionamento de compatibilidade. Um teste de login não implica que a conta Apple, a prévia e o download de todas as mídias estejam saudáveis. Veja [implementação e fluxogramas](../architecture/FRONTENDS_AND_BRIDGE.md).
+
 ## Navigation and logs
 
 Both apps link to their respective home and to the other app in the topbar.

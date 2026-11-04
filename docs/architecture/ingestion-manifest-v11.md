@@ -1,5 +1,7 @@
 # Ingestão recuperável v1.1
 
+> **Nota de revisão arquitetural (04/11/2026):** A descoberta incremental/backfill permanece autorizada, finita e baseada em manifestos cifrados; a documentação consolidada inclui **reparo automático catalog+R2**, reobtenção da fonte e watchdog horário, mantendo este documento como descrição das invariantes v1.1. Veja [arquitetura e evidências](INGESTION_AND_RECOVERY.md).
+
 A integração continua usando o SDK oficial do projeto `icloudpd` na revisão
 registrada em `packages/icloudpd-source/UPSTREAM.json`. A distribuição binária PyPI
 não disponibiliza todos os módulos Python utilizados pelo adapter; o código MIT

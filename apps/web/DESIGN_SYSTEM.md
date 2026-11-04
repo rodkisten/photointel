@@ -1,5 +1,7 @@
 # PhotoIntel Design System
 
+> **Nota de revisão arquitetural (04/11/2026):** O design system do PhotoIntel usa Tailwind 4 e tokens locais; componentes de páginas, jobs drawer e estados de erro devem manter consistência. O Manage possui frontend e estilos próprios. Confira [a referência de código e fluxos](../../docs/architecture/FRONTENDS_AND_BRIDGE.md).
+
 Dark-neutral design tokens live in `apps/web/src/design-system.css`. All existing
 application class names remain in `styles.css`.
 

@@ -1,5 +1,7 @@
 # Photo Intelligence Cloud: do zero ao deploy (Google Cloud + GitHub Actions)
 
+> **Nota de revisão arquitetural (04/11/2026):** A topologia consolidada usa Workers, Cloud Run Service/Jobs/Scheduler, Neon, R2 e Modal opcional. O gate do release atual confere Alembic em modo leitura; as migrações são executadas separadamente, e o Scheduler parte pausado por padrão. Veja [arquitetura e evidências](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 > Guia operacional para o repositório `rodkisten/photointel`, projeto GCP `photointel`, região `us-central1` e branch `main`. A execução de comandos que criam recursos **pode gerar cobranças**. Nada aqui autoriza o uso automático de recursos ou a importação de fotos pessoais.
 >
 > **Ordem segura:** configuração local → serviços externos → configuração de produção → bootstrap com operador administrativo → versões dos secrets → WIF/IAM → GitHub Environment → build → Jobs → migração controlada → API → Cloudflare → testes → Scheduler (pausado).

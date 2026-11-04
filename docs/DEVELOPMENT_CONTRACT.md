@@ -1,5 +1,7 @@
 # Contrato interno de implementação
 
+> **Nota de revisão arquitetural (04/11/2026):** Ao alterar código, atualize o fluxo Mermaid aplicável e testes junto com contratos OpenAPI, permissões e deploy. Não considere uma mudança de código entregue quando ainda falta migrar o schema ou publicar o Worker correspondente. Veja [arquitetura e evidências](architecture/COMPONENTS_AND_STACK.md).
+
 Python package: `apps/api/src/photointel`, instalado pelo pyproject raiz com uv.
 Configuração: `photointel.config.Settings`, `get_settings()`.
 Database: `photointel.database.Base`, `SessionLocal`, `get_session()` (AsyncSession).

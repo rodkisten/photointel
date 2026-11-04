@@ -1,5 +1,7 @@
 # Firebase Cloud Messaging · notificações de jobs
 
+> **Nota de revisão arquitetural (04/11/2026):** O Firebase do projeto está configurado para **`photointel`**. Registro no browser, armazenamento de instalação e envio FCM HTTP v1 dependem de permissões reais; a presença do SDK no PWA não comprova notificações no iPhone. Confira [a referência de código e fluxos](architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 O PhotoIntel já usa o mesmo `/sw.js` para PWA offline e FCM. O navegador
 registra a instalação com o Firebase SDK 13.1.0 e associa seu Firebase
 Installation ID (FID) à identidade autenticada pelo Cloudflare Access.

@@ -1,5 +1,7 @@
 # Bridge PhotoKit no iPhone
 
+> **Nota de revisão arquitetural (04/11/2026):** O Pyto Bridge é um componente opcional com inventário PhotoKit dependente das permissões do dispositivo. O protocolo de operações aprovado no servidor **não** comprova que exista escritor nativo de keywords funcional no runtime iOS atual. Veja [implementação e fluxogramas](docs/architecture/FRONTENDS_AND_BRIDGE.md).
+
 O Bridge é opcional para ingestão, galeria e inferência. O backend continua
 funcionando quando o iPhone está bloqueado. O módulo executável é
 `bridges/pyto/bridge.py`; ele também pode ser importado em um script Pyto.

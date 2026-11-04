@@ -1,4 +1,6 @@
-# Arquitetura v1.1
+# Arquitetura Photo Intelligence Cloud · implementação auditada
+
+> **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](docs/architecture/SYSTEM_OVERVIEW.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
 
 A migração mantém FastAPI, React/Vite, schema PostgreSQL, fila durável, JoyTag,
 SigLIP 2, R2, taxonomia, Bridge e design existentes. Cloud Run/Neon tornam-se o
@@ -13,28 +15,40 @@ modelo, metadados e Bridge têm papéis separados.
 
 ```mermaid
 flowchart LR
-    Phone[iPhone Safari / PWA] --> Access[Cloudflare Access]
-    Access --> Pages[Pages: React / Vite]
-    Access --> Edge[Cloudflare Worker: origin fixo]
-    Edge --> API[Cloud Run Service: JWT validado]
-    API --> PG[(Neon / PostgreSQL + pgvector)]
-    API --> R2[(R2 privado)]
-    API --> Outbox[Outbox PostgreSQL]
-    Outbox --> JobsAPI[Google Jobs API / ADC]
-    Scheduler[Cloud Scheduler OAuth] --> JobsAPI
-    JobsAPI --> Discover[discover / backfill finitos]
-    JobsAPI --> Worker[worker / maintenance finitos]
+    Phone["iPhone Safari / PWA"] --> Access["Cloudflare Access"]
+    Access --> Web["Worker unificado: React SPA + /v1 proxy"]
+    Access --> Manage["Manage Worker: SPA + /api"]
+    Web --> API["Cloud Run Service: FastAPI/JWT"]
+    API --> PG[("Neon / PostgreSQL + pgvector")]
+    API --> R2[("R2 privado")]
+    API --> Outbox["Outbox PostgreSQL"]
+    Outbox --> JobsAPI["Google Jobs API / ADC"]
+    Scheduler["Cloud Scheduler"] --> JobsAPI
+    JobsAPI --> Discover["discover / backfill finitos"]
+    JobsAPI --> Worker["worker / maintenance finitos"]
+    Discover --> Apple["Apple iCloud"]
     Discover --> PG
-    Discover --> Apple[iCloud somente leitura]
-    Discover --> R2
     Worker --> PG
     Worker --> R2
-    Worker --> Modal[Modal GPU: JoyTag / SigLIP 2]
-    Secrets[Secret Manager / IAM] --> API
-    Secrets --> Discover
-    Secrets --> Worker
-    Bridge[Pyto: PhotoKit opcional] --> Access
+    Worker --> Modal["Modal GPU opcional"]
+    Manage --> Providers["GitHub / GCP / Cloudflare / Sentry"]
+    Bridge["Pyto Bridge opcional"] --> API
 ```
+
+
+## Sumário técnico navegável
+
+| Área | Documento auditado |
+|---|---|
+| Arquitetura e confiança | [SYSTEM_OVERVIEW](docs/architecture/SYSTEM_OVERVIEW.md) |
+| Componentes, dependências, pastas | [COMPONENTS_AND_STACK](docs/architecture/COMPONENTS_AND_STACK.md) |
+| Descoberta iCloud, manifests, pipeline e autorreparo | [INGESTION_AND_RECOVERY](docs/architecture/INGESTION_AND_RECOVERY.md) |
+| Cloudflare, GCP, Neon, R2, Modal e workflows | [INFRASTRUCTURE_AND_DEPLOY](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md) |
+| Banco, recursos, busca e embeddings | [DATA_AND_INFERENCE](docs/architecture/DATA_AND_INFERENCE.md) |
+| JWT, IAM, segredos, sessões e R2 | [SECURITY_AND_SECRETS](docs/architecture/SECURITY_AND_SECRETS.md) |
+| Logs, Sentry, Notify, Telegram e custos | [OBSERVABILITY_AND_OPERATIONS](docs/architecture/OBSERVABILITY_AND_OPERATIONS.md) |
+| Web, Manage, PWA e Apple Bridge | [FRONTENDS_AND_BRIDGE](docs/architecture/FRONTENDS_AND_BRIDGE.md) |
+| Evidências e lacunas | [IMPLEMENTATION_REFERENCE](docs/architecture/IMPLEMENTATION_REFERENCE.md) |
 
 ## Fronteira de estado e execução
 

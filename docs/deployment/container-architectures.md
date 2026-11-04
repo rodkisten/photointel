@@ -1,5 +1,7 @@
 # Validação das arquiteturas dos containers
 
+> **Nota de revisão arquitetural (04/11/2026):** Compatibilidade ARM64/AMD64 e build Docker local não atestam o runtime Modal T4 nem a revisão implantada no Cloud Run. Validar wheels, codecs e tags de imagem por arquitetura. Veja [arquitetura e evidências](../architecture/COMPONENTS_AND_STACK.md).
+
 O workflow [Validate container architectures](../../.github/workflows/container-architectures.yml)
 constrói e executa as imagens `api`, `web` e `minio` separadamente em
 `linux/amd64` e `linux/arm64`. É uma validação explícita: só inicia manualmente

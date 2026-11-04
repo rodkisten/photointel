@@ -1,5 +1,7 @@
 # Plano e checklist v1
 
+> **Nota de revisão arquitetural (04/11/2026):** Plano não é inventário de funcionalidades já implantadas. A tabela de rastreabilidade separa código existente, integrações configuráveis e resultados não verificados em serviços externos. Veja [arquitetura e evidências](architecture/IMPLEMENTATION_REFERENCE.md).
+
 - [x] Fundação implementada: schema, configuração, auth, migrations e storage privado.
 - [x] Ingestão incremental/idempotente, mídia, identidade e fixtures implementadas.
 - [x] Jobs duráveis, lease, heartbeat, retry, batches e SSE implementados.

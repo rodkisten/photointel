@@ -1,5 +1,7 @@
 # Configuração Cloudflare com Wrangler + API oficial
 
+> **Nota de revisão arquitetural (04/11/2026):** O frontend atual é um **Cloudflare Worker com assets da SPA e proxy `/v1/*`**, e o Manage é outro Worker independente. Um Access app ou Worker publicado não comprova sozinho a autenticação do origin Cloud Run. Veja [arquitetura e evidências](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
 Use **Actions → ☁️ Cloudflare Setup → plan/apply**. A entrada é a mesma variável
 `GCP_CONFIG_ENV` do Environment `production`; não há uma segunda configuração
 nem valores de credenciais para copiar entre painéis. `plan` consulta a conta e

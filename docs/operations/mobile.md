@@ -1,5 +1,7 @@
 # Operação somente com iPhone
 
+> **Nota de revisão arquitetural (04/11/2026):** A PWA principal usa React Router; o Manage usa TanStack Router e Worker distinto. Inspecione navegabilidade no iPhone e nunca infira suporte de PhotoKit/FCM a partir de layout responsivo. Consulte [a referência técnica](../architecture/FRONTENDS_AND_BRIDGE.md).
+
 O iPhone usa a PWA pelo Safari e um terminal SSH para comandos de manutenção.
 O processamento permanece no servidor/Codespaces. Pyto é uma ponte opcional
 para PhotoKit, não requisito do catálogo cloud.

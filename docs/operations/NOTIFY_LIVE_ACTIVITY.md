@@ -1,5 +1,7 @@
 # 📱 Notify! — Live Activity e notificações por step
 
+> **Nota de revisão arquitetural (04/11/2026):** Notify! é integração de entrega **best effort**. Cada workflow/run, Job UUID e Sentry event ID tem identidade própria; uma Live Activity não substitui os eventos persistidos nem confirma entrega no iPhone. Consulte [a referência técnica](../architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 Esta integração usa a API do [Notify!](https://getnotifyapp.com/apidocs/), **sem** um serviço adicional e **sem** publicar credenciais no repositório.
 
 ## ✅ Apenas execuções estratégicas
