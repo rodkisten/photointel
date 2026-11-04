@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleAlert, Copy, GitBranch, GitCommit, Plus, RefreshCcw, Save, Trash2, Webhook } from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
+import { JsonView } from '../components/json-view';
 import { Empty, IssueBanner, Spinner } from '../components/shared';
 import { api, send } from '../lib/client';
 import { date } from '../lib/utils';
@@ -41,7 +42,11 @@ export function DeployTriggers() {
   const [inspect, setInspect] = useState<Inspect | null>(null);
   const [search, setSearch] = useState('');
   const [simulated, setSimulated] = useState('');
+  const [openLog, setOpenLog] = useState<string | null>(null);
   const [simResult, setSimResult] = useState<string | null>(null);
+  const logs = useQuery({ queryKey: ['deploy-run-logs', openLog],
+    queryFn: () => api<{ entries: unknown[]; message?: string }>('/deploy-router/runs/' + openLog + '/logs'),
+    enabled: Boolean(openLog), retry: false });
   const tree = useQuery({ queryKey: ['deploy-tree', search], queryFn: () =>
     api<{ entries: Array<{ path: string; type: string }> }>('/deploy-router/tree?q=' +
       encodeURIComponent(search)), enabled: search.length > 1, retry: false });
@@ -230,7 +235,15 @@ export function DeployTriggers() {
                 {run.detail && <span className="text-amber-400"><CircleAlert size={12} className="mr-1 inline" />{run.detail}</span>}
                 {run.status_url && <a className="underline" href={run.status_url}
                   target="_blank" rel="noreferrer">Abrir provedor</a>}
+                <button type="button" className="underline" onClick={() => setOpenLog(openLog === run.id ? null : run.id)}>
+                  {openLog === run.id ? 'Ocultar logs' : 'Ver logs'}
+                </button>
               </div>
+              {openLog === run.id && <div className="min-w-0 space-y-2">
+                {logs.isPending ? <Spinner /> : logs.error ? <IssueBanner error={logs.error} /> :
+                  <JsonView data={logs.data?.entries || logs.data?.message || ''} title="Logs do build"
+                    maxHeight={360} showSearch />}
+              </div>}
             </Card>)}</div>}
       </Section>
       <div className="text-xs text-carbon-500">Os secrets nunca são armazenados nas regras. GCP deve enviar callbacks assinados para indicar conclusão; caso contrário, a execução ficará como submitted.</div>
