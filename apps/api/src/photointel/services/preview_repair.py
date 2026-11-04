@@ -26,6 +26,36 @@ VARIANTS = ("thumbnail_small", "thumbnail_medium", "preview_large")
 ACTIVE = ("queued", "preparing", "running", "retrying", "paused")
 PIPELINE = ("media_download", "metadata_extract", "thumbnail_generate")
 
+RECOVERABLE_MANIFEST_FAILURES = frozenset({
+    "remote_asset_unavailable", "transient_network_error", "storage_error",
+    "rate_limited",
+})
+
+
+def manifest_recoverable(
+    status: str, category: str | None, attempts: int, maximum: int
+) -> bool:
+    """Resurrect exhausted remote sources only for transient failures."""
+    if status in {"quarantined", "failed"} or attempts >= maximum:
+        return category in RECOVERABLE_MANIFEST_FAILURES
+    return status != "completed"
+
+
+async def rearm_manifest(session: AsyncSession, manifest: DiscoveryManifest) -> bool:
+    """Preserve encrypted source identity while resetting recoverable retry budgets."""
+    if not manifest_recoverable(
+        manifest.status, manifest.failure_category,
+        manifest.attempts, manifest.maximum_attempts,
+    ):
+        return False
+    if manifest.status in {"quarantined", "failed"} or manifest.attempts >= manifest.maximum_attempts:
+        manifest.status = "retrying"
+        manifest.attempts = 0
+        manifest.last_error = None
+        manifest.failure_category = None
+    return True
+
+
 
 def repair_stage(
     *,
@@ -34,12 +64,16 @@ def repair_stage(
     manifest: bool,
     icloud_enabled: bool,
     ingestion_paused: bool,
+    source_retained: bool = False,
 ) -> str | None:
-    """No implicit Apple fetch without a valid source manifest and an enabled sync."""
-    if ingestion_status != "completed":
-        return None
-    if retained:
+    """Resume a historical failed source without changing the original."""
+    if ingestion_status == "completed" and retained:
         return "thumbnail_generate"
+    if source_retained and ingestion_status in {
+        "downloaded", "processing", "queued", "retrying",
+        "failed", "quarantined", "pending",
+    }:
+        return "metadata_extract"
     if manifest and icloud_enabled and not ingestion_paused:
         return "media_download"
     return None
@@ -95,8 +129,6 @@ async def _queue_repair(
     if asset is None:
         return "busy"
     if asset.media_type != "image" or asset.visibility_status == "archived":
-        return "blocked"
-    if asset.ingestion_status != "completed":
         return "blocked"
     busy = await session.scalar(
         select(Job.id).where(
