@@ -3,6 +3,7 @@
 # _MODE defaults to permissions; never grant an unauthenticated public IAM build.
 substitutions:
   _RUN_ID: ""
+  _EVENT_SHA: ""
   _MODE: permissions
   _AUTHORIZE_CHARGES: "false"
 steps:
@@ -13,7 +14,9 @@ steps:
     args:
       - -ceu
       - |
-        if python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
+        if [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] &&
+           [[ "$COMMIT_SHA" == "${_EVENT_SHA}" ]] &&
+           python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
            CONFIRM_PROJECT=photointel RELEASE_SHA="$COMMIT_SHA" python3 infra/gcp/gcp-env.py; then
           touch /workspace/.manage-config-ok
         else
@@ -28,16 +31,17 @@ steps:
         if [[ ! -f /workspace/.manage-config-ok ]]; then
           echo "provision skipped: configuration failed" >&2
         else
-          apt-get update -qq && apt-get install -y -qq jq curl ca-certificates >/dev/null
           export CONFIRM_PROJECT=photointel
           export BOOTSTRAP_MODE="${_MODE}"
           export AUTHORIZE_CHARGES="${_AUTHORIZE_CHARGES}"
-          case "$$BOOTSTRAP_MODE" in
-            plan|permissions) ;;
-            apply) [[ "$$AUTHORIZE_CHARGES" == true ]] ;;
-            *) echo "Invalid bootstrap mode" >&2; exit 2 ;;
-          esac
-          if bash infra/gcp/bootstrap.sh; then touch /workspace/.manage-provision-ok; fi
+          if [[ "$BOOTSTRAP_MODE" == permissions ]] &&
+             apt-get update -qq &&
+             apt-get install -y -qq jq curl ca-certificates >/dev/null &&
+             bash infra/gcp/bootstrap.sh; then
+            touch /workspace/.manage-provision-ok
+          else
+            echo "Permission-only provision failed or unsupported mode" >&2
+          fi
         fi
   - id: callback
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
