@@ -157,7 +157,7 @@ export function DeployTriggers() {
               {tree.data && <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-carbon-800">
                 {tree.data.entries.slice(0, 24).map((entry) =>
                   <button type="button" key={entry.path} className="block w-full break-all border-b border-carbon-800 px-3 py-2 text-left font-mono text-xs text-carbon-300 hover:bg-carbon-900"
-                    onClick={() => { setDraft((x) => ({ ...x, patterns: x.patterns + (x.patterns ? '\\n' : '') + entry.path + (entry.type === 'tree' ? '/' : '') })); setSearch(''); }}>
+                    onClick={() => { setDraft((x) => ({ ...x, patterns: x.patterns + (x.patterns ? String.fromCharCode(10) : '') + entry.path + (entry.type === 'tree' ? '/' : '') })); setSearch(''); }}>
                     {entry.type === 'tree' ? '📁 ' : '📄 '}{entry.path}
                   </button>)}
               </div>}
