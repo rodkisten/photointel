@@ -417,3 +417,87 @@ entry, event e período). Use `<Link>` e `useNavigate` para novas
 navegações internas; não modifique `window.history` diretamente.
 A aplicação continua protegida pelo Cloudflare Access inclusive em URLs
 abertas diretamente ou após recarregar.
+
+## Painel de custos (GitHub, GCP, Cloudflare Workers e Modal)
+
+`/costs` mostra custos por mês, fontes verificadas e incompletas,
+cota do GitHub Actions, detalhamento do GCP, workloads Modal e uso dos Workers.
+As telas `/deploys`, detalhes de run e Visão geral exibem tempo de execução e
+**estimativa bruta** por job. O cálculo usa minutos arredondados por job,
+o runner indicado pelo GitHub e preços oficiais consultados em novembro/2026.
+Um workflow não corresponde ao valor cobrado pelo GCP durante o deploy.
+Execuções self-hosted ou runners sem tarifa identificável permanecem indisponíveis;
+subtotal parcial é identificado por `≥`.
+
+**GitHub:** o Worker consulta a Billing Usage Summary API (com filtro por repositório)
+e só exibe valor oficial quando encontra itens de Actions. Conta pessoal pode
+não disponibilizar esses dados nesta API. Use um token que tenha também o acesso
+de Billing exigido pela conta ou organização. Os endpoints antigos `/timing`
+não são usados porque foram descontinuados. Em `GCP_CONFIG_ENV` no formato dotenv:
+
+```dotenv
+EXTRA_ENVIRONMENT__MANAGE_GITHUB_BILLING_OWNER=rodkisten
+EXTRA_ENVIRONMENT__MANAGE_GITHUB_BILLING_SCOPE=users
+EXTRA_ENVIRONMENT__MANAGE_GITHUB_ACTIONS_INCLUDED_USD=12
+```
+
+O último valor **é apenas um exemplo**. Ajuste à franquia em USD do seu plano
+(Free, Pro, Team etc.). Não é seguro assumir uma cota de minutos fixa nem
+deduzir automaticamente o plano pelo repositório.
+
+**GCP:** habilite na conta Cloud Billing a exportação **Standard** ou **Detailed**
+para BigQuery. A exportação não é retroativa e pode sofrer atraso. Configure
+a tabela real (substitua os valores de exemplo):
+
+```dotenv
+EXTRA_ENVIRONMENT__MANAGE_GCP_BILLING_TABLE=photointel.billing.gcp_billing_export_v1_ACCOUNT_ID
+```
+
+O Manage consulta somente lançamentos com `project.id=photointel` e agrega
+`cost + credits`. O orçamento de processamento da query é limitado a 100 MB.
+`🧱 Setup GCP → permissions` atualiza `roles/bigquery.jobUser` e
+`roles/bigquery.dataViewer` na conta `photointel-manage` para o projeto local;
+`apply` também habilita a API BigQuery. Se a exportação estiver em outro
+projeto, dê `bigquery.dataViewer` **no dataset** daquele projeto e
+`bigquery.jobUser` no projeto que executa as queries, sem abrir acesso global.
+O bootstrap não cria exportações do Cloud Billing nem altera contas de cobrança.
+
+**Cloudflare:** o adaptador lê Analytics GraphQL com permissão de **Account
+Analytics:Read**, agrupando requests por Worker. Exibe por Worker um valor
+**hipotético marginal** a US$ 0,30/milhão de requests. Não inclui franquia,
+CPU, Workers subscription, R2/D1, outros produtos nem representa a fatura:
+por isso não soma Cloudflare ao total oficial.
+
+**Modal:** requer plano Team/Enterprise para billing programático.
+Crie um secret Modal `photo-intelligence-billing` com
+`MANAGE_COSTS_TOKEN` gerado aleatoriamente (32+ caracteres) e execute:
+
+```sh
+uv run --group gpu modal deploy gpu/modal_billing.py
+```
+
+Depois configure a URL real do endpoint e referencie o **mesmo token** de maneira
+segura no Google Secret Manager, sem colocá-lo em plaintext no dotenv:
+
+```dotenv
+EXTRA_ENVIRONMENT__MANAGE_MODAL_BILLING_URL=https://YOUR-ENDPOINT.modal.run/report
+WORKFLOW_SECRETS__MANAGE_MODAL_BILLING_TOKEN__NAME=photointel-manage-modal-billing-token
+WORKFLOW_SECRETS__MANAGE_MODAL_BILLING_TOKEN__VERSION=1
+```
+
+O Manage valida domínio HTTPS `*.modal.run` e encaminha o token exclusivamente
+no backend. O endpoint Modal chama `Workspace.billing.summary()` (faturado após
+ajustes) e `Workspace.billing.report()` (detalhamento antes de ajustes).
+Se o plano não expõe a API, o painel indica ausência, **não** US$ 0.
+
+Depois de editar as variáveis, execute o workflow `🚀 Manage · Publish`.
+Os dados de billing e tokens nunca são armazenados no frontend. O total geral
+permanece marcado **parcial** enquanto nem todas as fontes tiverem valores de
+fatura comparáveis em USD; moedas diferentes não são convertidas implicitamente.
+
+Fontes de preços e APIs:
+- https://docs.github.com/en/billing/reference/actions-runner-pricing
+- https://docs.github.com/en/rest/billing/usage
+- https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery
+- https://developers.cloudflare.com/workers/platform/pricing/
+- https://modal.com/docs/guide/billing
