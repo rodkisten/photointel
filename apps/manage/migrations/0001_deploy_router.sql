@@ -31,5 +31,6 @@ CREATE TABLE IF NOT EXISTS deploy_runs (
   updated_at TEXT NOT NULL,
   UNIQUE(delivery_id,rule_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_deploy_runs_route_sha ON deploy_runs(rule_id,sha);
 CREATE INDEX IF NOT EXISTS idx_deploy_runs_state ON deploy_runs(state,created_at);
 CREATE INDEX IF NOT EXISTS idx_deploy_runs_created ON deploy_runs(created_at DESC);
