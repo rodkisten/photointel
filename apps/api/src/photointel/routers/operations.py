@@ -521,6 +521,14 @@ async def repair_preview(
                 ),
             )
         )).all())
+        source_invalid = bool(await session.scalar(
+            select(AssetResource.id).where(
+                AssetResource.asset_id == asset_id,
+                AssetResource.resource_type == "source_download",
+                AssetResource.revision == asset.content_revision,
+                AssetResource.status == "invalid",
+            ).limit(1)
+        ))
         manifest = await session.scalar(
             select(DiscoveryManifest).where(
                 DiscoveryManifest.asset_id == asset_id,
@@ -539,6 +547,7 @@ async def repair_preview(
             ingestion_status=asset.ingestion_status,
             retained=bool(resources),
             source_retained="source_download" in resources,
+            source_invalid=source_invalid,
             manifest=eligible_manifest,
             icloud_enabled=settings.icloud_enabled,
             ingestion_paused=ingestion_paused,
