@@ -7,8 +7,8 @@ Oracle/VPS permanece fallback até validação real. A fronteira de estado durá
 ```mermaid
 flowchart LR
   I[iPhone Safari / PWA] --> A[Cloudflare Access]
-  A --> P[Pages: React / Vite]
-  A --> E[Worker: proxy com origin fixo]
+  A --> E[Worker unificado: React SPA e proxy /v1]
+  A --> MA[Manage Worker separado]
   E --> S[Cloud Run Service: FastAPI / JWT validado]
   S --> N[(Neon PostgreSQL + pgvector)]
   S --> R[(R2 privado)]
@@ -28,6 +28,8 @@ flowchart LR
   K --> W
   B[Pyto / Bridge opcional] --> A
 ```
+
+[Infraestrutura vigente](INFRASTRUCTURE_AND_DEPLOY.md) documenta a topologia de Cloudflare Worker unificado, Manage Worker, Cloud Run, Neon, R2, Modal e respectivos workflows. O diagrama a seguir é o destino técnico, **não** evidência de que as contas ou execuções reais foram verificadas.
 
 ## API e limites
 

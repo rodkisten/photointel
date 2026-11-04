@@ -15,27 +15,24 @@ modelo, metadados e Bridge têm papéis separados.
 
 ```mermaid
 flowchart LR
-    Phone[iPhone Safari / PWA] --> Access[Cloudflare Access]
-    Access --> Pages[Pages: React / Vite]
-    Access --> Edge[Cloudflare Worker: origin fixo]
-    Edge --> API[Cloud Run Service: JWT validado]
-    API --> PG[(Neon / PostgreSQL + pgvector)]
-    API --> R2[(R2 privado)]
-    API --> Outbox[Outbox PostgreSQL]
-    Outbox --> JobsAPI[Google Jobs API / ADC]
-    Scheduler[Cloud Scheduler OAuth] --> JobsAPI
-    JobsAPI --> Discover[discover / backfill finitos]
-    JobsAPI --> Worker[worker / maintenance finitos]
+    Phone["iPhone Safari / PWA"] --> Access["Cloudflare Access"]
+    Access --> Web["Worker unificado: React SPA + /v1 proxy"]
+    Access --> Manage["Manage Worker: SPA + /api"]
+    Web --> API["Cloud Run Service: FastAPI/JWT"]
+    API --> PG[("Neon / PostgreSQL + pgvector")]
+    API --> R2[("R2 privado")]
+    API --> Outbox["Outbox PostgreSQL"]
+    Outbox --> JobsAPI["Google Jobs API / ADC"]
+    Scheduler["Cloud Scheduler"] --> JobsAPI
+    JobsAPI --> Discover["discover / backfill finitos"]
+    JobsAPI --> Worker["worker / maintenance finitos"]
+    Discover --> Apple["Apple iCloud"]
     Discover --> PG
-    Discover --> Apple[iCloud somente leitura]
-    Discover --> R2
     Worker --> PG
     Worker --> R2
-    Worker --> Modal[Modal GPU: JoyTag / SigLIP 2]
-    Secrets[Secret Manager / IAM] --> API
-    Secrets --> Discover
-    Secrets --> Worker
-    Bridge[Pyto: PhotoKit opcional] --> Access
+    Worker --> Modal["Modal GPU opcional"]
+    Manage --> Providers["GitHub / GCP / Cloudflare / Sentry"]
+    Bridge["Pyto Bridge opcional"] --> API
 ```
 
 

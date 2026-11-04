@@ -1,8 +1,25 @@
 # 🧭 GitHub Actions: catálogo e regras do Photo Intelligence
 
-Auditoria de **13 workflows** em `.github/workflows/`, 24/10/2026. Nem todo workflow deve rodar a cada commit e **nenhum teste de PR deve herdar segredos de produção**.
+O quadro abaixo começou como auditoria de **13 workflows em 24/10/2026**, mas é um **recorte histórico**, não a lista completa da branch atual (04/11/2026). O repositório já inclui novos workflows para Manage, migração Neon, watchdog de previews, FCM, validações e previews. Para a lista efetiva, consulte [`.github/workflows/`](../../.github/workflows/) e os eventos `on:` de cada YAML. Nenhum teste de PR deve herdar segredos de produção.
 
-## 🗂️ Inventário, necessidade e disparo
+## ⚙️ Fluxos adicionados após a auditoria de 24/10/2026
+
+| Workflow atual | Disparo/efeito |
+|---|---|
+| [`gcp-migrate.yml`](../../.github/workflows/gcp-migrate.yml) | Migração Neon separada: validação no push, alteração só por workflow_dispatch |
+| [`gcp-health.yml`](../../.github/workflows/gcp-health.yml) | Diagnóstico de Cloud Run, Neon, R2 e startup sanitizado |
+| [`backend-smoke.yml`](../../.github/workflows/backend-smoke.yml) | Python + Postgres real + smoke de recuperação |
+| [`manage-deploy.yml`](../../.github/workflows/manage-deploy.yml) | Publicação do Worker administrativo no push de `apps/manage/**` ou manual |
+| [`manage-validation.yml`](../../.github/workflows/manage-validation.yml) | Validação de UI, tipos, integração do Manage |
+| [`manage-format.yml`](../../.github/workflows/manage-format.yml) | Prettier/format do Manage |
+| [`frontend-format-fix.yml`](../../.github/workflows/frontend-format-fix.yml) | Formatação compartilhada dos frontends |
+| [`cloudflare-pr-previews.yml`](../../.github/workflows/cloudflare-pr-previews.yml) | Previews visuais isolados de produção |
+| [`config-sync.yml`](../../.github/workflows/config-sync.yml) | Verificações/sincronização de configuração |
+| [`release-manifest.yml`](../../.github/workflows/release-manifest.yml) | Manifesto de proveniência por release |
+
+O [`gcp-deploy.yml`](../../.github/workflows/gcp-deploy.yml) também possui watchdog horário para manutenção de previews. Versões antigas de guias podem chamar Pages de destino principal; o deploy web atual é um **Worker com assets e proxy**. Consulte [arquitetura de deploy](../architecture/INFRASTRUCTURE_AND_DEPLOY.md).
+
+## 🗂️ Inventário histórico, necessidade e disparo
 
 | Workflow | Quando executa | Por que permanece |
 |---|---|---|

@@ -84,11 +84,11 @@ Use o [workflow independente de bootstrap](https://github.com/rodkisten/photoint
 
 ## 📱 Notify! Live Activities e notificações por step
 
-Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, validações e testes não geram alertas. Os workflows **GCP Bootstrap** e **GCP Deploy** também mostram uma Live Activity no iPhone com **fases concluídas (ex.: 2/4), sem cronômetro**, e um botão que abre o step do GitHub ou os logs GCP quando aplicável. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
+Somente **GCP Deploy, Setup GCP, Pages e ZIP Patch** enviam Notify!. CI, validações e testes não geram alertas. Os workflows **GCP Bootstrap** e **GCP Deploy** incluem integração best-effort de Live Activity no iPhone com **fases concluídas (ex.: 2/4), sem cronômetro**, e um botão que abre o step do GitHub ou os logs GCP quando aplicável. O integrador é best-effort e não faz o job falhar se o Notify! estiver indisponível. Configure **Repository secrets `NOTIFY_DEVICE_ID` e `NOTIFY_TOKEN`**; se tiver exposto um URL com token, gere outro antes de cadastrar. Veja o [guia completo de configuração e testes](docs/operations/NOTIFY_LIVE_ACTIVITY.md).
 
 ## 🧭 GitHub Actions: workflows, ambientes e segredos
 
-A **[auditoria e documentação dos 13 workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
+O **[catálogo histórico e documentação dos workflows](docs/operations/GITHUB_ACTIONS.md)** explica o propósito de cada fluxo, quando executá-lo, quais usam `vars.*` do Environment `production`, quais usam `secrets.*` e como a [action GCP compartilhada](.github/actions/gcp-config/action.yml) prepara e remove a configuração privada. Todos os nomes de workflows, jobs e steps seguem emojis e labels; testes isolados não recebem credenciais de produção.
 
 ## 🚀 Publicação simplificada: um clique para o release
 
@@ -96,7 +96,7 @@ No [🚀 GCP Deploy](https://github.com/rodkisten/photointel/actions/workflows/g
 
 As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis. **`migrate` e `scheduler` são separados**, jamais disparados pelo `release`. O release publica as definições dos Cloud Run Jobs, mas não os executa e não inicia ingestão ou GPU.
 
-**Segurança:** `database_ready` começa desmarcado. Confirme-o somente depois de migrar e validar Neon, versões dos secrets e Cloudflare Access. Na primeira instalação, configure a infraestrutura, execute a migração explicitamente quando necessária e só então use `release`. [Guia e restrições](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
+**Segurança:** a fase `gate` do release realiza verificação **somente leitura** da versão Alembic no Neon, substituindo o antigo checkbox `database_ready`. Migrações são explícitas, separadas e devem ser feitas após validar banco, backup, versões dos segredos e Cloudflare Access. [Guia e restrições](docs/deployment/CLOUD_RUN_FROM_ZERO.md).
 
 ## Google Cloud Run: do zero ao deploy
 
@@ -109,7 +109,7 @@ As ações individuais `build`, `jobs-deploy` e `deploy` continuam disponíveis.
 3. Rodar **`bootstrap` como operador administrativo no Cloud Shell**; ele cria o repositório Docker, bucket, seis service accounts e políticas IAM. Não manter papéis administrativos na identidade CI.
 4. Preencher os secrets com prompts ocultos, configurar o pool `github-actions` / provider `photo-intelligence` e conceder WIF **somente** ao repo `rodkisten/photointel`, `main` e ambiente `production`.
 5. No GitHub `Settings → Environments → production → Environment variables`, definir a variável multiline **`GCP_CONFIG_ENV`**. O workflow `gcp-deploy.yml` usa `vars.GCP_CONFIG_ENV`, **não** `GCP_CONFIG_JSON`.
-6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker/Pages + Access → `scheduler` (cron jobs começam pausados).
+6. Executar `build` → `jobs-deploy` via [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gcp-deploy.yml). Execute a migração **direto GitHub → Neon** pela opção **`migrate`** no mesmo workflow, em `plan` ou `diagnose` (leitura), ou `apply` com banco vazio verificado/recuperação comprovada. Depois executar `deploy` → configurar Worker unificado + Access → `scheduler` (cron jobs começam pausados).
 7. Testar autenticação e rotas privadas e revisar custos. Lotes iCloud de até 1.000 fotos não exigem gates manuais; acima desse volume, a autorização de escala F continua obrigatória.
 
 Para evitar acúmulo de ZIPs e imagens, veja **[Política de retenção de artefatos](docs/deployment/ARTIFACT_RETENTION.md)**. Builds do mesmo SHA são reutilizados quando a imagem já existe; o GitHub guarda resultados de CI por 3 dias quando há falha ou execução manual. As regras de exclusão GCS/Artifact Registry são propostas versionadas, ainda não ativadas no Google Cloud.
