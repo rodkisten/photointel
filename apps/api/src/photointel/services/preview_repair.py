@@ -36,9 +36,12 @@ def manifest_recoverable(
     status: str, category: str | None, attempts: int, maximum: int
 ) -> bool:
     """Resurrect exhausted remote sources only for transient failures."""
+    # Previously downloaded/processed sources can be re-fetched if a copy
+    # disappears later. Their successful manifest is not a failed attempt.
+    if status in {"completed", "downloaded", "processing"}:
+        return True
     if status in {"quarantined", "failed"} or attempts >= maximum:
         return category in RECOVERABLE_MANIFEST_FAILURES
-    # A completed manifest can restore a lost private source from iCloud.
     return True
 
 
