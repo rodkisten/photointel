@@ -129,7 +129,7 @@ async def _queue_repair(
     )
     if asset is None:
         return "busy"
-    if asset.media_type != "image" or asset.visibility_status == "archived":
+    if asset.media_type == "video" or asset.visibility_status == "archived":
         return "blocked"
     busy = await session.scalar(
         select(Job.id).where(
@@ -271,12 +271,15 @@ async def _catalog_pass(
 async def _storage_pass(
     settings: Settings, cursor: UUID | None, now: datetime, paused: bool
 ) -> tuple[UUID | None, dict[str, int]]:
-    """Rotate through the completed catalog without unbounded R2 requests."""
+    """Verify partial previews and preserved sources, not only complete triplets."""
     limit = settings.auto_preview_verify_batch_size
     async with SessionLocal() as session:
         query = select(Asset.id).where(
-            Asset.media_type == "image",
-            Asset.ingestion_status == "completed",
+            Asset.media_type != "video",
+            Asset.ingestion_status.in_((
+                "completed", "downloaded", "failed", "quarantined",
+                "processing", "retrying",
+            )),
             Asset.visibility_status != "archived",
         )
         if cursor:
@@ -294,20 +297,30 @@ async def _storage_pass(
                 if asset is None:
                     continue
                 revision = asset.representation_revision
+                content_revision = asset.content_revision
                 resources = list((await session.scalars(select(AssetResource).where(
                     AssetResource.asset_id == asset_id,
-                    AssetResource.revision == revision,
-                    AssetResource.resource_type.in_(VARIANTS),
                     AssetResource.status == "available",
                     AssetResource.object_key.is_not(None),
+                    AssetResource.object_key != "",
                     AssetResource.byte_size > 0,
+                    (
+                        (
+                            (AssetResource.resource_type.in_(VARIANTS))
+                            & (AssetResource.revision == revision)
+                        )
+                        | (
+                            (AssetResource.resource_type == "source_download")
+                            & (AssetResource.revision == content_revision)
+                        )
+                    ),
                 ))).all())
                 busy = await session.scalar(select(Job.id).where(
                     Job.asset_id == asset_id,
                     Job.job_type.in_(PIPELINE),
                     Job.status.in_(ACTIVE),
                 ).limit(1))
-                if busy is not None or len(resources) != len(VARIANTS):
+                if busy is not None or not resources:
                     continue
                 snapshots = [(resource.id, resource.object_key) for resource in resources]
                 await session.commit()
@@ -322,7 +335,11 @@ async def _storage_pass(
                 asset = await session.scalar(
                     select(Asset).where(Asset.id == asset_id).with_for_update(skip_locked=True)
                 )
-                if asset is None or asset.representation_revision != revision:
+                if (
+                    asset is None
+                    or asset.representation_revision != revision
+                    or asset.content_revision != content_revision
+                ):
                     continue
                 busy = await session.scalar(select(Job.id).where(
                     Job.asset_id == asset_id,
