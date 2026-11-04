@@ -29,9 +29,9 @@ steps:
         export CONFIRM_PROJECT=photointel
         export BOOTSTRAP_MODE="${_MODE}"
         export AUTHORIZE_CHARGES="${_AUTHORIZE_CHARGES}"
-        case "$BOOTSTRAP_MODE" in
+        case "$$BOOTSTRAP_MODE" in
           plan|permissions) ;;
-          apply) [[ "$AUTHORIZE_CHARGES" == "true" ]] ;;
+          apply) [[ "$$AUTHORIZE_CHARGES" == "true" ]] ;;
           *) echo "Invalid bootstrap mode" >&2; exit 2 ;;
         esac
         bash infra/gcp/bootstrap.sh
