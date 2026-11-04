@@ -4,6 +4,7 @@ import {
   Activity,
   Apple,
   CloudCog,
+  ServerCog,
   Wallet,
   Code2,
   Images,
@@ -24,6 +25,7 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
@@ -35,6 +37,7 @@ const NAV = [
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
+  infrastructure: 'Cloud Build, infraestrutura e terminal SSH',
   costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
   config: 'Edição segura das configurações de produção',
@@ -45,6 +48,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 
 function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/deploys')) return 'deploy';
+  if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';
   if (pathname.startsWith('/environment')) return 'config';
