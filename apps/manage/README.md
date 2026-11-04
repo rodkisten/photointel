@@ -1,4 +1,9 @@
-# PhotoIntel Manage · Operational Control Center
+# PhotoIntel Manage
+
+## GitHub → Cloudflare/GCP deploy router
+
+Configure signed GitHub push webhooks, path/filename rules, Cloudflare Workers Builds / GCP Cloud Build and D1 deploy history at `/triggers`. See [DEPLOY_ROUTER.md](./DEPLOY_ROUTER.md) for production D1 migrations, callback status, credentials and xrelay notification integration.
+ · Operational Control Center
 
 > **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [a arquitetura de referência](../../docs/architecture/FRONTENDS_AND_BRIDGE.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
 
