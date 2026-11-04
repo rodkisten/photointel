@@ -138,14 +138,19 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
     }
     if (normalized.startsWith('extra_environment.')) {
       const field = normalized.slice('extra_environment.'.length);
-      // The deployment renderer injects extra_environment into all Cloud Run envs.
+      // Manage-only values must not trigger unrelated, billable Cloud Run deploys.
+      if (field.startsWith('manage_')) {
+        add('manage');
+        if (field === 'manage_access_allowed_emails') {
+          manual.add('Allowlist Manage: executar Setup GCP → permissions para atualizar a federação WIF.');
+          blocked = true;
+        }
+        continue;
+      }
+      // Other settings may need to be propagated to Cloud Run.
       add('api', 'jobs');
       if (field.startsWith('vite_') || field.startsWith('worker_')) add('worker');
-      if (field.startsWith('manage_') || field === 'sentry_org') add('manage');
-      if (field === 'manage_access_allowed_emails') {
-        manual.add('Allowlist Manage: executar Setup GCP → permissions para atualizar a federação WIF.');
-        blocked = true;
-      }
+      if (field === 'sentry_org') add('manage');
       continue;
     }
     if (/^workflows\./.test(normalized)) {
