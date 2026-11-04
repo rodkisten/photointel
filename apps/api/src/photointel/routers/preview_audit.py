@@ -57,7 +57,12 @@ def _audit_predicates():
         Asset.visibility_status != "archived",
         valid < len(VARIANTS),
         or_(
-            Asset.ingestion_status.in_(("completed", "failed", "quarantined")),
+            Asset.ingestion_status.in_(
+                (
+                    "completed", "failed", "quarantined", "pending",
+                    "queued", "retrying", "downloading", "downloaded", "processing",
+                )
+            ),
             failed_job,
         ),
     )
