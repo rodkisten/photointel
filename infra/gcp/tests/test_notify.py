@@ -258,7 +258,12 @@ class NotifyOfflineTests(unittest.TestCase):
             notify.handle(failure("🚀 API"), "IOFAKE1234567", "fakeTOKEN123456")
             payload = sent.call_args_list[-1].args[3]
             self.assertEqual(payload["button"]["title"], "Logs GCP")
-            self.assertIn("photointel-api/logs", payload["button"]["url"])
+            url = urllib.parse.urlsplit(payload["button"]["url"])
+            query = urllib.parse.parse_qs(url.query)
+            self.assertEqual(url.hostname, "photos-manage.migos.club")
+            self.assertEqual(query.get("tab"), ["logs"])
+            self.assertEqual(query.get("source"), ["gcp"])
+            self.assertEqual(query.get("search"), ["photointel-api"])
             sent.reset_mock()
             notify.handle(failure("🗃 Neon"), "IOFAKE1234567", "fakeTOKEN123456")
             payload = sent.call_args_list[-1].args[3]
@@ -266,8 +271,13 @@ class NotifyOfflineTests(unittest.TestCase):
 
     def test_job_failure_links_to_filtered_cloud_logging(self):
         url = notify.gcp_failure_url("📦 Jobs", "photointel", "us-central1")
-        self.assertIn("/logs/query;query=", url)
-        self.assertIn("cloud_run_job", urllib.parse.unquote(url))
+        parsed = urllib.parse.urlsplit(url)
+        query = urllib.parse.parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.hostname, "photos-manage.migos.club")
+        self.assertEqual(query.get("tab"), ["logs"])
+        self.assertEqual(query.get("source"), ["gcp"])
+        self.assertEqual(query.get("search"), ["photointel-worker"])
         self.assertNotIn("token=", url)
 
     def test_failure_end_preserves_previous_completed_stages(self):
