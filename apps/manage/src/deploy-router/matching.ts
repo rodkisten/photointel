@@ -6,7 +6,7 @@ export type DeployRule = {
   id: string; name: string; enabled: boolean; provider: RouteKind;
   target: string; patterns: string[]; created_at: string; updated_at: string;
 };
-const PATH = /^[A-Za-z0-9_./*?\-]+$/;
+const PATH = /^[A-Za-z0-9_.\/\*\?\-]+$/;
 export function validatePatterns(raw: unknown): string[] {
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 24)
     throw new ApiError(422, 'ROUTE_PATTERNS', 'Informe de 1 a 24 caminhos por regra');
