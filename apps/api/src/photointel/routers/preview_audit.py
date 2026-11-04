@@ -102,6 +102,7 @@ async def audit_previews(
     resources_by_asset: dict[UUID, dict[str, AssetResource]] = {}
     latest_by_asset: dict[UUID, dict] = {}
     source_by_asset: set[UUID] = set()
+    invalid_source_by_asset: set[UUID] = set()
     manifests_by_asset: dict[UUID, DiscoveryManifest] = {}
     if asset_ids:
         resources = (
@@ -131,6 +132,17 @@ async def audit_previews(
             )
         )).all()
         source_by_asset.update(persisted)
+        invalid_sources = (await session.scalars(
+            select(AssetResource.asset_id)
+            .join(Asset, AssetResource.asset_id == Asset.id)
+            .where(
+                Asset.id.in_(asset_ids),
+                AssetResource.resource_type == "source_download",
+                AssetResource.revision == Asset.content_revision,
+                AssetResource.status == "invalid",
+            )
+        )).all()
+        invalid_source_by_asset.update(invalid_sources)
         manifests = (await session.scalars(
             select(DiscoveryManifest)
             .join(Asset, DiscoveryManifest.asset_id == Asset.id)
@@ -205,6 +217,7 @@ async def audit_previews(
             ingestion_status=asset.ingestion_status,
             retained=("preview_large" in available or asset.id in source_by_asset),
             source_retained=asset.id in source_by_asset,
+            source_invalid=asset.id in invalid_source_by_asset,
             manifest=can_fetch,
             icloud_enabled=settings.icloud_enabled,
             ingestion_paused=ingestion_paused,
