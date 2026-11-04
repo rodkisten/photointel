@@ -213,12 +213,12 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     # Public cost integration settings are independent of deployment secrets.
     billing_table = str(extra.get("MANAGE_GCP_BILLING_TABLE") or "").strip()
     if billing_table and not re.fullmatch(
-        r"[a-z][a-z0-9-]{4,62}\\.[A-Za-z_][A-Za-z0-9_]{0,1023}\\.gcp_billing_export_(?:resource_)?v1_[A-Za-z0-9_]+",
+        r"[a-z][a-z0-9-]{4,62}\.[A-Za-z_][A-Za-z0-9_]{0,1023}\.gcp_billing_export_(?:resource_)?v1_[A-Za-z0-9_]+",
         billing_table,
     ):
         raise SetupError("MANAGE_GCP_BILLING_TABLE must reference a standard/detailed billing export table")
     github_credit = str(extra.get("MANAGE_GITHUB_ACTIONS_INCLUDED_USD") or "").strip()
-    if github_credit and not re.fullmatch(r"\\d{1,7}(?:\\.\\d{1,2})?", github_credit):
+    if github_credit and not re.fullmatch(r"\d{1,7}(?:\.\d{1,2})?", github_credit):
         raise SetupError("MANAGE_GITHUB_ACTIONS_INCLUDED_USD must be a nonnegative USD amount")
     github_scope = str(extra.get("MANAGE_GITHUB_BILLING_SCOPE") or "users")
     if github_scope not in ("users", "organizations"):
@@ -228,8 +228,8 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         raise SetupError("MANAGE_GITHUB_BILLING_OWNER is invalid")
     modal_url = str(extra.get("MANAGE_MODAL_BILLING_URL") or "").strip()
     if modal_url:
-        parsed_modal = urllib.parse.urlparse(modal_url)
-        if parsed_modal.scheme != "https" or not re.fullmatch(r"[a-z0-9-]+\\.modal\\.run", parsed_modal.hostname or "") or parsed_modal.username or parsed_modal.password:
+        parsed_modal = urlsplit(modal_url)
+        if parsed_modal.scheme != "https" or not re.fullmatch(r"[a-z0-9-]+\.modal\.run", parsed_modal.hostname or "") or parsed_modal.username or parsed_modal.password:
             raise SetupError("MANAGE_MODAL_BILLING_URL must be an HTTPS modal.run URL")
     # Only used by this management Worker, never the public PhotoIntel Worker
     # or the Cloud Run API/Jobs. No JSON service-account keys are created.
