@@ -1,4 +1,4 @@
-# Manual Cloud Build trigger, connected to rod kisten/photointel main.
+# Manual Cloud Build trigger, connected to rodkisten/photointel main.
 # Builds immutable API image then reconciles Cloud Run API, jobs and scheduler.
 # Does not automatically apply database migrations.
 steps:
