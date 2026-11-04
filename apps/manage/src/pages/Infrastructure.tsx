@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, CloudCog, ExternalLink, Play, Power, PowerOff, RefreshCcw, Terminal, Timer, ScrollText } from 'lucide-react';
+import { Activity, CloudCog, ExternalLink, Play, Power, PowerOff, RefreshCcw, Terminal, ScrollText } from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select } from '../components/ui';
 import { ConfirmDialog } from '../components/confirm-dialog';
 import { JsonView } from '../components/json-view';
@@ -232,7 +232,7 @@ export function Infrastructure() {
         <Card className="space-y-4 p-4 sm:p-5">
           {overview.data && !overview.data.trigger_configured &&
             <p className="text-sm text-amber-400">Nenhum trigger autorizado. Configure GCP_CLOUDBUILD_ALLOWED_TRIGGERS no Worker.</p>}
-          {overview.data?.triggers.status === 'error' && <IssueBanner error={new Error(overview.data.triggers.message)} />}
+          {overview.data?.triggers.status === 'error' && <IssueBanner error={new Error(overview.data.triggers.message || 'Cloud Build indisponível')} />}
           <label className="field-label" htmlFor="build-trigger">Pipeline / trigger</label>
           <Select id="build-trigger" value={selectedTrigger} onChange={(e) => setSelectedTrigger(e.target.value)} disabled={!authorized.length}>
             {authorized.length === 0 && <option value="">Nenhum trigger autorizado</option>}
