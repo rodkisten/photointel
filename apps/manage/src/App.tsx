@@ -4,6 +4,7 @@ import {
   Activity,
   Apple,
   CloudCog,
+  Wallet,
   Code2,
   Images,
   KeyRound,
@@ -23,6 +24,7 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
@@ -33,6 +35,7 @@ const NAV = [
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
+  costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
   config: 'Edição segura das configurações de produção',
   secrets: 'Versões e credenciais do Google Secret Manager',
@@ -42,6 +45,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 
 function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/deploys')) return 'deploy';
+  if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';
   if (pathname.startsWith('/environment')) return 'config';
   if (pathname.startsWith('/secrets')) return 'secrets';
