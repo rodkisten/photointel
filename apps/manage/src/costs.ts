@@ -50,6 +50,8 @@ async function githubCosts(env: Env, month: string): Promise<Source> {
   }) as { usageItems?: Array<Record<string, unknown>> };
   if (!Array.isArray(data.usageItems)) return unavailable('GitHub não retornou usageItems.');
   const actions = data.usageItems.filter((x) => String(x.product || '').toLowerCase() === 'actions');
+  if (!actions.length)
+    return unavailable('O endpoint de billing não trouxe uso do Actions para esta conta. Não é possível afirmar que o custo foi zero.');
   const gross = round(actions.reduce((sum, x) => sum + (asNumber(x.grossAmount) || 0), 0));
   const net = round(actions.reduce((sum, x) => sum + (asNumber(x.netAmount) || 0), 0));
   const credit = asNumber(env.GITHUB_ACTIONS_INCLUDED_USD);
