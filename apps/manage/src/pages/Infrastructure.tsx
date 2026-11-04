@@ -86,7 +86,7 @@ function LogLine({ item, search }: { item: Log; search: string }) {
     if (offset < value.length) pieces.push({ value: value.slice(offset), match: false });
     return pieces;
   }, [item.message, search]);
-  const json = item.message && /^[\s]*[{[]/.test(item.message);
+  const json = Boolean(item.message && (item.message.trim().startsWith('{') || item.message.trim().startsWith('[')));
   return (
     <div className="border-b border-carbon-800/70 px-3 py-2 text-xs leading-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -159,6 +159,7 @@ export function Infrastructure() {
     .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
 
   const selected = authorized.find((x) => x.location + ':' + x.id === selectedTrigger);
+  const selectedBuild = builds.find((x) => x.id === buildId);
   const titles = { start: 'Iniciar terminal GCP', stop: 'Desligar terminal GCP', build: 'Executar Cloud Build' };
   const descriptions = {
     start: 'Aplicar limite de ' + minutes + ' minutos e ligar a VM. O próprio Compute Engine a desligará no vencimento.',
@@ -255,6 +256,24 @@ export function Infrastructure() {
               </button>)}
           </div>}
         </Card>
+        {selectedBuild && <Card className="mt-3 space-y-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs text-carbon-500">Build selecionado</p>
+              <p className="break-all font-mono text-sm text-carbon-200">{selectedBuild.id}</p>
+            </div>
+            <Badge tone={statusTone(selectedBuild.status)}>{selectedBuild.status}</Badge>
+          </div>
+          <div className="grid gap-2 text-xs text-carbon-400 sm:grid-cols-3">
+            <span>Iniciado: {date(selectedBuild.start_time)}</span>
+            <span>Concluído: {date(selectedBuild.finish_time)}</span>
+            {selectedBuild.log_url && <a href={selectedBuild.log_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline">Console Build <ExternalLink size={12}/></a>}
+          </div>
+          {(selectedBuild.steps || []).map((step, i) => <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-carbon-900 p-2 text-xs">
+            <span className="min-w-0 break-all">{step.id || step.name}</span>
+            <Badge tone={statusTone(step.status)}>{step.status}</Badge>
+          </div>)}
+        </Card>}
       </Section>
 
       <div className="grid gap-3 sm:grid-cols-3">
