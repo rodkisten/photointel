@@ -1,0 +1,44 @@
+# Trigger this file from a connected private GitHub repository, main only.
+# Use the isolated photointel-bootstrap SA; do not attach a public webhook.
+# Store the non-secret GCP_CONFIG_ENV configuration in Secret Manager as
+# projects/photointel/secrets/photointel-gcp-config/versions/latest.
+# Give the trigger execution identity access to this secret and logging.logWriter.
+substitutions:
+  _MODE: permissions
+  _AUTHORIZE_CHARGES: "false"
+steps:
+  - id: configuration
+    name: python:3.12-slim
+    entrypoint: bash
+    secretEnv: [GCP_CONFIG_ENV]
+    args:
+      - -ceu
+      - |
+        python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4
+        export CONFIRM_PROJECT=photointel
+        export RELEASE_SHA="$COMMIT_SHA"
+        python3 infra/gcp/gcp-env.py
+  - id: provision
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        apt-get update -qq
+        apt-get install -y -qq jq curl ca-certificates >/dev/null
+        export CONFIRM_PROJECT=photointel
+        export BOOTSTRAP_MODE="${_MODE}"
+        export AUTHORIZE_CHARGES="${_AUTHORIZE_CHARGES}"
+        case "$BOOTSTRAP_MODE" in
+          plan|permissions) ;;
+          apply) [[ "$AUTHORIZE_CHARGES" == "true" ]] ;;
+          *) echo "Invalid bootstrap mode" >&2; exit 2 ;;
+        esac
+        bash infra/gcp/bootstrap.sh
+availableSecrets:
+  secretManager:
+    - versionName: projects/photointel/secrets/photointel-gcp-config/versions/latest
+      env: GCP_CONFIG_ENV
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 2700s
