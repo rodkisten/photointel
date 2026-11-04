@@ -1,5 +1,7 @@
 # Worker PostgreSQL
 
+> **Nota de revisão arquitetural (04/11/2026):** Esta pasta não contém um executável de worker separado. A fila durável, leases, claims e execução vivem em `apps/api/src/photointel/services/jobs.py`, `worker.py`, `task_runner.py` e no PostgreSQL. Confira [a referência de código e fluxos](../../docs/architecture/INGESTION_AND_RECOVERY.md).
+
 ```bash
 uv run python -m photointel.services.worker
 ```

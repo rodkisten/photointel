@@ -1,5 +1,7 @@
 # Preview real da aplicação
 
+> **Nota de revisão arquitetural (04/11/2026):** Screenshots versionados comprovam somente as condições de sua captura, não o estado visual da versão mais recente nem permissões, notificações ou iCloud no iPhone físico. Confira [a referência de código e fluxos](../architecture/FRONTENDS_AND_BRIDGE.md).
+
 `iphone-library.png` foi copiado sem alteração do artifact `validation-evidence`
 do [run 38896377983](https://github.com/rodkisten/photointel/actions/runs/38896377983),
 commit `9a835194ffb4d579b962477a400d1dd78348c408`.

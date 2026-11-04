@@ -1,5 +1,7 @@
 # Testes de ponta a ponta
 
+> **Nota de revisão arquitetural (04/11/2026):** Fixtures, mocks e Playwright comprovam contratos de desenvolvimento, não conexão com Apple, Sentry, Modal nem disponibilidade da biblioteca real. Registre SHA, ambiente e limites em relatórios de validação. Confira [a referência de código e fluxos](../../docs/architecture/IMPLEMENTATION_REFERENCE.md).
+
 Os cenários executáveis ficam em `apps/web/tests/e2e/application.spec.ts`.
 Essa localização permite resolver `@playwright/test` a partir do único lockfile
 JavaScript, em `apps/web/package-lock.json`, sem links de `node_modules`.

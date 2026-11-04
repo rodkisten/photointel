@@ -1,5 +1,7 @@
 # Ingestão iCloud
 
+> **Nota de revisão arquitetural (04/11/2026):** Este diretório descreve **responsabilidades de domínio**, mas não é por si só um microserviço Cloud Run independente: a execução real é implementada em `apps/api/src/photointel/services/ingestion.py`, `discovery.py` e no runner finito. Confira [a referência de código e fluxos](../../docs/architecture/INGESTION_AND_RECOVERY.md).
+
 Runtime: `photointel.services.ingestion`. O scheduler agenda jobs PostgreSQL a cada
 `INGESTION_INTERVAL_MINUTES` e atualiza heartbeat mesmo ocioso. O worker executa
 runs finitos. Nada remove ou modifica fotos Apple.

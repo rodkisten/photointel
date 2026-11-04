@@ -1,5 +1,7 @@
 # Notify! for PhotoIntel API jobs
 
+> **Nota de revisão arquitetural (04/11/2026):** Jobs e workflows usam fontes de eventos diferentes. A integração de Live Activity é **best effort** e precisa do serviço Notify e credenciais configuradas, não altera o estado transacional dos jobs. Confira [a referência de código e fluxos](architecture/OBSERVABILITY_AND_OPERATIONS.md).
+
 GitHub Actions uses `.github/actions/notify`; the Cloud Run API and workers use
 `apps/api/src/photointel/services/job_notify.py`.
 
