@@ -104,7 +104,7 @@ function SourceDetails({ source, id }: { source: CostSource; id: string }) {
               {item.detail && <p className="mt-0.5 break-words text-[11px] text-carbon-500">{item.detail}</p>}
             </div>
             <span className="shrink-0 text-right text-xs font-medium tabular-nums text-carbon-300">
-              {item.cost !== null ? money(item.cost, source.currency)
+              {item.cost !== null ? (id === 'cloudflare' ? '≈ ' : '') + money(item.cost, source.currency)
                 : item.units !== null && item.units !== undefined ? item.units.toLocaleString('pt-BR') + ' req.' : 'Não medido'}
             </span>
           </div>
