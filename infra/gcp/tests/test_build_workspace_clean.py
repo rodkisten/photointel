@@ -7,6 +7,7 @@ refuses a dirty Git working tree. These files are private artifacts, not source.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -22,8 +23,29 @@ GENERATED = (
 
 class BuildWorkspaceTests(unittest.TestCase):
     def test_generated_gcp_files_are_git_ignored(self) -> None:
+        # Cloud Build uploads source files without .git, and its slim Python
+        # validation image does not install Git. Validate the repository rules
+        # in both environments; additionally test Git's interpretation when
+        # running from a real checkout.
+        patterns = {
+            line.strip()
+            for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        expected = {
+            "infra/gcp/config.local.json": "infra/gcp/config.local.json",
+            "infra/gcp/rendered/photointel-api.json": "infra/gcp/rendered/",
+            "infra/gcp/rendered/photointel-worker.json": "infra/gcp/rendered/",
+            "infra/gcp/state/runtime.json": "infra/gcp/state/",
+        }
         for pathname in GENERATED:
             with self.subTest(path=pathname):
+                self.assertIn(
+                    expected[pathname], patterns,
+                    f"{pathname} must be excluded by .gitignore",
+                )
+                if shutil.which("git") is None or not (ROOT / ".git").exists():
+                    continue
                 result = subprocess.run(
                     ["git", "check-ignore", "-q", "--", pathname],
                     cwd=ROOT,
