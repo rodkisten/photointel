@@ -175,7 +175,7 @@ async function validSignature(request: Request, secret: string, body: string): P
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
   const bytes = Uint8Array.from(signature.slice(7).match(/../g) || [], (x) => parseInt(x, 16));
-  return crypto.subtle.verify('HMAC', key, bytes, new TextEncoder().encode(body));
+  return crypto.subtle.verify('HMAC', key, bytes as BufferSource, new TextEncoder().encode(body));
 }
 export async function githubHook(request: Request, env: Env, context: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
   if (request.method !== 'POST') throw new ApiError(405, 'METHOD', 'Webhook requer POST');
@@ -203,14 +203,12 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
   if (!SHA.test(after) || /^0{40}$/.test(after))
     throw new ApiError(422, 'HEAD_SHA', 'Commit SHA inválido');
   const database = db(env);
-  const existed = await database.prepare('SELECT id FROM deploy_deliveries WHERE id=?')
-    .bind(delivery).first<{ id: string }>();
-  if (existed) return json({ accepted: true, duplicate: true }, 200);
   const changed = await changedFiles(env, before, after);
   const selected = matchRules(await rules(database), changed);
   const stamp = now();
-  await database.prepare('INSERT OR IGNORE INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
+  const inserted = await database.prepare('INSERT OR IGNORE INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
     .bind(delivery, after, JSON.stringify(changed), stamp).run();
+  if (inserted.meta?.changes !== 1) return json({ accepted: true, duplicate: true });
   const runs: Run[] = [];
   for (const { rule } of selected) {
     const id = crypto.randomUUID();
@@ -256,7 +254,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
   if (request.method === 'GET' && path === '/api/deploy-router') {
     const [rs, runs] = await Promise.all([rules(database), database.prepare(SQL_RUNS +
       ' ORDER BY created_at DESC LIMIT 50').all<Run>()]);
-    return json({ rules: rs, runs: runs.results, webhook: 'https://photos-manage.migos.club/hooks/github',
+    return json({ rules: rs, runs: runs.results, webhook: 'https://photos-hooks.migos.club/hooks/github',
       configured: { github: Boolean(env.GITHUB_WEBHOOK_SECRET),
         gcp_release: Boolean(env.GCP_BUILD_WEBHOOK_RELEASE_URL),
         gcp_provision: Boolean(env.GCP_BUILD_WEBHOOK_PROVISION_URL),
