@@ -166,8 +166,9 @@ async def _queue_repair(
     ) or 0
     if recent >= settings.auto_preview_repair_max_attempts_week:
         return "cooldown"
-    retained = await session.scalar(
-        select(AssetResource.id).where(
+
+    retained_resources = set((await session.scalars(
+        select(AssetResource.resource_type).where(
             AssetResource.asset_id == asset_id,
             AssetResource.status == "available",
             AssetResource.object_key.is_not(None),
@@ -182,26 +183,35 @@ async def _queue_repair(
                     & (AssetResource.revision == asset.representation_revision)
                 )
             ),
-        ).limit(1)
-    )
-    manifest = False
-    if retained is None and settings.icloud_enabled and not ingestion_paused:
-        manifest = bool(await session.scalar(
-            select(DiscoveryManifest.id).where(
+        )
+    )).all())
+    source_retained = "source_download" in retained_resources
+    manifest = None
+    if settings.icloud_enabled and not ingestion_paused:
+        manifest = await session.scalar(
+            select(DiscoveryManifest).where(
                 DiscoveryManifest.asset_id == asset_id,
                 DiscoveryManifest.content_revision == asset.content_revision,
-                DiscoveryManifest.attempts < DiscoveryManifest.maximum_attempts,
-                DiscoveryManifest.status.not_in(("quarantined", "failed")),
-            ).limit(1)
-        ))
+            ).with_for_update()
+        )
+    has_manifest = bool(
+        manifest
+        and manifest_recoverable(
+            manifest.status, manifest.failure_category,
+            manifest.attempts, manifest.maximum_attempts,
+        )
+    )
     kind = repair_stage(
         ingestion_status=asset.ingestion_status,
-        retained=retained is not None,
-        manifest=manifest,
+        retained=bool(retained_resources),
+        source_retained=source_retained,
+        manifest=has_manifest,
         icloud_enabled=settings.icloud_enabled,
         ingestion_paused=ingestion_paused,
     )
     if kind is None:
+        return "blocked"
+    if kind == "media_download" and manifest and not await rearm_manifest(session, manifest):
         return "blocked"
     # At most one automatic attempt per six-hour slot, and a bounded weekly
     # budget. enqueue_job's UNIQUE key also protects concurrent schedulers.
