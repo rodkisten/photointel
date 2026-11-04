@@ -145,9 +145,12 @@ async function cloudflareCosts(env: Env, start: string, end: string): Promise<So
   }
   return {
     status: 'ok', currency: 'USD', total: null,
-    items: Array.from(buckets).map(([name, units]) => ({ name, units, cost: null })),
+    items: Array.from(buckets).map(([name, units]) => ({
+      name, units, cost: round(units * 0.30 / 1_000_000),
+      detail: 'Apenas custo marginal estimado por requests, antes da franquia e sem CPU.',
+    })),
     url: 'https://dash.cloudflare.com/?to=/:account/workers-and-pages',
-    note: 'Uso por Worker (requisições). Sem custo faturado individual: os limites e CPU são compartilhados pela conta. Total não é inventado.',
+    note: 'Estimativa marginal de US$0,30/milhão de requests por Worker, não é o valor cobrado. Franquia, CPU, outros produtos e plano são compartilhados; custo faturado por script indisponível.',
   };
 }
 
