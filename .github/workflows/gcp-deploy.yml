@@ -2,7 +2,7 @@ name: "🚀 Deploy"
 run-name: "🚀 Deploy · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
-  # Hourly safety net: if the dedicated Cloud Scheduler is paused or missing,
+  # Hourly safety net: if the worker Cloud Scheduler is paused or missing,
   # wake the finite maintenance Job without keeping the API alive.
   schedule:
     - cron: '23 * * * *'
@@ -97,7 +97,7 @@ jobs:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
       - uses: google-github-actions/setup-gcloud@v3
-      - name: "🩹 Wake finite maintenance if Scheduler is not active"
+      - name: "🩹 Wake maintenance when worker Scheduler is not active"
         env:
           PROJECT: photointel
           REGION: us-central1
@@ -106,7 +106,7 @@ jobs:
           gcloud run jobs describe photointel-maintenance \
             --project="$PROJECT" --region="$REGION" --format='value(name)' >/dev/null
           state_file="$(mktemp)"
-          if gcloud scheduler jobs describe photointel-maintenance \
+          if gcloud scheduler jobs describe photointel-worker \
               --project="$PROJECT" --location="$REGION" \
               --format='value(state)' >"$state_file" 2>"$state_file.err"; then
             state="$(tr -d '\r\n' < "$state_file")"
@@ -117,13 +117,13 @@ jobs:
             exit 1
           fi
           if [[ "$state" == "ENABLED" ]]; then
-            echo "Cloud Scheduler already runs maintenance; no duplicate Cloud Run invocation."
+            echo "Worker Scheduler already drives regular audits; no duplicate maintenance invocation."
             exit 0
           fi
-          echo "::notice::Maintenance Scheduler is $state; waking finite repair runner."
+          echo "::notice::Worker Scheduler is $state; waking finite repair runner."
           gcloud run jobs execute photointel-maintenance \
             --project="$PROJECT" --region="$REGION" --async
-          echo "🩹 Automatic preview repair wakeup requested (Scheduler: $state)" >> "$GITHUB_STEP_SUMMARY"
+          echo "🩹 Automatic preview repair wakeup requested (Worker Scheduler: $state)" >> "$GITHUB_STEP_SUMMARY"
       - name: "🧹 Erase prepared configuration"
         if: always()
         uses: ./.github/actions/gcp-config
