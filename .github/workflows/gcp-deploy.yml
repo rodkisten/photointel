@@ -39,7 +39,7 @@ on:
           - plan
           - apply
           - diagnose
-        default: apply
+        default: plan
         required: true
 
       migration_database:

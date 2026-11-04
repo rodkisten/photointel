@@ -61,7 +61,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("if: inputs.action == 'scheduler'", self.workflow)
         self.assertLess(self.stages["deploy_jobs"], self.stages["deploy_api"])
         self.assertLess(self.stages["database_gate"], self.stages["preflight"])
-        self.assertNotIn("jobs execute", self.workflow)
+        deploy_job = self.workflow.split("  deploy:\n", 1)[1]
+        self.assertNotIn("jobs execute", deploy_job)
 
     def test_release_live_notifications_use_three_phase_counts(self) -> None:
         self.assertIn("total: ${{ inputs.action == 'release' && '3' || '1' }}", self.workflow)
@@ -144,11 +145,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn("jobs execute", runner)
         self.assertTrue((ROOT / "infra/gcp/migration-requirements.txt").exists())
 
-    def test_workflow_has_no_embedded_bash_or_python_scripts(self) -> None:
-        self.assertNotIn("run: |", self.workflow)
-        self.assertNotIn("python3 -c", self.workflow)
-        self.assertNotIn("python3 - <<", self.workflow)
-        self.assertNotIn("gcloud artifacts docker images list", self.workflow)
+    def test_watchdog_is_isolated_from_release_operations(self) -> None:
+        watchdog = self.workflow.split("  preview-watchdog:\n", 1)[1].split("  push-check:", 1)[0]
+        self.assertIn("github.event_name == 'schedule'", watchdog)
+        self.assertIn("gcloud run jobs execute photointel-maintenance", watchdog)
+        for forbidden in ("release.sh migrate", "release.sh build", "release.sh deploy"):
+            self.assertNotIn(forbidden, watchdog)
+
+    def test_workflow_has_no_embedded_release_scripts(self) -> None:
+        # The schedule-only watchdog legitimately checks the Scheduler via Bash.
+        # The production deploy job delegates all release phases to release.sh.
+        deploy_job = self.workflow.split("  deploy:\n", 1)[1]
+        self.assertNotIn("run: |", deploy_job)
+        self.assertNotIn("python3 -c", deploy_job)
+        self.assertNotIn("python3 - <<", deploy_job)
+        self.assertNotIn("gcloud artifacts docker images list", deploy_job)
         for stage, command in {
             "database_gate": "gate",
             "preflight": "preflight",

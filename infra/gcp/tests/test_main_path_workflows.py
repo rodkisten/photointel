@@ -9,17 +9,29 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 class WorkflowPushSafetyTests(unittest.TestCase):
-    def test_every_workflow_has_main_paths_and_manual_dispatch(self):
+    def test_workflow_triggers_match_their_intended_scope(self):
         paths = sorted(WORKFLOWS.glob("*.yml"))
         self.assertGreaterEqual(len(paths), 21)
+        manual_only = {"config-sync.yml", "frontend-format-fix.yml"}
+        pull_request_only = {"cloudflare-pr-previews.yml"}
         for path in paths:
             source = path.read_text(encoding="utf-8")
             with self.subTest(workflow=path.name):
+                if path.name in manual_only:
+                    self.assertIn("  workflow_dispatch:", source)
+                    self.assertNotIn("  push:", source)
+                    continue
+                if path.name in pull_request_only:
+                    self.assertIn("  pull_request:", source)
+                    self.assertNotIn("  workflow_dispatch:", source)
+                    self.assertNotIn("  push:", source)
+                    continue
                 self.assertIn("  workflow_dispatch:", source)
                 self.assertRegex(
                     source, r"(?m)^  push:\n    branches: \[main\]\n    paths:"
                 )
-                self.assertNotIn("    paths-ignore:", source.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0].split("  pull_request:", 1)[0])
+                push_block = source.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0].split("  pull_request:", 1)[0]
+                self.assertNotIn("    paths-ignore:", push_block)
 
     def test_sensitive_actions_remain_manually_authorized(self):
         for name, job in (
@@ -40,8 +52,15 @@ class WorkflowPushSafetyTests(unittest.TestCase):
         for name in ("gcp-bootstrap.yml", "gcp-deploy.yml", "gcp-migrate.yml"):
             source = (WORKFLOWS / name).read_text(encoding="utf-8")
             with self.subTest(workflow=name):
-                self.assertIn("github.event_name == 'push'", source)
-                self.assertIn("|| 'photointel-gcp-production'", source)
+                group = source.split("concurrency:", 1)[1].split("\njobs:", 1)[0]
+                self.assertIn("'photointel-gcp-production'", group)
+                self.assertIn("-check", group, "Push checks need a separate concurrency group")
+                self.assertTrue(
+                    "github.event_name == 'push'" in group
+                    or "github.event_name == 'workflow_dispatch'" in group,
+                    "The production group must be scoped by event type",
+                )
+                self.assertIn("cancel-in-progress: false", group)
                 self.assertIn("if: github.event_name == 'push'", source)
 
     def test_cleanup_never_deletes_on_push(self):
