@@ -65,8 +65,11 @@ agendamentos no arquivo de configuração GCP, use a linha
 `auto_resume_schedules=true` no JSON) e execute a fase Scheduler.
 A nova salvaguarda `.github/workflows/gcp-deploy.yml` usa GitHub Actions
 `23 * * * *` (UTC) para chamar o Cloud Run Job **finito**
-`photointel-maintenance` quando seu agendamento nativo estiver pausado ou
-não existir. Se o Scheduler estiver `ENABLED`, não faz chamadas duplicadas.
+`photointel-maintenance` quando o agendamento nativo do
+`photointel-worker` estiver pausado ou não existir. Se o Scheduler de
+worker estiver `ENABLED`, ele já aciona auditorias regulares e o fallback
+não faz chamadas duplicadas. A execução do maintenance de 6 em 6 horas
+é complementar e não substitui o limite de até 60 minutos desejado.
 A salvaguarda depende de Actions ativos, WIF/GCP IAM, do Job já publicado e da
 configuração `production/GCP_CONFIG_ENV`; não executa o serviço API em background.
 
