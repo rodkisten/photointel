@@ -11,6 +11,9 @@ import type { Run, Job } from '../types';
 import { External, Spinner, IssueBanner } from './shared';
 import { ConfirmDialog } from './confirm-dialog';
 import { JsonView } from './json-view';
+import { RunCostInline, costEntry, secondsLabel } from './run-cost';
+import type { RunEstimate, RunCostsResponse } from './run-cost';
+import { money } from '../pages/Costs';
 
 // ==========================================
 // Tipos
@@ -18,6 +21,7 @@ import { JsonView } from './json-view';
 
 interface RunRowProps {
   run: Run;
+  estimate?: RunEstimate | { error: string };
 }
 
 interface RunDetailProps {
@@ -28,6 +32,7 @@ interface RunDetailProps {
 interface JobItemProps {
   runId: number;
   item: Job;
+  estimate?: RunEstimate['jobs'][number];
   isActive: boolean;
   onToggleLog: () => void;
 }
@@ -63,7 +68,7 @@ function JobSteps({ steps }: { steps: Job['steps'] }) {
   );
 }
 
-function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
+function JobItem({ runId, item, estimate, isActive, onToggleLog }: JobItemProps) {
   const status = item.conclusion || item.status;
 
   // A query de logs agora fica encapsulada no próprio Item
@@ -81,6 +86,12 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
         <Badge tone={state(status)}>{human(status)}</Badge>
       </div>
 
+      {estimate && (
+        <p className="mt-1 text-[11px] text-carbon-500">
+          {secondsLabel(estimate.duration_seconds)} · {estimate.billed_minutes ?? '—'} min. de runner ·{' '}
+          {estimate.cost_usd === null ? 'Custo não atribuível' : '≈ ' + money(estimate.cost_usd)} · {estimate.runner}
+        </p>
+      )}
       <div className="mt-2 flex items-center gap-4">
         <External href={item.html_url}>GitHub</External>
         <button
@@ -117,7 +128,7 @@ function JobItem({ runId, item, isActive, onToggleLog }: JobItemProps) {
 // Componentes Principais
 // ==========================================
 
-export function RunRow({ run }: RunRowProps) {
+export function RunRow({ run, estimate }: RunRowProps) {
   const status = run.conclusion || run.status;
   const currentTone = state(status);
 
@@ -143,6 +154,7 @@ export function RunRow({ run }: RunRowProps) {
         <p className="mt-0.5 truncate text-xs text-carbon-500">
           #{run.run_number} · {date(run.created_at)} · {run.event || 'manual'}
         </p>
+        <div className="mt-1.5"><RunCostInline estimate={estimate} /></div>
       </div>
 
       <Badge tone={currentTone}>{human(status)}</Badge>
@@ -155,6 +167,14 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
   const client = useQueryClient();
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showCostDetails, setShowCostDetails] = useState(false);
+  const costQuery = useQuery({
+    queryKey: ['run-costs', String(id)],
+    queryFn: () => api<RunCostsResponse>('/costs/runs?ids=' + id),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const estimate = costEntry(costQuery.data?.items[String(id)]);
 
   const { data, isPending, error, refetch } = useQuery({
     queryKey: ['run-jobs', id],
@@ -191,6 +211,34 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
         </Button>
       </div>
 
+      <Card className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-carbon-100">Tempo e custo do workflow</p>
+            {costQuery.isPending ? <Spinner /> : costQuery.error
+              ? <p className="text-xs text-carbon-400">Não foi possível calcular o custo.</p>
+              : <RunCostInline estimate={costQuery.data?.items[String(id)]} />}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setShowCostDetails((value) => !value)}>
+            {showCostDetails ? 'Ocultar composição' : 'Ver composição'}
+          </Button>
+        </div>
+        {showCostDetails && (
+          <div className="space-y-2 border-t border-carbon-800 pt-3 text-xs">
+            <p className="text-carbon-400">Somatório bruto do GitHub por minuto arredondado de cada job,
+              sem cota, créditos ou custo das nuvens envolvidas no deploy.</p>
+            <p className="text-carbon-300">Minutos de runner: {estimate?.runner_minutes ?? 'indisponível'}</p>
+            {estimate?.jobs.map((job) => (
+              <div key={job.id} className="flex justify-between gap-2 border-b border-carbon-800/60 py-1">
+                <span className="min-w-0 break-words">{job.name} · {job.runner}</span>
+                <span className="shrink-0 tabular-nums">{secondsLabel(job.duration_seconds)} · {money(job.cost_usd)}</span>
+              </div>
+            ))}
+            {estimate?.incomplete && <p className="text-amber-300">Estimativa parcial: alguns runners não têm tarifa identificável.</p>}
+          </div>
+        )}
+      </Card>
+
       {/* Conteúdo Principal */}
       <Section title={`Execução #${id}`} detail="Etapas, resultados e logs individuais">
         {isPending ? (
@@ -204,6 +252,7 @@ export function RunDetail({ id, onBack }: RunDetailProps) {
                 key={item.id}
                 runId={id}
                 item={item}
+                estimate={estimate?.jobs.find((job) => job.id === item.id)}
                 isActive={activeJobId === item.id}
                 onToggleLog={() => setActiveJobId((prev) => (prev === item.id ? null : item.id))}
               />
