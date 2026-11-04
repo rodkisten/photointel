@@ -29,7 +29,7 @@ if [[ "$FCM_ENABLED" == true && "$FCM_PROJECT" != "$PROJECT" ]]; then
   echo "::error::FCM_PROJECT_ID must match GCP project_id ($PROJECT); refusing cross-project IAM changes" >&2
   exit 2
 fi
-APIS=(bigquery.googleapis.com run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
+APIS=(compute.googleapis.com bigquery.googleapis.com run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
 gcp() { gcloud "$@" "--project=$PROJECT" --quiet; }
 change() { if [[ "$MODE" != "plan" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
@@ -168,6 +168,20 @@ reconcile_manage_access() {
       "--title=PhotoIntel Manage Secret Creator" \
       "--description=Create secret containers only; no delete or IAM changes" \
       --permissions=secretmanager.secrets.create --stage=GA
+  # Read Cloud Build, run allowlisted triggers, and power-cycle only the fixed
+  # terminal VM through application-level guards. The IAM permission
+  # cloudbuild.builds.create is inherently privileged: protect this SA with
+  # dedicated Access WIF and never expose an arbitrary builds.create endpoint.
+  local infra_role="photointelManageInfrastructure"
+  local infra_permissions="cloudbuild.builds.create,cloudbuild.builds.get,cloudbuild.builds.list,compute.instances.get,compute.instances.getSerialPortOutput,compute.instances.start,compute.instances.stop,compute.instances.setScheduling,compute.zoneOperations.get"
+  ensure "Manage infrastructure custom role" \
+    iam roles describe "$infra_role" \
+    @@CREATE@@ iam roles create "$infra_role" \
+      "--title=PhotoIntel Manage infrastructure operations" \
+      "--description=Cloud Build trigger execution and limited VM operations" \
+      "--permissions=$infra_permissions" --stage=GA
+  change projects add-iam-policy-binding "$PROJECT" \
+    "--member=$MANAGE" "--role=projects/$PROJECT/roles/$infra_role" --condition=None --format=none
   for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
     roles/bigquery.jobUser roles/bigquery.dataViewer \
     roles/secretmanager.viewer roles/secretmanager.secretAccessor \
