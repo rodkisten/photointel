@@ -6,6 +6,7 @@
 # without reporting a failed build as successful.
 substitutions:
   _RUN_ID: ""
+  _EVENT_SHA: ""
 steps:
   - id: configuration
     name: python:3.12-slim
@@ -14,7 +15,9 @@ steps:
     args:
       - -ceu
       - |
-        if python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
+        if [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] &&
+           [[ "$COMMIT_SHA" == "${_EVENT_SHA}" ]] &&
+           python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
            CONFIRM_PROJECT=photointel RELEASE_SHA="$COMMIT_SHA" python3 infra/gcp/gcp-env.py; then
           touch /workspace/.manage-config-ok
         else
