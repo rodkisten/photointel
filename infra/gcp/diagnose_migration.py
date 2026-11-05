@@ -15,13 +15,15 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 
 from urllib.parse import quote
 
 from infra.gcp.cloud_cli import run as cloud_run
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 JOB = "photointel-migrate"
 EXECUTION = re.compile(r"photointel-migrate-[a-z0-9-]{3,40}$")
