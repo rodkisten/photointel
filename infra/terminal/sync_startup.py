@@ -12,10 +12,9 @@ import json
 import os
 import subprocess
 from pathlib import Path
-
-from infra import repository_root
 from typing import Any
 
+from infra import repository_root
 from infra.gcp.cloud_cli import run as cloud_run
 
 PROJECT = "photointel"
