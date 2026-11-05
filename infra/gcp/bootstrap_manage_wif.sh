@@ -11,6 +11,8 @@ if [[ -z "$EMAILS" ]]; then
   exit 0
 fi
 command -v gcloud >/dev/null
+command -v python3 >/dev/null
+gcp() { python3 "$(dirname "${BASH_SOURCE[0]}")/cloud_cli.py" "--project=$PROJECT" -- "$@"; }
 command -v curl >/dev/null
 ADMIN_LIST="$(jq -cen --argjson emails "$EMAILS" '
   $emails | if type=="array" and length>0 and length<=12
@@ -22,7 +24,7 @@ TEAM="$(jq -er '.access_team_domain' "$CONFIG")"
 POOL=manage
 PROVIDER=cloudflare-access
 MANAGE_SA="photointel-manage@$PROJECT.iam.gserviceaccount.com"
-project_num="$(gcloud projects describe "$PROJECT" --project="$PROJECT" --format='value(projectNumber)' --quiet)"
+project_num="$(gcp projects describe "$PROJECT" --project="$PROJECT" --format='value(projectNumber)' --quiet)"
 [[ "$project_num" =~ ^[0-9]{6,15}$ ]] || exit 1
 AUDIENCE="//iam.googleapis.com/projects/$project_num/locations/global/workloadIdentityPools/$POOL/providers/$PROVIDER"
 expected_audience="$(jq -r '.extra_environment.MANAGE_GCP_WIF_AUDIENCE // ""' "$CONFIG")"
@@ -36,7 +38,7 @@ secret_ref() {
   name="$(jq -r --arg key "$key" '.workflow_secrets[$key].name // empty' "$CONFIG")"
   version="$(jq -r --arg key "$key" '.workflow_secrets[$key].version // empty' "$CONFIG")"
   [[ -n "$name" && "$version" =~ ^[0-9]+$ ]] || return 1
-  gcloud secrets versions access "$version" --secret="$name" --project="$PROJECT" --quiet 2>/dev/null
+  gcp secrets versions access "$version" --secret="$name" --project="$PROJECT" --quiet 2>/dev/null
 }
 cf_token="$(secret_ref CLOUDFLARE_API_TOKEN)" || { echo "::error::Cloudflare API secret unavailable to GCP bootstrap" >&2; exit 1; }
 cf_account="$(secret_ref CLOUDFLARE_ACCOUNT_ID)" || { echo "::error::Cloudflare account secret unavailable to GCP bootstrap" >&2; exit 1; }
@@ -60,23 +62,23 @@ jq -e '{keys: [.keys[] | select(.kty == "RSA" and .kid and .n and .e)]}
   | select(.keys | length > 0)' "$tmp/certs.json" > "$tmp/jwks.json" ||
   { echo "::error::Cloudflare Access RSA JWKS unavailable; federation not changed" >&2; exit 1; }
 condition="assertion.email in $ADMIN_LIST"
-gcloud iam workload-identity-pools describe "$POOL" --location=global --project="$PROJECT" --quiet >/dev/null 2>&1 ||
-  gcloud iam workload-identity-pools create "$POOL" --location=global --project="$PROJECT" \
+gcp iam workload-identity-pools describe "$POOL" --location=global --project="$PROJECT" --quiet >/dev/null 2>&1 ||
+  gcp iam workload-identity-pools create "$POOL" --location=global --project="$PROJECT" \
     --display-name="PhotoIntel Manage Access" --quiet
-if gcloud iam workload-identity-pools providers describe "$PROVIDER" \
+if gcp iam workload-identity-pools providers describe "$PROVIDER" \
     --workload-identity-pool="$POOL" --location=global --project="$PROJECT" --quiet >/dev/null 2>&1; then
   op=update-oidc
 else
   op=create-oidc
 fi
-gcloud iam workload-identity-pools providers "$op" "$PROVIDER" \
+gcp iam workload-identity-pools providers "$op" "$PROVIDER" \
   --location=global --workload-identity-pool="$POOL" --project="$PROJECT" \
   --issuer-uri="https://$TEAM" --allowed-audiences="$aud" \
   --attribute-mapping="google.subject=assertion.sub,attribute.email=assertion.email" \
   --attribute-condition="$condition" --jwk-json-path="$tmp/jwks.json" --quiet
 # Scoped IAM grants: an authenticated email in this *dedicated provider*, not the pool.
 jq -r '.[]' <<< "$ADMIN_LIST" | while IFS= read -r email; do
-  gcloud iam service-accounts add-iam-policy-binding "$MANAGE_SA" --project="$PROJECT" \
+  gcp iam service-accounts add-iam-policy-binding "$MANAGE_SA" --project="$PROJECT" \
     --member="principalSet://iam.googleapis.com/projects/$project_num/locations/global/workloadIdentityPools/$POOL/attribute.email/$email" \
     --role=roles/iam.workloadIdentityUser --condition=None --format=none --quiet
 done
