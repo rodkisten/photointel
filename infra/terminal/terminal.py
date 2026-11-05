@@ -12,6 +12,8 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'infra/gcp'))
+from cloud_cli import run as cloud_run, classify as cloud_classify
 
 
 def configuration(raw: dict) -> dict:
@@ -66,22 +68,15 @@ class Gcloud:
         self.project = project
 
     def run(self, *args, optional=False):
-        result = subprocess.run(['gcloud', *args, '--project', self.project, '--quiet', '--format=json'],
-                                capture_output=True, text=True, check=False)
+        result = cloud_run([*args, '--format=json'], project=self.project, timeout=120)
         if result.returncode:
             # Classify only safe codes/permission identifiers, never dump raw output.
-            error = result.stderr.lower()
-            denied = any(code in error for code in ('permission_denied', 'permission denied',
-                         'does not have permission', 'forbidden', '403', 'required permission'))
-            if optional and not denied and any(code in error for code in
-                    ('not_found', 'was not found', 'does not exist', 'not found', '404')):
+            classification = cloud_classify(result.stderr)
+            denied = classification.code == 'PERMISSION_DENIED'
+            if optional and classification.code == 'NOT_FOUND':
                 return None
-            details = sorted(set(re.findall(r'\b(?:compute|iam|artifactregistry|serviceusage)\.[A-Za-z]+\.[A-Za-z]+\b', result.stderr)))
-            reason = ('PERMISSION_DENIED' if denied else
-                      'NOT_FOUND' if any(marker in error for marker in
-                          ('not_found', 'was not found', 'does not exist', 'not found', '404'))
-                      else 'UNAUTHENTICATED' if 'unauthenticated' in error
-                      else 'PROVIDER_ERROR')
+            details = classification.permissions
+            reason = classification.code
             hint = ''
             if args[:2] == ('compute', 'firewall-rules') and denied:
                 hint = ' Run Setup GCP apply: bootstrap needs roles/compute.securityAdmin.'
@@ -104,9 +99,9 @@ def image_base(c):
 def configure_registry(c):
     """Use GitHub WIF's existing Docker credential helper, never static keys."""
     registry = image_base(c).split('/', 1)[0]
-    subprocess.run(
-        ['gcloud', 'auth', 'configure-docker', registry, '--quiet'],
-        check=True,
+    cloud_run(
+        ['auth', 'configure-docker', registry],
+        project=c['project'], timeout=60, check=True,
     )
 
 
