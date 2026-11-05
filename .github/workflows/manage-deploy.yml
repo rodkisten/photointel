@@ -68,12 +68,12 @@ jobs:
       - name: "🔎 Configure Manage Sentry browser DSN"
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/deploy_manage.py browser-env
+        run: python3 -m infra.scripts.deploy_manage browser-env
       - name: "🏗 Build management assets"
         if: ${{ inputs.mode != 'plan' }}
         run: npm --prefix apps/manage run build
       - name: "☁️ Reconcile Access, domain and Worker"
-        run: python3 infra/scripts/deploy_manage.py "${{ inputs.mode || 'apply' }}"
+        run: python3 -m infra.scripts.deploy_manage "${{ inputs.mode || 'apply' }}"
       - name: "🧹 Remove temporary production config"
         if: always()
         uses: ./.github/actions/gcp-config
