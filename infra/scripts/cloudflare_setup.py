@@ -19,6 +19,7 @@ from pathlib import Path
 
 from infra import repository_root
 
+
 ROOT = repository_root(__file__)
 MANAGED_POLICY = 'photointel-allowed-emails'
 
