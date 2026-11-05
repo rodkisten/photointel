@@ -137,7 +137,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         runner = (ROOT / "infra/gcp/release.sh").read_text(encoding="utf-8")
         self.assertIn("infra/gcp/migration-requirements.txt", runner)
         self.assertIn('python3 -m venv', runner)
-        self.assertIn('infra/gcp/migrate_workflow.py', runner)
+        self.assertIn('infra.gcp.migrate_workflow', runner)
         script = (ROOT / "infra/gcp/migrate_workflow.py").read_text(encoding="utf-8")
         self.assertIn("alembic", script)
         self.assertIn("photointel-migrate@", script)
