@@ -39,7 +39,7 @@ shared CLI on failure; errors use `CLOUD_CLI_ERROR PERMISSION_DENIED`,
 ## Python
 
 ```python
-from cloud_cli import run, classify
+from infra.gcp.cloud_cli import run, classify
 
 result = run(
     ["run", "services", "describe", "photointel-api",
@@ -110,3 +110,21 @@ bash -n infra/gcp/bootstrap.sh infra/gcp/bootstrap_manage_wif.sh
 ```
 
 The unit tests mock subprocess. They do not contact GCP or incur costs.
+
+## Installed entrypoints
+
+Install the project from its checkout without pulling its optional API/ML
+runtime dependencies when only administration is needed:
+
+```bash
+python3 -m pip install --no-deps -e .
+photointel-gcloud --project photointel -- run services list --enabled
+photointel-gcp doctor --config infra/gcp/config.local.json
+photointel-vm-sync
+```
+
+The project declares CLI entrypoints in pyproject.toml. For operations that
+need repository files (deploy, VM startup sync, Secret Manager references),
+run from your checkout or set PHOTOINTEL_REPO_ROOT=/absolute/path/to/photointel.
+The pure photointel-gcloud transport works independently of a checkout.
+The dotenv parser lives at infra.gcp.gcp_env, not a hyphenated Python file.
