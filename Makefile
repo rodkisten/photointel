@@ -144,7 +144,7 @@ release-manifest:
 # Read-only plans are the default. Mutation needs all explicit authorization flags.
 .PHONY: gcp-doctor gcp-bootstrap gcp-build gcp-deploy gcp-migrate gcp-jobs-deploy gcp-scheduler gcp-smoke gcp-rollback gcp-cleanup gcp-render
 gcp-doctor gcp-bootstrap gcp-build gcp-deploy gcp-migrate gcp-jobs-deploy gcp-scheduler gcp-smoke gcp-rollback gcp-cleanup gcp-render:
-	python3 infra/gcp/manage.py $(@:gcp-%=%) --config "$(GCP_CONFIG)" $(GCP_ARGS)
+	python3 -m infra.gcp.manage $(@:gcp-%=%) --config "$(GCP_CONFIG)" $(GCP_ARGS)
 
 benchmark: ASSETS=10000
 benchmark:
