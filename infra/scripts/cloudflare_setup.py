@@ -17,7 +17,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from infra import repository_root
+
+ROOT = repository_root(__file__)
 MANAGED_POLICY = 'photointel-allowed-emails'
 
 
