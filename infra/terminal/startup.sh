@@ -9,8 +9,30 @@ trap 'result=$?; echo "terminal-startup: FAILED stage=$terminal_stage exit=$resu
 meta() { curl --fail --silent --show-error --retry 5 -H 'Metadata-Flavor: Google' "http://metadata.google.internal/computeMetadata/v1/$1"; }
 cfg="$(meta instance/attributes/terminal-config)"
 project="$(meta project/project-id)"
-minutes="$(jq -er '.max_minutes' <<< "$cfg")"
-# Arm before package/network operations; setup failures must still shut down.
+# The Debian host may be freshly provisioned and have no jq at all.
+# GCE's max-run-duration + STOP action remain an independent hard stop
+# while this small first-boot prerequisite is installed.
+# Repair public Tailscale APT files *before any apt-get update*, including
+# the one needed to bootstrap jq. Secrets retain umask 077.
+tailscale_keyring=/usr/share/keyrings/tailscale-archive-keyring.gpg
+tailscale_sources=/etc/apt/sources.list.d/tailscale.list
+for apt_public_file in "$tailscale_keyring" "$tailscale_sources"; do
+  if [[ -f "$apt_public_file" ]]; then
+    chmod 0644 "$apt_public_file"
+  fi
+done
+echo 'terminal-startup: apt source permissions checked'
+if ! command -v jq >/dev/null 2>&1; then
+  terminal_stage=bootstrap-jq
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y --no-install-recommends jq
+  echo 'terminal-startup: jq bootstrapped'
+fi
+terminal_stage=metadata
+minutes="$(jq -er '.max_minutes | select(type == "number" and floor == . and . >= 15 and . <= 720)' <<< "$cfg")"
+# Arm immediately after minimal jq bootstrap. Compute Engine's independently
+# configured max-run-duration / STOP still bounds startup failures before this.
 cat > /etc/systemd/system/terminal-deadline.service <<'UNIT'
 [Unit]
 Description=Stop terminal VM at session deadline
@@ -32,19 +54,6 @@ systemctl daemon-reload
 systemctl enable --now terminal-deadline.timer
 terminal_stage=apt
 export DEBIAN_FRONTEND=noninteractive
-# On the first boot this script used umask 077 for all files, including the
-# public Tailscale keyring. APT verifies repositories as the unprivileged _apt
-# user, so mode 0600 makes the correct key unreadable and produces a misleading
-# "repository is not signed" / GPG verification error. Repair any files left by
-# a previous failed boot BEFORE the first apt-get update.
-tailscale_keyring=/usr/share/keyrings/tailscale-archive-keyring.gpg
-tailscale_sources=/etc/apt/sources.list.d/tailscale.list
-for apt_public_file in "$tailscale_keyring" "$tailscale_sources"; do
-  if [[ -f "$apt_public_file" ]]; then
-    chmod 0644 "$apt_public_file"
-  fi
-done
-echo 'terminal-startup: apt source permissions checked'
 apt-get update -qq
 apt-get install -y --no-install-recommends docker.io curl jq ca-certificates gnupg
 systemctl enable --now docker
@@ -73,7 +82,13 @@ mkdir -p /etc/ssh/sshd_config.d
 printf 'ListenAddress 127.0.0.1\nPasswordAuthentication no\nPermitRootLogin no\n' > /etc/ssh/sshd_config.d/00-terminal.conf
 systemctl restart ssh || true
 install -d -m 0700 /run/terminal
-trap 'rm -f /run/terminal/*' EXIT
+cleanup_terminal_auth() {
+  # Every file here contains sensitive authentication material and stays on
+  # tmpfs. Cleanup is idempotent, including after an earlier failed stage.
+  rm -f -- /run/terminal/client /run/terminal/secret /run/terminal/oauth \
+    /run/terminal/header /run/terminal/request /run/terminal/key 2>/dev/null || true
+}
+trap cleanup_terminal_auth EXIT
 access_token="$(meta instance/service-accounts/default/token | jq -er .access_token)"
 secret() {
   local name version response
@@ -307,4 +322,16 @@ if ! id rod >/dev/null 2>&1; then useradd -m -s /usr/local/bin/terminal-shell ro
 usermod -aG docker -s /usr/local/bin/terminal-shell rod
 grep -qxF /usr/local/bin/terminal-shell /etc/shells || echo /usr/local/bin/terminal-shell >> /etc/shells
 terminal_stage=ready
-echo "Terminal ready: ssh rod@$(tailscale ip -4). Maximum uptime: $minutes minutes."
+# Do not report a successful boot until the Tailscale endpoint and the actual
+# container are ready. The prior script could print "Terminal ready" and then
+# exit with stage=ready/exit=1, causing false-positive monitoring.
+terminal_ip="$(tailscale ip -4)"
+[[ "$terminal_ip" =~ ^100\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]
+[[ "$(docker inspect --format '{{.State.Running}}' photointel-terminal)" == true ]]
+docker exec --user rod --workdir /home/rod photointel-terminal \
+  /bin/bash -lc 'command -v gcloud >/dev/null && command -v zsh >/dev/null && command -v git >/dev/null'
+# All possible failing work, including secret cleanup, precedes the ready event.
+cleanup_terminal_auth
+trap - EXIT
+echo 'terminal-startup: COMPLETE'
+echo "Terminal ready: ssh rod@$terminal_ip. Maximum uptime: $minutes minutes."

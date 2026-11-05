@@ -1,8 +1,10 @@
 """Offline tests of cost boundaries, command authorization and VM lifecycle."""
 import unittest
 import json
+from pathlib import Path
 from datetime import datetime, timezone
 import boot_logs
+import sync_startup
 from unittest.mock import patch
 
 import terminal
@@ -48,6 +50,74 @@ class TerminalTests(unittest.TestCase):
         self.assertIn('tailscale-archive-keyring', script)
         self.assertIn('umask 077', script)
         self.assertIn('source installed', script)
+
+    def test_clean_debian_bootstraps_jq_before_reading_configuration(self):
+        script = (terminal.ROOT / 'infra/terminal/startup.sh').read_text()
+        repair = script.index('chmod 0644 "$apt_public_file"')
+        first_apt = script.index('apt-get update -qq')
+        bootstrap = script.index('if ! command -v jq')
+        parse = script.index('minutes="$(jq -er')
+        self.assertLess(repair, first_apt)
+        self.assertLess(bootstrap, parse)
+        self.assertLess(first_apt, parse)
+        self.assertIn('terminal_stage=bootstrap-jq', script)
+        self.assertIn('floor == . and . >= 15 and . <= 720', script)
+
+    def test_no_false_terminal_ready_before_secret_cleanup_and_runtime_checks(self):
+        script = (terminal.ROOT / 'infra/terminal/startup.sh').read_text()
+        self.assertLess(script.index('cleanup_terminal_auth\ntrap - EXIT'),
+                        script.index("echo 'terminal-startup: COMPLETE'"))
+        self.assertLess(script.index("echo 'terminal-startup: COMPLETE'"),
+                        script.index('echo "Terminal ready:'))
+        self.assertIn('docker inspect --format', script)
+        self.assertIn('terminal_ip="$(tailscale ip -4)"', script)
+
+    def test_metadata_sync_is_idempotent_and_never_stops_vm(self):
+        source = sync_startup.SCRIPT.read_text()
+        info = {
+            'name': 'photointel-terminal',
+            'machineType': 'projects/photointel/zones/us-central1-a/machineTypes/e2-micro',
+            'status': 'RUNNING',
+            'labels': {'app': 'photointel', 'purpose': 'terminal'},
+            'metadata': {'items': [
+                {'key': 'terminal-config', 'value': '{"max_minutes":120}'},
+                {'key': 'startup-script', 'value': source},
+            ]},
+        }
+        with patch('sync_startup.gcloud', return_value=json.dumps(info)) as cloud:
+            self.assertEqual(sync_startup.sync(apply=True), 'unchanged')
+            self.assertEqual(len(cloud.call_args_list), 1)
+        info['metadata']['items'][1]['value'] = 'old script'
+        with __import__('tempfile').TemporaryDirectory() as directory, \
+             patch('sync_startup.gcloud', return_value=json.dumps(info)) as cloud, \
+             patch('sync_startup.Path.home', return_value=Path(directory)):
+            # Backup stays inside a temporary directory; no VM changes here.
+            self.assertEqual(sync_startup.sync(apply=True), 'updated')
+            calls = [call.args for call in cloud.call_args_list]
+            self.assertEqual(len(calls), 2)
+            self.assertIn('add-metadata', calls[1])
+            self.assertIn('--metadata-from-file=startup-script=' + str(sync_startup.SCRIPT), calls[1])
+            self.assertFalse(any(
+                arg in {'stop', 'start'} for operation in calls for arg in operation
+            ))
+
+    def test_metadata_sync_rejects_wrong_vm_and_preserves_terminal_config(self):
+        info = {
+            'name': 'photointel-terminal',
+            'machineType': 'zones/us-central1-a/machineTypes/e2-micro',
+            'labels': {'purpose': 'other', 'app': 'photointel'},
+            'metadata': {'items': [{'key': 'terminal-config', 'value': '{}'}]},
+        }
+        with patch('sync_startup.gcloud', return_value=json.dumps(info)) as cloud:
+            with self.assertRaisesRegex(ValueError, 'Refusing'):
+                sync_startup.sync(apply=True)
+            self.assertEqual(len(cloud.call_args_list), 1)
+        info['labels']['purpose'] = 'terminal'
+        info['metadata']['items'] = []
+        with patch('sync_startup.gcloud', return_value=json.dumps(info)) as cloud:
+            with self.assertRaisesRegex(ValueError, 'terminal-config'):
+                sync_startup.sync(apply=True)
+            self.assertEqual(len(cloud.call_args_list), 1)
 
     def test_docker_first_boot_emits_safe_progress_checkpoints(self):
         script = (terminal.ROOT / 'infra/terminal/startup.sh').read_text()
