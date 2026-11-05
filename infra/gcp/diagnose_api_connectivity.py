@@ -15,10 +15,9 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-
-from infra import repository_root
 from typing import Any
 
+from infra import repository_root
 from infra.gcp.cloud_cli import run as cloud_run
 
 ROOT = repository_root(__file__)
