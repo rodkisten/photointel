@@ -70,7 +70,7 @@ class CloudRunStartupDiagnosticsTests(unittest.TestCase):
         self.assertEqual(len(entries), 1)
         args = run.call_args.args[0]
         self.assertEqual(args[:3], ["gcloud", "logging", "read"])
-        self.assertIn("--project", args)
+        self.assertIn("--project=photointel", args)
         self.assertNotIn("secrets", args)
         self.assertTrue(run.call_args.kwargs["capture_output"])
 
