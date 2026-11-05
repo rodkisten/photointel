@@ -12,8 +12,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def configuration(raw: dict) -> dict:
