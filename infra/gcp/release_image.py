@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cloud_cli import run as cloud_run, classify as cloud_classify
+from cloud_cli import run as cloud_run, classify as cloud_classify  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
