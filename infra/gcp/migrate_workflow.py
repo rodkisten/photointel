@@ -24,8 +24,8 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from manage import ConfigurationError, validate, verify_backup_receipt
-from cloud_cli import run as cloud_run
+from manage import ConfigurationError, validate, verify_backup_receipt  # noqa: E402
+from cloud_cli import run as cloud_run  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 # This script is run by its file path inside an isolated venv. Python adds
