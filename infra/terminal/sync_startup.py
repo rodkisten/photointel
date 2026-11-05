@@ -12,6 +12,8 @@ import json
 import os
 import subprocess
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 
 from infra.gcp.cloud_cli import run as cloud_run
@@ -19,7 +21,7 @@ from infra.gcp.cloud_cli import run as cloud_run
 PROJECT = "photointel"
 ZONE = "us-central1-a"
 INSTANCE = "photointel-terminal"
-SCRIPT = Path(__file__).resolve().parent / "startup.sh"
+SCRIPT = repository_root(__file__) / "infra/terminal/startup.sh"
 
 
 def gcloud(*args: str) -> str:
