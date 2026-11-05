@@ -18,8 +18,8 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
-from cloudflare_setup import client, policy, reconcile_app, SetupError
-from prepare_workflow_env import read_config, secret_value
+from infra.scripts.cloudflare_setup import client, policy, reconcile_app, SetupError
+from infra.scripts.prepare_workflow_env import read_config, secret_value
 
 ROOT = Path(__file__).resolve().parents[2]
 MANAGE = ROOT / "apps/manage"
