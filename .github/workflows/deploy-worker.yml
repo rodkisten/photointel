@@ -112,7 +112,7 @@ jobs:
         id: worker_env
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py worker
+        run: python3 -m infra.scripts.prepare_workflow_env worker
 
       - name: "🔎 Diagnose Access domain and application audience"
         continue-on-error: true
@@ -131,7 +131,7 @@ jobs:
         id: notify_observed_004
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py worker-build
+        run: python3 -m infra.scripts.prepare_workflow_env worker-build
       - name: "📱 Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
@@ -178,7 +178,7 @@ jobs:
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py worker-deploy
+        run: python3 -m infra.scripts.prepare_workflow_env worker-deploy
 
       - name: "📱 Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
