@@ -6,6 +6,8 @@ import os
 import subprocess
 import tempfile
 
+from cloud_cli import run as cloud_run
+
 PROJECT = "photointel"
 REGION = "us-central1"
 JOB = "photointel-icloud-preflight"
@@ -34,10 +36,7 @@ asyncio.run(check())
 
 
 def call(arguments, *, required=True):
-    result = subprocess.run(
-        ["gcloud", *arguments, "--project", PROJECT, "--quiet"],
-        capture_output=True, text=True, check=False, timeout=240,
-    )
+    result = cloud_run(arguments, project=PROJECT, timeout=240)
     if result.returncode and required:
         raise RuntimeError("Preflight não concluiu; confira IAM e os logs do Job")
     return result
