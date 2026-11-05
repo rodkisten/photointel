@@ -5,7 +5,10 @@ MODE="${BOOTSTRAP_MODE:-plan}"
 CONFIG="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
 [[ "$MODE" == "plan" || "$MODE" == "apply" || "$MODE" == "permissions" ]] || { echo "::error::Invalid mode" >&2; exit 2; }
 command -v jq >/dev/null || { echo "::error::jq is required" >&2; exit 2; }
-if [[ "$MODE" != plan ]]; then command -v gcloud >/dev/null || { echo "::error::gcloud is required for IAM/apply" >&2; exit 2; }; fi
+if [[ "$MODE" != plan ]]; then
+  command -v gcloud >/dev/null || { echo "::error::gcloud is required for IAM/apply" >&2; exit 2; }
+  command -v python3 >/dev/null || { echo "::error::Python3 is required for the shared GCP client" >&2; exit 2; }
+fi
 PROJECT="$(jq -er '.project_id' "$CONFIG")"
 REGION="$(jq -er '.region' "$CONFIG")"
 REPO="$(jq -er '.repository' "$CONFIG")"
