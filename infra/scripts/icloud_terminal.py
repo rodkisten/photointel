@@ -19,8 +19,9 @@ import urllib.request
 import venv
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
 from infra.gcp.cloud_cli import run as cloud_run
+
+ROOT = Path(__file__).resolve().parents[2]
 RUNTIME_SECRETS = frozenset({"DATABASE_URL", "STORAGE_ACCESS_KEY", "STORAGE_SECRET_KEY",
                              "ICLOUD_SESSION_KEY", "BRIDGE_TOKEN_PEPPER"})
 REQUIRED = RUNTIME_SECRETS
