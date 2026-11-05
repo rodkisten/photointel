@@ -91,13 +91,18 @@ choose_mode() {
   done
 }
 
-for arg in "$@"; do
-  case "$arg" in
-    --yes|-y) YES=1 ;;
-    --no-tmux) NO_TMUX=1 ;;
-    --env-file) die '--env-file requires a path (use --env-file=/path)' ;;
-    --env-file=*) export PHOTOINTEL_CONFIG_ENV_FILE="${arg#--env-file=}" ;;
-    *) die "Unknown argument: $arg" ;;
+while (( $# )); do
+  case "$1" in
+    --yes|-y) YES=1; shift ;;
+    --no-tmux) NO_TMUX=1; shift ;;
+    --env-file)
+      (( $# >= 2 )) || die 'Missing --env-file path'
+      export PHOTOINTEL_CONFIG_ENV_FILE="$2"
+      shift 2 ;;
+    --env-file=*)
+      export PHOTOINTEL_CONFIG_ENV_FILE="${1#--env-file=}"
+      shift ;;
+    *) die "Unknown argument: $1" ;;
   esac
 done
 
