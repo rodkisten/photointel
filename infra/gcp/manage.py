@@ -1286,9 +1286,15 @@ def main() -> None:
             )
 
 
-if __name__ == "__main__":
+def cli() -> int:
+    """Console script and module entrypoint share safe error formatting."""
     try:
         main()
+        return 0
     except (ConfigurationError, KeyError, json.JSONDecodeError) as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
-        raise SystemExit(2) from None
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())
