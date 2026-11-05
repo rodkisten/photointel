@@ -12,7 +12,6 @@ import argparse
 import json
 import re
 import subprocess
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
