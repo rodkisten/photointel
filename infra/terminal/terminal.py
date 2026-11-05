@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'infra/gcp'))
-from cloud_cli import run as cloud_run, classify as cloud_classify
+from cloud_cli import run as cloud_run, classify as cloud_classify  # noqa: E402
 
 
 def configuration(raw: dict) -> dict:
