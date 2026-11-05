@@ -8,8 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "infra/gcp"))
-import cloud_cli  # noqa: E402
+from infra.gcp import cloud_cli
 
 
 class CloudCLIContractTests(unittest.TestCase):
