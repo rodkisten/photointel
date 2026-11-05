@@ -530,13 +530,13 @@ function gcloudInvocation(args) {
   if (!project) {
     throw new ConfigurationError('Explicit GCP project required for shared CLI');
   }
-  return ['python3', [path.join(ROOT, 'infra/gcp/cloud_cli.py'), '--project=' + project, '--', ...args]];
+  return ['python3', ['-m', 'infra.gcp.cloud_cli', '--project=' + project, '--', ...args]];
 }
 
 function runChecked(binary, args, { capture = false, cwd, timeout = 3_600_000, input } = {}) {
   const [cmd, argv] = binary === 'gcloud' ? gcloudInvocation(args) : [binary, args];
   const result = spawnSync(cmd, argv, {
-    cwd,
+    cwd: binary === 'gcloud' ? ROOT : cwd,
     timeout,
     input,
     encoding: input === undefined ? 'utf8' : undefined,
@@ -557,6 +557,7 @@ function runChecked(binary, args, { capture = false, cwd, timeout = 3_600_000, i
 function runProbe(binary, args, { timeout = 60_000 } = {}) {
   const [cmd, argv] = binary === 'gcloud' ? gcloudInvocation(args) : [binary, args];
   const result = spawnSync(cmd, argv, {
+    cwd: binary === 'gcloud' ? ROOT : undefined,
     encoding: 'utf8',
     timeout,
     maxBuffer: 16 * 1024 * 1024,
