@@ -20,7 +20,6 @@ import venv
 from pathlib import Path
 
 from infra import repository_root
-
 from infra.gcp.cloud_cli import run as cloud_run
 
 ROOT = repository_root(__file__)
