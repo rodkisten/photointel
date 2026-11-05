@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from cloud_cli import run as cloud_run
+
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SERVICE = "photointel-api"
@@ -111,19 +113,10 @@ def read_logs(project: str, service: str, region: str) -> list[dict[str, Any]]:
         f'AND resource.labels.service_name="{service}" '
         f'AND resource.labels.location="{region}"'
     )
-    result = subprocess.run(
-        [
-            "gcloud", "logging", "read", filter_expression,
-            "--project", project,
-            "--freshness=15m",
-            "--limit=100",
-            "--format=json",
-            "--quiet",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=45,
-        check=False,
+    result = cloud_run(
+        ["logging", "read", filter_expression,
+         "--freshness=15m", "--limit=100", "--format=json"],
+        project=project, timeout=45,
     )
     if result.returncode:
         raise RuntimeError("Cloud Logging could not be read. The deployer may need "
