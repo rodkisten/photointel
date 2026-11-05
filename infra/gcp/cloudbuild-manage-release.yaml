@@ -12,7 +12,7 @@ steps:
         python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4
         export CONFIRM_PROJECT=photointel
         export RELEASE_SHA="$COMMIT_SHA"
-        python3 infra/gcp/gcp-env.py
+        python3 -m infra.gcp.gcp_env
   - id: image
     name: gcr.io/cloud-builders/docker
     args:
@@ -33,10 +33,10 @@ steps:
       - -ceu
       - |
         export CONFIRM_PROJECT=photointel
-        python3 infra/gcp/manage.py render
-        python3 infra/gcp/manage.py jobs-deploy --apply --authorize-charges --confirm-project photointel
-        python3 infra/gcp/manage.py deploy --apply --authorize-charges --confirm-project photointel
-        python3 infra/gcp/manage.py scheduler --apply --authorize-charges --confirm-project photointel
+        python3 -m infra.gcp.manage render
+        python3 -m infra.gcp.manage jobs-deploy --apply --authorize-charges --confirm-project photointel
+        python3 -m infra.gcp.manage deploy --apply --authorize-charges --confirm-project photointel
+        python3 -m infra.gcp.manage scheduler --apply --authorize-charges --confirm-project photointel
 availableSecrets:
   secretManager:
     - versionName: projects/photointel/secrets/photointel-gcp-config/versions/latest
