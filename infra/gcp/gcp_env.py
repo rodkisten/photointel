@@ -10,13 +10,11 @@ from __future__ import annotations
 import json
 import os
 import pathlib
-
-from infra import repository_root
 import re
 from io import StringIO
 from typing import Any
 
-
+from infra import repository_root
 from infra.gcp.manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
 
 ROOT = repository_root(__file__)
