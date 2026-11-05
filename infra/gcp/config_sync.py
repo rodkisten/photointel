@@ -12,12 +12,11 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-
-from infra import repository_root
 from typing import Any
 
-from infra.gcp.manage import render
+from infra import repository_root
 from infra.gcp.cloud_cli import run as cloud_run
+from infra.gcp.manage import render
 
 ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
