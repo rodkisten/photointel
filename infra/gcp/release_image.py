@@ -14,11 +14,13 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 
 from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SHA_PATTERN = re.compile(r"[a-f0-9]{40}")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}")
