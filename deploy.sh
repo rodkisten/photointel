@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PhotoIntel unified manual deployment CLI.
 # Install: bash deploy.sh install
-# Then: deploy all | gcp | cloudflare | manage | access | verify
+# Then: deploy all | gcp | cloudflare | web | manage | access | verify
 set -Eeuo pipefail
 umask 077
 
@@ -23,7 +23,8 @@ PhotoIntel deployment CLI
   deploy                      Interactive menu
   deploy all                  GCP API/jobs/scheduler + Access/R2 + web + Manage
   deploy gcp                  Cloud Build (only if missing), jobs, API, scheduler
-  deploy cloudflare           Access/R2 + photointel web Worker and assets
+  deploy cloudflare           Access/R2 + BOTH PhotoIntel and Manage Workers
+  deploy web                  Access/R2 + photointel web Worker and assets
   deploy manage               Independent Manage Access + Worker
   deploy access               Reconcile Access/R2 and sync API/jobs audiences
   deploy plan                 Read-only Cloudflare and Manage plans
@@ -81,9 +82,9 @@ install_cli() {
 choose_mode() {
   printf 'PhotoIntel deployment\n'
   PS3='Select: '
-  select choice in all gcp cloudflare manage access plan verify doctor quit; do
+  select choice in all gcp cloudflare web manage access plan verify doctor quit; do
     case "$choice" in
-      all|gcp|cloudflare|manage|access|plan|verify|doctor)
+      all|gcp|cloudflare|web|manage|access|plan|verify|doctor)
         MODE="$choice"; return ;;
       quit) exit 0 ;;
       *) printf 'Choose a valid item.\n' ;;
@@ -119,7 +120,7 @@ if [[ "$MODE" == menu ]]; then
   choose_mode
 fi
 case "$MODE" in
-  all|gcp|cloudflare|manage|access|plan|verify|doctor) ;;
+  all|gcp|cloudflare|web|manage|access|plan|verify|doctor) ;;
   *) usage; die "Invalid mode: $MODE" ;;
 esac
 
@@ -127,7 +128,7 @@ esac
 if [[ "$NO_TMUX" == 0 && -z "${TMUX:-}" && -t 0 ]] &&
    command -v tmux >/dev/null 2>&1; then
   case "$MODE" in
-    all|gcp|cloudflare|manage|access)
+    all|gcp|cloudflare|web|manage|access)
       printf -v tmux_cmd '%q ' bash "$ROOT/deploy.sh" "$MODE" --no-tmux
       if [[ "$YES" == 1 ]]; then tmux_cmd+=" --yes"; fi
       if [[ -n "${PHOTOINTEL_CONFIG_ENV_FILE:-}" ]]; then
@@ -369,7 +370,7 @@ case "$MODE" in
       verify)
         verify_public
         ;;
-      all|gcp|cloudflare|manage|access)
+      all|gcp|cloudflare|web|manage|access)
         confirm_apply
         case "$MODE" in
           all)
@@ -380,7 +381,8 @@ case "$MODE" in
             verify_public
             ;;
           gcp) gcp_deploy ;;
-          cloudflare) access_apply; web_deploy; verify_public ;;
+          cloudflare) access_apply; web_deploy; manage_deploy; verify_public ;;
+          web) access_apply; web_deploy; verify_public ;;
           manage) manage_deploy ;;
           access) access_apply; verify_public ;;
         esac
