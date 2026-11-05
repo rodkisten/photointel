@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from manage import ConfigurationError, validate, verify_backup_receipt
 from cloud_cli import run as cloud_run
 
