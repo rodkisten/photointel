@@ -21,11 +21,10 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-
-from infra import repository_root
 from typing import Any
 from urllib.parse import urlsplit
 
+from infra import repository_root
 from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
 
 ROOT = repository_root(__file__)
