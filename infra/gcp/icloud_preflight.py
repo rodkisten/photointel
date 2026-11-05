@@ -8,8 +8,7 @@ import tempfile
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cloud_cli import run as cloud_run  # noqa: E402
+from infra.gcp.cloud_cli import run as cloud_run
 
 PROJECT = "photointel"
 REGION = "us-central1"
