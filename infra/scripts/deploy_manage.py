@@ -14,12 +14,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
-from infra import repository_root
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+from infra import repository_root
 from infra.scripts.cloudflare_setup import client, policy, reconcile_app, SetupError
 from infra.scripts.prepare_workflow_env import read_config, secret_value
 
