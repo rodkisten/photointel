@@ -5,8 +5,6 @@ import json
 import os
 import subprocess
 import tempfile
-import sys
-from pathlib import Path
 
 from infra.gcp.cloud_cli import run as cloud_run
 
