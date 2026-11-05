@@ -62,14 +62,23 @@ jq -e '{keys: [.keys[] | select(.kty == "RSA" and .kid and .n and .e)]}
   | select(.keys | length > 0)' "$tmp/certs.json" > "$tmp/jwks.json" ||
   { echo "::error::Cloudflare Access RSA JWKS unavailable; federation not changed" >&2; exit 1; }
 condition="assertion.email in $ADMIN_LIST"
-gcp iam workload-identity-pools describe "$POOL" --location=global --project="$PROJECT" --quiet >/dev/null 2>&1 ||
-  gcp iam workload-identity-pools create "$POOL" --location=global --project="$PROJECT" \
-    --display-name="PhotoIntel Manage Access" --quiet
-if gcp iam workload-identity-pools providers describe "$PROVIDER" \
-    --workload-identity-pool="$POOL" --location=global --project="$PROJECT" --quiet >/dev/null 2>&1; then
-  op=update-oidc
+if result="$(gcp iam workload-identity-pools describe "$POOL" --location=global 2>&1)"; then
+  :  # Existing pool; no mutation needed.
+elif [[ "$result" == *"CLOUD_CLI_ERROR NOT_FOUND"* ]]; then
+  gcp iam workload-identity-pools create "$POOL" --location=global \
+    --display-name="PhotoIntel Manage Access"
 else
+  echo "::error::Manage WIF pool lookup failed; not creating on ambiguous error" >&2
+  exit 1
+fi
+if result="$(gcp iam workload-identity-pools providers describe "$PROVIDER" \
+    --workload-identity-pool="$POOL" --location=global 2>&1)"; then
+  op=update-oidc
+elif [[ "$result" == *"CLOUD_CLI_ERROR NOT_FOUND"* ]]; then
   op=create-oidc
+else
+  echo "::error::Manage WIF provider lookup failed; not creating on ambiguous error" >&2
+  exit 1
 fi
 gcp iam workload-identity-pools providers "$op" "$PROVIDER" \
   --location=global --workload-identity-pool="$POOL" --project="$PROJECT" \
