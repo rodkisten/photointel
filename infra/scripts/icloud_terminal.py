@@ -20,6 +20,8 @@ import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "infra/gcp"))
+from cloud_cli import run as cloud_run
 RUNTIME_SECRETS = frozenset({"DATABASE_URL", "STORAGE_ACCESS_KEY", "STORAGE_SECRET_KEY",
                              "ICLOUD_SESSION_KEY", "BRIDGE_TOKEN_PEPPER"})
 REQUIRED = RUNTIME_SECRETS
@@ -99,7 +101,8 @@ def ensure_user_login(project: str, *, interactive: bool) -> None:
     if not interactive or not sys.stdin.isatty():
         raise SetupError("Abra o setup em um terminal para entrar na sua conta Google")
     print("Primeiro uso: entre na sua conta Google com acesso ao projeto PhotoIntel.")
-    subprocess.run([CLOUD_CLI, "auth", "login", "--no-launch-browser"], check=True)
+    cloud_run(["auth", "login", "--no-launch-browser"], project=project,
+              binary=CLOUD_CLI, capture_output=False, timeout=900, check=True)
 
 
 class SetupError(RuntimeError):
@@ -107,10 +110,7 @@ class SetupError(RuntimeError):
 
 
 def gcloud(arguments: list[str], project: str) -> str:
-    result = subprocess.run(
-        [CLOUD_CLI, *arguments, "--project", project, "--quiet"],
-        capture_output=True, text=True, check=False,
-    )
+    result = cloud_run(arguments, project=project, binary=CLOUD_CLI, timeout=180)
     if result.returncode:
         raise SetupError(
             "Sem acesso à configuração/secret do worker. No terminal, execute "
