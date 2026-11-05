@@ -34,7 +34,7 @@ if [[ "$FCM_ENABLED" == true && "$FCM_PROJECT" != "$PROJECT" ]]; then
 fi
 APIS=(compute.googleapis.com bigquery.googleapis.com run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com)
 log() { printf '[bootstrap] %s\n' "$*"; }
-gcp() { python3 -m infra.gcp.cloud_cli "--project=$PROJECT" -- "$@"; }
+gcp() { (cd "$(dirname "${BASH_SOURCE[0]}")/../.." && python3 -m infra.gcp.cloud_cli "--project=$PROJECT" -- "$@"); }
 change() { if [[ "$MODE" != "plan" ]]; then gcp "$@"; else log "PLAN gcloud $* --project=$PROJECT"; fi; }
 # Return 0=exists, 1=missing, 2=other error; never confuse IAM denial with absence.
 exists() {
