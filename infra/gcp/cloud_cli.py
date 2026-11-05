@@ -16,12 +16,10 @@ Safety:
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Sequence
 
 PROJECT_PATTERN = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
