@@ -20,7 +20,7 @@ aos secrets do banco/R2 e não recebe permissões adicionais por causa deste flu
 
 ```bash
 git pull --ff-only
-python3 infra/scripts/icloud_terminal.py setup --account oirodolfo@icloud.com
+python3 -m infra.scripts.icloud_terminal setup --account oirodolfo@icloud.com
 ```
 
 Em Linux x86_64/ARM64, o comando instala gcloud no cache do usuário se necessário,
@@ -56,9 +56,9 @@ e todos os demais secrets continuam no Secret Manager.
 ## Depois do login
 
 ```bash
-python3 infra/scripts/icloud_terminal.py verify
-python3 infra/scripts/icloud_terminal.py test
-python3 infra/scripts/icloud_terminal.py status
+python3 -m infra.scripts.icloud_terminal verify
+python3 -m infra.scripts.icloud_terminal test
+python3 -m infra.scripts.icloud_terminal status
 ```
 
 `verify` revalida online. `test` consulta um item e a representação solicitada sem
