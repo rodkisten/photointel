@@ -54,7 +54,7 @@ jobs:
           confirm-project: photointel
           release-sha: ${{ github.sha }}
       - name: "🧪 Validate terminal configuration"
-        run: python3 infra/terminal/terminal.py plan
+        run: python3 -m infra.terminal.terminal plan
       - name: "🛡️ Check bootstrap identity"
         if: inputs.action == 'provision' || inputs.action == 'build' || inputs.action == 'logs'
         env:
@@ -80,7 +80,7 @@ jobs:
           TERMINAL_ACTION: ${{ inputs.action }}
           TERMINAL_DEPLOYER: ${{ steps.config.outputs.service_account }}
         run: |
-          python3 infra/terminal/terminal.py "$TERMINAL_ACTION" --apply --confirm-project photointel
+          python3 -m infra.terminal.terminal "$TERMINAL_ACTION" --apply --confirm-project photointel
       - name: "📋 VM boot logs + Tailscale readiness"
         if: (inputs.action == 'provision' && steps.terminal_operation.outcome == 'success') || inputs.action == 'logs'
         timeout-minutes: 14
@@ -88,7 +88,7 @@ jobs:
         env:
           TERMINAL_LOG_TIMEOUT: ${{ inputs.action == 'logs' && '15' || '720' }}
         run: |
-          python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds "$TERMINAL_LOG_TIMEOUT"
+          python3 -m infra.terminal.boot_logs --name photointel-terminal --zone us-central1-a --timeout-seconds "$TERMINAL_LOG_TIMEOUT"
       - name: "🧹 GCP Config"
         if: always()
         uses: ./.github/actions/gcp-config
