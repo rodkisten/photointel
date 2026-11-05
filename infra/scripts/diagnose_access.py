@@ -5,7 +5,7 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlsplit
 
-from prepare_workflow_env import read_config, secret_value, worker_environment
+from infra.scripts.prepare_workflow_env import read_config, secret_value, worker_environment
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
