@@ -30,3 +30,13 @@ GCP_BILLING_TABLE=photointel.billing.gcp_billing_export_v1_ACCOUNT_ID
 # Cloud Build triggers connected to GitHub, allowlisted for Manage execution.
 # Comma-separated location:trigger-uuid (only connected and audited production triggers).
 # GCP_CLOUDBUILD_ALLOWED_TRIGGERS=us-central1:00000000-0000-0000-0000-000000000001
+
+# Deploy Router requires a D1 binding DEPLOY_DB in Wrangler config (not a secret).
+# Production deployment generates D1 binding and runs remote migrations first.
+# GITHUB_WEBHOOK_SECRET=LONG_RANDOM_HMAC_SECRET
+# GCP_BUILD_WEBHOOK_RELEASE_URL=SECRET_GCP_CLOUDBUILD_WEBHOOK_URL
+# GCP_BUILD_WEBHOOK_PROVISION_URL=SEPARATE_SECRET_GCP_WEBHOOK
+# GCP_BUILD_CALLBACK_SECRET=RANDOM_CALLBACK_SECRET
+# XRELAY_NOTIFICATION_URL=https://xrelay.migos.club/YOUR_NOTIFICATION_ENDPOINT
+# XRELAY_NOTIFICATION_TOKEN=RELAY_BEARER_TOKEN
+# XRELAY_CHAT_ID=OPTIONAL_DESTINATION_ID

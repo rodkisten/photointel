@@ -1,6 +1,12 @@
-# Manual Cloud Build trigger, connected to rodkisten/photointel main.
-# Builds immutable API image then reconciles Cloud Run API, jobs and scheduler.
-# Does not automatically apply database migrations.
+# Trigger: webhook (GitHub 2nd-gen connected repository), source branch main.
+# Configure _RUN_ID=$(body.run_id) in the trigger's substitutions.
+# Secrets: photointel-gcp-config (non-secret configuration),
+#          photointel-gcp-build-callback (long random shared callback token).
+# Each stage writes a workspace marker, allowing a final callback on failure
+# without reporting a failed build as successful.
+substitutions:
+  _RUN_ID: ""
+  _EVENT_SHA: ""
 steps:
   - id: configuration
     name: python:3.12-slim
@@ -9,38 +15,79 @@ steps:
     args:
       - -ceu
       - |
-        python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4
-        export CONFIRM_PROJECT=photointel
-        export RELEASE_SHA="$COMMIT_SHA"
-        python3 -m infra.gcp.gcp_env
+        if [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] &&
+           [[ "$COMMIT_SHA" == "${_EVENT_SHA}" ]] &&
+           python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
+           CONFIRM_PROJECT=photointel RELEASE_SHA="$COMMIT_SHA" python3 -m infra.gcp.gcp_env; then
+          touch /workspace/.manage-config-ok
+        else
+          echo "configuration FAILED" >&2
+        fi
   - id: image
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - build
-      - --file=infra/docker/api.Dockerfile
-      - --label=org.opencontainers.image.revision=$COMMIT_SHA
-      - --tag=us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
-      - .
+      - -ceu
+      - |
+        if [[ -f /workspace/.manage-config-ok ]] &&
+           docker build -f infra/docker/api.Dockerfile \
+             --label=org.opencontainers.image.revision=$COMMIT_SHA \
+             -t us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA .; then
+          touch /workspace/.manage-image-ok
+        else
+          echo "image FAILED or skipped because configuration failed" >&2
+        fi
   - id: push
     name: gcr.io/cloud-builders/docker
+    entrypoint: bash
     args:
-      - push
-      - us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
+      - -ceu
+      - |
+        if [[ -f /workspace/.manage-image-ok ]] &&
+           docker push us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA; then
+          touch /workspace/.manage-push-ok
+        else
+          echo "push FAILED or skipped because image failed" >&2
+        fi
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
     entrypoint: bash
     args:
       - -ceu
       - |
-        export CONFIRM_PROJECT=photointel
-        python3 -m infra.gcp.manage render
-        python3 -m infra.gcp.manage jobs-deploy --apply --authorize-charges --confirm-project photointel
-        python3 -m infra.gcp.manage deploy --apply --authorize-charges --confirm-project photointel
-        python3 -m infra.gcp.manage scheduler --apply --authorize-charges --confirm-project photointel
+        if [[ -f /workspace/.manage-push-ok ]] &&
+           CONFIRM_PROJECT=photointel python3 -m infra.gcp.manage render &&
+           python3 -m infra.gcp.manage jobs-deploy --apply --authorize-charges --confirm-project photointel &&
+           python3 -m infra.gcp.manage deploy --apply --authorize-charges --confirm-project photointel &&
+           python3 -m infra.gcp.manage scheduler --apply --authorize-charges --confirm-project photointel; then
+          touch /workspace/.manage-deploy-ok
+        else
+          echo "deploy FAILED or skipped because push failed" >&2
+        fi
+  - id: callback
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: bash
+    secretEnv: [CALLBACK_SECRET]
+    args:
+      - -ceu
+      - |
+        status=failed
+        if [[ -f /workspace/.manage-deploy-ok ]]; then status=success; fi
+        if [[ "${_RUN_ID}" =~ ^[a-f0-9-]{36}$ ]]; then
+          curl -fsS --max-time 10 \
+            -H "Authorization: Bearer $$CALLBACK_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"run_id":"${_RUN_ID}","status":"'"$$status"'","build_id":"$BUILD_ID"}' \
+            https://photos-hooks.migos.club/hooks/cloud-build ||
+            echo "Manage callback failed; build result remains independently recorded" >&2
+        fi
+        if [[ "$$status" == failed ]]; then exit 1; fi
 availableSecrets:
   secretManager:
     - versionName: projects/photointel/secrets/photointel-gcp-config/versions/latest
       env: GCP_CONFIG_ENV
+    - versionName: projects/photointel/secrets/photointel-gcp-build-callback/versions/latest
+      env: CALLBACK_SECRET
 images:
   - us-central1-docker.pkg.dev/photointel/photointel/api:$COMMIT_SHA
 options:

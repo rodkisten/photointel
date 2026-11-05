@@ -18,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
 
 
 ROOT = repository_root(__file__)
@@ -378,9 +379,13 @@ def sync_runtime(config):
     update = '^|^' + '|'.join(key + '=' + value for key, value in values.items())
     # Update only auth metadata, preserving images, secret references and other env.
     def run(args):
-        result = subprocess.run(['gcloud', *args, '--project', project, '--quiet'], capture_output=True, text=True)
+        result = cloud_run(args, project=project, timeout=180)
         if result.returncode:
-            raise SetupError('Cloud Run auth synchronization failed; verify deployer run.admin permission and existing API health')
+            code = cloud_classify(result.stderr).code
+            raise SetupError(
+                f'Cloud Run auth synchronization failed ({code}); '
+                'verify deployer run.admin permission and API health'
+            )
         return result.stdout
     run(['run', 'services', 'update', 'photointel-api', '--region', region, '--update-env-vars', update])
     jobs = json.loads(run(['run', 'jobs', 'list', '--region', region, '--format=json']))

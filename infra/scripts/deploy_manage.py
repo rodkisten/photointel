@@ -27,6 +27,8 @@ MANAGE = ROOT / "apps/manage"
 DOMAIN = "photos-manage.migos.club"
 APP_NAME = "photointel-manage"
 WORKER_NAME = "photointel-manage"
+HOOK_DOMAIN = "photos-hooks.migos.club"
+D1_NAME = "photointel-manage"
 
 
 def run(args: list[str], *, env: dict[str, str], stdin: str | None = None) -> None:
@@ -113,6 +115,22 @@ def export_browser_sentry(config: dict) -> None:
 
 
 
+def ensure_manage_d1(api) -> str:
+    """Create once (or reuse) the production D1 database before deployment."""
+    rows = api.pages(api.base + "/d1/database?name=" + D1_NAME)
+    matching = [row for row in rows if row.get("name") == D1_NAME]
+    if len(matching) > 1:
+        raise SetupError("Multiple D1 databases named photointel-manage")
+    database = matching[0] if matching else api.write(
+        "POST", api.base + "/d1/database", {"name": D1_NAME})
+    database_id = database.get("uuid")
+    if not isinstance(database_id, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", database_id):
+        raise SetupError("Cloudflare D1 returned an invalid database UUID")
+    print("Manage D1 ready:", D1_NAME, "(id withheld)")
+    return database_id
+
+
 def publish(config: dict, *, apply: bool) -> dict[str, object]:
     extra = config.get("extra_environment", {})
     sentry_dsn, sentry_org = public_sentry_settings(config)
@@ -133,6 +151,11 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     occupied = [d for d in domains if d.get("hostname") == DOMAIN]
     if any(d.get("service") != WORKER_NAME for d in occupied):
         raise SetupError("The management hostname is already bound to a different Worker; refusing to replace it")
+    hooks_occupied = [d for d in domains if d.get("hostname") == HOOK_DOMAIN]
+    if any(d.get("service") != WORKER_NAME for d in hooks_occupied):
+        raise SetupError("The webhooks hostname belongs to a different Worker")
+    if any(HOOK_DOMAIN in str(app.get("domain", "")) for app in apps):
+        raise SetupError("Webhooks hostname must not be gated by Cloudflare Access")
     idps = api.pages(api.base + "/access/identity_providers")
     otp = [x for x in idps if x.get("type") == "onetimepin"]
     if not otp and apply:
@@ -246,6 +269,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         ):
             raise SetupError("MANAGE_CLOUDBUILD_ALLOWED_TRIGGERS must contain location:trigger-UUID values")
         build_triggers = ",".join(dict.fromkeys(allowed))
+    d1_id = ensure_manage_d1(api)
     # Only used by this management Worker, never the public PhotoIntel Worker
     # or the Cloud Run API/Jobs. No JSON service-account keys are created.
     wrangler = {
@@ -263,13 +287,23 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             "run_worker_first": True,
             "not_found_handling": "single-page-application",
         },
-        "routes": [{"pattern": DOMAIN, "custom_domain": True}],
+        "routes": [
+            {"pattern": DOMAIN, "custom_domain": True},
+            {"pattern": HOOK_DOMAIN, "custom_domain": True},
+        ],
+        "d1_databases": [{
+            "binding": "DEPLOY_DB", "database_name": D1_NAME,
+            "database_id": d1_id, "migrations_dir": "./migrations",
+        }],
+        "triggers": {"crons": ["*/2 * * * *"]},
         "vars": {
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": app["aud"],
             "ACCESS_ALLOWED_EMAILS": json.dumps(emails),
             "GITHUB_REPO": "rodkisten/photointel",
             "GITHUB_ENVIRONMENT": "production",
+            **({"XRELAY_CHAT_ID": str(extra["MANAGE_XRELAY_CHAT_ID"])}
+               if extra.get("MANAGE_XRELAY_CHAT_ID") else {}),
             # Non-secret evidence of which pinned version last populated the
             # runtime GITHUB_API_TOKEN. Does not reveal any token material.
             "GITHUB_TOKEN_SECRET_VERSION":
@@ -291,7 +325,8 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     }
     env = os.environ.copy()
     env.update(CLOUDFLARE_API_TOKEN=cf_deploy_token,
-               CLOUDFLARE_ACCOUNT_ID=cf_account, WRANGLER_SEND_METRICS="false")
+               CLOUDFLARE_ACCOUNT_ID=cf_account, WRANGLER_SEND_METRICS="false",
+               CI="true")
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile("w", encoding="utf8", suffix=".json",
@@ -300,9 +335,25 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             temp_path = Path(out.name)
             temp_path.chmod(0o600)
             json.dump(wrangler, out)
+        # D1 schema must exist before traffic reaches the new code. Wrangler
+        # records applied migrations and does not reapply them on subsequent builds.
+        run(["npx", "--yes", "wrangler@4", "d1", "migrations", "apply", "DEPLOY_DB",
+             "--remote", "--config", str(temp_path)], env=env)
+        print("Manage D1 migrations applied before deploy")
         run(["npx", "--yes", "wrangler@4", "deploy", "--config", str(temp_path)], env=env)
         secrets = {"GITHUB_API_TOKEN": gh_token,
                    "CLOUDFLARE_API_TOKEN": cf_token}
+        secret_map = {
+            "MANAGE_GITHUB_WEBHOOK_SECRET": "GITHUB_WEBHOOK_SECRET",
+            "MANAGE_GCP_BUILD_RELEASE_URL": "GCP_BUILD_WEBHOOK_RELEASE_URL",
+            "MANAGE_GCP_BUILD_PROVISION_URL": "GCP_BUILD_WEBHOOK_PROVISION_URL",
+            "MANAGE_GCP_BUILD_CALLBACK_SECRET": "GCP_BUILD_CALLBACK_SECRET",
+            "MANAGE_XRELAY_NOTIFICATION_URL": "XRELAY_NOTIFICATION_URL",
+            "MANAGE_XRELAY_NOTIFICATION_TOKEN": "XRELAY_NOTIFICATION_TOKEN",
+        }
+        for reference, binding in secret_map.items():
+            if reference in config.get("workflow_secrets", {}):
+                secrets[binding] = secret_value(config, reference)
         if "MANAGE_MODAL_BILLING_TOKEN" in config.get("workflow_secrets", {}):
             secrets["MODAL_BILLING_TOKEN"] = secret_value(config, "MANAGE_MODAL_BILLING_TOKEN")
         if "MANAGE_SENTRY_API_TOKEN" in config.get("workflow_secrets", {}):

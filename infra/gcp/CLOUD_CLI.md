@@ -128,3 +128,19 @@ need repository files (deploy, VM startup sync, Secret Manager references),
 run from your checkout or set PHOTOINTEL_REPO_ROOT=/absolute/path/to/photointel.
 The pure photointel-gcloud transport works independently of a checkout.
 The dotenv parser lives at infra.gcp.gcp_env, not a hyphenated Python file.
+
+## Root deployment CLI
+
+`deploy.sh` uses the shared `python3 -m infra.gcp.cloud_cli --project photointel -- ...`
+bridge for GCP operations and imports `infra.*` modules for Cloudflare/Manage
+operations. It does not alter the globally active GCP project.
+
+```bash
+bash deploy.sh help
+bash deploy.sh doctor
+bash deploy.sh plan
+bash deploy.sh all --yes  # review before production changes
+```
+
+Native `gcloud auth login --no-launch-browser` is only used for interactive
+OAuth, which cannot run through the captured-output bridge.
