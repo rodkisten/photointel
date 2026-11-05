@@ -21,12 +21,14 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 from urllib.parse import urlsplit
 
 from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 MODES = ("discover", "backfill", "worker", "maintenance", "migrate")
 SCHEDULED = ("discover", "worker", "maintenance")
 SCOPES = "https://www.googleapis.com/auth/cloud-platform"
