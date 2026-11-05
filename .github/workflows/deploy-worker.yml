@@ -118,7 +118,7 @@ jobs:
         continue-on-error: true
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/diagnose_access.py
+        run: python3 -m infra.scripts.diagnose_access
 
       - name: "🧰 Config"
         id: notify_observed_002
