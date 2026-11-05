@@ -37,7 +37,8 @@ steps:
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
     entrypoint: python3
     args:
-      - infra/gcp/cloud_cli.py
+      - -m
+      - infra.gcp.cloud_cli
       - --project=$PROJECT_ID
       - --
       - artifacts
