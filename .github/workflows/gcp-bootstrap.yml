@@ -46,7 +46,7 @@ jobs:
           bash infra/gcp/tests/test-bootstrap.sh
           python3 -m unittest discover -s infra/gcp/tests -p test_config_sync.py -v
           python3 -m unittest discover -s infra/gcp/tests -p test_config_normalization.py -v
-          python3 infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json
+          python3 -m infra.gcp.manage bootstrap --config infra/gcp/config.example.json
   bootstrap:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
     name: "🧱 ${{ inputs.mode }}"
