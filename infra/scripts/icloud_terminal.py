@@ -178,7 +178,7 @@ def venv_python() -> Path:
     if not (base / "pyvenv.cfg").is_file() or not python.is_file() or not os.access(python, os.X_OK):
         raise SetupError(
             "Ambiente virtual iCloud ausente ou inválido. Execute: "
-            "python3 infra/scripts/icloud_terminal.py prepare"
+            "python3 -m infra.scripts.icloud_terminal prepare"
         )
     return python
 
@@ -192,7 +192,7 @@ def dependency_fingerprint() -> str:
         except OSError:
             raise SetupError(
                 "Arquivos de dependências iCloud ausentes. Atualize o repositório "
-                "e execute: python3 infra/scripts/icloud_terminal.py prepare"
+                "e execute: python3 -m infra.scripts.icloud_terminal prepare"
             ) from None
         digest.update(name.encode("utf-8") + b"\\0" + contents + b"\\0")
     return digest.hexdigest()
@@ -238,7 +238,7 @@ def prepared_python() -> Path:
     }:
         raise SetupError(
             "Dependências iCloud não preparadas ou desatualizadas. Execute uma vez: "
-            "python3 infra/scripts/icloud_terminal.py prepare"
+            "python3 -m infra.scripts.icloud_terminal prepare"
         )
     return python
 
