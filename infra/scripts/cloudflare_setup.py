@@ -85,7 +85,7 @@ class Cloudflare:
 
 
 def client(config):
-    from prepare_workflow_env import secret_value
+    from infra.scripts.prepare_workflow_env import secret_value
     return Cloudflare(secret_value(config, 'CLOUDFLARE_ACCOUNT_ID'),
                       secret_value(config, 'CLOUDFLARE_API_TOKEN'))
 
@@ -447,7 +447,7 @@ def verify(config):
 
 
 def main():
-    from prepare_workflow_env import read_config
+    from infra.scripts.prepare_workflow_env import read_config
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('plan', 'apply', 'sync', 'verify'))
     args = parser.parse_args()
