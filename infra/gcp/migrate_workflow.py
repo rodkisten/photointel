@@ -20,13 +20,15 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from infra.gcp.manage import ConfigurationError, validate, verify_backup_receipt
 from infra.gcp.cloud_cli import run as cloud_run
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 # This migration environment intentionally does not install the API runtime.
 # Load its SQLAlchemy-only connection policy by a verified source file without
 # rewriting sys.path or importing application startup / GPU modules.
