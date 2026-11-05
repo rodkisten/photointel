@@ -16,6 +16,8 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from cloud_cli import run as cloud_run
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -131,10 +133,7 @@ TRACE_LINE = re.compile(
 
 
 def run_readonly(args: list[str], project: str, *, timeout: int = 50) -> dict[str, Any] | list[Any]:
-    result = subprocess.run(
-        ["gcloud", *args, "--project", project, "--quiet", "--format=json"],
-        text=True, capture_output=True, timeout=timeout, check=False,
-    )
+    result = cloud_run([*args, "--format=json"], project=project, timeout=timeout)
     if result.returncode:
         # Never print provider stderr; gcloud can include sensitive values.
         message = result.stderr.lower()
