@@ -142,6 +142,7 @@ main > *,
   }
 }
 
+
 /* Six mobile tabs: retain independent hit areas and legible labels. */
 @media (max-width: 767px) {
   nav[aria-label='Navegação principal'] > button {
