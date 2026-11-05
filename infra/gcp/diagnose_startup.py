@@ -11,8 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cloud_cli import run as cloud_run  # noqa: E402
+from infra.gcp.cloud_cli import run as cloud_run
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
