@@ -24,6 +24,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+# Also supports importlib-based offline tests and execution outside repo cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
+
 ROOT = Path(__file__).resolve().parents[2]
 MODES = ("discover", "backfill", "worker", "maintenance", "migrate")
 SCHEDULED = ("discover", "worker", "maintenance")
@@ -559,34 +563,27 @@ class Runner:
         self.apply = apply
 
     def command(self, args: list[str], *, capture: bool = False) -> str:
-        command = ["gcloud", *args, "--project", self.config["project_id"], "--quiet"]
+        command = cloud_command(args, project=self.config["project_id"])
         print(shlex.join(command), flush=True)
         if not self.apply:
             return ""
-        result = subprocess.run(
-            command,
-            check=True,
-            text=True,
-            stdout=subprocess.PIPE if capture else None,
-            timeout=3600,
-        )
+        result = cloud_run(args, project=self.config["project_id"], timeout=3600)
+        if result.returncode:
+            raise RuntimeError(
+                "Google Cloud command failed: " + cloud_classify(result.stderr).code
+            )
+        if not capture and result.stdout:
+            print(result.stdout, end="", flush=True)
         return result.stdout.strip() if capture else ""
 
     def ensure(self, query: list[str], create: list[str]) -> None:
         if self.apply:
-            command = [
-                "gcloud",
-                *query,
-                "--project",
-                self.config["project_id"],
-                "--quiet",
-            ]
-            result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+            result = cloud_run(query, project=self.config["project_id"], timeout=60)
             if result.returncode == 0:
                 return
-            if "NOT_FOUND" not in result.stderr and "does not exist" not in result.stderr:
+            if cloud_classify(result.stderr).code != "NOT_FOUND":
                 raise RuntimeError(
-                    "Provider existence check failed; refusing ambiguous create"
+                    "Provider existence check failed: " + cloud_classify(result.stderr).code
                 )
         self.command(create)
 
@@ -882,26 +879,14 @@ def scheduler(runner: Runner) -> None:
         # after reconciliation; the scheduler must never start ingestion by itself.
         command = "create"
         if runner.apply:
-            result = subprocess.run(
-                [
-                    "gcloud",
-                    "scheduler",
-                    "jobs",
-                    "describe",
-                    name,
-                    "--location",
-                    config["region"],
-                    "--project",
-                    config["project_id"],
-                    "--format=json",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
+            result = cloud_run(
+                ["scheduler", "jobs", "describe", name, "--location",
+                 config["region"], "--format=json"],
+                project=config["project_id"], timeout=60,
             )
             if result.returncode == 0:
                 command = "update"
-            elif "NOT_FOUND" not in result.stderr:
+            elif cloud_classify(result.stderr).code != "NOT_FOUND":
                 raise RuntimeError("Unable to verify scheduler job existence")
         runner.command(
             [
@@ -1122,23 +1107,17 @@ def main() -> None:
         if args.secret not in config["secrets"]:
             raise ConfigurationError("Choose a configured secret field with --secret")
         name = config["secrets"][args.secret]["name"]
-        command = [
-            "gcloud",
-            "secrets",
-            "versions",
-            "add",
-            name,
-            "--data-file=-",
-            "--project",
-            config["project_id"],
-            "--quiet",
-        ]
-        print(shlex.join(command), flush=True)
+        command = ["secrets", "versions", "add", name, "--data-file=-"]
+        print(shlex.join(cloud_command(command, project=config["project_id"])), flush=True)
         if args.apply:
             value = getpass.getpass("Secret value (hidden; never stored in config): ")
             if not value:
                 raise ConfigurationError("Empty secret is not accepted")
-            subprocess.run(command, input=value.encode(), check=True, timeout=60)
+            result = cloud_run(command, project=config["project_id"],
+                               input=value.encode(), text=False, timeout=60)
+            if result.returncode:
+                raise RuntimeError("Failed to add secret version: " +
+                                   cloud_classify(result.stderr).code)
     elif args.action == "bootstrap":
         bootstrap(runner)
     elif args.action == "build":
