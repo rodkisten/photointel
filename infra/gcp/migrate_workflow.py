@@ -24,6 +24,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from manage import ConfigurationError, validate, verify_backup_receipt
+from cloud_cli import run as cloud_run
 
 ROOT = Path(__file__).resolve().parents[2]
 # This script is run by its file path inside an isolated venv. Python adds
@@ -69,16 +70,11 @@ class Status:
 
 
 def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes:
-    command = ["gcloud", *args, "--project", project, "--quiet"]
-    if impersonate:
-        command.append(
-            f"--impersonate-service-account=photointel-migrate@{project}.iam.gserviceaccount.com"
-        )
+    account = (f"photointel-migrate@{project}.iam.gserviceaccount.com"
+               if impersonate else None)
     try:
-        result = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=False, timeout=90,
-        )
+        result = cloud_run(args, project=project, impersonate=account,
+                           text=False, timeout=90)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise MigrationError("Google Cloud credential retrieval unavailable") from None
     if result.returncode:
@@ -279,12 +275,9 @@ def validate_backup(project: str, prefix: str, work: Path) -> None:
     work.chmod(0o700)
     for name in ("backup.json", "manifest.enc", "restore-verification.json"):
         # Use --destination flag? gcloud storage cp supports source and target as args.
-        command = [
-            "gcloud", "storage", "cp", f"{source}/{name}", str(work / name),
-            "--project", project, "--quiet",
-        ]
-        result = subprocess.run(
-            command, capture_output=True, check=False, timeout=180,
+        result = cloud_run(
+            ["storage", "cp", f"{source}/{name}", str(work / name)],
+            project=project, text=False, timeout=180,
         )
         if result.returncode:
             raise MigrationError("Required private backup metadata could not be downloaded")
