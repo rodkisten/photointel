@@ -14,6 +14,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'gcp'))
+from cloud_cli import run as cloud_run
+
 PROJECT = "photointel"
 ZONE = "us-central1-a"
 INSTANCE = "photointel-terminal"
@@ -21,12 +25,7 @@ SCRIPT = Path(__file__).resolve().parent / "startup.sh"
 
 
 def gcloud(*args: str) -> str:
-    command = [
-        "gcloud", *args, "--project=" + PROJECT, "--quiet",
-    ]
-    response = subprocess.run(
-        command, text=True, capture_output=True, check=False, timeout=90,
-    )
+    response = cloud_run(args, project=PROJECT, timeout=90)
     if response.returncode:
         operation = " ".join(args[:3])
         raise RuntimeError(
