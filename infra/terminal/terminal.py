@@ -12,9 +12,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from infra import repository_root
+
 from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 
 
 def configuration(raw: dict) -> dict:
