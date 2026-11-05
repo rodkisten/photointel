@@ -50,7 +50,7 @@ case "$PHASE" in
     summary "✅ Docker image for this exact commit built and verified."
     ;;
   jobs-deploy)
-    python3 infra/scripts/cloudflare_setup.py sync
+    python3 -m infra.scripts.cloudflare_setup sync
     python3 -m infra.gcp.manage render
     manage jobs-deploy
     summary "✅ Cloud Run processing Jobs deployed. Neon migrations run separately in GitHub Actions."
@@ -73,7 +73,7 @@ case "$PHASE" in
     ;;
   deploy)
     database_gate
-    python3 infra/scripts/cloudflare_setup.py sync
+    python3 -m infra.scripts.cloudflare_setup sync
     python3 -m infra.gcp.manage render
     if manage deploy; then
       summary "✅ Cloud Run API deployment requested. Test authentication before importing data."
