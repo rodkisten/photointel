@@ -45,7 +45,7 @@ jobs:
       - name: "🧪 Setup contracts"
         run: python3 -m unittest discover -s infra/gcp/tests -p test_icloud_setup.py -v
       - name: "🔎 Chave, PostgreSQL e R2 sem acessar Apple"
-        run: python3 infra/gcp/icloud_preflight.py
+        run: python3 -m infra.gcp.icloud_preflight
       - name: "🧹 Configuração temporária"
         if: always()
         uses: ./.github/actions/gcp-config
