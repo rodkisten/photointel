@@ -16,6 +16,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from cloud_cli import run as cloud_run
+
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = ROOT / "infra/gcp/config.local.json"
 SERVICE = "photointel-api"
@@ -27,13 +29,9 @@ URL_SUFFIX = ".run.app"
 
 def service_details(project: str, region: str) -> dict[str, Any]:
     try:
-        result = subprocess.run(
-            [
-                "gcloud", "run", "services", "describe", SERVICE,
-                "--project", project, "--region", region,
-                "--format=json", "--quiet",
-            ],
-            capture_output=True, text=True, timeout=45, check=False,
+        result = cloud_run(
+            ["run", "services", "describe", SERVICE, "--region", region, "--format=json"],
+            project=project, timeout=45,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise RuntimeError("Cannot execute Cloud Run service inspection") from None
