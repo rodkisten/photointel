@@ -97,8 +97,9 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertIn('add-metadata', calls[1])
             self.assertIn('--metadata-from-file=startup-script=' + str(sync_startup.SCRIPT), calls[1])
-            self.assertNotIn('stop', str(calls))
-            self.assertNotIn('start', str(calls[1][:3]))
+            self.assertFalse(any(
+                arg in {'stop', 'start'} for operation in calls for arg in operation
+            ))
 
     def test_metadata_sync_rejects_wrong_vm_and_preserves_terminal_config(self):
         info = {

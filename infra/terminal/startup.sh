@@ -31,7 +31,8 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 terminal_stage=metadata
 minutes="$(jq -er '.max_minutes | select(type == "number" and floor == . and . >= 15 and . <= 720)' <<< "$cfg")"
-# Arm before package/network operations; setup failures must still shut down.
+# Arm immediately after minimal jq bootstrap. Compute Engine's independently
+# configured max-run-duration / STOP still bounds startup failures before this.
 cat > /etc/systemd/system/terminal-deadline.service <<'UNIT'
 [Unit]
 Description=Stop terminal VM at session deadline
