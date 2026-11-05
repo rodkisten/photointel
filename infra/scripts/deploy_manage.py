@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from infra import repository_root
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -21,7 +23,7 @@ from urllib.error import HTTPError, URLError
 from infra.scripts.cloudflare_setup import client, policy, reconcile_app, SetupError
 from infra.scripts.prepare_workflow_env import read_config, secret_value
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 MANAGE = ROOT / "apps/manage"
 DOMAIN = "photos-manage.migos.club"
 APP_NAME = "photointel-manage"
