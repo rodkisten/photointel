@@ -17,7 +17,7 @@ dependencies = [
 
 [project.scripts]
 photointel-gcloud = "infra.gcp.cloud_cli:main"
-photointel-gcp = "infra.gcp.manage:main"
+photointel-gcp = "infra.gcp.manage:cli"
 photointel-terminal = "infra.terminal.terminal:main"
 photointel-vm-sync = "infra.terminal.sync_startup:main"
 photointel-gcp-env = "infra.gcp.gcp_env:main"
