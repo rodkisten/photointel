@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from manage import render
+from cloud_cli import run as cloud_run
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "infra/gcp/config.local.json"
@@ -28,10 +29,7 @@ class ConfigurationSyncError(RuntimeError):
 
 
 def gcloud(args: list[str]) -> str:
-    result = subprocess.run(
-        ["gcloud", *args, "--project=photointel", "--quiet"],
-        capture_output=True, text=True, check=False, timeout=100,
-    )
+    result = cloud_run(args, project="photointel", timeout=100)
     if result.returncode:
         # Cloud Run stderr may contain sensitive URL/IDs: keep logs bounded.
         raise ConfigurationSyncError(
