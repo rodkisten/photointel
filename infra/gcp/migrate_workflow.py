@@ -23,19 +23,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from manage import ConfigurationError, validate, verify_backup_receipt  # noqa: E402
-from cloud_cli import run as cloud_run  # noqa: E402
+from infra.gcp.manage import ConfigurationError, validate, verify_backup_receipt
+from infra.gcp.cloud_cli import run as cloud_run
 
 ROOT = Path(__file__).resolve().parents[2]
-# This script is run by its file path inside an isolated venv. Python adds
-# infra/gcp to sys.path, not the application src-layout package directory.
-# Resolve the application DB connection policy locally without installing
-# the API or importing unrelated cloud/ML runtime dependencies.
+# This migration environment intentionally does not install the API runtime.
+# Load its SQLAlchemy-only connection policy by a verified source file without
+# rewriting sys.path or importing application startup / GPU modules.
 APP_SRC = ROOT / "apps/api/src"
-if not (APP_SRC / "photointel/db_connection.py").is_file():
+DB_POLICY = APP_SRC / "photointel/db_connection.py"
+if not DB_POLICY.is_file():
     raise RuntimeError("PhotoIntel source tree is incomplete: apps/api/src/photointel/db_connection.py")
-sys.path.insert(0, str(APP_SRC))
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 SECRET_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
@@ -169,7 +167,13 @@ def migration_secret(config: dict[str, Any]) -> str:
 
 def connection_profile(url: str) -> tuple[str, dict[str, Any]]:
     # Exact same TLS and channel-binding policy used by the API/Alembic runtime.
-    from photointel.db_connection import database_connection_options
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("photointel_migration_db_policy", DB_POLICY)
+    if not spec or not spec.loader:
+        raise MigrationError("Cannot load isolated database connection policy")
+    db_policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(db_policy)
+    database_connection_options = db_policy.database_connection_options
 
     @dataclass
     class Options:
