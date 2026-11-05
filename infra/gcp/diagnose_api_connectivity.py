@@ -15,11 +15,13 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 
 from infra.gcp.cloud_cli import run as cloud_run
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 DEFAULT_CONFIG = ROOT / "infra/gcp/config.local.json"
 SERVICE = "photointel-api"
 TIMEOUT = 10
