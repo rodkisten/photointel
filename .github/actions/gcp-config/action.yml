@@ -52,8 +52,8 @@ runs:
         RELEASE_SHA: ${{ inputs.release-sha }}
       run: |
         set -euo pipefail
-        python3 infra/gcp/gcp-env.py
-        python3 infra/gcp/manage.py render
+        python3 -m infra.gcp.gcp_env
+        python3 -m infra.gcp.manage render
     - name: "🧹 [CLEANUP] Remove config and generated"
       if: inputs.mode == 'cleanup'
       shell: bash
