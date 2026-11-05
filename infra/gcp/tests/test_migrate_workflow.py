@@ -114,8 +114,7 @@ class MigrationWorkflowTests(unittest.TestCase):
             "--impersonate-service-account=photointel-migrate@photointel.iam.gserviceaccount.com",
             proc.call_args.args[0],
         )
-        self.assertTrue(proc.call_args.kwargs["capture_output"] is False
-                        if "capture_output" in proc.call_args.kwargs else True)
+        self.assertTrue(proc.call_args.kwargs["capture_output"])
 
     def test_missing_iam_role_has_specific_safe_diagnostic(self) -> None:
         class Denied:
