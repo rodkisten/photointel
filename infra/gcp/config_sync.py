@@ -12,12 +12,14 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+from infra import repository_root
 from typing import Any
 
 from infra.gcp.manage import render
 from infra.gcp.cloud_cli import run as cloud_run
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 IMAGE = re.compile(r"^us-central1-docker\.pkg\.dev/photointel/photointel/api(?::[a-zA-Z0-9_.-]+|@sha256:[a-f0-9]{64})$")
 SHA = re.compile(r"^[a-f0-9]{40}$")
