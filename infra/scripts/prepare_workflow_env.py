@@ -343,7 +343,7 @@ def main() -> int:
         elif opts.target == "worker-build":
             worker_build(config)
         elif opts.target == "worker-deploy":
-            from cloudflare_setup import SetupError, sync_config
+            from infra.scripts.cloudflare_setup import SetupError, sync_config
             try:
                 config = sync_config(config)
             except SetupError as exc:
