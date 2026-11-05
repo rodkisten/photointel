@@ -12,7 +12,7 @@ if [[ -z "$EMAILS" ]]; then
 fi
 command -v gcloud >/dev/null
 command -v python3 >/dev/null
-gcp() { python3 "$(dirname "${BASH_SOURCE[0]}")/cloud_cli.py" "--project=$PROJECT" -- "$@"; }
+gcp() { python3 -m infra.gcp.cloud_cli "--project=$PROJECT" -- "$@"; }
 command -v curl >/dev/null
 ADMIN_LIST="$(jq -cen --argjson emails "$EMAILS" '
   $emails | if type=="array" and length>0 and length<=12
