@@ -27,7 +27,7 @@ database_gate() {
 }
 
 manage() {
-  python3 infra/gcp/manage.py "$1" --apply --authorize-charges --confirm-project "$PROJECT"
+  python3 -m infra.gcp.manage "$1" --apply --authorize-charges --confirm-project "$PROJECT"
 }
 
 case "$PHASE" in
@@ -35,23 +35,23 @@ case "$PHASE" in
     database_gate
     ;;
   preflight)
-    python3 infra/gcp/release_image.py preflight --project "$PROJECT"
+    python3 -m infra.gcp.release_image preflight --project "$PROJECT"
     ;;
   cache)
     [[ -n "$SHA" ]] || { log "::error::RELEASE_SHA is required for cache"; exit 2; }
-    python3 infra/gcp/release_image.py cache --project "$PROJECT" --sha "$SHA"
+    python3 -m infra.gcp.release_image cache --project "$PROJECT" --sha "$SHA"
     ;;
   verify)
     [[ -n "$SHA" ]] || { log "::error::RELEASE_SHA is required for verify"; exit 2; }
-    python3 infra/gcp/release_image.py verify --project "$PROJECT" --sha "$SHA"
+    python3 -m infra.gcp.release_image verify --project "$PROJECT" --sha "$SHA"
     ;;
   build)
     manage build
     summary "✅ Docker image for this exact commit built and verified."
     ;;
   jobs-deploy)
-    python3 infra/scripts/cloudflare_setup.py sync
-    python3 infra/gcp/manage.py render
+    python3 -m infra.scripts.cloudflare_setup sync
+    python3 -m infra.gcp.manage render
     manage jobs-deploy
     summary "✅ Cloud Run processing Jobs deployed. Neon migrations run separately in GitHub Actions."
     ;;
@@ -65,7 +65,7 @@ case "$PHASE" in
     "$migration_venv/bin/python" -m pip install --quiet --disable-pip-version-check -r infra/gcp/migration-requirements.txt
     echo "🔎 Checking isolated Python imports, verified TLS and Alembic revisions (offline)."
     "$migration_venv/bin/python" infra/gcp/check_migration_runtime.py
-    "$migration_venv/bin/python" infra/gcp/migrate_workflow.py \
+    "$migration_venv/bin/python" -m infra.gcp.migrate_workflow \
       --mode "$mode" \
       --project "$PROJECT" \
       --database "${MIGRATION_DATABASE:-unselected}" \
@@ -73,15 +73,15 @@ case "$PHASE" in
     ;;
   deploy)
     database_gate
-    python3 infra/scripts/cloudflare_setup.py sync
-    python3 infra/gcp/manage.py render
+    python3 -m infra.scripts.cloudflare_setup sync
+    python3 -m infra.gcp.manage render
     if manage deploy; then
       summary "✅ Cloud Run API deployment requested. Test authentication before importing data."
     else
       status=$?
       log "::error::Cloud Run service deployment failed. Collecting safe startup diagnostics."
       # Do not mask the deployment failure; troubleshooting is read-only and best-effort.
-      python3 infra/gcp/diagnose_startup.py --project "$PROJECT" || true
+      python3 -m infra.gcp.diagnose_startup --project "$PROJECT" || true
       exit "$status"
     fi
     ;;

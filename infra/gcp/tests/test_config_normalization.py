@@ -2,21 +2,12 @@
 from __future__ import annotations
 
 import contextlib
-import importlib.util
 import io
 import json
-import sys
 import unittest
-from pathlib import Path
 
-GCP = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(GCP))
-spec = importlib.util.spec_from_file_location("gcp_env", GCP / "gcp-env.py")
-assert spec and spec.loader
-loader = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(loader)
-
-from manage import environment
+from infra.gcp import gcp_env as loader
+from infra.gcp.manage import environment
 
 
 class TelegramEnvTests(unittest.TestCase):

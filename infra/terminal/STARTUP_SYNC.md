@@ -18,13 +18,13 @@ cd photointel
 
 # Verify shell syntax and compare SHA-256 with the existing VM metadata:
 bash -n infra/terminal/startup.sh
-python3 infra/terminal/sync_startup.py
+python3 -m infra.terminal.sync_startup
 
 # Metadata-only update, idempotent. Does NOT restart VM or change disk/config:
-python3 infra/terminal/sync_startup.py --apply
+python3 -m infra.terminal.sync_startup --apply
 
 # Recheck: should report Already in sync:
-python3 infra/terminal/sync_startup.py
+python3 -m infra.terminal.sync_startup
 ```
 
 If `photointel` already exists in Cloud Shell, run `git -C photointel
@@ -45,7 +45,7 @@ gcloud compute instances stop photointel-terminal --zone=us-central1-a --project
 gcloud compute instances start photointel-terminal --zone=us-central1-a --project=photointel --quiet
 
 # Follow sanitized startup stages, including errors:
-python3 infra/terminal/boot_logs.py --name photointel-terminal --zone us-central1-a --timeout-seconds 720
+python3 -m infra.terminal.boot_logs --name photointel-terminal --zone us-central1-a --timeout-seconds 720
 ```
 
 Alternatively use the Compute Engine Console stop/start buttons. The VM's

@@ -17,7 +17,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
+
+
+ROOT = repository_root(__file__)
 MANAGED_POLICY = 'photointel-allowed-emails'
 
 
@@ -85,7 +89,7 @@ class Cloudflare:
 
 
 def client(config):
-    from prepare_workflow_env import secret_value
+    from infra.scripts.prepare_workflow_env import secret_value
     return Cloudflare(secret_value(config, 'CLOUDFLARE_ACCOUNT_ID'),
                       secret_value(config, 'CLOUDFLARE_API_TOKEN'))
 
@@ -375,9 +379,13 @@ def sync_runtime(config):
     update = '^|^' + '|'.join(key + '=' + value for key, value in values.items())
     # Update only auth metadata, preserving images, secret references and other env.
     def run(args):
-        result = subprocess.run(['gcloud', *args, '--project', project, '--quiet'], capture_output=True, text=True)
+        result = cloud_run(args, project=project, timeout=180)
         if result.returncode:
-            raise SetupError('Cloud Run auth synchronization failed; verify deployer run.admin permission and existing API health')
+            code = cloud_classify(result.stderr).code
+            raise SetupError(
+                f'Cloud Run auth synchronization failed ({code}); '
+                'verify deployer run.admin permission and API health'
+            )
         return result.stdout
     run(['run', 'services', 'update', 'photointel-api', '--region', region, '--update-env-vars', update])
     jobs = json.loads(run(['run', 'jobs', 'list', '--region', region, '--format=json']))
@@ -447,7 +455,7 @@ def verify(config):
 
 
 def main():
-    from prepare_workflow_env import read_config
+    from infra.scripts.prepare_workflow_env import read_config
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('plan', 'apply', 'sync', 'verify'))
     args = parser.parse_args()

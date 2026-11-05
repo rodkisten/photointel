@@ -18,7 +18,7 @@ steps:
         if [[ "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ ]] &&
            [[ "$COMMIT_SHA" == "${_EVENT_SHA}" ]] &&
            python3 -m pip install --quiet --disable-pip-version-check python-dotenv==1.2.4 &&
-           CONFIRM_PROJECT=photointel RELEASE_SHA="$COMMIT_SHA" python3 infra/gcp/gcp-env.py; then
+           CONFIRM_PROJECT=photointel RELEASE_SHA="$COMMIT_SHA" python3 -m infra.gcp.gcp_env; then
           touch /workspace/.manage-config-ok
         else
           echo "configuration FAILED" >&2
@@ -56,10 +56,10 @@ steps:
       - -ceu
       - |
         if [[ -f /workspace/.manage-push-ok ]] &&
-           CONFIRM_PROJECT=photointel python3 infra/gcp/manage.py render &&
-           python3 infra/gcp/manage.py jobs-deploy --apply --authorize-charges --confirm-project photointel &&
-           python3 infra/gcp/manage.py deploy --apply --authorize-charges --confirm-project photointel &&
-           python3 infra/gcp/manage.py scheduler --apply --authorize-charges --confirm-project photointel; then
+           CONFIRM_PROJECT=photointel python3 -m infra.gcp.manage render &&
+           python3 -m infra.gcp.manage jobs-deploy --apply --authorize-charges --confirm-project photointel &&
+           python3 -m infra.gcp.manage deploy --apply --authorize-charges --confirm-project photointel &&
+           python3 -m infra.gcp.manage scheduler --apply --authorize-charges --confirm-project photointel; then
           touch /workspace/.manage-deploy-ok
         else
           echo "deploy FAILED or skipped because push failed" >&2

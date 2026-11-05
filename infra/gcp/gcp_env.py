@@ -9,15 +9,14 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
 import re
 from io import StringIO
 from typing import Any
 
+from infra import repository_root
+from infra.gcp.manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
 
-from manage import REQUIRED_SECRETS, SECRET_FIELDS, WORKFLOW_SECRET_FIELDS
-
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 CONFIG_PATH = ROOT / "infra/gcp/config.local.json"
 REQUIRED_WIF = (
     "GCP_WORKLOAD_IDENTITY_PROVIDER",

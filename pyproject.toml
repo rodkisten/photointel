@@ -15,6 +15,13 @@ dependencies = [
   "sentry-sdk[fastapi]>=2.49,<4",
 ]
 
+[project.scripts]
+photointel-gcloud = "infra.gcp.cloud_cli:main"
+photointel-gcp = "infra.gcp.manage:cli"
+photointel-terminal = "infra.terminal.terminal:main"
+photointel-vm-sync = "infra.terminal.sync_startup:main"
+photointel-gcp-env = "infra.gcp.gcp_env:main"
+
 [dependency-groups]
 dev = [
   "pytest>=8.3,<10", "pytest-asyncio>=0.25,<2", "pytest-cov>=6,<8",
@@ -32,7 +39,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["apps/api/src/photointel", "gpu", "bridges"]
+packages = ["apps/api/src/photointel", "gpu", "bridges", "infra"]
 
 [tool.ruff]
 line-length = 120

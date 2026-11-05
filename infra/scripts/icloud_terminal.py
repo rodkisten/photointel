@@ -19,7 +19,10 @@ import urllib.request
 import venv
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run
+
+ROOT = repository_root(__file__)
 RUNTIME_SECRETS = frozenset({"DATABASE_URL", "STORAGE_ACCESS_KEY", "STORAGE_SECRET_KEY",
                              "ICLOUD_SESSION_KEY", "BRIDGE_TOKEN_PEPPER"})
 REQUIRED = RUNTIME_SECRETS
@@ -99,7 +102,8 @@ def ensure_user_login(project: str, *, interactive: bool) -> None:
     if not interactive or not sys.stdin.isatty():
         raise SetupError("Abra o setup em um terminal para entrar na sua conta Google")
     print("Primeiro uso: entre na sua conta Google com acesso ao projeto PhotoIntel.")
-    subprocess.run([CLOUD_CLI, "auth", "login", "--no-launch-browser"], check=True)
+    cloud_run(["auth", "login", "--no-launch-browser"], project=project,
+              binary=CLOUD_CLI, capture_output=False, timeout=900, check=True)
 
 
 class SetupError(RuntimeError):
@@ -107,10 +111,7 @@ class SetupError(RuntimeError):
 
 
 def gcloud(arguments: list[str], project: str) -> str:
-    result = subprocess.run(
-        [CLOUD_CLI, *arguments, "--project", project, "--quiet"],
-        capture_output=True, text=True, check=False,
-    )
+    result = cloud_run(arguments, project=project, binary=CLOUD_CLI, timeout=180)
     if result.returncode:
         raise SetupError(
             "Sem acesso à configuração/secret do worker. No terminal, execute "
@@ -176,7 +177,7 @@ def venv_python() -> Path:
     if not (base / "pyvenv.cfg").is_file() or not python.is_file() or not os.access(python, os.X_OK):
         raise SetupError(
             "Ambiente virtual iCloud ausente ou inválido. Execute: "
-            "python3 infra/scripts/icloud_terminal.py prepare"
+            "python3 -m infra.scripts.icloud_terminal prepare"
         )
     return python
 
@@ -190,7 +191,7 @@ def dependency_fingerprint() -> str:
         except OSError:
             raise SetupError(
                 "Arquivos de dependências iCloud ausentes. Atualize o repositório "
-                "e execute: python3 infra/scripts/icloud_terminal.py prepare"
+                "e execute: python3 -m infra.scripts.icloud_terminal prepare"
             ) from None
         digest.update(name.encode("utf-8") + b"\\0" + contents + b"\\0")
     return digest.hexdigest()
@@ -236,7 +237,7 @@ def prepared_python() -> Path:
     }:
         raise SetupError(
             "Dependências iCloud não preparadas ou desatualizadas. Execute uma vez: "
-            "python3 infra/scripts/icloud_terminal.py prepare"
+            "python3 -m infra.scripts.icloud_terminal prepare"
         )
     return python
 

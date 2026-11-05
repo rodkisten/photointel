@@ -16,7 +16,7 @@ FCM_PROJECT_ID=photointel
 FCM_JOB_EVENTS_ENABLED=true
 ```
 
-O conversor `infra/gcp/gcp-env.py` coloca as chaves em `extra_environment`.
+O conversor `infra/gcp/gcp_env.py` coloca as chaves em `extra_environment`.
 Elas também podem ser declaradas como `EXTRA_ENVIRONMENT__FCM_PROJECT_ID`
 e `EXTRA_ENVIRONMENT__FCM_JOB_EVENTS_ENABLED`, mas não duplique as formas.
 O deploy passa ambas às instâncias de API e aos Cloud Run Jobs. Não configure

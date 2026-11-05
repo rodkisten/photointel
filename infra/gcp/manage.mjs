@@ -523,9 +523,20 @@ function printCommand(binary, args) {
   console.log([binary, ...args].map(shellQuote).join(' '));
 }
 
+function gcloudInvocation(args) {
+  const separate = args.indexOf('--project');
+  const inline = args.find((value) => value.startsWith('--project='));
+  const project = separate >= 0 ? args[separate + 1] : inline?.slice('--project='.length);
+  if (!project) {
+    throw new ConfigurationError('Explicit GCP project required for shared CLI');
+  }
+  return ['python3', ['-m', 'infra.gcp.cloud_cli', '--project=' + project, '--', ...args]];
+}
+
 function runChecked(binary, args, { capture = false, cwd, timeout = 3_600_000, input } = {}) {
-  const result = spawnSync(binary, args, {
-    cwd,
+  const [cmd, argv] = binary === 'gcloud' ? gcloudInvocation(args) : [binary, args];
+  const result = spawnSync(cmd, argv, {
+    cwd: binary === 'gcloud' ? ROOT : cwd,
     timeout,
     input,
     encoding: input === undefined ? 'utf8' : undefined,
@@ -544,7 +555,9 @@ function runChecked(binary, args, { capture = false, cwd, timeout = 3_600_000, i
 }
 
 function runProbe(binary, args, { timeout = 60_000 } = {}) {
-  const result = spawnSync(binary, args, {
+  const [cmd, argv] = binary === 'gcloud' ? gcloudInvocation(args) : [binary, args];
+  const result = spawnSync(cmd, argv, {
+    cwd: binary === 'gcloud' ? ROOT : undefined,
     encoding: 'utf8',
     timeout,
     maxBuffer: 16 * 1024 * 1024,

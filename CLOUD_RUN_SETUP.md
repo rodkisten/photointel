@@ -100,13 +100,13 @@ Carregue cada valor por prompt oculto, sem argumentos, arquivo de código ou
 histórico de shell. Execute o comando para cada referência configurada:
 
 ```bash
-python3 infra/gcp/manage.py secret-add --secret DATABASE_URL --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret MIGRATION_DATABASE_URL --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret STORAGE_ACCESS_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret STORAGE_SECRET_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret BRIDGE_TOKEN_PEPPER --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret BRIDGE_ENROLLMENT_SECRET --apply --authorize-charges --confirm-project SEU_PROJECT_ID
-python3 infra/gcp/manage.py secret-add --secret ICLOUD_SESSION_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret DATABASE_URL --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret MIGRATION_DATABASE_URL --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret STORAGE_ACCESS_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret STORAGE_SECRET_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret BRIDGE_TOKEN_PEPPER --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret BRIDGE_ENROLLMENT_SECRET --apply --authorize-charges --confirm-project SEU_PROJECT_ID
+python3 -m infra.gcp.manage secret-add --secret ICLOUD_SESSION_KEY --apply --authorize-charges --confirm-project SEU_PROJECT_ID
 ```
 
 Crie pepper/enrollment com pelo menos 32 caracteres aleatórios; a chave de sessão
@@ -226,7 +226,7 @@ projects/799387180206/locations/global/workloadIdentityPools/github-actions/prov
 
 Restrinja o provider via `assertion.repository == 'rodkisten/photointel'`, `assertion.ref == 'refs/heads/main'` e `assertion.environment == 'production'`, com mapeamento `google.subject` e `attribute.repository` (e atributos auxiliares utilizados pela condição). Conceda `roles/iam.workloadIdentityUser` **na service account** `photointel-deployer@photointel.iam.gserviceaccount.com` para o principalSet do repo exato. Não use `providers/photointel` nem e-mail `@799387180206.iam.gserviceaccount.com`.
 
-No GitHub `Settings → Environments → production → Environment variables`, crie a única variável **multiline** `GCP_CONFIG_ENV`, com valores não secretos e referências `SECRETS__...__NAME/VERSION`, além de `GCP_WORKLOAD_IDENTITY_PROVIDER` e `GCP_DEPLOY_SERVICE_ACCOUNT`. O workflow passa **`vars.GCP_CONFIG_ENV`** para `infra/gcp/gcp-env.py`, que gera `config.local.json` privado, adiciona o SHA de `main` e expõe os dois identificadores WIF como outputs. **As instruções antigas com `GCP_CONFIG_JSON` não se aplicam a este workflow.** Nunca inclua R2 secrets, senha Neon, Bridge pepper, cookies iCloud ou chaves Google no dotenv do GitHub.
+No GitHub `Settings → Environments → production → Environment variables`, crie a única variável **multiline** `GCP_CONFIG_ENV`, com valores não secretos e referências `SECRETS__...__NAME/VERSION`, além de `GCP_WORKLOAD_IDENTITY_PROVIDER` e `GCP_DEPLOY_SERVICE_ACCOUNT`. O workflow passa **`vars.GCP_CONFIG_ENV`** para `infra/gcp/gcp_env.py`, que gera `config.local.json` privado, adiciona o SHA de `main` e expõe os dois identificadores WIF como outputs. **As instruções antigas com `GCP_CONFIG_JSON` não se aplicam a este workflow.** Nunca inclua R2 secrets, senha Neon, Bridge pepper, cookies iCloud ou chaves Google no dotenv do GitHub.
 
 ### IAM mínimo para o fluxo de build
 

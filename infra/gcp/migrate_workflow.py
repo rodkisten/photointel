@@ -23,17 +23,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from manage import ConfigurationError, validate, verify_backup_receipt
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run
+from infra.gcp.manage import ConfigurationError, validate, verify_backup_receipt
 
-ROOT = Path(__file__).resolve().parents[2]
-# This script is run by its file path inside an isolated venv. Python adds
-# infra/gcp to sys.path, not the application src-layout package directory.
-# Resolve the application DB connection policy locally without installing
-# the API or importing unrelated cloud/ML runtime dependencies.
+ROOT = repository_root(__file__)
+# This migration environment intentionally does not install the API runtime.
+# Load its SQLAlchemy-only connection policy by a verified source file without
+# rewriting sys.path or importing application startup / GPU modules.
 APP_SRC = ROOT / "apps/api/src"
-if not (APP_SRC / "photointel/db_connection.py").is_file():
+DB_POLICY = APP_SRC / "photointel/db_connection.py"
+if not DB_POLICY.is_file():
     raise RuntimeError("PhotoIntel source tree is incomplete: apps/api/src/photointel/db_connection.py")
-sys.path.insert(0, str(APP_SRC))
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 SECRET_NAME = re.compile(r"[a-z][a-z0-9-]{0,254}")
@@ -69,16 +70,11 @@ class Status:
 
 
 def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes:
-    command = ["gcloud", *args, "--project", project, "--quiet"]
-    if impersonate:
-        command.append(
-            f"--impersonate-service-account=photointel-migrate@{project}.iam.gserviceaccount.com"
-        )
+    account = (f"photointel-migrate@{project}.iam.gserviceaccount.com"
+               if impersonate else None)
     try:
-        result = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=False, timeout=90,
-        )
+        result = cloud_run(args, project=project, impersonate=account,
+                           text=False, timeout=90)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise MigrationError("Google Cloud credential retrieval unavailable") from None
     if result.returncode:
@@ -172,7 +168,13 @@ def migration_secret(config: dict[str, Any]) -> str:
 
 def connection_profile(url: str) -> tuple[str, dict[str, Any]]:
     # Exact same TLS and channel-binding policy used by the API/Alembic runtime.
-    from photointel.db_connection import database_connection_options
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("photointel_migration_db_policy", DB_POLICY)
+    if not spec or not spec.loader:
+        raise MigrationError("Cannot load isolated database connection policy")
+    db_policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(db_policy)
+    database_connection_options = db_policy.database_connection_options
 
     @dataclass
     class Options:
@@ -279,12 +281,9 @@ def validate_backup(project: str, prefix: str, work: Path) -> None:
     work.chmod(0o700)
     for name in ("backup.json", "manifest.enc", "restore-verification.json"):
         # Use --destination flag? gcloud storage cp supports source and target as args.
-        command = [
-            "gcloud", "storage", "cp", f"{source}/{name}", str(work / name),
-            "--project", project, "--quiet",
-        ]
-        result = subprocess.run(
-            command, capture_output=True, check=False, timeout=180,
+        result = cloud_run(
+            ["storage", "cp", f"{source}/{name}", str(work / name)],
+            project=project, text=False, timeout=180,
         )
         if result.returncode:
             raise MigrationError("Required private backup metadata could not be downloaded")

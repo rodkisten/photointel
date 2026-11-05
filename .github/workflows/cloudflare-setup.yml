@@ -60,10 +60,10 @@ jobs:
       - name: "🧪 Test configuration reconciliation"
         run: python3 -m unittest discover -s infra/gcp/tests -p test_cloudflare_setup.py -v
       - name: "🔎 Access, paths, private R2 and API audience"
-        run: python3 infra/scripts/cloudflare_setup.py "$SETUP_MODE"
+        run: python3 -m infra.scripts.cloudflare_setup "$SETUP_MODE"
       - name: "⚙ Worker environment"
         if: env.SETUP_MODE == 'apply'
-        run: python3 infra/scripts/prepare_workflow_env.py worker
+        run: python3 -m infra.scripts.prepare_workflow_env worker
       - name: "🧰 Node"
         if: env.SETUP_MODE == 'apply'
         uses: actions/setup-node@v4
@@ -84,10 +84,10 @@ jobs:
         if: env.SETUP_MODE == 'apply'
         run: |
           cp infra/cloudflare/worker-headers apps/web/dist/_headers
-          python3 infra/scripts/prepare_workflow_env.py worker-deploy
+          python3 -m infra.scripts.prepare_workflow_env worker-deploy
       - name: "🔎 Verify anonymous navigation goes to Access login"
         if: env.SETUP_MODE == 'apply'
-        run: python3 infra/scripts/cloudflare_setup.py verify
+        run: python3 -m infra.scripts.cloudflare_setup verify
       - name: "🧹 Private local configuration"
         if: always()
         uses: ./.github/actions/gcp-config

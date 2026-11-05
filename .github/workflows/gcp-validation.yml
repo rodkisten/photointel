@@ -65,9 +65,9 @@ jobs:
         id: notify_observed_003
         run: |
           python -m unittest discover -s infra/gcp/tests -v
-          python infra/gcp/manage.py render --config infra/gcp/config.example.json --output reports/gcp-rendered
-          python infra/gcp/manage.py bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
-          python infra/gcp/manage.py scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
+          python -m infra.gcp.manage render --config infra/gcp/config.example.json --output reports/gcp-rendered
+          python -m infra.gcp.manage bootstrap --config infra/gcp/config.example.json > reports/gcp-bootstrap-plan.txt
+          python -m infra.gcp.manage scheduler --config infra/gcp/config.example.json > reports/gcp-scheduler-plan.txt
       - name: "🧩 Limpeza"
         id: notify_observed_004
         run: |

@@ -41,6 +41,7 @@ Config priority: environment GCP_CONFIG_ENV, --env-file,
   ~/.config/photointel/GCP_CONFIG_ENV, GitHub production environment variable
   via authenticated gh CLI, then existing infra/gcp/config.local.json.
 
+All GCP commands use the Python bridge (except interactive OAuth login).
 Migrations are NEVER applied automatically. No destructive cleanup is run.
 The Scheduler stage retains repository defaults (new schedules are paused).
 HELP
@@ -57,6 +58,11 @@ info() {
 
 need() {
   command -v "$1" >/dev/null 2>&1 || die "Missing command: $1"
+}
+
+# Shared project-scoped GCP executor; native login remains interactive.
+gcp() {
+  python3 -m infra.gcp.cloud_cli --project "$PROJECT" -- "$@"
 }
 
 install_cli() {
@@ -164,7 +170,7 @@ printf 'Release: %s | project: %s | mode: %s\n' "$SHA" "$PROJECT" "$MODE"
 
 ensure_gcloud() {
   local account
-  account="$(gcloud auth list --filter='status:ACTIVE' --format='value(account)' 2>/dev/null || true)"
+  account="$(gcp auth list --filter='status:ACTIVE' --format='value(account)' 2>/dev/null || true)"
   if [[ -z "$account" ]]; then
     if [[ -t 0 ]]; then
       info 'Google Cloud login'
@@ -173,9 +179,8 @@ ensure_gcloud() {
       die 'gcloud authentication required: run gcloud auth login --no-launch-browser'
     fi
   fi
-  gcloud projects describe "$PROJECT" --format='value(projectId)' >/dev/null ||
+  gcp projects describe "$PROJECT" --format='value(projectId)' >/dev/null ||
     die "Cannot access Google Cloud project $PROJECT"
-  gcloud config set project "$PROJECT" --quiet >/dev/null
 }
 
 prepare_config() {
@@ -202,7 +207,7 @@ prepare_config() {
       py="$venv/bin/python"
     fi
     GCP_CONFIG_ENV="$raw" CONFIRM_PROJECT="$PROJECT" RELEASE_SHA="$SHA" \
-      "$py" infra/gcp/gcp-env.py
+      "$py" -m infra.gcp.gcp_env
     unset raw
   elif [[ -f "$CONFIG" ]]; then
     info 'Using existing private config.local.json; refreshing release SHA'
@@ -267,14 +272,14 @@ confirm_apply() {
 
 gcp_deploy() {
   info 'GCP preflight and immutable image check'
-  python3 infra/gcp/release_image.py preflight --project "$PROJECT"
-  python3 infra/gcp/release_image.py cache --project "$PROJECT" --sha "$SHA"
-  if python3 infra/gcp/release_image.py verify --project "$PROJECT" --sha "$SHA"; then
+  python3 -m infra.gcp.release_image preflight --project "$PROJECT"
+  python3 -m infra.gcp.release_image cache --project "$PROJECT" --sha "$SHA"
+  if python3 -m infra.gcp.release_image verify --project "$PROJECT" --sha "$SHA"; then
     info 'Reusing existing image, no Cloud Build charges'
   else
     info 'Building API Docker image in Cloud Build'
     bash infra/gcp/release.sh build
-    python3 infra/gcp/release_image.py verify --project "$PROJECT" --sha "$SHA"
+    python3 -m infra.gcp.release_image verify --project "$PROJECT" --sha "$SHA"
   fi
   info 'Cloud Run processing jobs'
   bash infra/gcp/release.sh jobs-deploy
@@ -286,9 +291,9 @@ gcp_deploy() {
 
 access_apply() {
   info 'Inspect Cloudflare Access application, policies and private R2'
-  python3 infra/scripts/cloudflare_setup.py plan
+  python3 -m infra.scripts.cloudflare_setup plan
   info 'Reconcile Cloudflare Access/R2 and synchronize API/Jobs audiences'
-  python3 infra/scripts/cloudflare_setup.py apply
+  python3 -m infra.scripts.cloudflare_setup apply
 }
 
 web_deploy() {
@@ -296,16 +301,16 @@ web_deploy() {
   info 'Installing frontend dependencies'
   npm --prefix apps/web ci
   info 'Building PhotoIntel SPA'
-  python3 infra/scripts/prepare_workflow_env.py worker-build
+  python3 -m infra.scripts.prepare_workflow_env worker-build
   cp infra/cloudflare/worker-headers apps/web/dist/_headers
   info 'Deploying photointel Worker + assets + /v1 proxy'
-  python3 infra/scripts/prepare_workflow_env.py worker-deploy
+  python3 -m infra.scripts.prepare_workflow_env worker-deploy
 }
 
 manage_deploy() {
   ensure_node
   info 'Planning independent Manage Access application'
-  python3 infra/scripts/deploy_manage.py plan
+  python3 -m infra.scripts.deploy_manage plan
   info 'Installing Manage dependencies'
   npm --prefix apps/manage ci
   info 'Building Manage SPA with existing public Sentry settings'
@@ -313,11 +318,9 @@ manage_deploy() {
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path("infra/scripts").resolve()))
-from deploy_manage import public_sentry_settings
+from infra.scripts.deploy_manage import public_sentry_settings
 
 config = json.loads(Path("infra/gcp/config.local.json").read_text())
 dsn, org = public_sentry_settings(config)
@@ -330,12 +333,12 @@ env["VITE_MANAGE_RELEASE"] = os.environ["RELEASE_SHA"]
 subprocess.run(["npm", "--prefix", "apps/manage", "run", "build"], env=env, check=True)
 PY
   info 'Deploying separate photointel-manage Worker and runtime secrets'
-  python3 infra/scripts/deploy_manage.py apply
+  python3 -m infra.scripts.deploy_manage apply
 }
 
 verify_public() {
   info 'Checking unauthenticated Cloudflare Access redirects'
-  python3 infra/scripts/cloudflare_setup.py verify
+  python3 -m infra.scripts.cloudflare_setup verify
   info 'HTTP status only; a login in Safari is still required'
   local url
   for url in https://photos.migos.club/ https://photos-manage.migos.club/; do
@@ -343,14 +346,14 @@ verify_public() {
       -w "$url -> HTTP %{http_code}\n" "$url" || true
   done
   info 'Cloud Run service URL'
-  gcloud run services describe photointel-api \
+  gcp run services describe photointel-api \
     --region "$REGION" --project "$PROJECT" --format='value(status.url)'
 }
 
 case "$MODE" in
   doctor)
     printf 'Active GCP account: '
-    gcloud auth list --filter='status:ACTIVE' --format='value(account)'
+    gcp auth list --filter='status:ACTIVE' --format='value(account)'
     printf 'Python: '; python3 --version
     printf 'Node: '; command -v node >/dev/null && node --version || true
     printf 'npm: '; command -v npm >/dev/null && npm --version || true
@@ -363,9 +366,9 @@ case "$MODE" in
     prepare_config
     case "$MODE" in
       plan)
-        python3 infra/gcp/manage.py render
-        python3 infra/scripts/cloudflare_setup.py plan
-        python3 infra/scripts/deploy_manage.py plan
+        python3 -m infra.gcp.manage render
+        python3 -m infra.scripts.cloudflare_setup plan
+        python3 -m infra.scripts.deploy_manage plan
         ;;
       verify)
         verify_public

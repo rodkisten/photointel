@@ -12,7 +12,10 @@ import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
+
+from infra.gcp.cloud_cli import run as cloud_run
 
 LOG_TIME = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})")
 SCRIPT_MARKER = 'google_metadata_script_runner'
@@ -24,10 +27,7 @@ APT_WARNING = re.compile(r"(?:W: GPG error:|E: The repository|E: Unable to locat
 
 
 def gcloud(*args: str) -> str:
-    result = subprocess.run(
-        ['gcloud', *args, '--project=photointel', '--quiet'],
-        text=True, capture_output=True, check=False, timeout=20,
-    )
+    result = cloud_run(args, project='photointel', timeout=20)
     if result.returncode:
         # Never display raw stderr. It can contain provider response context.
         hint = ('Check bootstrap identity permission compute.instances.getSerialPortOutput '

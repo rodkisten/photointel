@@ -71,7 +71,7 @@ Antes de ativar o deployment, prepare:
 
 ## 3. Fonte única de configuração: GCP_CONFIG_ENV
 
-O workflow `.github/workflows/gcp-deploy.yml` usa **exclusivamente** a variável multiline `vars.GCP_CONFIG_ENV` do GitHub Environment `production`. O conversor `infra/gcp/gcp-env.py` transforma esse dotenv em `infra/gcp/config.local.json`, acrescenta o SHA da revisão e envia ao GitHub os identificadores WIF. **Não** usa `GCP_CONFIG_JSON`, `GCP_CONFIG_SECRET` nem uma chave Google JSON.
+O workflow `.github/workflows/gcp-deploy.yml` usa **exclusivamente** a variável multiline `vars.GCP_CONFIG_ENV` do GitHub Environment `production`. O conversor `infra/gcp/gcp_env.py` transforma esse dotenv em `infra/gcp/config.local.json`, acrescenta o SHA da revisão e envia ao GitHub os identificadores WIF. **Não** usa `GCP_CONFIG_JSON`, `GCP_CONFIG_SECRET` nem uma chave Google JSON.
 
 Modelo de valores não secretos (substitua TODOS os placeholders pelos valores reais e preserve o formato):
 
@@ -143,9 +143,9 @@ python -m pip install python-dotenv==1.2.4
 export GCP_CONFIG_ENV="$(cat "$HOME/photointel-production.env")"
 export CONFIRM_PROJECT=photointel
 export RELEASE_SHA="$(git rev-parse HEAD)"
-python3 infra/gcp/gcp-env.py
-python3 infra/gcp/manage.py render
-python3 infra/gcp/manage.py bootstrap               # plano offline, sem mutação
+python3 -m infra.gcp.gcp_env
+python3 -m infra.gcp.manage render
+python3 -m infra.gcp.manage bootstrap               # plano offline, sem mutação
 ```
 
 O exemplo `config.example.json` é outro ponto de partida possível, mas requer preencher manualmente `image` e `release_git_sha`, além dos demais campos. `config.local.json` é privado e fica fora do Git.
@@ -164,10 +164,10 @@ O operador pode precisar de permissões para habilitar APIs (Service Usage Admin
 
 ```bash
 # Primeiro conferir o plano:
-python3 infra/gcp/manage.py bootstrap
+python3 -m infra.gcp.manage bootstrap
 
 # Depois de revisar recursos, políticas, billing e escopo:
-python3 infra/gcp/manage.py bootstrap \
+python3 -m infra.gcp.manage bootstrap \
   --apply --authorize-charges --confirm-project photointel
 ```
 
@@ -210,7 +210,7 @@ Com o bootstrap concluído, use o comando interativo do projeto. Ele usa prompt 
 ```bash
 for secret in DATABASE_URL MIGRATION_DATABASE_URL STORAGE_ACCESS_KEY STORAGE_SECRET_KEY BRIDGE_TOKEN_PEPPER BRIDGE_ENROLLMENT_SECRET ICLOUD_SESSION_KEY; do
   echo "Adicionando versão para $secret"
-  python3 infra/gcp/manage.py secret-add --secret "$secret" \
+  python3 -m infra.gcp.manage secret-add --secret "$secret" \
     --apply --authorize-charges --confirm-project photointel
 done
 ```
@@ -386,7 +386,7 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
    Para banco realmente vazio:
 
    ```bash
-   python3 infra/gcp/manage.py migrate \
+   python3 -m infra.gcp.manage migrate \
      --apply --authorize-charges --confirm-project photointel \
      --initial-empty-database
    ```
@@ -394,7 +394,7 @@ Em [GitHub Actions](https://github.com/rodkisten/photointel/actions/workflows/gc
    Para **banco existente**, **não** use `--initial-empty-database`. Exija backup PostgreSQL + R2, teste de restauração isolada e recibo dentro da validade, então, como alternativa via Cloud Shell, use:
 
    ```bash
-   python3 infra/gcp/manage.py migrate \
+   python3 -m infra.gcp.manage migrate \
      --apply --authorize-charges --confirm-project photointel \
      --backup-directory backups/RELEASE \
      --backup-receipt backups/RELEASE/restore-verification.json
@@ -424,7 +424,7 @@ gcloud artifacts docker images list \
 Com a URL real `https://...run.app`:
 
 ```bash
-python3 infra/gcp/manage.py smoke \
+python3 -m infra.gcp.manage smoke \
   --apply --origin https://ORIGIN_REAL.run.app
 ```
 

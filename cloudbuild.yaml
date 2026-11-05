@@ -35,13 +35,16 @@ steps:
 
   - id: verify-existing-repository
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: gcloud
+    entrypoint: python3
     args:
+      - -m
+      - infra.gcp.cloud_cli
+      - --project=$PROJECT_ID
+      - --
       - artifacts
       - repositories
       - describe
       - ${_REPOSITORY}
-      - --project=$PROJECT_ID
       - --location=${_REGION}
 
   - id: docker-build

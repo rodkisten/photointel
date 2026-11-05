@@ -1,21 +1,16 @@
 """GCP_CONFIG_ENV single-var JSON/dotenv compatibility and secret-ref policy."""
 
-import importlib.util
 import io
 import json
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from infra.gcp import gcp_env as app
+
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "infra/gcp"))
-SPEC = importlib.util.spec_from_file_location("gcp_env", ROOT / "infra/gcp/gcp-env.py")
-assert SPEC and SPEC.loader
-app = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(app)
 
 DEPLOY_WIF = "projects/123456789/locations/global/workloadIdentityPools/github/providers/deploy"
 BOOTSTRAP_WIF = "projects/123456789/locations/global/workloadIdentityPools/github-bootstrap/providers/admin"

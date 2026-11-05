@@ -305,7 +305,7 @@ class CloudRunCommandsTests(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "infra/gcp/manage.py"),
+                    "-m", "infra.gcp.manage",
                     "bootstrap",
                     "--config",
                     str(path),

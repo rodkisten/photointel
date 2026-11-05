@@ -16,7 +16,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run, classify as cloud_classify
+
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 SHA_PATTERN = re.compile(r"[a-f0-9]{40}")
 DIGEST_PATTERN = re.compile(r"sha256:[a-f0-9]{64}")
@@ -34,13 +37,10 @@ def config_for_project(project: str, config_path: Path = CONFIG) -> dict[str, An
 
 
 def gcloud(args: list[str], project: str) -> str:
-    command = ["gcloud", *args, "--project", project, "--quiet"]
-    result = subprocess.run(
-        command, capture_output=True, text=True, timeout=120, check=False
-    )
+    result = cloud_run(args, project=project, timeout=120)
     if result.returncode:
         raise ReleaseCheckError(
-            f"gcloud {' '.join(args[:3])} failed: {result.stderr.strip() or 'unknown error'}"
+            f"gcloud {' '.join(args[:3])} failed: {cloud_classify(result.stderr).code}"
         )
     return result.stdout.strip()
 

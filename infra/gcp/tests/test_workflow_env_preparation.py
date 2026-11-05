@@ -103,7 +103,7 @@ class WorkflowEnvTests(unittest.TestCase):
         self.assertNotIn("VERY_PRIVATE", str(raised.exception))
         self.assertEqual(call.call_args.args[0][:5],
                          ["gcloud", "secrets", "versions", "access", "1"])
-        self.assertEqual(call.call_args.kwargs["stderr"], subprocess.PIPE)
+        self.assertTrue(call.call_args.kwargs["capture_output"])
 
     def test_worker_preflight_fails_before_build_when_secret_is_missing(self):
         with tempfile.TemporaryDirectory() as tmp:

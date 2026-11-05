@@ -103,10 +103,10 @@ jobs:
           REGION: us-central1
         run: |
           set -euo pipefail
-          gcloud run jobs describe photointel-maintenance \
+          python3 -m infra.gcp.cloud_cli --project="$PROJECT" -- run jobs describe photointel-maintenance \
             --project="$PROJECT" --region="$REGION" --format='value(name)' >/dev/null
           state_file="$(mktemp)"
-          if gcloud scheduler jobs describe photointel-worker \
+          if python3 -m infra.gcp.cloud_cli --project="$PROJECT" -- scheduler jobs describe photointel-worker \
               --project="$PROJECT" --location="$REGION" \
               --format='value(state)' >"$state_file" 2>"$state_file.err"; then
             state="$(tr -d '\r\n' < "$state_file")"
@@ -121,7 +121,7 @@ jobs:
             exit 0
           fi
           echo "::notice::Worker Scheduler is $state; waking finite repair runner."
-          gcloud run jobs execute photointel-maintenance \
+          python3 -m infra.gcp.cloud_cli --project="$PROJECT" -- run jobs execute photointel-maintenance \
             --project="$PROJECT" --region="$REGION" --async
           echo "🩹 Automatic preview repair wakeup requested (Worker Scheduler: $state)" >> "$GITHUB_STEP_SUMMARY"
       - name: "🧹 Erase prepared configuration"
@@ -137,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - run: bash -n infra/gcp/release.sh && python3 infra/gcp/manage.py render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
+      - run: bash -n infra/gcp/release.sh && python3 -m infra.gcp.manage render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
     # Push performs only the offline check. Production releases require

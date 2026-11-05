@@ -12,13 +12,15 @@ import argparse
 import json
 import re
 import subprocess
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-ROOT = Path(__file__).resolve().parents[2]
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run
+
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 JOB = "photointel-migrate"
 EXECUTION = re.compile(r"photointel-migrate-[a-z0-9-]{3,40}$")
@@ -131,10 +133,7 @@ TRACE_LINE = re.compile(
 
 
 def run_readonly(args: list[str], project: str, *, timeout: int = 50) -> dict[str, Any] | list[Any]:
-    result = subprocess.run(
-        ["gcloud", *args, "--project", project, "--quiet", "--format=json"],
-        text=True, capture_output=True, timeout=timeout, check=False,
-    )
+    result = cloud_run([*args, "--format=json"], project=project, timeout=timeout)
     if result.returncode:
         # Never print provider stderr; gcloud can include sensitive values.
         message = result.stderr.lower()

@@ -14,9 +14,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from manage import render
+from infra import repository_root
+from infra.gcp.cloud_cli import run as cloud_run
+from infra.gcp.manage import render
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = repository_root(__file__)
 CONFIG = ROOT / "infra/gcp/config.local.json"
 IMAGE = re.compile(r"^us-central1-docker\.pkg\.dev/photointel/photointel/api(?::[a-zA-Z0-9_.-]+|@sha256:[a-f0-9]{64})$")
 SHA = re.compile(r"^[a-f0-9]{40}$")
@@ -28,10 +30,7 @@ class ConfigurationSyncError(RuntimeError):
 
 
 def gcloud(args: list[str]) -> str:
-    result = subprocess.run(
-        ["gcloud", *args, "--project=photointel", "--quiet"],
-        capture_output=True, text=True, check=False, timeout=100,
-    )
+    result = cloud_run(args, project="photointel", timeout=100)
     if result.returncode:
         # Cloud Run stderr may contain sensitive URL/IDs: keep logs bounded.
         raise ConfigurationSyncError(
