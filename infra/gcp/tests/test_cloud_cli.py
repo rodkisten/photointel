@@ -1,8 +1,6 @@
 """Offline contract tests: every infrastructure caller shares one safe gcloud transport."""
 from __future__ import annotations
 
-import importlib.util
-import io
 import subprocess
 import sys
 import unittest
