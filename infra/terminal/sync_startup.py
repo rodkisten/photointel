@@ -14,7 +14,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import sys
 from infra.gcp.cloud_cli import run as cloud_run
 
 PROJECT = "photointel"
