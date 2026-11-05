@@ -24,9 +24,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-# Also supports importlib-based offline tests and execution outside repo cwd.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify  # noqa: E402
+from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
 
 ROOT = Path(__file__).resolve().parents[2]
 MODES = ("discover", "backfill", "worker", "maintenance", "migrate")
