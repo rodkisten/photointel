@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
 import re
 from io import StringIO
 from typing import Any
