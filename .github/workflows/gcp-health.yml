@@ -50,11 +50,11 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: "🩺 Cloud Run status + HTTP health"
-        run: python3 infra/gcp/diagnose_api_connectivity.py --project photointel
+        run: python3 -m infra.gcp.diagnose_api_connectivity --project photointel
 
       - name: "🔍 Startup errors (sanitized)"
         if: ${{ always() && steps.config.outcome == 'success' }}
-        run: python3 infra/gcp/diagnose_startup.py --project photointel
+        run: python3 -m infra.gcp.diagnose_startup --project photointel
 
       - name: "🧹 Config"
         if: ${{ always() && steps.checkout.outcome == 'success' }}
