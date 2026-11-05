@@ -19,6 +19,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "infra/gcp"))
+from cloud_cli import run as cloud_run
 CONFIG = ROOT / "infra/gcp/config.local.json"
 WORKER_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 DOMAIN = re.compile(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
@@ -97,14 +99,10 @@ def worker_environment(config: dict) -> dict[str, str]:
 def discover_cloud_run_origin(config: dict) -> str:
     """Resolve the real deployed Cloud Run URL instead of a placeholder .run.app."""
     try:
-        result = subprocess.run(
-            [
-                "gcloud", "run", "services", "describe", "photointel-api",
-                "--region", config["region"], "--project", config["project_id"],
-                "--format=value(status.url)", "--quiet",
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            timeout=45, check=False,
+        result = cloud_run(
+            ["run", "services", "describe", "photointel-api",
+             "--region", config["region"], "--format=value(status.url)"],
+            project=config["project_id"], timeout=45,
         )
     except (OSError, subprocess.TimeoutExpired, KeyError):
         raise WorkflowEnvironmentError("Could not inspect Cloud Run photointel-api") from None
@@ -181,13 +179,9 @@ def secret_value(config: dict, key: str) -> str:
         raise WorkflowEnvironmentError(f"Invalid WORKFLOW_SECRETS__{key} reference")
     project = config["project_id"]
     try:
-        result = subprocess.run(
-            [
-                "gcloud", "secrets", "versions", "access", version,
-                "--secret", name, "--project", project, "--quiet",
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=45,
-            check=False,
+        result = cloud_run(
+            ["secrets", "versions", "access", version, "--secret", name],
+            project=project, text=False, timeout=45,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise WorkflowEnvironmentError(f"Could not access GCP secret for {key}") from None
