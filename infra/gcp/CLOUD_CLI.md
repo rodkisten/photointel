@@ -1,6 +1,6 @@
 # PhotoIntel unified Google Cloud CLI transport
 
-**One shared executor:** `infra/gcp/cloud_cli.py`.
+**One shared executor:** `infra.gcp.cloud_cli` (source: `infra/gcp/cloud_cli.py`).
 
 The prior repository had multiple copies of Google Cloud invocation logic in
 `manage.py`, `manage.mjs`, `terminal.py`, `boot_logs.py`,
@@ -19,9 +19,9 @@ There is no static JSON service account key or fallback credential in this modul
 
 ```bash
 # Read-only command; no GitHub Actions and no implicit project:
-python3 infra/gcp/cloud_cli.py --project photointel -- auth list --format=value(account)
+python3 -m infra.gcp.cloud_cli --project photointel -- auth list --format=value(account)
 
-python3 infra/gcp/cloud_cli.py --project photointel -- \
+python3 -m infra.gcp.cloud_cli --project photointel -- \
   compute instances describe photointel-terminal \
   --zone=us-central1-a --format=json
 
@@ -64,7 +64,7 @@ Use `text=False` for sensitive binary stdin/stdout and never log
 ```bash
 PROJECT=photointel
 gcp() {
-  python3 infra/gcp/cloud_cli.py "--project=$PROJECT" -- "$@"
+  python3 -m infra.gcp.cloud_cli "--project=$PROJECT" -- "$@"
 }
 gcp run services describe photointel-api --region=us-central1 --format=json
 ```
