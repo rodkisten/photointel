@@ -81,8 +81,8 @@ class CloudCLIContractTests(unittest.TestCase):
         shell = (ROOT / "infra/gcp/bootstrap.sh").read_text()
         wif = (ROOT / "infra/gcp/bootstrap_manage_wif.sh").read_text()
         node = (ROOT / "infra/gcp/manage.mjs").read_text()
-        self.assertIn('cloud_cli.py', shell)
-        self.assertIn('cloud_cli.py', wif)
+        self.assertIn('infra.gcp.cloud_cli', shell)
+        self.assertIn('infra.gcp.cloud_cli', wif)
         self.assertIn("gcloudInvocation(args)", node)
 
     def test_all_critical_python_commands_use_the_shared_transport(self):
