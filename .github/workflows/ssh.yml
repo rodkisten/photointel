@@ -123,7 +123,7 @@ jobs:
         if: ${{ inputs.command == 'ssh' }}
         env:
           CONFIRM_PROJECT: photointel
-        run: python3 infra/scripts/prepare_workflow_env.py ssh
+        run: python3 -m infra.scripts.prepare_workflow_env ssh
 
       - name: "🧰 Setup"
         id: notify_observed_001
