@@ -20,13 +20,12 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-
-from infra import repository_root
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from infra.gcp.manage import ConfigurationError, validate, verify_backup_receipt
+from infra import repository_root
 from infra.gcp.cloud_cli import run as cloud_run
+from infra.gcp.manage import ConfigurationError, validate, verify_backup_receipt
 
 ROOT = repository_root(__file__)
 # This migration environment intentionally does not install the API runtime.
