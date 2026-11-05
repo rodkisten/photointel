@@ -15,8 +15,7 @@ import time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'gcp'))
-from cloud_cli import run as cloud_run  # noqa: E402
+from infra.gcp.cloud_cli import run as cloud_run
 
 LOG_TIME = re.compile(r"^([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})")
 SCRIPT_MARKER = 'google_metadata_script_runner'
