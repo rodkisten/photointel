@@ -23,6 +23,8 @@ export interface Env {
   /** Deployed Secret Manager version only, never the secret value. */
   GITHUB_TOKEN_SECRET_VERSION?: string;
   GITHUB_REPO: string;
+  /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
+  PHOTOINTEL_PREVIEW?: string;
   GITHUB_ENVIRONMENT: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
