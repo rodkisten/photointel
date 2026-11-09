@@ -53,6 +53,30 @@ export default {
     if (method === 'OPTIONS')
       return withIncidentHeaders(failure(405, 'CORS', 'CORS desabilitado'), correlationId);
     try {
+      if (env.PHOTOINTEL_PREVIEW === 'true') {
+        // Previews are visual-only. Never expose Admin, webhooks, or live provider APIs.
+        if (!location.hostname.endsWith('.workers.dev')) {
+          return withIncidentHeaders(failure(403, 'PREVIEW_HOST', 'Preview hostname required'), correlationId);
+        }
+        if (path.startsWith('/api/') || path.startsWith('/hooks/') || path.startsWith('/__')) {
+          return withIncidentHeaders(failure(404, 'PREVIEW_DISABLED', 'Preview route unavailable'), correlationId);
+        }
+        if (method !== 'GET' && method !== 'HEAD') {
+          return withIncidentHeaders(failure(405, 'PREVIEW_READONLY', 'Preview is read-only'), correlationId);
+        }
+        const response = await env.ASSETS.fetch(request);
+        const headers = new Headers(response.headers);
+        headers.set('Cache-Control', 'no-store');
+        headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        headers.set('X-Content-Type-Options', 'nosniff');
+        headers.set('X-Frame-Options', 'DENY');
+        headers.set(
+          'Content-Security-Policy',
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+            "connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
+        );
+        return withIncidentHeaders(new Response(response.body, { status: response.status, headers }), correlationId);
+      }
       if (location.hostname === 'photos-hooks.migos.club') {
         if (path === '/hooks/github') {
           if (!context) throw new ApiError(503, 'WORKER_CONTEXT', 'Contexto indisponível');
@@ -119,6 +143,7 @@ export default {
     }
   },
   async scheduled(_event: unknown, env: Env, context: { waitUntil(promise: Promise<unknown>): void }): Promise<void> {
+    if (env.PHOTOINTEL_PREVIEW === 'true') return;
     context.waitUntil(tick(env));
   },
 };
