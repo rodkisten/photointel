@@ -97,7 +97,7 @@ function setup() {
 test('precaches the complete shell and serves navigation and JavaScript offline', async () => {
   const env = setup();
   await env.trigger('install');
-  assert.equal(env.stores.get('photointel-static-v3').size, 2);
+  assert.equal(env.stores.get('photointel-static-test-release').size, 2);
   env.disconnect();
   const page = await env.trigger('fetch', {
     request: { method: 'GET', mode: 'navigate', url: 'https://photos.migos.club/library' },
@@ -133,5 +133,5 @@ test('keeps immutable assets while removing obsolete shells', async () => {
   env.stores.set('photointel-shell-old-release', new Map());
   await env.trigger('activate');
   assert.equal(env.stores.has('photointel-shell-old-release'), false);
-  assert.equal(env.stores.has('photointel-static-v3'), true);
+  assert.equal(env.stores.has('photointel-static-test-release'), true);
 });
