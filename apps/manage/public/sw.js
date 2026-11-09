@@ -4,6 +4,7 @@ const PRECACHE = /*__PHOTOINTEL_MANAGE_PRECACHE__*/ [];
 const SHELL_CACHE = 'photointel-manage-shell-' + BUILD;
 const ASSET_CACHE = 'photointel-manage-assets-' + BUILD;
 const BLOCKED = /^\/(?:api|auth|hooks|__|cdn-cgi)(?:\/|$)|^\/\./;
+const HASHED = /^\/assets\/.+[-.][A-Za-z0-9_-]{8,}\.(?:js|mjs|css|png|jpe?g|svg|webp|avif|woff2?|ico)$/i;
 
 function acceptable(response, path) {
   if (!response.ok || response.redirected || response.type === 'opaque') return false;
@@ -74,6 +75,20 @@ self.addEventListener('message', (event) => {
   }
 });
 
+async function cachedAsset(path) {
+  const current = await (await caches.open(ASSET_CACHE)).match(path);
+  if (current) return current;
+  if (!HASHED.test(path)) return undefined;
+  const names = (await caches.keys())
+    .filter((name) => name.startsWith('photointel-manage-assets-') && name !== ASSET_CACHE)
+    .reverse();
+  for (const name of names) {
+    const hit = await (await caches.open(name)).match(path);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
@@ -105,14 +120,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (!PRECACHE.includes(url.pathname)) return;
+  if (!PRECACHE.includes(url.pathname) && !HASHED.test(url.pathname)) return;
   event.respondWith(
     (async () => {
-      const assets = await caches.open(ASSET_CACHE);
-      const cached = await assets.match(url.pathname);
+      const cached = await cachedAsset(url.pathname);
       if (cached) return cached;
       const response = await fetch(request);
       if (acceptable(response, url.pathname)) {
+        const assets = await caches.open(ASSET_CACHE);
         event.waitUntil(assets.put(url.pathname, response.clone()));
       }
       return response;
