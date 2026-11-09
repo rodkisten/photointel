@@ -73,3 +73,45 @@ createRoot(element).render(
     </ManageBoundary>
   </React.StrictMode>,
 );
+
+function updateOfflineNotice(): void {
+  let notice = document.getElementById('photointel-manage-offline');
+  if (navigator.onLine) {
+    notice?.remove();
+    return;
+  }
+  if (notice) return;
+  notice = document.createElement('div');
+  notice.id = 'photointel-manage-offline';
+  notice.setAttribute('role', 'status');
+  notice.textContent = 'Sem conexão · a interface está disponível offline, mas dados e ações exigem internet.';
+  Object.assign(notice.style, {
+    position: 'fixed',
+    bottom: 'max(12px, env(safe-area-inset-bottom))',
+    left: '12px',
+    right: '12px',
+    marginInline: 'auto',
+    maxWidth: '560px',
+    zIndex: '2147483646',
+    background: '#1d2523',
+    color: '#e7fcf3',
+    border: '1px solid #537566',
+    borderRadius: '12px',
+    padding: '12px 16px',
+    font: '13px/1.4 system-ui, sans-serif',
+    boxShadow: '0 4px 20px #0005',
+  });
+  document.body.appendChild(notice);
+}
+
+window.addEventListener('online', updateOfflineNotice);
+window.addEventListener('offline', updateOfflineNotice);
+updateOfflineNotice();
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker
+      .register('/sw.js', { updateViaCache: 'none' })
+      .catch((error) => captureManageBrowserError(error, 'service-worker'));
+  });
+}

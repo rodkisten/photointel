@@ -86,7 +86,7 @@ if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function')
 /* Public SPA shell and build-stamped immutable assets. No private/API caching. */
 const SW_BUILD = '__PHOTOINTEL_SW_VERSION__';
 const SHELL_CACHE = 'photointel-shell-' + SW_BUILD;
-const ASSET_CACHE = 'photointel-static-v3';
+const ASSET_CACHE = 'photointel-static-' + SW_BUILD;
 const PUBLIC_CDN = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://www.gstatic.com'];
 const PRECACHE = /*__PHOTOINTEL_PRECACHE__*/ [];
 const PRIVATE = /^\/(?:v1(?:\/|$)|auth(?:\/|$)|__|cdn-cgi(?:\/|$)|api(?:\/|$)|\.)/;
@@ -127,12 +127,16 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE)
-          .map((key) => caches.delete(key)),
+      // Keep two previous immutable asset releases for old open tabs, while
+      // bounding disk usage on Safari. The active release is never deleted.
+      const previousAssets = keys.filter(
+        (key) => key.startsWith('photointel-static-') && key !== ASSET_CACHE,
       );
-      // The static cache is intentionally retained across releases.
+      const expired = [
+        ...keys.filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE),
+        ...previousAssets.slice(0, -2),
+      ];
+      await Promise.all(expired.map((key) => caches.delete(key)));
       await self.clients.claim();
     })(),
   );
@@ -152,6 +156,21 @@ self.addEventListener('message', (event) => {
     );
   }
 });
+// Older open tabs may still request their own fingerprinted bundles after an
+// upgrade. Search the two retained release caches before hitting the network.
+async function cachedAsset(path) {
+  const current = await (await caches.open(ASSET_CACHE)).match(path);
+  if (current) return current;
+  if (!HASHED.test(path)) return undefined;
+  const names = (await caches.keys())
+    .filter((name) => name.startsWith('photointel-static-') && name !== ASSET_CACHE)
+    .reverse();
+  for (const name of names) {
+    const hit = await (await caches.open(name)).match(path);
+    if (hit) return hit;
+  }
+  return undefined;
+}
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -182,8 +201,9 @@ self.addEventListener('fetch', (event) => {
         } catch {
           // Offline fallback below.
         }
+        const savedShell = await (await caches.open(SHELL_CACHE)).match('/index.html');
         return (
-          (await caches.open(SHELL_CACHE)).match('/index.html') ||
+          savedShell ||
           new Response('PhotoIntel precisa ser aberto online uma vez.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -196,11 +216,11 @@ self.addEventListener('fetch', (event) => {
   if (!PRECACHE.includes(url.pathname) && !HASHED.test(url.pathname)) return;
   event.respondWith(
     (async () => {
-      const cache = await caches.open(ASSET_CACHE);
-      const hit = await cache.match(url.pathname);
+      const hit = await cachedAsset(url.pathname);
       if (hit) return hit;
       const response = await fetch(req);
       if (valid(response, url.pathname)) {
+        const cache = await caches.open(ASSET_CACHE);
         event.waitUntil(cache.put(url.pathname, response.clone()));
       }
       return response;

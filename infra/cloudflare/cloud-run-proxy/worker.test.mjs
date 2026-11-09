@@ -357,5 +357,10 @@ test('SPA navigation and sw.js bypass edge cache; versioned assets keep normal c
     assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
   }
   const asset = await handle(new Request(env.FRONTEND_ORIGIN + '/assets/app.abcd1234.js'), configured);
-  assert.equal(asset.headers.get('cache-control'), 'public, max-age=86400');
+  assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  assert.equal(asset.headers.get('cdn-cache-control'), 'public, max-age=31536000, immutable');
+  const icon = await handle(new Request(env.FRONTEND_ORIGIN + '/icon-192.png'), configured);
+  assert.match(icon.headers.get('cache-control'), /max-age=604800/);
+  const dynamic = await handle(new Request(env.FRONTEND_ORIGIN + '/app-config.json'), configured);
+  assert.equal(dynamic.headers.get('cache-control'), 'no-store');
 });

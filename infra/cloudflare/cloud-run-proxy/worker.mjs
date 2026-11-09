@@ -130,6 +130,35 @@ function isNavigation(request, pathname) {
   );
 }
 
+// Only fingerprinted public release files are immutable. HTML, workers, auth and API
+// must always revalidate so deployments and sessions cannot be stuck in cache.
+const IMMUTABLE_ASSET = /^\/assets\/.+[-.][A-Za-z0-9_-]{8,}\.(?:js|mjs|css|woff2?|png|jpe?g|svg|webp|avif|ico)$/i;
+const PUBLIC_STATIC_ASSET = /\.(?:png|jpe?g|svg|webp|avif|gif|ico|woff2?|ttf)$/i;
+
+function setPublicAssetCache(headers, request, pathname, status) {
+  const html = (headers.get('Content-Type') || '').includes('text/html');
+  const navigation = isNavigation(request, pathname);
+  const critical = ['/index.html', '/sw.js', '/manifest.webmanifest', '/fcm.js'].includes(pathname);
+  if (status !== 200 || html || navigation || critical) {
+    headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+    headers.set('CDN-Cache-Control', 'no-store');
+    headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+    headers.set('Pragma', 'no-cache');
+    return;
+  }
+  let policy;
+  if (IMMUTABLE_ASSET.test(pathname)) {
+    policy = 'public, max-age=31536000, immutable';
+  } else if (PUBLIC_STATIC_ASSET.test(pathname)) {
+    policy = 'public, max-age=604800, stale-while-revalidate=86400';
+  } else {
+    policy = 'no-store';
+  }
+  headers.set('Cache-Control', policy);
+  headers.set('CDN-Cache-Control', policy);
+  headers.set('Cloudflare-CDN-Cache-Control', policy);
+}
+
 async function dispatch(request, env, fetchOrigin, correlationId) {
   const incoming = new URL(request.url);
   const log = (level, event, route, status, durationMs = 0) =>
@@ -267,15 +296,7 @@ async function dispatch(request, env, fetchOrigin, correlationId) {
         return frontendFailure(response.status, correlationId);
       }
       const headers = new Headers(response.headers);
-      if (
-        isNavigation(request, incoming.pathname) ||
-        ['/index.html', '/sw.js', '/manifest.webmanifest', '/fcm.js'].includes(incoming.pathname)
-      ) {
-        headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
-        headers.set('CDN-Cache-Control', 'no-store');
-        headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-        headers.set('Pragma', 'no-cache');
-      }
+      setPublicAssetCache(headers, request, incoming.pathname, response.status);
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,

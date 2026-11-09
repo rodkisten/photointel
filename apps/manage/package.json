@@ -10,7 +10,9 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "format": "npm --prefix ../.. run format:manage",
-    "format:check": "npm --prefix ../.. run format:check:manage"
+    "format:check": "npm --prefix ../.. run format:check:manage",
+    "postbuild": "node scripts/inject-precache.mjs",
+    "test:pwa": "node --test scripts/offline-sw.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
