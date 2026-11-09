@@ -187,7 +187,7 @@ export function DeployTriggers() {
         </Card>
       </Section>
       <Section title="Regras salvas" detail="Desativadas não disparam builds, mas continuam editáveis.">
-        {snapshot.isPending ? <Spinner /> : !snapshot.data?.rules.length ? <Empty message="Nenhuma regra configurada" /> :
+        {snapshot.isPending ? <Spinner /> : !snapshot.data?.rules.length ? <Empty title="Nenhuma regra configurada" /> :
           <div className="space-y-2">{snapshot.data.rules.map((rule) =>
             <Card key={rule.id} className="flex flex-wrap items-start justify-between gap-3 p-3">
               <div className="min-w-0 flex-1 space-y-1">
@@ -222,7 +222,7 @@ export function DeployTriggers() {
             onClick={() => refresh.mutate()}><RefreshCcw size={15} /> Atualizar status</Button>
         </div>
         {refresh.error && <IssueBanner error={refresh.error} />}
-        {!snapshot.data?.runs.length ? <Empty message="Nenhum deploy recebido ainda" /> :
+        {!snapshot.data?.runs.length ? <Empty title="Nenhum deploy recebido ainda" /> :
           <div className="space-y-2">{snapshot.data.runs.map((run) =>
             <Card key={run.id} className="space-y-2 p-3">
               <div className="flex flex-wrap items-center gap-2">
