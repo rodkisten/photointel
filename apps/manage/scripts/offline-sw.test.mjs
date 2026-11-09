@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8')
   .replace('/*__PHOTOINTEL_MANAGE_PRECACHE__*/ []', "['/assets/index-B7x92a0z.js', '/assets/index-Q9w8c7f6.css']")
   .replace('__PHOTOINTEL_MANAGE_SW_VERSION__', 'test-release');
 
-function setup() {
+function setup({ accessRedirect = false } = {}) {
   const listeners = new Map();
   const stores = new Map();
   let offline = false;
@@ -35,6 +35,7 @@ function setup() {
     async fetch(input) {
       requests++;
       if (offline) throw new Error('offline');
+      if (accessRedirect) return Response.redirect('https://auth.example.net/login', 302);
       const path = typeof input === 'string' ? input : new URL(input.url).pathname;
       if (path.endsWith('.js')) return new Response('console.log("manage")', { headers: { 'content-type': 'application/javascript' } });
       if (path.endsWith('.css')) return new Response('body{color:black}', { headers: { 'content-type': 'text/css' } });
@@ -87,6 +88,6 @@ test('Manage never intercepts API, auth, hooks, diagnostics or cross-origin requ
 });
 
 test('Manage refuses to precache redirected Access login responses', async () => {
-  assert.equal(source.includes('response.redirected'), true);
-  assert.equal(source.includes('redirect: \'error\''), true);
+  const env = setup({ accessRedirect: true });
+  await assert.rejects(env.trigger('install'), /Cannot precache/);
 });
