@@ -1,6 +1,6 @@
 {
   "$schema": "../manage/node_modules/wrangler/config-schema.json",
-  "name": "photointel-api-relay",
+  "name": "photointel",
   "main": "../../infra/cloudflare/cloud-run-proxy/worker.mjs",
   "compatibility_date": "2026-11-01",
   "workers_dev": false,
