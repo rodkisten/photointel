@@ -176,7 +176,7 @@ export function PreviewAuditDialog({ onClose }: { onClose: () => void }) {
                     na configuração de produção antes de ampliar a capacidade do banco.
                   </p>
                 </div>
-              )
+              )}
               <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
                 <strong>Reparo de mídia {automation.data?.enabled ? '· Automação configurada' : '· Automação desativada'}</strong>
                 <p className="field-help" role="status">
