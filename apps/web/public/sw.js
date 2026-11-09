@@ -186,8 +186,9 @@ self.addEventListener('fetch', (event) => {
         } catch {
           // Offline fallback below.
         }
+        const savedShell = await (await caches.open(SHELL_CACHE)).match('/index.html');
         return (
-          (await caches.open(SHELL_CACHE)).match('/index.html') ||
+          savedShell ||
           new Response('PhotoIntel precisa ser aberto online uma vez.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
