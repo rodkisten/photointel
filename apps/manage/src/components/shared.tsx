@@ -39,6 +39,7 @@ import { findDuplicateConfigKeys, planConfigChange } from '../config-reconcile';
 import type { ConfigPlan } from '../config-reconcile';
 import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
+
 export const External = ({ href, children }: { href?: string; children: React.ReactNode }) =>
   href && href.startsWith('https://') ? (
     <a
@@ -51,18 +52,23 @@ export const External = ({ href, children }: { href?: string; children: React.Re
       <ArrowUpRight size={13} />
     </a>
   ) : null;
+
 export function Spinner() {
   return <LoaderCircle size={17} className="animate-spin text-carbon-500" />;
 }
-export function Empty({ title, detail }: { title: string; detail?: string }) {
+
+
+export function Empty({ title, detail, message}: { title?: string; detail?: string; message?: string }) {
   return (
     <Card className="p-7 text-center">
       <CircleAlert className="mx-auto text-carbon-600" size={25} />
-      <p className="mt-3 text-sm font-medium">{title}</p>
+      {title && <p className="mt-3 text-sm font-medium">{title}</p>}
       {detail && <p className="mt-1.5 text-xs text-carbon-500">{detail}</p>}
+      {message && <p className="mt-1.5 text-xs text-carbon-500">{message}</p>}
     </Card>
   );
 }
+
 export function IssueBanner({ error, className }: { error: unknown; className?: string }) {
   const e = error as { message?: string; code?: string; correlationId?: string; sentryEventId?: string };
   const sentryUrl = sentryIssueSearch(e.correlationId);
