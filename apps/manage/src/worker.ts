@@ -2,6 +2,7 @@ import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
 import { captureManageError } from './sentry';
+import { manageAssetCachePolicy } from './asset-cache';
 import { githubHook, cloudBuildCallback, tick } from './deploy-router/service';
 
 function routeGroup(path: string): string {
@@ -66,7 +67,9 @@ export default {
         }
         const response = await env.ASSETS.fetch(request);
         const headers = new Headers(response.headers);
-        headers.set('Cache-Control', 'no-store');
+        headers.set('Cache-Control', manageAssetCachePolicy(path, response));
+        headers.set('CDN-Cache-Control', 'no-store');
+        headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
         headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
         headers.set('X-Content-Type-Options', 'nosniff');
         headers.set('X-Frame-Options', 'DENY');
@@ -96,10 +99,10 @@ export default {
         return withIncidentHeaders(failure(405, 'METHOD', 'Método não permitido'), correlationId);
       const response = await env.ASSETS.fetch(request);
       const headers = new Headers(response.headers);
-      headers.set(
-        'Cache-Control',
-        path === '/' || path.endsWith('.html') ? 'no-store' : 'public,max-age=3600',
-      );
+      // Browser-only caching: Cloudflare Access must never be bypassed by shared edge caches.
+      headers.set('Cache-Control', manageAssetCachePolicy(path, response));
+      headers.set('CDN-Cache-Control', 'no-store');
+      headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
       headers.set('Referrer-Policy', 'no-referrer');
       headers.set('X-Frame-Options', 'DENY');
       headers.set('X-Content-Type-Options', 'nosniff');
