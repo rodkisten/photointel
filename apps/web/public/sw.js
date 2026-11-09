@@ -156,6 +156,21 @@ self.addEventListener('message', (event) => {
     );
   }
 });
+// Older open tabs may still request their own fingerprinted bundles after an
+// upgrade. Search the two retained release caches before hitting the network.
+async function cachedAsset(path) {
+  const current = await (await caches.open(ASSET_CACHE)).match(path);
+  if (current) return current;
+  if (!HASHED.test(path)) return undefined;
+  const names = (await caches.keys())
+    .filter((name) => name.startsWith('photointel-static-') && name !== ASSET_CACHE)
+    .reverse();
+  for (const name of names) {
+    const hit = await (await caches.open(name)).match(path);
+    if (hit) return hit;
+  }
+  return undefined;
+}
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -201,11 +216,11 @@ self.addEventListener('fetch', (event) => {
   if (!PRECACHE.includes(url.pathname) && !HASHED.test(url.pathname)) return;
   event.respondWith(
     (async () => {
-      const cache = await caches.open(ASSET_CACHE);
-      const hit = await cache.match(url.pathname);
+      const hit = await cachedAsset(url.pathname);
       if (hit) return hit;
       const response = await fetch(req);
       if (valid(response, url.pathname)) {
+        const cache = await caches.open(ASSET_CACHE);
         event.waitUntil(cache.put(url.pathname, response.clone()));
       }
       return response;
