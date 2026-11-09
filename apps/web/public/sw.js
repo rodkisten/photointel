@@ -86,7 +86,7 @@ if (typeof firebase !== 'undefined' && typeof firebase.messaging === 'function')
 /* Public SPA shell and build-stamped immutable assets. No private/API caching. */
 const SW_BUILD = '__PHOTOINTEL_SW_VERSION__';
 const SHELL_CACHE = 'photointel-shell-' + SW_BUILD;
-const ASSET_CACHE = 'photointel-static-v3';
+const ASSET_CACHE = 'photointel-static-' + SW_BUILD;
 const PUBLIC_CDN = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://www.gstatic.com'];
 const PRECACHE = /*__PHOTOINTEL_PRECACHE__*/ [];
 const PRIVATE = /^\/(?:v1(?:\/|$)|auth(?:\/|$)|__|cdn-cgi(?:\/|$)|api(?:\/|$)|\.)/;
@@ -127,12 +127,16 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE)
-          .map((key) => caches.delete(key)),
+      // Keep two previous immutable asset releases for old open tabs, while
+      // bounding disk usage on Safari. The active release is never deleted.
+      const previousAssets = keys.filter(
+        (key) => key.startsWith('photointel-static-') && key !== ASSET_CACHE,
       );
-      // The static cache is intentionally retained across releases.
+      const expired = [
+        ...keys.filter((key) => key.startsWith('photointel-shell-') && key !== SHELL_CACHE),
+        ...previousAssets.slice(0, -2),
+      ];
+      await Promise.all(expired.map((key) => caches.delete(key)));
       await self.clients.claim();
     })(),
   );
