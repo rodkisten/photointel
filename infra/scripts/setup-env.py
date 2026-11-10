@@ -8,6 +8,8 @@ import os
 import re
 import secrets
 import tempfile
+import sys
+from urllib.parse import urlsplit
 from pathlib import Path
 
 
@@ -43,6 +45,10 @@ def replace_settings(contents: str, replacements: dict[str, str]) -> str:
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--codespaces-origin", action="store_true")
+parser.add_argument(
+    "--force-github", action="store_true",
+    help="Fetch current production GCP_CONFIG_ENV from GitHub and refresh non-secret GPU settings",
+)
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[2]
 target = root / ".env"
@@ -94,6 +100,66 @@ else:
     print(".env local criado com modo 0600 e credenciais aleatórias.")
     if origins:
         print("Origem HTTPS do Codespaces configurada; mantenha as portas privadas.")
+if args.force_github:
+    # Reuse the GPU CLI transport (installs/locates gh and reads the production
+    # environment variable, without running deploy, billing or GCP mutations).
+    sys.path.insert(0, str(root))
+    from gpu import SetupError, get_github_config, parse_config
+
+    try:
+        github_raw = get_github_config(dry_run=False)
+        github_values = parse_config(github_raw)
+    except SetupError as exc:
+        raise SystemExit(f"[setup] GitHub config unavailable: {exc}") from None
+
+    # Only public inference fields can be copied into the local dev .env.
+    # GCP_CONFIG_ENV holds Secret Manager names/versions, not secret values.
+    remote = {
+        key: github_values.get(f"EXTRA_ENVIRONMENT__{key}", "")
+        for key in ("MODAL_ENDPOINT", "JOYTAG_MODEL_REVISION", "SIGLIP_MODEL_REVISION")
+    }
+    replacements = {key: value for key, value in remote.items() if value}
+    if "MODAL_ENDPOINT" in replacements:
+        parsed = urlsplit(replacements["MODAL_ENDPOINT"])
+        if (
+            parsed.scheme != "https" or not parsed.hostname or parsed.username
+            or parsed.password or parsed.query or parsed.fragment
+        ):
+            raise SystemExit("[setup] Invalid Modal endpoint in GCP_CONFIG_ENV")
+    for key in ("JOYTAG_MODEL_REVISION", "SIGLIP_MODEL_REVISION"):
+        if key in replacements and not re.fullmatch(r"[0-9a-fA-F]{40}", replacements[key]):
+            raise SystemExit(f"[setup] Invalid 40-character model SHA: {key}")
+    if target.is_symlink():
+        raise SystemExit("[setup] Refusing to update a symlinked .env")
+    if replacements:
+        original = target.read_text(encoding="utf-8")
+        updated = replace_settings(original, replacements)
+        if updated != original:
+            import datetime as dt
+
+            backup = root / f".env.backup-github-{dt.datetime.now(dt.UTC):%Y%m%d-%H%M%S%f}"
+            backup_fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            with os.fdopen(backup_fd, "w", encoding="utf-8") as stream:
+                stream.write(original)
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=root,
+                prefix=".env.github-", delete=False,
+            ) as handle:
+                temporary = Path(handle.name)
+                handle.write(updated)
+            try:
+                os.chmod(temporary, 0o600)
+                os.replace(temporary, target)
+            finally:
+                temporary.unlink(missing_ok=True)
+            print("[setup] GitHub synchronized public fields: " + ", ".join(sorted(replacements)))
+            print(f"[setup] Previous .env privately backed up to {backup.name}")
+        else:
+            print("[setup] Local .env public GPU values already match GitHub")
+    else:
+        print("[setup] GitHub GCP_CONFIG_ENV cached; no public model fields to copy into .env")
+    print("[setup] GPU_ENABLED and all private credentials left unchanged.")
+
 for name in ("processing", "icloud-session", "icloud-downloads", "model-cache"):
     path = root / "var" / name
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
