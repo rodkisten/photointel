@@ -55,8 +55,13 @@ class SetupError(RuntimeError):
 
 
 def exec_cmd(args: Sequence[str], *, stdin: str | None = None,
-             allow_error: bool = False, timeout: int = 300) -> subprocess.CompletedProcess[str]:
+             allow_error: bool = False, timeout: int = 300,
+             clean_github_auth: bool = False) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
+    if clean_github_auth:
+        # Tokens injected by Codespaces override the user's saved gh login.
+        env.pop("GH_TOKEN", None)
+        env.pop("GITHUB_TOKEN", None)
     env.update({
         "CLOUDSDK_CORE_DISABLE_PROMPTS": "1",
         "GH_PROMPT_DISABLED": "1",
@@ -190,9 +195,31 @@ def run_gcloud(args: Sequence[str], *, stdin: str | None = None,
 
 def run_gh(args: Sequence[str], *, stdin: str | None = None,
            allow_error: bool = False) -> subprocess.CompletedProcess[str]:
-    """Executa `gh <args>` com instalação sob demanda."""
+    """Execute gh, retrying saved user auth if Codespaces integration is denied."""
     ensure_cli("gh")
-    return exec_cmd(["gh", *args], stdin=stdin, allow_error=allow_error)
+    command = ["gh", *args]
+    result = exec_cmd(command, stdin=stdin, allow_error=True)
+    denied = (
+        result.returncode != 0
+        and ("resource not accessible by integration" in result.stderr.casefold()
+             or "http 403" in result.stderr.casefold())
+    )
+    if denied and args and args[0] in {"variable", "workflow"}:
+        # Only retry a denied request; never prompt, print tokens or change login.
+        personal = exec_cmd(
+            command, stdin=stdin, allow_error=True, clean_github_auth=True,
+        )
+        if personal.returncode == 0:
+            return personal
+    if result.returncode and not allow_error:
+        if denied:
+            raise SetupError(
+                "GitHub Codespaces token lacks permission for the production Environment. "
+                "Authenticate personally with: "
+                "env -u GH_TOKEN -u GITHUB_TOKEN gh auth login -h github.com --web -s repo"
+            )
+        raise SetupError("Falha ao executar gh. Confira autenticação e permissões.")
+    return result
 
 
 def read_env() -> dict[str, str]:
@@ -270,9 +297,18 @@ def get_github_config(*, dry_run: bool) -> str:
         "--json", "value", "--jq", ".value",
     ], allow_error=True)
     if result.returncode:
+        if ("resource not accessible by integration" in result.stderr.casefold()
+                or "http 403" in result.stderr.casefold()):
+            raise SetupError(
+                "HTTP 403: token automático do Codespaces não tem acesso à variável "
+                "GCP_CONFIG_ENV do GitHub Environment production. Execute "
+                "'env -u GH_TOKEN -u GITHUB_TOKEN gh auth login -h github.com --web -s repo' "
+                "e tente novamente. Para token fine-grained, habilite Environments: read "
+                "(write também é necessário para o deploy)."
+            )
         raise SetupError(
-            "GCP_CONFIG_ENV não pôde ser lida via gh. Verifique 'gh auth status', "
-            "a variável no GitHub Environment production e suas permissões. "
+            "GCP_CONFIG_ENV não pôde ser lida via gh. Verifique a autenticação pessoal, "
+            "a existência da variável no ambiente production e suas permissões. "
             "Nenhuma configuração remota foi modificada."
         )
     raw = result.stdout.rstrip("\n") + "\n"
