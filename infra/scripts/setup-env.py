@@ -7,8 +7,8 @@ import json
 import os
 import re
 import secrets
-import tempfile
 import sys
+import tempfile
 from urllib.parse import urlsplit
 from pathlib import Path
 
