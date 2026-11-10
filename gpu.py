@@ -2,11 +2,14 @@
 """Sincroniza o Modal do .env com GCP Secret Manager e GitHub Actions.
 
 Uso (na raiz do repositório photointel):
-    python3 photointel_backend_gpu_sync.py --dry-run
-    python3 photointel_backend_gpu_sync.py
-    python3 photointel_backend_gpu_sync.py --enable-gpu --deploy
+    python3 gpu.py --dry-run
+    python3 gpu.py
+    python3 gpu.py --enable-gpu --deploy
 
-Instala gh/gcloud via repositórios apt oficiais em Debian/Ubuntu, quando ausentes
+Se GCP_CONFIG_ENV não existir localmente, baixa via gh e salva em
+.env.gcp-config-env (0600). Mantém cache sincronizado com a fonte de verdade.
+Localiza gh/gcloud fora do PATH ou instala via repositórios apt oficiais em
+Debian/Ubuntu, quando ausentes
 e houver privilégios root ou sudo não interativo. Não autentica, habilita APIs,
 altera billing ou inicia um deploy sem --deploy.
 """
@@ -31,6 +34,7 @@ PROJECT = "photointel"
 ENVIRONMENT = "production"
 ROOT = Path(__file__).resolve().parent
 ENV_PATH = ROOT / ".env"
+CONFIG_CACHE = ROOT / ".env.gcp-config-env"  # Guardado no gitignore (.env.*)
 
 # Somente as seis entradas realmente exigidas pela integração.
 REQUIRED = (
@@ -66,8 +70,7 @@ def exec_cmd(args: Sequence[str], *, stdin: str | None = None,
     )
     if result.returncode and not allow_error:
         # Não mostramos os argumentos nem stdout: alguns carregam credenciais.
-        error = (result.stderr or "Erro não detalhado pelo programa").strip()
-        raise SetupError(f"Falhou {Path(args[0]).name}: {error[:600]}")
+        raise SetupError(f"Falhou {Path(args[0]).name}. Confira autenticação, permissões e configurações.")
     return result
 
 
@@ -89,7 +92,7 @@ def admin_cmd(prefix: Sequence[str], args: Sequence[str], *, stdin: str | None =
     result = exec_cmd(command, stdin=stdin, allow_error=True, timeout=900)
     if result.returncode:
         raise SetupError(
-            "Instalação da CLI falhou: " + (result.stderr or "confira APT e rede")[-650:].strip()
+            "Instalação da CLI falhou; confira permissões, repositórios APT e rede."
         )
 
 
@@ -152,8 +155,26 @@ def install_cli(program: str) -> None:
 
 
 def ensure_cli(program: str) -> None:
+    """Localiza CLIs instaladas fora do PATH e instala quando necessário.
+
+    Somente diretórios de executáveis são adicionados ao PATH; nunca valores
+    de variáveis, tokens ou conteúdos do GCP_CONFIG_ENV.
+    """
     if shutil.which(program):
         return
+    for directory in (
+        "/usr/local/bin",
+        "/usr/bin",
+        "/opt/homebrew/bin",
+        "/home/linuxbrew/.linuxbrew/bin",
+        str(Path.home() / "google-cloud-sdk/bin"),
+        "/opt/google-cloud-sdk/bin",
+    ):
+        executable = Path(directory) / program
+        if executable.is_file() and os.access(executable, os.X_OK):
+            os.environ["PATH"] = directory + os.pathsep + os.environ.get("PATH", "")
+            print(f"✅ {program} localizado e incluído no PATH: {directory}")
+            return
     install_cli(program)
 
 
@@ -222,6 +243,57 @@ def parse_config(raw: str) -> dict[str, str]:
     return result
 
 
+def write_private(path: Path, content: str) -> None:
+    """Grava atomica e privadamente, sem exibir o conteúdo no terminal."""
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".gcp-config-", dir=path.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def get_github_config(*, dry_run: bool) -> str:
+    """Obtém GCP_CONFIG_ENV via gh e coloca arquivo local sob caminho estável.
+
+    O GitHub é a fonte de verdade. Mesmo que haja cache local, recupera a versão
+    atual antes da escrita remota para evitar aplicar sobre configuração antiga.
+    """
+    base = ["-R", REPO, "-e", ENVIRONMENT]
+    result = run_gh([
+        "variable", "get", "GCP_CONFIG_ENV", *base,
+        "--json", "value", "--jq", ".value",
+    ], allow_error=True)
+    if result.returncode:
+        raise SetupError(
+            "GCP_CONFIG_ENV não pôde ser lida via gh. Verifique 'gh auth status', "
+            "a variável no GitHub Environment production e suas permissões. "
+            "Nenhuma configuração remota foi modificada."
+        )
+    raw = result.stdout.rstrip("\n") + "\n"
+    if not raw.strip():
+        raise SetupError("GCP_CONFIG_ENV existe, mas está vazia no GitHub")
+    parse_config(raw)
+    cached = CONFIG_CACHE.read_text(encoding="utf-8") if CONFIG_CACHE.is_file() else None
+    if cached != raw:
+        if not dry_run:
+            write_private(CONFIG_CACHE, raw)
+            print(f"✅ GCP_CONFIG_ENV obtida via gh e salva em {CONFIG_CACHE}")
+        else:
+            print(f"🔎 GCP_CONFIG_ENV disponível no GitHub (cache seria salvo em {CONFIG_CACHE})")
+    else:
+        print(f"✅ GCP_CONFIG_ENV local já atualizada em {CONFIG_CACHE}")
+    # Caminho de arquivo, não PATH (que é reservado para executáveis).
+    os.environ["GCP_CONFIG_ENV_PATH"] = str(CONFIG_CACHE)
+    os.environ["GCP_CONFIG_ENV"] = raw
+    return raw
+
+
 def patch_config(raw: str, patch: dict[str, str]) -> str:
     updated: list[str] = []
     done: set[str] = set()
@@ -244,7 +316,7 @@ def secret_exists(name: str) -> bool:
     message = result.stderr.lower()
     if any(part in message for part in ("not_found", "not found", "404")):
         return False
-    raise SetupError(f"Não foi possível consultar Secret Manager ({name}): {result.stderr[:400]}")
+    raise SetupError(f"Não foi possível consultar Secret Manager ({name}); confira IAM e autenticação")
 
 
 def sync_secret(key: str, value: str, name: str, *, dry_run: bool) -> str | None:
@@ -295,10 +367,7 @@ def main() -> None:
         raise SetupError("gcloud sem conta ativa; execute: gcloud auth login --no-launch-browser")
 
     base_args = ["-R", REPO, "-e", ENVIRONMENT]
-    original = run_gh([
-        "variable", "get", "GCP_CONFIG_ENV", *base_args,
-        "--json", "value", "--jq", ".value",
-    ]).stdout
+    original = get_github_config(dry_run=args.dry_run)
     existing = parse_config(original)
 
     patch = {
@@ -314,6 +383,7 @@ def main() -> None:
         "EXTRA_ENVIRONMENT__GPU_MONTHLY_BUDGET": "10",
     }
     print(f"🔎 Projeto: {PROJECT} / GitHub: {REPO} / ambiente: {ENVIRONMENT}")
+    print(f"📁 Configuração local: {CONFIG_CACHE}")
     for key in SECRET_NAMES:
         name_key = f"SECRETS__{key}__NAME"
         name = existing.get(name_key, f"photointel-{key.lower().replace('_', '-')}")
@@ -337,7 +407,9 @@ def main() -> None:
 
     updated = patch_config(original, patch)
     run_gh(["variable", "set", "GCP_CONFIG_ENV", *base_args], stdin=updated)
-    print("✅ GCP_CONFIG_ENV atualizado preservando as demais linhas")
+    write_private(CONFIG_CACHE, updated)
+    os.environ["GCP_CONFIG_ENV"] = updated
+    print(f"✅ GCP_CONFIG_ENV atualizado no GitHub e em {CONFIG_CACHE}")
     print("⛔ GPU configurada como " + ("ATIVA" if args.enable_gpu else "DESATIVADA"))
     if args.deploy:
         run_gh(["workflow", "run", "gcp-deploy.yml", "-R", REPO,
