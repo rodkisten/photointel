@@ -9,6 +9,7 @@ ASSETS ?= 100
 REPORT ?= reports/benchmark-$(ASSETS).json
 GCP_CONFIG ?= infra/gcp/config.local.json
 GCP_ARGS ?=
+FORCE_GITHUB ?= 0
 BACKUP_DIRECTORY ?= backups/application
 BACKUP_KEY_FILE ?=
 POSTGRES_CONTAINER ?= photointel-v11-postgres
@@ -19,12 +20,14 @@ E2E_ARGS ?=
 # GitHub Actions interactive SSH session
 SESSION_MINUTES ?= 60
 
-.PHONY: help setup dev stop migrate seed lint typecheck test test-integration test-e2e build doctor ingest-test gpu-test backup restore-test benchmark export cleanup info check finish keepalive
+.PHONY: help setup setup-github dev stop migrate seed lint typecheck test test-integration test-e2e build doctor ingest-test gpu-test backup restore-test benchmark export cleanup info check finish keepalive
 
 help:
 	@printf '%s\n' \
 	  'Photo Intelligence Cloud — available commands:' \
 	  '  make setup              Prepare .env, install uv and npm (creates missing lockfiles)' \
+	  '  make setup-github       Force-refresh public GPU env and GCP config cache from GitHub' \
+	  '  make setup FORCE_GITHUB=1  Equivalent GitHub refresh' \
 	  '  make dev                Start services with Docker Compose' \
 	  '  make stop               Stop services' \
 	  '  make migrate            Apply Alembic migrations' \
@@ -49,7 +52,7 @@ help:
 	  '  make keepalive          Wait for SSH session (used by GitHub Actions)'
 
 setup:
-	python3 infra/scripts/setup-env.py
+	python3 infra/scripts/setup-env.py $(if $(filter 1 true yes,$(FORCE_GITHUB)),--force-github,)
 	@if [[ ! -f pyproject.toml ]]; then \
 	  echo '[setup] ERROR: pyproject.toml not found in repository root' >&2; \
 	  exit 1; \
@@ -68,6 +71,9 @@ setup:
 	else \
 	  echo '[setup] apps/web/package.json absent; skipping npm installation'; \
 	fi
+
+setup-github:
+	@$(MAKE) setup FORCE_GITHUB=1
 
 dev:
 	$(COMPOSE) up --build -d
