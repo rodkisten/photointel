@@ -7,7 +7,6 @@ import json
 import os
 import re
 import secrets
-import sys
 import tempfile
 from urllib.parse import urlsplit
 from pathlib import Path
@@ -103,8 +102,17 @@ else:
 if args.force_github:
     # Reuse the GPU CLI transport (installs/locates gh and reads the production
     # environment variable, without running deploy, billing or GCP mutations).
-    sys.path.insert(0, str(root))
-    from gpu import SetupError, get_github_config, parse_config
+    # A pasta gpu/ tem precedência sobre gpu.py em "import gpu".
+    # Carregue explicitamente o script da raiz, sem invocar main().
+    from runpy import run_path
+
+    try:
+        helpers = run_path(str(root / "gpu.py"), run_name="_photointel_gpu_setup")
+        SetupError = helpers["SetupError"]
+        get_github_config = helpers["get_github_config"]
+        parse_config = helpers["parse_config"]
+    except (FileNotFoundError, KeyError) as exc:
+        raise SystemExit("[setup] gpu.py ausente ou incompatível; atualize seu checkout") from exc
 
     try:
         github_raw = get_github_config(dry_run=False)
