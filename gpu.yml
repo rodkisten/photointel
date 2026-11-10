@@ -1,0 +1,229 @@
+# PhotoIntel GPU: configuração e publicação MANUAL.
+# Cópia solicitada na raiz. O arquivo de execução fica em .github/workflows/gpu.yml.
+# Não configura billing, não habilita APIs e não roda inferência automaticamente.
+name: "🎛️ PhotoIntel · GPU / Modal"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Plan, sync secrets/config, deploy current config, or sync + deploy"
+        required: true
+        type: choice
+        default: plan
+        options:
+          - plan
+          - sync
+          - deploy
+          - sync-and-deploy
+      enable_gpu:
+        description: "Set enable_gpu=true in GCP_CONFIG_ENV (may incur GPU charges after deploy)"
+        type: boolean
+        default: false
+      modal_endpoint:
+        description: "HTTPS endpoint; leave blank to reuse GCP_CONFIG_ENV"
+        type: string
+        required: false
+      joytag_revision:
+        description: "JoyTag Hugging Face 40-character SHA; blank reuses config"
+        type: string
+        required: false
+      siglip_revision:
+        description: "SigLIP 2 Hugging Face 40-character SHA; blank reuses config"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+
+concurrency:
+  group: photointel-gpu-production
+  cancel-in-progress: false
+
+jobs:
+  gpu:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ secrets.GPU_GH_TOKEN || github.token }}
+      GH_PROMPT_DISABLED: "1"
+      CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+      GIT_TERMINAL_PROMPT: "0"
+      REPO: rodkisten/photointel
+      PROJECT: photointel
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "🔎 Discover GitHub config"
+        id: source
+        shell: bash
+        env:
+          CONFIG_FROM_VARS: ${{ vars.GCP_CONFIG_ENV }}
+        run: |
+          set -euo pipefail
+          if ! command -v gh >/dev/null 2>&1; then
+            sudo apt-get update -qq >/dev/null
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gh >/dev/null
+          fi
+          if [[ -n "$CONFIG_FROM_VARS" ]]; then
+            value="$CONFIG_FROM_VARS"
+          else
+            value="$(gh variable get GCP_CONFIG_ENV --repo "$REPO" --env production)"
+          fi
+          [[ -n "$value" ]] || { echo "::error::GCP_CONFIG_ENV missing"; exit 1; }
+          printf '%s\n' "$value" > "$RUNNER_TEMP/gpu-config.env"
+          chmod 600 "$RUNNER_TEMP/gpu-config.env"
+          delimiter="GPU_CONFIG_$(date +%s%N)"
+          {
+            echo "value<<$delimiter"
+            printf '%s\n' "$value"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+          echo "✅ GCP_CONFIG_ENV available. Values not printed."
+
+      - name: "🔍 Validate GCP release config"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ steps.source.outputs.value }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+
+      - name: "🔐 Authenticate GCP through existing WIF"
+        if: inputs.action != 'plan'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+
+      - name: "🧰 Ensure gcloud is available"
+        if: inputs.action != 'plan'
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: "🔐 Sync Modal credentials and configuration"
+        if: inputs.action == 'sync' || inputs.action == 'sync-and-deploy'
+        shell: bash
+        env:
+          MODAL_TOKEN: ${{ secrets.MODAL_TOKEN }}
+          MODAL_PROXY_KEY: ${{ secrets.MODAL_PROXY_KEY }}
+          MODAL_PROXY_SECRET: ${{ secrets.MODAL_PROXY_SECRET }}
+          ENDPOINT_INPUT: ${{ inputs.modal_endpoint }}
+          JOYTAG_INPUT: ${{ inputs.joytag_revision }}
+          SIGLIP_INPUT: ${{ inputs.siglip_revision }}
+          GPU_ON: ${{ inputs.enable_gpu }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          raw = Path(os.environ["RUNNER_TEMP"], "gpu-config.env").read_text()
+          entries = {}
+          for line in raw.splitlines():
+              if not line.strip() or line.lstrip().startswith("#"):
+                  continue
+              if "=" not in line:
+                  raise SystemExit("Malformed GCP_CONFIG_ENV; no changes made")
+              key, value = line.split("=", 1)
+              if key in entries:
+                  raise SystemExit(f"Duplicate GCP_CONFIG_ENV key: {key}")
+              entries[key] = value
+          if entries.get("PROJECT_ID") != "photointel":
+              raise SystemExit("Unexpected GCP project")
+
+          endpoint = os.environ["ENDPOINT_INPUT"] or entries.get("EXTRA_ENVIRONMENT__MODAL_ENDPOINT", "")
+          joytag = os.environ["JOYTAG_INPUT"] or entries.get("EXTRA_ENVIRONMENT__JOYTAG_MODEL_REVISION", "")
+          siglip = os.environ["SIGLIP_INPUT"] or entries.get("EXTRA_ENVIRONMENT__SIGLIP_MODEL_REVISION", "")
+          parsed = urlsplit(endpoint)
+          if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+              raise SystemExit("Missing/invalid HTTPS Modal endpoint")
+          if not all(re.fullmatch(r"[0-9a-f]{40}", sha, re.I) for sha in (joytag, siglip)):
+              raise SystemExit("Missing/invalid JoyTag and SigLIP immutable 40-character SHAs")
+          secrets = {
+              "MODAL_TOKEN": os.environ["MODAL_TOKEN"],
+              "MODAL_PROXY_KEY": os.environ["MODAL_PROXY_KEY"],
+              "MODAL_PROXY_SECRET": os.environ["MODAL_PROXY_SECRET"],
+          }
+          if len(secrets["MODAL_TOKEN"]) < 32 or not secrets["MODAL_PROXY_KEY"].startswith("wk-") or not secrets["MODAL_PROXY_SECRET"].startswith("ws-"):
+              raise SystemExit("GitHub Environment production requires valid MODAL_TOKEN, MODAL_PROXY_KEY, MODAL_PROXY_SECRET secrets")
+
+          def gcloud(args, *, data=None, allow_failure=False):
+              proc = subprocess.run(
+                  ["gcloud", *args, "--project=photointel", "--quiet"],
+                  input=data, text=True, capture_output=True, check=False, timeout=180,
+              )
+              if proc.returncode and not allow_failure:
+                  raise SystemExit("gcloud command failed; verify Secret Manager/IAM permissions")
+              return proc
+
+          patch = {
+              "ENABLE_GPU": "json:true" if os.environ["GPU_ON"] == "true" else "json:false",
+              "EXTRA_ENVIRONMENT__MODAL_ENDPOINT": endpoint,
+              "EXTRA_ENVIRONMENT__JOYTAG_MODEL_REVISION": joytag,
+              "EXTRA_ENVIRONMENT__SIGLIP_MODEL_REVISION": siglip,
+              "EXTRA_ENVIRONMENT__MAX_GPU_CONCURRENCY": "1",
+              "EXTRA_ENVIRONMENT__BATCH_SIZE": "1",
+              "EXTRA_ENVIRONMENT__GPU_MAX_ASSETS_PER_RUN": "1",
+              "EXTRA_ENVIRONMENT__GPU_MAX_COST_PER_RUN": "1",
+              "EXTRA_ENVIRONMENT__GPU_DAILY_BUDGET": "2",
+              "EXTRA_ENVIRONMENT__GPU_MONTHLY_BUDGET": "10",
+          }
+          for key, value in secrets.items():
+              reference = entries.get(f"SECRETS__{key}__NAME", "photointel-" + key.lower().replace("_", "-"))
+              if not re.fullmatch(r"[a-z][a-z0-9-]{0,254}", reference):
+                  raise SystemExit("Invalid GCP Secret Manager reference")
+              check = gcloud(["secrets", "describe", reference, "--format=value(name)"], allow_failure=True)
+              if check.returncode:
+                  # Create only if absent, not for arbitrary permission errors.
+                  if "not found" not in check.stderr.lower() and "not_found" not in check.stderr.lower() and "404" not in check.stderr:
+                      raise SystemExit("Cannot inspect Secret Manager; verify access")
+                  gcloud(["secrets", "create", reference, "--replication-policy=automatic", "--format=none"])
+              result = gcloud(["secrets", "versions", "add", reference, "--data-file=-", "--format=value(name)"], data=value)
+              version = result.stdout.strip().rsplit("/", 1)[-1]
+              if not version.isdigit():
+                  raise SystemExit("Unexpected Secret Manager version")
+              for sa in ("photointel-api", "photointel-jobs"):
+                  gcloud([
+                      "secrets", "add-iam-policy-binding", reference,
+                      f"--member=serviceAccount:{sa}@photointel.iam.gserviceaccount.com",
+                      "--role=roles/secretmanager.secretAccessor", "--format=none",
+                  ])
+              patch[f"SECRETS__{key}__NAME"] = reference
+              patch[f"SECRETS__{key}__VERSION"] = version
+              print(f"✅ {key}: Secret Manager version {version}")
+
+          merged = dict(entries)
+          merged.update(patch)
+          updated = "\n".join(f"{key}={value}" for key, value in merged.items()) + "\n"
+          process = subprocess.run(
+              ["gh", "variable", "set", "GCP_CONFIG_ENV", "--repo", "rodkisten/photointel", "--env", "production"],
+              input=updated, text=True, capture_output=True, check=False, timeout=60,
+          )
+          if process.returncode:
+              raise SystemExit("GitHub variable update failed; GPU secrets are saved in GCP, but GCP_CONFIG_ENV was not updated. Check GPU_GH_TOKEN permissions.")
+          print("✅ GCP_CONFIG_ENV updated without exposing credential values")
+          PY
+
+      - name: "🚀 Trigger existing controlled GCP release"
+        if: inputs.action == 'deploy' || inputs.action == 'sync-and-deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run gcp-deploy.yml --repo "$REPO" --ref main -f action=release
+          echo "Release requested. Verify the run's result in Actions; this is not a completed deploy."
+
+      - name: "🧹 Clean generated local configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
