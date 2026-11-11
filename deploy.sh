@@ -192,8 +192,13 @@ prepare_config() {
   elif [[ -f "$path" ]]; then
     raw="$(cat "$path")"
     info 'Configuration source: local private file'
-  elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    raw="$(gh api 'repos/rodkisten/photointel/environments/production/variables/GCP_CONFIG_ENV' --jq '.value' 2>/dev/null || true)"
+  elif command -v gh >/dev/null 2>&1 &&
+       env -u GITHUB_TOKEN -u GH_TOKEN gh auth status >/dev/null 2>&1; then
+    # Codespaces exports a restricted GITHUB_TOKEN which overrides the user's
+    # authenticated gh credentials. Use the explicitly authenticated account.
+    raw="$(env -u GITHUB_TOKEN -u GH_TOKEN gh api \
+      'repos/rodkisten/photointel/environments/production/variables/GCP_CONFIG_ENV' \
+      --jq '.value' 2>/dev/null || true)"
     if [[ -n "$raw" ]]; then info 'Configuration source: GitHub production Environment'; fi
   fi
 
