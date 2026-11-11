@@ -234,7 +234,7 @@ class WorkflowEnvTests(unittest.TestCase):
             self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", source)
             self.assertIn('name: "⚙ Env"', source)
         worker = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
-        self.assertIn("prepare_workflow_env.py worker-deploy", worker)
+        self.assertIn("python3 -m infra.scripts.prepare_workflow_env worker-deploy", worker)
         self.assertNotIn("wrangler pages", worker)
         self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
         for name in (
