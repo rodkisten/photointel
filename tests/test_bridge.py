@@ -110,3 +110,54 @@ def test_keyword_symbol_presence_cannot_enable_unverified_native_writes() -> Non
     caps = PhotoKitReader().capabilities()
     assert caps["keywords_write"] is False
     assert caps["keywords_read"] is False
+
+
+def test_photokit_checks_explicit_read_write_grant() -> None:
+    from unittest.mock import Mock
+
+    reader = PhotoKitReader()
+    reader.library_class = Mock()
+    reader.library_class.authorizationStatusForAccessLevel_.return_value = 1
+    assert reader.authorization() == "restricted"
+    reader.library_class.authorizationStatusForAccessLevel_.assert_called_once_with(2)
+
+    reader.library_class.authorizationStatusForAccessLevel_.return_value = 3
+    assert reader.authorization() == "authorized"
+    assert reader.capabilities()["photo_access_complete"] is True
+    reader.library_class.authorizationStatusForAccessLevel_.return_value = 4
+    assert reader.authorization() == "limited"
+    assert reader.capabilities()["photo_access_complete"] is False
+
+
+def test_photokit_permission_request_explains_nonpromptable_states() -> None:
+    from unittest.mock import Mock
+
+    reader = PhotoKitReader()
+    reader.library_class = Mock()
+    reader.usage_description_present = True
+
+    for status, expected_code in (
+        (1, "PHOTOKIT_RESTRICTED"),
+        (2, "PHOTOKIT_PERMISSION_DENIED"),
+    ):
+        reader.library_class.authorizationStatusForAccessLevel_.return_value = status
+        with pytest.raises(BridgeError) as caught:
+            reader.request_authorization()
+        assert caught.value.code == expected_code
+
+    reader.library_class.authorizationStatusForAccessLevel_.return_value = 3
+    assert reader.request_authorization() == "authorized"
+    reader.library_class.requestAuthorizationForAccessLevel_handler_.assert_not_called()
+
+
+def test_photokit_prevents_crash_when_usage_description_is_missing() -> None:
+    from unittest.mock import Mock
+
+    reader = PhotoKitReader()
+    reader.library_class = Mock()
+    reader.library_class.authorizationStatusForAccessLevel_.return_value = 0
+    reader.usage_description_present = False
+    with pytest.raises(BridgeError) as caught:
+        reader.request_authorization()
+    assert caught.value.code == "PHOTOKIT_USAGE_DESCRIPTION_MISSING"
+    reader.library_class.requestAuthorizationForAccessLevel_handler_.assert_not_called()

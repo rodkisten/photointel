@@ -96,7 +96,9 @@ class KeychainPolicyTests(unittest.TestCase):
 
     def test_entitlement_error_is_not_a_missing_credential(self) -> None:
         self.backend.read_result = (-34018, None)
-        self.assert_error("KEYCHAIN_UNAVAILABLE", lambda: self.store.get(self.account))
+        self.assert_error(
+            "KEYCHAIN_ENTITLEMENT_MISSING", lambda: self.store.get(self.account)
+        )
 
     def test_new_credential_is_read_back(self) -> None:
         self.store.set(self.account, "private-test-credential")
@@ -316,6 +318,51 @@ class AccessPolicyTests(unittest.TestCase):
             Client(self.origin).request("GET", "/v1/bridge/status")
         self.assertEqual(caught.exception.code, "BACKEND_REDIRECT_BLOCKED")
         self.assertEqual(opener.open.call_count, 1)
+
+
+
+    def test_cloudflare_403_html_has_actionable_hint_without_echo(self) -> None:
+        headers = Message()
+        headers["Content-Type"] = "text/html"
+        headers["CF-Ray"] = "abcd1234-GRU"
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            self.origin, 403, "Forbidden", headers,
+            io.BytesIO(b"<html>private-service-secret</html>")
+        )
+        with (
+            patch("bridges.pyto.bridge.urllib.request.build_opener", return_value=opener),
+            self.assertRaises(BridgeError) as caught,
+        ):
+            Client(self.origin).request("POST", "/v1/bridge/enroll", {})
+        self.assertEqual(caught.exception.code, "CLOUDFLARE_ACCESS_REQUIRED")
+        self.assertIn("Service Auth", caught.exception.message)
+        self.assertIn("abcd1234-GRU", caught.exception.message)
+        self.assertNotIn("private-service-secret", caught.exception.message)
+
+    def test_origin_403_json_preserves_safe_error_and_correlation(self) -> None:
+        headers = Message()
+        headers["Content-Type"] = "application/json"
+        response = {
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "Serviço Bridge não autorizado",
+                "correlation_id": "6a7b8c9d",
+            }
+        }
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            self.origin, 403, "Forbidden", headers,
+            io.BytesIO(json.dumps(response).encode())
+        )
+        with (
+            patch("bridges.pyto.bridge.urllib.request.build_opener", return_value=opener),
+            self.assertRaises(BridgeError) as caught,
+        ):
+            Client(self.origin).request("POST", "/v1/bridge/enroll", {})
+        self.assertEqual(caught.exception.code, "FORBIDDEN")
+        self.assertIn("Serviço Bridge não autorizado", caught.exception.message)
+        self.assertIn("Correlation ID: 6a7b8c9d", caught.exception.message)
 
     def test_enrollment_and_subsequent_clients_load_service_auth(self) -> None:
         self.credentials.save(self.store, self.origin)
