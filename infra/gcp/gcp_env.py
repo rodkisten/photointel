@@ -72,6 +72,28 @@ def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str)
     current[path[-1]] = value
 
 
+def typed_environment_value(value: str) -> Any:
+    """Infer JSON scalar/container types; explicit quoted strings remain strings."""
+    if value.startswith("json:"):
+        try:
+            return json.loads(value[5:])
+        except json.JSONDecodeError:
+            fail("Invalid json: environment value")
+    if value.startswith(('"', "'")) and value.endswith(value[0]) and len(value) >= 2:
+        return value[1:-1]
+    if value in {"true", "false", "null"} or value.startswith(("[", "{")):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            fail("Invalid structured environment value")
+    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", value):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            pass
+    return value
+
+
 def compact_secret_reference(key: str, value: str, prefix: str) -> tuple[str, dict[str, str]] | None:
     """Parse explicit or inferred Secret Manager references without fetching values."""
     if key.startswith("SECRET__"):
@@ -114,10 +136,10 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
             field = key[4:]
             if not re.fullmatch(r"[A-Z][A-Z0-9_]*", field):
                 fail(f"Invalid Cloudflare environment variable: {key}")
-            nested_insert(config, ["cloudflare_environment", field], raw_value, key)
+            nested_insert(config, ["cloudflare_environment", field], typed_environment_value(raw_value), key)
             continue
         if key.startswith("ENV__") and key.count("__") == 1:
-            nested_insert(config, ["extra_environment", key[5:]], raw_value, key)
+            nested_insert(config, ["extra_environment", key[5:]], typed_environment_value(raw_value), key)
             continue
         if key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF:
             continue  # WIF authentication metadata is not application configuration
