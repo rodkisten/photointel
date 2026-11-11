@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicateConfigKeys, planConfigChange } from './config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange } from './config-reconcile';
 
 const BASE = [
   'PROJECT_ID=photointel',
@@ -123,4 +123,32 @@ describe('automatic configuration impact planner', () => {
     }
   });
 
+});
+
+describe('compact configuration optimizer', () => {
+  it('preserves comments and unrelated values while compacting a reference pair', () => {
+    const input = [
+      '# Keep this comment',
+      'SECRETS__MODAL_PROXY_KEY__NAME=photointel-modal-proxy-key',
+      'SECRETS__MODAL_PROXY_KEY__VERSION=2',
+      'CF__FEATURE_ENABLED=true',
+    ].join('\n');
+    const optimized = optimizeDotenv(input);
+    expect(optimized.value).toContain('# Keep this comment');
+    expect(optimized.value).toContain('SECRET__MODAL_PROXY_KEY=photointel-modal-proxy-key@2');
+    expect(optimized.value).toContain('CF__FEATURE_ENABLED=true');
+    expect(optimized.value).not.toContain('SECRETS__MODAL_PROXY_KEY__VERSION');
+    expect(optimized.changes).toHaveLength(1);
+  });
+
+  it('keeps incomplete references untouched', () => {
+    const input = 'SECRETS__R2_ENDPOINT__NAME=photointel-media-r2-endpoint';
+    expect(optimizeDotenv(input).value).toBe(input);
+  });
+
+  it('routes CF bindings to the Worker and ENV bindings to Cloud Run', () => {
+    expect(planConfigChange(BASE, BASE + '\nCF__FEATURE_ENABLED=true').targets).toEqual(['worker']);
+    expect(planConfigChange(BASE, BASE + '\nENV__MAX_GPU_CONCURRENCY=2').targets)
+      .toEqual(['jobs', 'api']);
+  });
 });
