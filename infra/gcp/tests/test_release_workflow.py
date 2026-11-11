@@ -148,7 +148,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_watchdog_is_isolated_from_release_operations(self) -> None:
         watchdog = self.workflow.split("  preview-watchdog:\n", 1)[1].split("  push-check:", 1)[0]
         self.assertIn("github.event_name == 'schedule'", watchdog)
-        self.assertIn("gcloud run jobs execute photointel-maintenance", watchdog)
+        self.assertIn("python3 -m infra.gcp.cloud_cli", watchdog)
+        self.assertIn("run jobs execute photointel-maintenance", watchdog)
         for forbidden in ("release.sh migrate", "release.sh build", "release.sh deploy"):
             self.assertNotIn(forbidden, watchdog)
 
