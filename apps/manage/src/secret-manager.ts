@@ -109,7 +109,23 @@ export function replaceReference(
   if (!matches) {
     const compactKey = (scope === 'secrets' ? 'SECRET__' : 'WORKFLOW_SECRET__') + key;
     const compactPattern = new RegExp(
-      '^([ \\t]*(?:export[ \\t]+)?' + compactKey + '[ \\t]*=[ \\t]*)([^\\r\\n#]*?)([ \\t]*(?:#.*)?)
+      '^([ \\t]*(?:export[ \\t]+)?' + compactKey + '[ \\t]*=[ \\t]*)([^\\r\\n#]*?)([ \\t]*(?:#.*)?)$',
+      'gm',
+    );
+    let count = 0;
+    const compactUpdated = raw.replace(compactPattern, (_line, head: string, value: string, tail: string) => {
+      const ref = value.trim();
+      const at = ref.lastIndexOf('@');
+      const version = at < 0 ? 'latest' : ref.slice(at + 1);
+      if (version !== oldVersion)
+        throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referência desatualizada');
+      count += 1;
+      return head + (at < 0 ? ref : ref.slice(0, at)) + '@' + newVersion + tail;
+    });
+    if (count === 1) return compactUpdated;
+    if (count > 1) throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referências duplicadas');
+    throw new ApiError(409, 'SECRET_VERSION_MISSING', 'Referência ausente');
+  }
   return updated;
 }
 
