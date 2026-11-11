@@ -1,6 +1,7 @@
 interface Env {
   MEDIA_BUCKET: R2Bucket;
   MEDIA_SIGNING_KEY: string;
+  MEDIA_ISSUER_TOKEN: string;
   MEDIA_PREFIX: string;
 }
 
@@ -46,9 +47,50 @@ function contentType(key: string): string {
 }
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (!allowedMethods.has(request.method)) return new Response('Method Not Allowed', { status: 405 });
+    if (!allowedMethods.has(request.method) && request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
     const url = new URL(request.url);
     if (url.pathname === '/healthz') return new Response('ok', { headers: { 'Cache-Control': 'no-store' } });
+    if (url.pathname === '/v1/sign') {
+      if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+      const authorization = request.headers.get('Authorization') || '';
+      if (!env.MEDIA_ISSUER_TOKEN || env.MEDIA_ISSUER_TOKEN.length < 32 ||
+          !constantTimeEquals(authorization, 'Bearer ' + env.MEDIA_ISSUER_TOKEN)) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      if (!env.MEDIA_SIGNING_KEY || env.MEDIA_SIGNING_KEY.length < 32) {
+        return new Response('Unavailable', { status: 503 });
+      }
+      const body = await request.text();
+      if (body.length > 2048) return new Response('Payload Too Large', { status: 413 });
+      let input: unknown;
+      try { input = JSON.parse(body); }
+      catch { return new Response('Invalid JSON', { status: 400 }); }
+      if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        return new Response('Invalid request', { status: 400 });
+      }
+      const { key, ttl } = input as Record<string, unknown>;
+      if (typeof key !== 'string' || typeof ttl !== 'number' ||
+          !Number.isInteger(ttl) || ttl < 1 || ttl > 3600) {
+        return new Response('Invalid key or TTL', { status: 400 });
+      }
+      const path = '/v1/media/' + key.split('/').map(encodeURIComponent).join('/');
+      const candidate = new URL(path, url.origin);
+      candidate.searchParams.set('exp', String(Math.floor(Date.now() / 1000) + ttl));
+      candidate.searchParams.set('sig', '0'.repeat(64));
+      const parsedKey = parseRequest(candidate);
+      if (!parsedKey || parsedKey.key !== key) {
+        return new Response('Invalid key', { status: 400 });
+      }
+      const object = await env.MEDIA_BUCKET.head(key);
+      if (!object) return new Response('Not Found', { status: 404 });
+      const sig = await signature(env.MEDIA_SIGNING_KEY,
+        `GET\n${key}\n${parsedKey.expires}`);
+      candidate.searchParams.set('sig', sig);
+      return Response.json({ url: candidate.toString(), expires: parsedKey.expires }, {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    if (!allowedMethods.has(request.method)) return new Response('Method Not Allowed', { status: 405 });
     const parsed = parseRequest(url);
     if (!parsed) return new Response('Not Found', { status: 404 });
     const now = Math.floor(Date.now() / 1000);
