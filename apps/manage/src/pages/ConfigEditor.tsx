@@ -35,7 +35,7 @@ import {
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, planConfigChange } from '../config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, parseConfiguration, planConfigChange } from '../config-reconcile';
 import type { ConfigPlan } from '../config-reconcile';
 import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
@@ -87,7 +87,20 @@ export function ConfigEditor() {
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
+  const optimization = useMemo(() => optimizeDotenv(editor), [editor]);
+  const [optimizationPreview, setOptimizationPreview] = useState(false);
   const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
+  const resolvedPreview = useMemo(() => {
+    if (!editor.trim() || editor.trimStart().startsWith('{')) return null;
+    try {
+      const entries = parseConfiguration(editor);
+      return { entries: Object.entries(entries).filter(([key]) =>
+        !/SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|KEY|AUTH|SESSION/i.test(key)), error: '' };
+    } catch (error) {
+      return { entries: [] as Array<[string, string]>,
+        error: error instanceof Error ? error.message : 'Referência inválida' };
+    }
+  }, [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
     if (!q.data || !dirty) return null;
@@ -106,7 +119,12 @@ export function ConfigEditor() {
       } catch {
         return 'JSON inválido';
       }
-    return null;
+    try {
+      parseConfiguration(editor);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Configuração inválida';
+    }
   }, [editor]);
   return (
     <div className="space-y-4">
@@ -157,6 +175,55 @@ export function ConfigEditor() {
                 format={detectEnvironmentFormat(editor)}
                 ariaLabel="Editar GCP_CONFIG_ENV"
               />
+            )}
+            {detectEnvironmentFormat(editor) === 'dotenv' && (
+              <div className="space-y-2 rounded-lg border border-carbon-800 p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-carbon-200">Otimização segura do .env</span>
+                  <Button type="button" size="sm" variant="secondary"
+                    onClick={() => setOptimizationPreview((current) => !current)}>
+                    {optimizationPreview ? 'Ocultar prévia' : 'Otimizar configuração'}
+                  </Button>
+                </div>
+                {optimizationPreview && (
+                  <div className="space-y-2">
+                    <p className="text-carbon-400">
+                      {optimization.changes.length} referências podem ser compactadas.
+                      Nada será salvo automaticamente.
+                    </p>
+                    {optimization.changes.map((change) => (
+                      <p key={change} className="text-carbon-300">{change}</p>
+                    ))}
+                    {optimization.warnings.map((warning, index) => (
+                      <p key={index} className="text-amber-300">{warning}</p>
+                    ))}
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border
+                      border-carbon-800 p-2 text-carbon-300">{optimization.value}</pre>
+                    <Button type="button" size="sm" disabled={!optimization.changes.length}
+                      onClick={() => { setEditor(optimization.value); setOptimizationPreview(false); }}>
+                      Aplicar no editor (sem salvar)
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {resolvedPreview && (
+              <details className="rounded-lg border border-carbon-800 p-3 text-xs">
+                <summary className="cursor-pointer text-carbon-200">
+                  Prévia de referências resolvidas (somente campos públicos)
+                </summary>
+                {resolvedPreview.error && <p className="mt-2 text-red-300">{resolvedPreview.error}</p>}
+                <div className="mt-2 max-h-64 space-y-1 overflow-auto font-mono">
+                  {resolvedPreview.entries.map(([key, value]) => (
+                    <div key={key} className="break-all text-carbon-400">
+                      <span className="text-carbon-200">{key}</span> = {value}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-carbon-500">
+                  Campos potencialmente sensíveis são ocultados. Nenhum valor é publicado nesta prévia.
+                </p>
+              </details>
             )}
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">

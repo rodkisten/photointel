@@ -53,6 +53,28 @@ def read_config() -> dict:
     return config
 
 
+def cloudflare_variables(config: dict) -> dict:
+    """Validate explicit Worker bindings without allowing protected overrides."""
+    values = config.get("cloudflare_environment", {})
+    if not isinstance(values, dict):
+        raise WorkflowEnvironmentError("cloudflare_environment must be an object")
+    reserved = {
+        "CLOUD_RUN_ORIGIN", "FRONTEND_ORIGIN", "ACCESS_TEAM_DOMAIN",
+        "ACCESS_AUDIENCE", "RELEASE_SHA", "SENTRY_DSN",
+        "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID",
+    }
+    result = {}
+    for key, value in values.items():
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
+            raise WorkflowEnvironmentError("Invalid CF__ binding name")
+        if key in reserved or any(part in key for part in ("SECRET", "TOKEN", "PASSWORD", "PRIVATE_KEY")):
+            raise WorkflowEnvironmentError(f"Protected or credential-like CF__ binding: {key}")
+        if not isinstance(value, (str, bool, int, float, list, dict)) or len(json.dumps(value)) > 8192:
+            raise WorkflowEnvironmentError(f"Invalid CF__ binding value for {key}")
+        result[key] = value
+    return result
+
+
 def worker_environment(config: dict) -> dict[str, str]:
     """Extend the existing deployed frontend Worker with /v1 proxy handling."""
     worker = (config.get("workflows") or {}).get("worker") or {}
@@ -221,6 +243,8 @@ def worker_deploy(config: dict) -> None:
         "main": "./worker.mjs",
         "compatibility_date": WORKER_COMPATIBILITY_DATE,
         "workers_dev": False,
+        # Preserve bindings managed manually in Cloudflare across deployments.
+        "keep_vars": True,
         "preview_urls": False,
         # Persist only explicit warning/error events; omit per-request invocation noise.
         "observability": {
@@ -234,6 +258,7 @@ def worker_deploy(config: dict) -> None:
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": config["access_audience"],
             "RELEASE_SHA": public["VITE_RELEASE_ID"],
+            **cloudflare_variables(config),
             **({"SENTRY_DSN": public["VITE_SENTRY_DSN"]}
                if public.get("VITE_SENTRY_DSN") else {}),
         },

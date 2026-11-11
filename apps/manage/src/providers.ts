@@ -1,3 +1,4 @@
+import { parseConfiguration } from './config-reconcile';
 import { ApiError, redact } from './auth';
 import type { Env, Identity } from './auth';
 
@@ -193,6 +194,11 @@ export async function readConfig(env: Env): Promise<{ value: string; version: st
   return { value: variable.value, version: await digest(variable.value), updated_at: variable.updated_at };
 }
 export function validateConfig(value: string): void {
+  try {
+    parseConfiguration(value);
+  } catch (error) {
+    throw new ApiError(422, 'CONFIG_REFERENCE', error instanceof Error ? error.message : 'Configuração inválida');
+  }
   if (!value.trim() || value.length > 120_000 || value.includes('\0'))
     throw new ApiError(422, 'CONFIG_SIZE', 'Valor precisa ter de 1 a 120.000 caracteres');
   if (/(?:github_pat_|ghp_|-----BEGIN PRIVATE KEY-----)/.test(value))

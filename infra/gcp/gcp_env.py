@@ -59,6 +59,47 @@ def checked_dotenv() -> dict[str, str]:
     return values
 
 
+
+REFERENCE_PATTERN = re.compile(r"\$\$|\$\{([A-Za-z][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}")
+
+
+def resolve_dotenv_references(entries: dict[str, str]) -> dict[str, str]:
+    """Expand only keys from this config, with cycle detection and bounded output."""
+    resolved: dict[str, str] = {}
+    visiting: set[str] = set()
+
+    def resolve(key: str, depth: int = 0) -> str:
+        if key in resolved:
+            return resolved[key]
+        if key not in entries:
+            fail(f"Unknown configuration reference: {key}")
+        if key in visiting or depth > 32:
+            fail(f"Circular or excessively nested configuration reference: {key}")
+        visiting.add(key)
+        raw = entries[key]
+
+        def substitute(match: re.Match[str]) -> str:
+            if match.group(0) == "$":
+                return "$"
+            name, operator, fallback = match.group(1, 2, 3)
+            if name not in entries or (operator == ":-" and not entries[name]):
+                if operator:
+                    return REFERENCE_PATTERN.sub(substitute, fallback or "")
+                fail(f"Unknown configuration reference: {name}")
+            return resolve(name, depth + 1)
+
+        value = REFERENCE_PATTERN.sub(substitute, raw)
+        if len(value.encode("utf-8")) > 65536:
+            fail(f"Expanded configuration value too large: {key}")
+        visiting.remove(key)
+        resolved[key] = value
+        return value
+
+    for key in entries:
+        resolve(key)
+    return resolved
+
+
 def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str) -> None:
     current = config
     for part in path[:-1]:
@@ -72,9 +113,84 @@ def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str)
     current[path[-1]] = value
 
 
+def typed_environment_value(value: str) -> Any:
+    """Infer JSON scalar/container types; explicit quoted strings remain strings."""
+    if value.startswith("json:"):
+        try:
+            return json.loads(value[5:])
+        except json.JSONDecodeError:
+            fail("Invalid json: environment value")
+    if value.startswith(('"', "'")) and value.endswith(value[0]) and len(value) >= 2:
+        return value[1:-1]
+    if value in {"true", "false", "null"} or value.startswith(("[", "{")):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            fail("Invalid structured environment value")
+    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", value):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            pass
+    return value
+
+
+def compact_secret_reference(key: str, value: str, prefix: str) -> tuple[str, dict[str, str]] | None:
+    """Parse explicit or inferred Secret Manager references without fetching values."""
+    if key.startswith("WORKFLOW_SECRET__"):
+        target = key.removeprefix("WORKFLOW_SECRET__")
+    elif key.startswith("SECRET__"):
+        target = key.removeprefix("SECRET__")
+        reference = value
+    elif value.startswith("secret://"):
+        target = key
+        reference = value.removeprefix("secret://")
+    else:
+        return None
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", target):
+        fail(f"Invalid compact secret variable: {key}")
+    if "@" in reference:
+        name, version = reference.rsplit("@", 1)
+    else:
+        name, version = reference, "latest"
+    if not name:
+        name = prefix + target.lower().replace("_", "-")
+    if not SECRET_NAME_PATTERN.fullmatch(name):
+        fail(f"Invalid compact secret name for {key}")
+    if not (SECRET_VERSION_PATTERN.fullmatch(version) or version == "latest"):
+        fail(f"Invalid compact secret version for {key}")
+    return target, {"name": name, "version": version}
+
+
 def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     config: dict[str, Any] = {}
+    prefix = entries.get("SECRET_NAME_PREFIX", "photointel-")
+    if prefix and not prefix.endswith("-"):
+        prefix += "-"
     for key, raw_value in entries.items():
+        if key == "SECRET_NAME_PREFIX":
+            continue
+        compact = compact_secret_reference(key, raw_value, prefix)
+        if compact:
+            target, reference = compact
+            scope = "workflow_secrets" if key.startswith("WORKFLOW_SECRET__") else "secrets"
+            nested_insert(config, [scope, target], reference, key)
+            continue
+        if key.startswith("WF__"):
+            parts = key.split("__")[1:]
+            if not parts or not all(re.fullmatch(r"[A-Z][A-Z0-9_]*", part) for part in parts):
+                fail(f"Invalid workflow variable: {key}")
+            nested_insert(config, ["workflows", *[part.lower() for part in parts]], typed_environment_value(raw_value), key)
+            continue
+        if key.startswith("CF__") and key.count("__") == 1:
+            field = key[4:]
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", field):
+                fail(f"Invalid Cloudflare environment variable: {key}")
+            nested_insert(config, ["cloudflare_environment", field], typed_environment_value(raw_value), key)
+            continue
+        if key.startswith("ENV__") and key.count("__") == 1:
+            nested_insert(config, ["extra_environment", key[5:]], typed_environment_value(raw_value), key)
+            continue
         if key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF:
             continue  # WIF authentication metadata is not application configuration
         segments = key.split("__")
@@ -157,7 +273,7 @@ def validate_references(config: dict[str, Any]) -> None:
                 f"Invalid Secret Manager NAME for {key}: use the short secret ID "
                 "(lowercase letters, numbers, hyphens), not a resource path"
             )
-        if not isinstance(version, str) or not SECRET_VERSION_PATTERN.fullmatch(version):
+        if not isinstance(version, str) or not (SECRET_VERSION_PATTERN.fullmatch(version) or version == "latest"):
             fail(
                 f"Invalid Secret Manager VERSION for {key}: use 1, 2, ... "
                 "without the json: prefix or latest"
@@ -276,7 +392,7 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
         if any(not isinstance(item, str) for item in entries.values()):
             fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
         return normalize_legacy_notification_fields(payload), entries
-    entries = checked_dotenv()
+    entries = resolve_dotenv_references(checked_dotenv())
     return normalize_legacy_notification_fields(decode_config(entries)), entries
 
 

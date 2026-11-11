@@ -49,13 +49,30 @@ export function listReferences(raw: string): SecretReference[] {
     entry[field] = value === null || value === undefined ? '' : String(value);
     refs.set(id, entry);
   }
+  if (!isJson) {
+    const prefix = parsed.SECRET_NAME_PREFIX?.replace(/-?$/, '-') || 'photointel-';
+    for (const [path, value] of Object.entries(parsed)) {
+      const compact = /^(SECRET|WORKFLOW_SECRET)__([A-Z][A-Z0-9_]*)$/.exec(path);
+      const uri = !compact && /^([A-Z][A-Z0-9_]*)$/.exec(path) && value.startsWith('secret://');
+      if (!compact && !uri) continue;
+      const scope = compact?.[1] === 'WORKFLOW_SECRET' ? 'workflow_secrets' : 'secrets';
+      const key = compact?.[2] || path;
+      const reference = uri ? value.slice('secret://'.length) : value;
+      const at = reference.lastIndexOf('@');
+      const name = (at >= 0 ? reference.slice(0, at) : reference) ||
+        prefix + key.toLowerCase().replaceAll('_', '-');
+      const version = at >= 0 ? reference.slice(at + 1) : 'latest';
+      if (!NAME.test(name) || !(VERSION.test(version) || version === 'latest')) continue;
+      refs.set(scope + ':' + key, { scope, key, name, version });
+    }
+  }
   return [...refs.values()]
     .filter((entry) => NAME.test(entry.name || ''))
     .map((entry) => ({
       scope: entry.scope!,
       key: entry.key!,
       name: entry.name!,
-      version: VERSION.test(entry.version || '') ? entry.version! : '',
+      version: VERSION.test(entry.version || '') || entry.version === 'latest' ? entry.version! : '',
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -89,7 +106,26 @@ export function replaceReference(
     matches += 1;
     return head + newVersion + tail;
   });
-  if (!matches) throw new ApiError(409, 'SECRET_VERSION_MISSING', 'Referência ausente');
+  if (!matches) {
+    const compactKey = (scope === 'secrets' ? 'SECRET__' : 'WORKFLOW_SECRET__') + key;
+    const compactPattern = new RegExp(
+      '^([ \\t]*(?:export[ \\t]+)?' + compactKey + '[ \\t]*=[ \\t]*)([^\\r\\n#]*?)([ \\t]*(?:#.*)?)$',
+      'gm',
+    );
+    let count = 0;
+    const compactUpdated = raw.replace(compactPattern, (_line, head: string, value: string, tail: string) => {
+      const ref = value.trim();
+      const at = ref.lastIndexOf('@');
+      const version = at < 0 ? 'latest' : ref.slice(at + 1);
+      if (version !== oldVersion)
+        throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referência desatualizada');
+      count += 1;
+      return head + (at < 0 ? ref : ref.slice(0, at)) + '@' + newVersion + tail;
+    });
+    if (count === 1) return compactUpdated;
+    if (count > 1) throw new ApiError(409, 'SECRET_VERSION_CONFLICT', 'Referências duplicadas');
+    throw new ApiError(409, 'SECRET_VERSION_MISSING', 'Referência ausente');
+  }
   return updated;
 }
 

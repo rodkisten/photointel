@@ -46,6 +46,7 @@ import type { RunCostsResponse } from '../components/run-cost';
 import type { CostSource } from './Costs';
 import { money } from './Costs';
 import { ConfirmDialog } from '../components/confirm-dialog';
+import { CloudflareDeployPanel } from '../CloudflareDeployPanel';
 export function Deploys() {
   const qc = useQueryClient();
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: () => api<{ items: WF[] }>('/workflows') });
@@ -95,6 +96,7 @@ export function Deploys() {
   }
   return (
     <div className="space-y-6">
+      <CloudflareDeployPanel />
       <Section title="Disparar workflow" detail="Todas as execuções são criadas na branch main">
         <Card className="space-y-4 p-4 sm:p-5">
           {workflows.error && <IssueBanner error={workflows.error} />}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicateConfigKeys, planConfigChange } from './config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange, resolveConfigReferences } from './config-reconcile';
 
 const BASE = [
   'PROJECT_ID=photointel',
@@ -123,4 +123,77 @@ describe('automatic configuration impact planner', () => {
     }
   });
 
+});
+
+describe('compact configuration optimizer', () => {
+  it('preserves comments and unrelated values while compacting a reference pair', () => {
+    const input = [
+      '# Keep this comment',
+      'SECRETS__MODAL_PROXY_KEY__NAME=photointel-modal-proxy-key',
+      'SECRETS__MODAL_PROXY_KEY__VERSION=2',
+      'CF__FEATURE_ENABLED=true',
+    ].join('\n');
+    const optimized = optimizeDotenv(input);
+    expect(optimized.value).toContain('# Keep this comment');
+    expect(optimized.value).toContain('SECRET__MODAL_PROXY_KEY=photointel-modal-proxy-key@2');
+    expect(optimized.value).toContain('CF__FEATURE_ENABLED=true');
+    expect(optimized.value).not.toContain('SECRETS__MODAL_PROXY_KEY__VERSION');
+    expect(optimized.changes).toHaveLength(1);
+  });
+
+  it('keeps incomplete references untouched', () => {
+    const input = 'SECRETS__R2_ENDPOINT__NAME=photointel-media-r2-endpoint';
+    expect(optimizeDotenv(input).value).toBe(input);
+  });
+
+  it('routes CF bindings to the Worker and ENV bindings to Cloud Run', () => {
+    expect(planConfigChange(BASE, BASE + '\nCF__FEATURE_ENABLED=true').targets).toEqual(['worker']);
+    expect(planConfigChange(BASE, BASE + '\nENV__MAX_GPU_CONCURRENCY=2').targets)
+      .toEqual(['jobs', 'api']);
+  });
+});
+
+describe('WF__ workflow shorthand', () => {
+  it('routes nested WF__ changes to the Worker deployment', () => {
+    const baseline = 'PROJECT_ID=photointel';
+    const plan = planConfigChange(baseline, baseline + '\nWF__WORKER__DOMAIN=photos.migos.club');
+    expect(plan.targets).toEqual(['worker']);
+    expect(plan.blocked).toBe(false);
+  });
+});
+
+describe('dotenv interpolation', () => {
+  it('resolves nested references and defaults', () => {
+    expect(resolveConfigReferences({
+      DOMAIN: 'migos.club',
+      HOST: 'photos.${DOMAIN}',
+      URL: 'https://${HOST}',
+      EMPTY: '',
+      FALLBACK: '${EMPTY:-default}',
+      LITERAL: '$${DOMAIN}',
+    })).toMatchObject({
+      HOST: 'photos.migos.club',
+      URL: 'https://photos.migos.club',
+      FALLBACK: 'default',
+      LITERAL: '${DOMAIN}',
+    });
+  });
+  it('rejects unknown variables and circular references', () => {
+    expect(() => resolveConfigReferences({ A: '${MISSING}' })).toThrow();
+    expect(() => resolveConfigReferences({ A: '${B}', B: '${A}' })).toThrow();
+  });
+});
+
+describe('workflow shorthand optimizer', () => {
+  it('converts legacy workflow fields', () => {
+    const input = 'WORKFLOWS__WORKER__DOMAIN=photos.migos.club';
+    const result = optimizeDotenv(input);
+    expect(result.value).toContain('WF__WORKER__DOMAIN=photos.migos.club');
+    expect(result.changes).toHaveLength(1);
+  });
+  it('preserves conflicting shorthand fields', () => {
+    const input = 'WORKFLOWS__WORKER__NAME=old\nWF__WORKER__NAME=new';
+    expect(optimizeDotenv(input).value).toBe(input);
+    expect(optimizeDotenv(input).warnings.length).toBeGreaterThan(0);
+  });
 });
