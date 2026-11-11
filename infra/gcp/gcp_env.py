@@ -86,7 +86,7 @@ def typed_environment_value(value: str) -> Any:
             return json.loads(value)
         except json.JSONDecodeError:
             fail("Invalid structured environment value")
-    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", value):
+    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?", value):
         try:
             return json.loads(value)
         except json.JSONDecodeError:
@@ -96,7 +96,9 @@ def typed_environment_value(value: str) -> Any:
 
 def compact_secret_reference(key: str, value: str, prefix: str) -> tuple[str, dict[str, str]] | None:
     """Parse explicit or inferred Secret Manager references without fetching values."""
-    if key.startswith("SECRET__"):
+    if key.startswith("WORKFLOW_SECRET__"):
+        target = key.removeprefix("WORKFLOW_SECRET__")
+    elif key.startswith("SECRET__"):
         target = key.removeprefix("SECRET__")
         reference = value
     elif value.startswith("secret://"):
@@ -130,7 +132,8 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
         compact = compact_secret_reference(key, raw_value, prefix)
         if compact:
             target, reference = compact
-            nested_insert(config, ["secrets", target], reference, key)
+            scope = "workflow_secrets" if key.startswith("WORKFLOW_SECRET__") else "secrets"
+            nested_insert(config, [scope, target], reference, key)
             continue
         if key.startswith("CF__") and key.count("__") == 1:
             field = key[4:]
