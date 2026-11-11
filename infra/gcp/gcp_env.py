@@ -59,6 +59,47 @@ def checked_dotenv() -> dict[str, str]:
     return values
 
 
+
+REFERENCE_PATTERN = re.compile(r"\$\$|\$\{([A-Za-z][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}")
+
+
+def resolve_dotenv_references(entries: dict[str, str]) -> dict[str, str]:
+    """Expand only keys from this config, with cycle detection and bounded output."""
+    resolved: dict[str, str] = {}
+    visiting: set[str] = set()
+
+    def resolve(key: str, depth: int = 0) -> str:
+        if key in resolved:
+            return resolved[key]
+        if key not in entries:
+            fail(f"Unknown configuration reference: {key}")
+        if key in visiting or depth > 32:
+            fail(f"Circular or excessively nested configuration reference: {key}")
+        visiting.add(key)
+        raw = entries[key]
+
+        def substitute(match: re.Match[str]) -> str:
+            if match.group(0) == "$":
+                return "$"
+            name, operator, fallback = match.group(1, 2, 3)
+            if name not in entries or (operator == ":-" and not entries[name]):
+                if operator:
+                    return REFERENCE_PATTERN.sub(substitute, fallback or "")
+                fail(f"Unknown configuration reference: {name}")
+            return resolve(name, depth + 1)
+
+        value = REFERENCE_PATTERN.sub(substitute, raw)
+        if len(value.encode("utf-8")) > 65536:
+            fail(f"Expanded configuration value too large: {key}")
+        visiting.remove(key)
+        resolved[key] = value
+        return value
+
+    for key in entries:
+        resolve(key)
+    return resolved
+
+
 def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str) -> None:
     current = config
     for part in path[:-1]:
@@ -351,7 +392,7 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
         if any(not isinstance(item, str) for item in entries.values()):
             fail("WIF values in GCP_CONFIG_ENV JSON must be strings")
         return normalize_legacy_notification_fields(payload), entries
-    entries = checked_dotenv()
+    entries = resolve_dotenv_references(checked_dotenv())
     return normalize_legacy_notification_fields(decode_config(entries)), entries
 
 
