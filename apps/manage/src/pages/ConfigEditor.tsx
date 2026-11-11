@@ -90,6 +90,17 @@ export function ConfigEditor() {
   const optimization = useMemo(() => optimizeDotenv(editor), [editor]);
   const [optimizationPreview, setOptimizationPreview] = useState(false);
   const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
+  const resolvedPreview = useMemo(() => {
+    if (!editor.trim() || editor.trimStart().startsWith('{')) return null;
+    try {
+      const entries = parseConfiguration(editor);
+      return { entries: Object.entries(entries).filter(([key]) =>
+        !/SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|KEY|AUTH|SESSION/i.test(key)), error: '' };
+    } catch (error) {
+      return { entries: [] as Array<[string, string]>,
+        error: error instanceof Error ? error.message : 'Referência inválida' };
+    }
+  }, [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
     if (!q.data || !dirty) return null;
@@ -195,6 +206,24 @@ export function ConfigEditor() {
                   </div>
                 )}
               </div>
+            )}
+            {resolvedPreview && (
+              <details className="rounded-lg border border-carbon-800 p-3 text-xs">
+                <summary className="cursor-pointer text-carbon-200">
+                  Prévia de referências resolvidas (somente campos públicos)
+                </summary>
+                {resolvedPreview.error && <p className="mt-2 text-red-300">{resolvedPreview.error}</p>}
+                <div className="mt-2 max-h-64 space-y-1 overflow-auto font-mono">
+                  {resolvedPreview.entries.map(([key, value]) => (
+                    <div key={key} className="break-all text-carbon-400">
+                      <span className="text-carbon-200">{key}</span> = {value}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-carbon-500">
+                  Campos potencialmente sensíveis são ocultados. Nenhum valor é publicado nesta prévia.
+                </p>
+              </details>
             )}
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
