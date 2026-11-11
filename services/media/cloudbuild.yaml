@@ -1,5 +1,6 @@
 # Build only. No automatic deployment, resource creation or billing changes.
 substitutions:
+  _GIT_SHA: REPLACE_GIT_SHA
   _REGION: us-central1
   _REPOSITORY: photointel
 steps:
@@ -24,19 +25,19 @@ steps:
         npm test
   - id: image-image
     name: gcr.io/cloud-builders/docker
-    args: [build, -f, services/media/image/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:$COMMIT_SHA", services/media/image]
+    args: [build, -f, services/media/image/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:${_GIT_SHA}", services/media/image]
     waitFor: [image-tests]
   - id: video-image
     name: gcr.io/cloud-builders/docker
-    args: [build, -f, services/media/video/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA", services/media/video]
+    args: [build, -f, services/media/video/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:${_GIT_SHA}", services/media/video]
     waitFor: [video-tests]
   - id: imagor-image
     name: gcr.io/cloud-builders/docker
-    args: [build, -f, services/media/imagor.Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA", services/media]
+    args: [build, -f, services/media/imagor.Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:${_GIT_SHA}", services/media]
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:$COMMIT_SHA"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA"
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:${_GIT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:${_GIT_SHA}"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:${_GIT_SHA}"
 options:
   logging: CLOUD_LOGGING_ONLY
 timeout: 1800s
