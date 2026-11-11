@@ -152,3 +152,12 @@ describe('compact configuration optimizer', () => {
       .toEqual(['jobs', 'api']);
   });
 });
+
+describe('WF__ workflow shorthand', () => {
+  it('routes nested WF__ changes to the Worker deployment', () => {
+    const baseline = 'PROJECT_ID=photointel';
+    const plan = planConfigChange(baseline, baseline + '\nWF__WORKER__DOMAIN=photos.migos.club');
+    expect(plan.targets).toEqual(['worker']);
+    expect(plan.blocked).toBe(false);
+  });
+});
