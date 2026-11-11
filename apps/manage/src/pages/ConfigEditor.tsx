@@ -35,7 +35,7 @@ import {
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, planConfigChange } from '../config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange } from '../config-reconcile';
 import type { ConfigPlan } from '../config-reconcile';
 import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
@@ -87,6 +87,8 @@ export function ConfigEditor() {
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
+  const optimization = useMemo(() => optimizeDotenv(editor), [editor]);
+  const [optimizationPreview, setOptimizationPreview] = useState(false);
   const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
@@ -157,6 +159,37 @@ export function ConfigEditor() {
                 format={detectEnvironmentFormat(editor)}
                 ariaLabel="Editar GCP_CONFIG_ENV"
               />
+            )}
+            {detectEnvironmentFormat(editor) === 'dotenv' && (
+              <div className="space-y-2 rounded-lg border border-carbon-800 p-3 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-carbon-200">Otimização segura do .env</span>
+                  <Button type="button" size="sm" variant="secondary"
+                    onClick={() => setOptimizationPreview((current) => !current)}>
+                    {optimizationPreview ? 'Ocultar prévia' : 'Otimizar configuração'}
+                  </Button>
+                </div>
+                {optimizationPreview && (
+                  <div className="space-y-2">
+                    <p className="text-carbon-400">
+                      {optimization.changes.length} referências podem ser compactadas.
+                      Nada será salvo automaticamente.
+                    </p>
+                    {optimization.changes.map((change) => (
+                      <p key={change} className="text-carbon-300">{change}</p>
+                    ))}
+                    {optimization.warnings.map((warning, index) => (
+                      <p key={index} className="text-amber-300">{warning}</p>
+                    ))}
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border
+                      border-carbon-800 p-2 text-carbon-300">{optimization.value}</pre>
+                    <Button type="button" size="sm" disabled={!optimization.changes.length}
+                      onClick={() => { setEditor(optimization.value); setOptimizationPreview(false); }}>
+                      Aplicar no editor (sem salvar)
+                    </Button>
+                  </div>
+                )}
+              </div>
             )}
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
