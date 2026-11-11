@@ -2,6 +2,7 @@
 """Sincroniza o Modal do .env com GCP Secret Manager e GitHub Actions.
 
 Uso (na raiz do repositório photointel):
+    python3 gpu.py --repair-env
     python3 gpu.py --dry-run
     python3 gpu.py
     python3 gpu.py --enable-gpu --deploy
@@ -222,6 +223,92 @@ def run_gh(args: Sequence[str], *, stdin: str | None = None,
     return result
 
 
+def verified_model_revisions() -> dict[str, str]:
+    """Read immutable revisions already checked by gpu.checkpoints (no network or GPU)."""
+    report = ROOT / "reports/model-evidence.json"
+    if not report.is_file() or report.is_symlink():
+        raise SetupError(
+            "Relatório de modelos ausente. Execute "
+            "'uv run python -m gpu.checkpoints' e tente novamente."
+        )
+    try:
+        data = json.loads(report.read_text(encoding="utf-8"))
+        models = data["models"]
+        mapping: dict[str, str] = {}
+        expected = {
+            "fancyfeast/joytag": "JOYTAG_MODEL_REVISION",
+            "google/siglip2-base-patch16-224": "SIGLIP_MODEL_REVISION",
+        }
+        for item in models:
+            model_id = item.get("model_id")
+            if model_id in expected:
+                key = expected[model_id]
+                revision = item.get("revision")
+                if key in mapping or not isinstance(revision, str) or not SHA40.fullmatch(revision):
+                    raise ValueError("Duplicate model ID or invalid immutable revision")
+                mapping[key] = revision
+        if set(mapping) != set(expected.values()):
+            raise ValueError("Missing expected model revisions")
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise SetupError("Relatório de modelos inválido; execute novamente 'uv run python -m gpu.checkpoints'") from exc
+    return mapping
+
+
+def repair_model_revisions() -> None:
+    """Repair invalid/missing SHA fields only; keep all other .env values unchanged."""
+    import tempfile
+
+    if not ENV_PATH.is_file() or ENV_PATH.is_symlink():
+        raise SetupError(".env não encontrado ou não é um arquivo local regular")
+    revisions = verified_model_revisions()
+    original = ENV_PATH.read_text(encoding="utf-8")
+    lines = original.splitlines(keepends=True)
+    output: list[str] = []
+    seen: set[str] = set()
+    repaired: list[str] = []
+
+    for line in lines:
+        match = ENV_ASSIGNMENT.fullmatch(line.rstrip("\r\n"))
+        if not match or match.group(1) not in revisions:
+            output.append(line)
+            continue
+        key, value = match.groups()
+        if key in seen:
+            raise SetupError(f".env contém a variável duplicada: {key}")
+        seen.add(key)
+        current = value.strip().strip("'\\"")
+        if SHA40.fullmatch(current):
+            output.append(line)
+            continue
+        output.append(f"{key}={revisions[key]}\n")
+        repaired.append(key)
+
+    for key, revision in revisions.items():
+        if key not in seen:
+            output.append(f"{key}={revision}\n")
+            repaired.append(key)
+    if not repaired:
+        print("✅ Revisões dos modelos já são SHAs válidos; .env preservado.")
+        return
+
+    os.umask(0o077)
+    backup = ROOT / f".env.backup-model-revisions-{dt.datetime.now(dt.UTC):%Y%m%d-%H%M%S%f}"
+    backup_fd = os.open(backup, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(backup_fd, "w", encoding="utf-8") as file:
+        file.write(original)
+    fd, temporary = tempfile.mkstemp(prefix=".env.models-", dir=ROOT)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            file.writelines(output)
+        os.replace(temporary, ENV_PATH)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+    print("✅ Revisões corrigidas a partir de reports/model-evidence.json: " + ", ".join(repaired))
+    print(f"🔐 Backup privado: {backup.name}")
+    print("ℹ️ Outras variáveis e tokens foram preservados. Nenhum deploy iniciado.")
+
+
 def read_env() -> dict[str, str]:
     if not ENV_PATH.is_file():
         raise SetupError(f"Não encontrei {ENV_PATH}. Execute na raiz do photointel.")
@@ -386,11 +473,17 @@ def sync_secret(key: str, value: str, name: str, *, dry_run: bool) -> str | None
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sincronizar Modal → GCP / GitHub Actions")
     parser.add_argument("--dry-run", action="store_true", help="Validar sem modificar GCP/GitHub")
+    parser.add_argument("--repair-env", action="store_true", help="Reparar somente SHAs inválidos no .env usando o relatório local, sem deploy")
     parser.add_argument("--enable-gpu", action="store_true", help="Configurar GPU_ENABLED=true")
     parser.add_argument("--deploy", action="store_true", help="Disparar release manual do Cloud Run")
     args = parser.parse_args()
     if args.dry_run and args.deploy:
         parser.error("--dry-run não pode ser combinado com --deploy")
+    if args.repair_env:
+        if args.dry_run or args.deploy or args.enable_gpu:
+            parser.error("--repair-env deve ser usado sozinho")
+        repair_model_revisions()
+        return
 
     data = read_env()
     ensure_cli("gh")
