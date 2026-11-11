@@ -276,7 +276,7 @@ def repair_model_revisions() -> None:
         if key in seen:
             raise SetupError(f".env contém a variável duplicada: {key}")
         seen.add(key)
-        current = value.strip().strip("'\\"")
+        current = value.strip().strip(chr(39) + chr(34))
         if SHA40.fullmatch(current):
             output.append(line)
             continue
