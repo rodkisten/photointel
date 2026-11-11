@@ -1,4 +1,4 @@
-# Local-only development. Do not expose the unsafe Imagor port publicly.
+# Local-only development; unsafe Imagor is bound exclusively to loopback.
 services:
   imagor:
     image: shumc/imagor:latest
@@ -13,6 +13,11 @@ services:
   video:
     build: ./video
     profiles: ["video"]
-    volumes:
-      - ./work:/work
-    entrypoint: ["python", "/app/render.py"]
+    environment:
+      R2_ENDPOINT: ${R2_ENDPOINT:?R2_ENDPOINT required}
+      R2_BUCKET: ${R2_BUCKET:?R2_BUCKET required}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID required}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY required}
+      MEDIA_INPUT_KEY: ${MEDIA_INPUT_KEY:?MEDIA_INPUT_KEY required}
+      MEDIA_OUTPUT_KEY: ${MEDIA_OUTPUT_KEY:?MEDIA_OUTPUT_KEY required}
+      MEDIA_WATERMARK: ${MEDIA_WATERMARK:-}
