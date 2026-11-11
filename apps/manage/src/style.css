@@ -73,12 +73,16 @@ button:disabled {
   background: #555b65;
 }
 @media (max-width: 767px) {
-  input,
+  input {
+    font-size: 16px;
+    zoom: 0.75;
+    /* transform: scale(0.75);
+        iOS Safari needs 16px inputs, but transform: scale breaks width and hit areas. */
+  }
+  
   textarea,
   select {
     font-size: 16px;
-    transform: scale(0.75);
-    /* iOS Safari needs 16px inputs, but transform: scale breaks width and hit areas. */
   }
   .logbox,
   .logline {
