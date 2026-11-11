@@ -28,7 +28,7 @@ function db(env: Env): DB {
 }
 function toRule(row: RuleRow): DeployRule {
   return { id: row.id, name: row.name, enabled: row.enabled === 1,
-    provider: row.provider, target: row.target, patterns: JSON.parse(row.patterns_json),
+    provider: row.provider === 'gcp' && row.target === 'circleci-release' ? 'circleci' : row.provider, target: row.target === 'circleci-release' ? 'release' : row.target, patterns: JSON.parse(row.patterns_json),
     created_at: row.created_at, updated_at: row.updated_at };
 }
 async function rules(database: DB): Promise<DeployRule[]> {
@@ -341,6 +341,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         gcp_release: Boolean(env.GCP_BUILD_WEBHOOK_RELEASE_URL),
         gcp_provision: Boolean(env.GCP_BUILD_WEBHOOK_PROVISION_URL),
         cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
+        circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
   }
   if (request.method === 'GET' && path === '/api/deploy-router/providers') {
@@ -375,7 +376,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
       throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado entre os Workers conectados');
     const id = crypto.randomUUID(), stamp = now();
     await database.prepare('INSERT INTO deploy_rules (id,name,enabled,provider,target,patterns_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
-      .bind(id, input.name, Number(input.enabled), input.provider, input.target,
+      .bind(id, input.name, Number(input.enabled), input.provider === 'circleci' ? 'gcp' : input.provider, input.provider === 'circleci' ? 'circleci-release' : input.target,
         JSON.stringify(input.patterns), stamp, stamp).run();
     return json({ id }, 201);
   }
@@ -395,7 +396,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         !(await cloudflareTriggers(env)).some((x) => x.id === input.target))
         throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado');
       await database.prepare('UPDATE deploy_rules SET name=?,enabled=?,provider=?,target=?,patterns_json=?,updated_at=? WHERE id=?')
-        .bind(input.name, Number(input.enabled), input.provider, input.target,
+        .bind(input.name, Number(input.enabled), input.provider === 'circleci' ? 'gcp' : input.provider, input.provider === 'circleci' ? 'circleci-release' : input.target,
           JSON.stringify(input.patterns), now(), route[1]).run();
       return json({ updated: true });
     }
@@ -406,6 +407,10 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
     if (!run) throw new ApiError(404, 'RUN_NOT_FOUND', 'Execução não encontrada');
     if (!run.provider_id || !UUID.test(run.provider_id))
       return json({ message: 'O provedor ainda não informou um ID de execução', entries: [] });
+    if (run.provider === 'circleci') {
+      const raw = await circleciRequest(env, 'pipeline/' + run.provider_id + '/workflow');
+      return json({ entries: [redact(raw).slice(0, 80_000)] });
+    }
     if (run.provider === 'cloudflare') {
       const raw = await cf(env, '/builds/builds/' + run.provider_id + '/logs');
       return json({ entries: [redact(raw).slice(0, 80_000)] });
@@ -427,7 +432,10 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
     const waiting = await database.prepare(SQL_RUNS +
       " WHERE provider='cloudflare' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
     await Promise.all(waiting.results.map(async (run) => pollCloudflare(env, database, run)));
-    return json({ refreshed: waiting.results.length });
+    const ci = await database.prepare(SQL_RUNS +
+      " WHERE provider='circleci' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+    await Promise.all(ci.results.map((run) => pollCircleci(env, database, run)));
+    return json({ refreshed: waiting.results.length + ci.results.length });
   }
   return null;
 }
