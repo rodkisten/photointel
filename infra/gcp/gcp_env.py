@@ -72,9 +72,47 @@ def nested_insert(config: dict[str, Any], path: list[str], value: Any, key: str)
     current[path[-1]] = value
 
 
+def compact_secret_reference(key: str, value: str, prefix: str) -> tuple[str, dict[str, str]] | None:
+    """Parse explicit or inferred Secret Manager references without fetching values."""
+    if key.startswith("SECRET__"):
+        target = key.removeprefix("SECRET__")
+        reference = value
+    elif value.startswith("secret://"):
+        target = key
+        reference = value.removeprefix("secret://")
+    else:
+        return None
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", target):
+        fail(f"Invalid compact secret variable: {key}")
+    if "@" in reference:
+        name, version = reference.rsplit("@", 1)
+    else:
+        name, version = reference, "latest"
+    if not name:
+        name = prefix + target.lower().replace("_", "-")
+    if not SECRET_NAME_PATTERN.fullmatch(name):
+        fail(f"Invalid compact secret name for {key}")
+    if not (SECRET_VERSION_PATTERN.fullmatch(version) or version == "latest"):
+        fail(f"Invalid compact secret version for {key}")
+    return target, {"name": name, "version": version}
+
+
 def decode_config(entries: dict[str, str]) -> dict[str, Any]:
     config: dict[str, Any] = {}
+    prefix = entries.get("SECRET_NAME_PREFIX", "photointel-")
+    if prefix and not prefix.endswith("-"):
+        prefix += "-"
     for key, raw_value in entries.items():
+        if key == "SECRET_NAME_PREFIX":
+            continue
+        compact = compact_secret_reference(key, raw_value, prefix)
+        if compact:
+            target, reference = compact
+            nested_insert(config, ["secrets", target], reference, key)
+            continue
+        if key.startswith("ENV__") and key.count("__") == 1:
+            nested_insert(config, ["extra_environment", key[5:]], raw_value, key)
+            continue
         if key in REQUIRED_WIF + OPTIONAL_BOOTSTRAP_WIF:
             continue  # WIF authentication metadata is not application configuration
         segments = key.split("__")
@@ -157,7 +195,7 @@ def validate_references(config: dict[str, Any]) -> None:
                 f"Invalid Secret Manager NAME for {key}: use the short secret ID "
                 "(lowercase letters, numbers, hyphens), not a resource path"
             )
-        if not isinstance(version, str) or not SECRET_VERSION_PATTERN.fullmatch(version):
+        if not isinstance(version, str) or not (SECRET_VERSION_PATTERN.fullmatch(version) or version == "latest"):
             fail(
                 f"Invalid Secret Manager VERSION for {key}: use 1, 2, ... "
                 "without the json: prefix or latest"
