@@ -5,6 +5,9 @@ import contextlib
 import io
 import json
 import unittest
+from pathlib import Path
+
+GCP = Path(__file__).resolve().parents[1]
 
 from infra.gcp import gcp_env as loader
 from infra.gcp.manage import environment
