@@ -28,7 +28,7 @@ function db(env: Env): DB {
 }
 function toRule(row: RuleRow): DeployRule {
   return { id: row.id, name: row.name, enabled: row.enabled === 1,
-    provider: row.provider, target: row.target, patterns: JSON.parse(row.patterns_json),
+    provider: row.provider === 'gcp' && row.target === 'circleci-release' ? 'circleci' : row.provider, target: row.target === 'circleci-release' ? 'release' : row.target, patterns: JSON.parse(row.patterns_json),
     created_at: row.created_at, updated_at: row.updated_at };
 }
 async function rules(database: DB): Promise<DeployRule[]> {
@@ -99,6 +99,53 @@ async function setState(database: DB, run: Run, state: string, providerId: strin
   return { ...run, state, provider_id: providerId || run.provider_id,
     status_url: url || run.status_url, detail, updated_at: now() };
 }
+async function circleciRequest(env: Env, path: string, method = 'GET', body?: unknown): Promise<Record<string, unknown>> {
+  if (!env.CIRCLECI_API_TOKEN || !env.CIRCLECI_PROJECT_SLUG || !env.CIRCLECI_DEFINITION_ID)
+    throw new ApiError(503, 'CIRCLECI_SETUP', 'Configure CircleCI API token, project slug and pipeline definition');
+  if (!/^(?:gh\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+|circleci\/[a-f0-9-]{36}\/[a-f0-9-]{36})$/.test(env.CIRCLECI_PROJECT_SLUG))
+    throw new ApiError(503, 'CIRCLECI_PROJECT', 'Invalid CircleCI project slug');
+  if (!UUID.test(env.CIRCLECI_DEFINITION_ID))
+    throw new ApiError(503, 'CIRCLECI_DEFINITION', 'Invalid CircleCI pipeline definition ID');
+  const response = await fetch('https://circleci.com/api/v2/' + path, {
+    method, redirect: 'manual',
+    headers: { 'Circle-Token': env.CIRCLECI_API_TOKEN, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new ApiError(502, 'CIRCLECI_HTTP', 'CircleCI HTTP ' + response.status);
+  return await response.json() as Record<string, unknown>;
+}
+async function syncCircleciConfig(env: Env): Promise<void> {
+  if (!env.CIRCLECI_CONTEXT_ID || !UUID.test(env.CIRCLECI_CONTEXT_ID))
+    throw new ApiError(503, 'CIRCLECI_CONTEXT', 'CircleCI context UUID not configured');
+  // Read the authoritative GitHub repository Actions variable using Manage's GitHub token.
+  const source = await gh(env, '/actions/variables/GCP_CONFIG_ENV') as { value?: string };
+  if (!source.value || typeof source.value !== 'string')
+    throw new ApiError(503, 'GITHUB_CONFIG', 'GCP_CONFIG_ENV unavailable from GitHub');
+  const response = await fetch('https://circleci.com/api/v2/context/' +
+    env.CIRCLECI_CONTEXT_ID + '/environment-variable/GCP_CONFIG_ENV', {
+    method: 'PUT', redirect: 'manual',
+    headers: { 'Circle-Token': env.CIRCLECI_API_TOKEN!, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: source.value }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new ApiError(502, 'CIRCLECI_SYNC', 'CircleCI config sync HTTP ' + response.status);
+}
+async function pollCircleci(env: Env, database: DB, run: Run): Promise<void> {
+  if (!run.provider_id || !UUID.test(run.provider_id)) return;
+  const response = await circleciRequest(env, 'pipeline/' + run.provider_id + '/workflow');
+  const workflows = (response.items || []) as Array<{ status?: string }>;
+  if (!workflows.length) return;
+  const statuses = workflows.map((item) => item.status || '');
+  const state = statuses.some((x) => x === 'failed' || x === 'error' || x === 'failing') ? 'failed'
+    : statuses.every((x) => x === 'success') ? 'success'
+    : statuses.every((x) => x === 'canceled' || x === 'cancelled') ? 'cancelled'
+    : statuses.some((x) => x === 'running' || x === 'on_hold') ? 'running' : 'submitted';
+  if (state !== run.state) {
+    const updated = await setState(database, run, state);
+    if (FINISHED.has(state) || run.state !== 'running') await announce(env, updated, state);
+  }
+}
 async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
   const locked = await database.prepare("UPDATE deploy_runs SET state='dispatching',updated_at=? WHERE id=? AND state='queued'")
     .bind(now(), run.id).run();
@@ -106,7 +153,21 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
   try {
     let id: string | null = null;
     let url: string | null = null;
-    if (run.provider === 'cloudflare') {
+    if (run.provider === 'circleci') {
+      if (run.target !== 'release') throw new ApiError(422, 'CIRCLECI_ACTION', 'Only release is permitted');
+      await syncCircleciConfig(env);
+      // The CircleCI approval job remains mandatory; the webhook cannot bypass it.
+      const slug = env.CIRCLECI_PROJECT_SLUG || '';
+      const response = await circleciRequest(env, 'project/' + slug + '/pipeline/run', 'POST', {
+        definition_id: env.CIRCLECI_DEFINITION_ID,
+        config: { branch: 'main' },
+        checkout: { branch: 'main' },
+        parameters: { action: 'release', expected_sha: run.sha },
+      });
+      id = typeof response.id === 'string' ? response.id : null;
+      if (!id || !UUID.test(id)) throw new ApiError(502, 'CIRCLECI_PIPELINE_ID', 'CircleCI did not return a pipeline ID');
+      url = 'https://app.circleci.com/pipelines/' + slug + '?pipeline_id=' + id;
+    } else if (run.provider === 'cloudflare') {
       if (!(await cloudflareTriggers(env)).some((x) => x.id === run.target))
         throw new ApiError(403, 'BUILD_TRIGGER_REVOKED', 'Trigger fora do repositório autorizado');
       const response = (await cf(env, '/builds/triggers/' + run.target + '/builds', 'POST',
@@ -166,6 +227,12 @@ export async function tick(env: Env): Promise<void> {
   for (const run of waiting.results) await dispatch(env, database, run);
   const running = await database.prepare(SQL_RUNS +
     " WHERE provider='cloudflare' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+  const circleciRuns = await database.prepare(SQL_RUNS +
+    " WHERE provider='circleci' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+  for (const run of circleciRuns.results) {
+    try { await pollCircleci(env, database, run); }
+    catch { console.error(JSON.stringify({ event: 'circleci_poll_failed', run_id: run.id })); }
+  }
   for (const run of running.results) {
     try { await pollCloudflare(env, database, run); }
     catch { console.error(JSON.stringify({ event: 'deploy_poll_failed', run_id: run.id })); }
@@ -291,6 +358,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         gcp_release: Boolean(env.GCP_BUILD_WEBHOOK_RELEASE_URL),
         gcp_provision: Boolean(env.GCP_BUILD_WEBHOOK_PROVISION_URL),
         cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
+        circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID && env.CIRCLECI_CONTEXT_ID),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
   }
   if (request.method === 'GET' && path === '/api/deploy-router/providers') {
@@ -325,7 +393,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
       throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado entre os Workers conectados');
     const id = crypto.randomUUID(), stamp = now();
     await database.prepare('INSERT INTO deploy_rules (id,name,enabled,provider,target,patterns_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)')
-      .bind(id, input.name, Number(input.enabled), input.provider, input.target,
+      .bind(id, input.name, Number(input.enabled), input.provider === 'circleci' ? 'gcp' : input.provider, input.provider === 'circleci' ? 'circleci-release' : input.target,
         JSON.stringify(input.patterns), stamp, stamp).run();
     return json({ id }, 201);
   }
@@ -345,7 +413,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         !(await cloudflareTriggers(env)).some((x) => x.id === input.target))
         throw new ApiError(422, 'BUILD_TRIGGER_NOT_FOUND', 'Trigger Cloudflare não encontrado');
       await database.prepare('UPDATE deploy_rules SET name=?,enabled=?,provider=?,target=?,patterns_json=?,updated_at=? WHERE id=?')
-        .bind(input.name, Number(input.enabled), input.provider, input.target,
+        .bind(input.name, Number(input.enabled), input.provider === 'circleci' ? 'gcp' : input.provider, input.provider === 'circleci' ? 'circleci-release' : input.target,
           JSON.stringify(input.patterns), now(), route[1]).run();
       return json({ updated: true });
     }
@@ -356,6 +424,10 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
     if (!run) throw new ApiError(404, 'RUN_NOT_FOUND', 'Execução não encontrada');
     if (!run.provider_id || !UUID.test(run.provider_id))
       return json({ message: 'O provedor ainda não informou um ID de execução', entries: [] });
+    if (run.provider === 'circleci') {
+      const raw = await circleciRequest(env, 'pipeline/' + run.provider_id + '/workflow');
+      return json({ entries: [redact(raw).slice(0, 80_000)] });
+    }
     if (run.provider === 'cloudflare') {
       const raw = await cf(env, '/builds/builds/' + run.provider_id + '/logs');
       return json({ entries: [redact(raw).slice(0, 80_000)] });
@@ -377,7 +449,10 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
     const waiting = await database.prepare(SQL_RUNS +
       " WHERE provider='cloudflare' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
     await Promise.all(waiting.results.map(async (run) => pollCloudflare(env, database, run)));
-    return json({ refreshed: waiting.results.length });
+    const ci = await database.prepare(SQL_RUNS +
+      " WHERE provider='circleci' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+    await Promise.all(ci.results.map((run) => pollCircleci(env, database, run)));
+    return json({ refreshed: waiting.results.length + ci.results.length });
   }
   return null;
 }

@@ -1,6 +1,6 @@
 import { ApiError } from '../auth';
 
-export type RouteKind = 'cloudflare' | 'gcp';
+export type RouteKind = 'cloudflare' | 'gcp' | 'circleci';
 export type PathCheck = { pattern: string; kind: 'blob' | 'tree' | 'glob'; exists: boolean; matches: number };
 export type DeployRule = {
   id: string; name: string; enabled: boolean; provider: RouteKind;
@@ -59,5 +59,6 @@ export function validateTarget(provider: unknown, target: unknown): { provider: 
   if (provider === 'cloudflare' && typeof target === 'string' &&
     /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(target))
     return { provider, target: target.toLowerCase() };
+  if (provider === 'circleci' && target === 'release') return { provider, target };
   throw new ApiError(422, 'ROUTE_TARGET', 'Destino inválido: GCP release/provision ou UUID de Workers Builds');
 }

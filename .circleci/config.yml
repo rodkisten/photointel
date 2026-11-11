@@ -1,0 +1,143 @@
+version: 2.1
+
+# CircleCI counterpart to .github/workflows/gcp-deploy.yml.
+# A push performs offline validation only. Production operations require an
+# explicit pipeline parameter AND a manual approval in CircleCI.
+parameters:
+  action:
+    type: enum
+    enum: [check, release, build, jobs-deploy, migrate, deploy, scheduler, cleanup]
+    default: check
+  expected_sha:
+    type: string
+    default: ""
+  migration_mode:
+    type: enum
+    enum: [plan, apply, diagnose]
+    default: plan
+  migration_database:
+    type: enum
+    enum: [unselected, initial-empty, existing-with-backup]
+    default: unselected
+  migration_backup_prefix:
+    type: string
+    default: ""
+
+jobs:
+  offline-check:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: Validate shell and render example config without credentials
+          command: |
+            set -euo pipefail
+            bash -n infra/gcp/release.sh
+            python3 -m infra.gcp.manage render \
+              --config infra/gcp/config.example.json \
+              --output /tmp/photointel-circleci-rendered
+
+  production:
+    docker:
+      - image: cimg/python:3.12
+    resource_class: medium
+    environment:
+      CONFIRM_PROJECT: photointel
+      CLOUDSDK_CORE_PROJECT: photointel
+      CLOUDSDK_COMPUTE_REGION: us-central1
+    steps:
+      - checkout
+      - run:
+          name: Install gcloud and Python config parser
+          command: |
+            set -euo pipefail
+            python3 -m pip install --user --disable-pip-version-check python-dotenv==1.2.4
+            curl -fsSL https://sdk.cloud.google.com | bash -s -- --disable-prompts >/dev/null
+            echo 'export PATH="$HOME/google-cloud-sdk/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: Validate configuration and authenticate using CircleCI OIDC
+          command: |
+            set -euo pipefail
+            : "${GCP_CONFIG_ENV:?Set GCP_CONFIG_ENV in a restricted CircleCI context}"
+            : "${CIRCLE_OIDC_TOKEN_V2:?CircleCI OIDC token is required}"
+            expected="<< pipeline.parameters.expected_sha >>"
+            if [ -n "$expected" ] && [ "$expected" != "$CIRCLE_SHA1" ]; then
+              echo "Ref moved since webhook; refusing to deploy a different commit" >&2
+              exit 1
+            fi
+            export RELEASE_SHA="$CIRCLE_SHA1"
+            python3 -m infra.gcp.gcp_env
+            # CircleCI uses its own OIDC issuer and provider, not GitHub's WIF.
+            : "${CIRCLE_GCP_WIF_PROVIDER:?CircleCI-specific workload identity provider required}"
+            : "${CIRCLE_GCP_SERVICE_ACCOUNT:?CircleCI deploy service account required}"
+            printf '%s' "$CIRCLE_OIDC_TOKEN_V2" > /tmp/circleci-oidc-token
+            chmod 600 /tmp/circleci-oidc-token
+            gcloud iam workload-identity-pools create-cred-config \
+              "$CIRCLE_GCP_WIF_PROVIDER" \
+              --service-account="$CIRCLE_GCP_SERVICE_ACCOUNT" \
+              --credential-source-file=/tmp/circleci-oidc-token \
+              --output-file=/tmp/circleci-gcp-credentials.json
+            echo 'export GOOGLE_APPLICATION_CREDENTIALS=/tmp/circleci-gcp-credentials.json' >> "$BASH_ENV"
+      - run:
+          name: Execute explicitly approved release stage
+          no_output_timeout: 30m
+          command: |
+            set -euo pipefail
+            export RELEASE_SHA="$CIRCLE_SHA1"
+            action="<< pipeline.parameters.action >>"
+            case "$action" in
+              release)
+                bash infra/gcp/release.sh gate
+                bash infra/gcp/release.sh preflight
+                bash infra/gcp/release.sh cache
+                bash infra/gcp/release.sh build
+                bash infra/gcp/release.sh verify
+                bash infra/gcp/release.sh jobs-deploy
+                bash infra/gcp/release.sh deploy
+                bash infra/gcp/release.sh scheduler
+                ;;
+              build)
+                bash infra/gcp/release.sh preflight
+                bash infra/gcp/release.sh cache
+                bash infra/gcp/release.sh build
+                bash infra/gcp/release.sh verify
+                ;;
+              migrate)
+                export MIGRATION_MODE="<< pipeline.parameters.migration_mode >>"
+                export MIGRATION_DATABASE="<< pipeline.parameters.migration_database >>"
+                export MIGRATION_BACKUP_PREFIX="<< pipeline.parameters.migration_backup_prefix >>"
+                bash infra/gcp/release.sh migrate
+                ;;
+              jobs-deploy|deploy|scheduler|cleanup)
+                bash infra/gcp/release.sh "$action"
+                ;;
+              *) echo "Unsupported production action" >&2; exit 2 ;;
+            esac
+      - run:
+          name: Remove local credentials
+          when: always
+          command: rm -f /tmp/circleci-oidc-token /tmp/circleci-gcp-credentials.json infra/gcp/config.local.json
+
+workflows:
+  check:
+    when:
+      equal: [check, << pipeline.parameters.action >>]
+    jobs:
+      - offline-check
+  production:
+    unless:
+      equal: [check, << pipeline.parameters.action >>]
+    jobs:
+      - approval:
+          type: approval
+          filters:
+            branches:
+              only: main
+      - production:
+          context: photointel-production
+          requires:
+            - approval
+          filters:
+            branches:
+              only: main
