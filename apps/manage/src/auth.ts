@@ -9,6 +9,9 @@ export interface D1Binding { prepare(sql: string): D1Statement; }
 export interface Env {
   DEPLOY_DB?: D1Binding;
   GITHUB_WEBHOOK_SECRET?: string;
+  CIRCLECI_API_TOKEN?: string;
+  CIRCLECI_PROJECT_SLUG?: string;
+  CIRCLECI_DEFINITION_ID?: string;
   GCP_BUILD_WEBHOOK_RELEASE_URL?: string;
   GCP_BUILD_WEBHOOK_PROVISION_URL?: string;
   GCP_BUILD_CALLBACK_SECRET?: string;
