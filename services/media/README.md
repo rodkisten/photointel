@@ -1,37 +1,40 @@
-# PhotoIntel Media Engine (initial scaffold)
+# PhotoIntel Media Engine
 
-The media engine is additive: it does not replace existing PhotoIntel ingestion,
-API, Workers or deployment resources.
+Independent image and video processing, inside the existing PhotoIntel monorepo.
 
-## Components
+## Current implementation
 
-- **Imagor**: on-demand images (WebP, AVIF, resize, crop, image watermark).
-- **FFmpeg**: asynchronous full-video exports (H.264/AAC, portrait, optional
-  attribution watermark and loudness normalization).
-- **ImagorVideo**: planned separate deployment for video-frame thumbnails.
-- **Cloudflare R2**: originals and derived objects; production integration pending.
-- **Cloudflare Worker**: planned authenticated, signed gateway and CDN caching.
+- Imagor image service for WebP, AVIF, JPEG, PNG and transformations.
+- TypeScript/Node.js video job using FFmpeg (H.264/AAC, portrait 9:16, optional text watermark, loudness normalization).
+- R2 S3-compatible input/output for the video job.
+- Separate Cloud Build configuration at `services/media/cloudbuild.yaml`, which **builds images only**.
+- Local Docker Compose for Imagor and optional R2-backed video jobs.
 
-## Local
+## Local checks
 
 ```sh
-cd services/media
+cd services/media/video
+npm install
+npm run build
+npm test
+cd ..
 docker compose up -d imagor
-# video processing with a local file:
-mkdir -p work
-docker compose run --rm video --input /work/input.mp4 --output /work/story.mp4
 ```
 
-The Imagor compose configuration deliberately enables `IMAGOR_UNSAFE` **only**
-on loopback for local development. Do not publish this configuration to Cloud
-Run. Production must use signed URLs, an origin allowlist, private credentials
-from Secret Manager, R2 integration and request limits.
+The Imagor development port binds only to 127.0.0.1. `IMAGOR_UNSAFE`
+is strictly for local development and must never be deployed publicly.
 
-## Deployment integration (not enabled)
+Video job requires `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, `MEDIA_INPUT_KEY`, `MEDIA_OUTPUT_KEY`.
+Optional: `MEDIA_WATERMARK`. Keep credentials in Secret Manager.
 
-Cloud Build can build independent Imagor and FFmpeg images into the existing
-Artifact Registry, then publish an Imagor Cloud Run Service and FFmpeg Cloud Run
-Job. Do not modify the existing guarded `infra/gcp/manage.py` deployment path
-or add an automatic production trigger before the security and cost review.
+## Production gates still required
 
-This scaffold does not provision infrastructure, change billing, or deploy.
+1. Signed Cloudflare Worker gateway with authenticated object access and SSRF protection.
+2. Imagor private R2 loader and result storage with strict image size limits.
+3. ImagorVideo thumbnail extraction integration.
+4. Explicit Cloud Run Service/Job configuration and guarded deploy/rollback scripts.
+5. Verified dependencies, pinned container digests, real image/video integration tests.
+6. Approval for any infrastructure provisioning or charge-incurring deploy.
+
+No production resources, billing, triggers or existing API deploy paths are changed.
