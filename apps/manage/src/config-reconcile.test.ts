@@ -183,3 +183,17 @@ describe('dotenv interpolation', () => {
     expect(() => resolveConfigReferences({ A: '${B}', B: '${A}' })).toThrow();
   });
 });
+
+describe('workflow shorthand optimizer', () => {
+  it('converts legacy workflow fields', () => {
+    const input = 'WORKFLOWS__WORKER__DOMAIN=photos.migos.club';
+    const result = optimizeDotenv(input);
+    expect(result.value).toContain('WF__WORKER__DOMAIN=photos.migos.club');
+    expect(result.changes).toHaveLength(1);
+  });
+  it('preserves conflicting shorthand fields', () => {
+    const input = 'WORKFLOWS__WORKER__NAME=old\nWF__WORKER__NAME=new';
+    expect(optimizeDotenv(input).value).toBe(input);
+    expect(optimizeDotenv(input).warnings.length).toBeGreaterThan(0);
+  });
+});
