@@ -13,6 +13,19 @@ steps:
         npm install --no-audit --no-fund
         npm run build
         npm test
+  - id: image-tests
+    name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd services/media/image
+        npm install --no-audit --no-fund
+        npm test
+  - id: image-image
+    name: gcr.io/cloud-builders/docker
+    args: [build, -f, services/media/image/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:$COMMIT_SHA", services/media/image]
+    waitFor: [image-tests]
   - id: video-image
     name: gcr.io/cloud-builders/docker
     args: [build, -f, services/media/video/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA", services/media/video]
@@ -21,6 +34,7 @@ steps:
     name: gcr.io/cloud-builders/docker
     args: [build, -f, services/media/imagor.Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA", services/media]
 images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:$COMMIT_SHA"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA"
   - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA"
 options:
