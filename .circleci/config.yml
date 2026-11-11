@@ -8,6 +8,9 @@ parameters:
     type: enum
     enum: [check, release, build, jobs-deploy, migrate, deploy, scheduler, cleanup]
     default: check
+  expected_sha:
+    type: string
+    default: ""
   migration_mode:
     type: enum
     enum: [plan, apply, diagnose]
@@ -58,6 +61,11 @@ jobs:
             set -euo pipefail
             : "${GCP_CONFIG_ENV:?Set GCP_CONFIG_ENV in a restricted CircleCI context}"
             : "${CIRCLE_OIDC_TOKEN_V2:?CircleCI OIDC token is required}"
+            expected="<< pipeline.parameters.expected_sha >>"
+            if [ -n "$expected" ] && [ "$expected" != "$CIRCLE_SHA1" ]; then
+              echo "Ref moved since webhook; refusing to deploy a different commit" >&2
+              exit 1
+            fi
             export RELEASE_SHA="$CIRCLE_SHA1"
             python3 -m infra.gcp.gcp_env
             # CircleCI uses its own OIDC issuer and provider, not GitHub's WIF.
