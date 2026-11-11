@@ -1,4 +1,5 @@
-# Local-only development; unsafe Imagor is bound exclusively to loopback.
+# Development-only composition. Imagor's unsafe mode is loopback-only.
+# R2-backed jobs are opt-in via profiles, never started by plain 'up'.
 services:
   imagor:
     image: shumc/imagor:latest
@@ -10,14 +11,26 @@ services:
       IMAGOR_AUTO_WEBP: "1"
       IMAGOR_AUTO_AVIF: "1"
     restart: unless-stopped
+
+  image:
+    build:
+      context: ./image
+    profiles: ["image"]
+    environment: &r2_environment
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+      R2_BUCKET: ${R2_BUCKET:-photointel}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      MEDIA_INPUT_KEY: ${MEDIA_INPUT_KEY:-}
+      MEDIA_OUTPUT_KEY: ${MEDIA_OUTPUT_KEY:-}
+      MEDIA_FORMAT: ${MEDIA_FORMAT:-webp}
+      MEDIA_WIDTH: ${MEDIA_WIDTH:-1280}
+      MEDIA_HEIGHT: ${MEDIA_HEIGHT:-1280}
+
   video:
-    build: ./video
+    build:
+      context: ./video
     profiles: ["video"]
     environment:
-      R2_ENDPOINT: ${R2_ENDPOINT:?R2_ENDPOINT required}
-      R2_BUCKET: ${R2_BUCKET:?R2_BUCKET required}
-      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID required}
-      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY required}
-      MEDIA_INPUT_KEY: ${MEDIA_INPUT_KEY:?MEDIA_INPUT_KEY required}
-      MEDIA_OUTPUT_KEY: ${MEDIA_OUTPUT_KEY:?MEDIA_OUTPUT_KEY required}
+      <<: *r2_environment
       MEDIA_WATERMARK: ${MEDIA_WATERMARK:-}
