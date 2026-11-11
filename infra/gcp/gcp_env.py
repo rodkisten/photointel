@@ -135,6 +135,12 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
             scope = "workflow_secrets" if key.startswith("WORKFLOW_SECRET__") else "secrets"
             nested_insert(config, [scope, target], reference, key)
             continue
+        if key.startswith("WF__"):
+            parts = key.split("__")[1:]
+            if not parts or not all(re.fullmatch(r"[A-Z][A-Z0-9_]*", part) for part in parts):
+                fail(f"Invalid workflow variable: {key}")
+            nested_insert(config, ["workflows", *[part.lower() for part in parts]], typed_environment_value(raw_value), key)
+            continue
         if key.startswith("CF__") and key.count("__") == 1:
             field = key[4:]
             if not re.fullmatch(r"[A-Z][A-Z0-9_]*", field):
