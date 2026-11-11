@@ -1,0 +1,18 @@
+# Local-only development. Do not expose the unsafe Imagor port publicly.
+services:
+  imagor:
+    image: shumc/imagor:latest
+    ports:
+      - "127.0.0.1:8008:8000"
+    environment:
+      PORT: "8000"
+      IMAGOR_UNSAFE: "1"
+      IMAGOR_AUTO_WEBP: "1"
+      IMAGOR_AUTO_AVIF: "1"
+    restart: unless-stopped
+  video:
+    build: ./video
+    profiles: ["video"]
+    volumes:
+      - ./work:/work
+    entrypoint: ["python", "/app/render.py"]
