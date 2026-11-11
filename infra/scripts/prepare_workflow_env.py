@@ -243,6 +243,8 @@ def worker_deploy(config: dict) -> None:
         "main": "./worker.mjs",
         "compatibility_date": WORKER_COMPATIBILITY_DATE,
         "workers_dev": False,
+        # Preserve bindings managed manually in Cloudflare across deployments.
+        "keep_vars": True,
         "preview_urls": False,
         # Persist only explicit warning/error events; omit per-request invocation noise.
         "observability": {
