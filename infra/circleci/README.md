@@ -47,3 +47,40 @@ production operations.
 
 No production deployments, provider-token creation, or billing changes are
 performed by these files.
+
+## Manage → CircleCI webhook route
+
+The existing signed GitHub webhook on `photos-hooks.migos.club/hooks/github`
+now supports a `circleci` rule with target `release`. On a matching push
+to main, Manage reads `GCP_CONFIG_ENV` from the GitHub Actions repository
+variable, writes it to the CircleCI context, and triggers a CircleCI pipeline
+with `action=release` and `expected_sha=<signed push commit>`. CircleCI
+requires human approval and checks the commit SHA before executing the release.
+Manage polls pipeline workflow status and includes CircleCI in the runs API.
+
+**Required Manage Worker bindings** (configure securely through the existing
+Manage secret-publishing mechanism; do not put the token in Git):
+
+- `CIRCLECI_API_TOKEN`: token authorized to write context variables and trigger/read pipelines
+- `CIRCLECI_CONTEXT_ID`: restricted production context UUID
+- `CIRCLECI_PROJECT_SLUG`: CircleCI project slug from Project Settings
+- `CIRCLECI_DEFINITION_ID`: pipeline definition UUID from Project Settings
+
+The Manage GitHub API token must also have **Actions variables: read** permission.
+The CircleCI context must additionally have its CircleCI OIDC provider and service
+account configured, as documented in the deploy pipeline setup. Enable exactly
+one deploy rule for the relevant paths, and disable overlapping GCP/Cloudflare
+push-based release triggers to prevent duplicate deployments.
+
+No automatic CircleCI rule is enabled by this PR; create an enabled rule through
+Manage's deploy-router API after credentials, integration and approval policies
+have been tested. Existing D1 schema remains unchanged: CircleCI rules are
+stored internally with a compatible provider discriminator and mapped back
+to `circleci` in API responses.
+
+**Operational caveat:** CircleCI pipeline triggers select the current main
+branch; if it advances after the signed webhook, the pipeline's expected SHA
+check fails closed. This is intentional.
+
+**Deployment status:** implementation committed to the PR, but not deployed
+or tested against a live CircleCI account. No billing changes.
