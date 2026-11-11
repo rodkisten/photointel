@@ -1,4 +1,5 @@
 import { ApiError, bodyJson, json, redact } from './auth';
+import { cloudflareRoute } from './cloudflare-management';
 import { routerApi } from './deploy-router/service';
 import { costRoute } from './costs';
 import { infrastructureRoute } from './infrastructure';
@@ -40,6 +41,10 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  if (path.startsWith('/api/cloudflare/')) {
+    const response = await cloudflareRoute(request, env);
+    if (response) return response;
+  }
   if (path.startsWith('/api/deploy-router')) {
     const response = await routerApi(request, env, identity);
     if (response) return response;
