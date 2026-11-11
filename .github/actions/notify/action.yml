@@ -182,7 +182,7 @@ runs:
           --arg workflow "$WORKFLOW_LABEL" \
           --arg job "$JOB_LABEL" \
           --arg step "${STEP_LABEL:-}" \
-          --arg label "${PHASE_LABEL:-}" \
+          --arg phase_label "${PHASE_LABEL:-}" \
           --arg outcome "$STEP_OUTCOME" \
           --arg completed "$NOTIFY_COMPLETED" \
           --arg total "$NOTIFY_TOTAL" \
@@ -200,7 +200,7 @@ runs:
           ($workflow | clean) as $workflow |
           ($job | clean) as $job |
           ($step | clean) as $step |
-          ($label | clean) as $phase_label |
+          ($phase_label | clean) as $clean_phase_label |
           ($completed | tonumber? // 0) as $completed |
           ($total | tonumber? // 1) as $total |
 
@@ -256,8 +256,8 @@ runs:
 
               (
                 if $action == "step" then
-                  if $phase_label != "" then
-                    "📍 " + $phase_label
+                  if $clean_phase_label != "" then
+                    "📍 " + $clean_phase_label
                   elif $step != "" then
                     "📍 " + $step
                   else
