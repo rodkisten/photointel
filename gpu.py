@@ -548,6 +548,11 @@ def main() -> None:
         print("ℹ️ Nenhum deploy iniciado. Para publicar, use --deploy quando estiver pronto.")
 
 
+if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] in {"doctor", "test", "deploy"}:
+    from infra.gcp.orchestrator import main as orchestrate
+
+    raise SystemExit(orchestrate(sys.argv[1:]))
+
 if __name__ == "__main__":
     try:
         main()
