@@ -117,7 +117,20 @@ export function optimizeDotenv(raw: string): { value: string; changes: string[];
     if (seen.has(key) && seen.get(key) !== value) warnings.push('Conflito em ' + key + ': preservado.');
     seen.set(key, value);
     const ref = /^(SECRETS|WORKFLOW_SECRETS)__([A-Z][A-Z0-9_]*)__(NAME|VERSION)$/.exec(key);
-    if (!ref) continue;
+    if (!ref) {
+      // WORKFLOWS__X__Y and WF__X__Y decode to the same nested workflow path.
+      if (key.startsWith('WORKFLOWS__')) {
+        const compact = 'WF__' + key.slice('WORKFLOWS__'.length);
+        if (seen.has(compact)) {
+          warnings.push('Workflow ' + compact + ' já definido; mantido sem conversão.');
+        } else if (/^WF__(?:[A-Z][A-Z0-9_]*__)*[A-Z][A-Z0-9_]*$/.test(compact)) {
+          lines[i] = m[1] + compact + m[3] + value;
+          changes.push(key + ' → ' + compact);
+          seen.set(compact, value);
+        }
+      }
+      continue;
+    }
     const id = ref[1] + '__' + ref[2];
     const entry = secretNames.get(id) || { indices: [] };
     entry[ref[3] === 'NAME' ? 'name' : 'version'] = value.trim();
