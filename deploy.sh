@@ -9,7 +9,7 @@ ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT="photointel"
 REGION="us-central1"
 CONFIG="$ROOT/infra/gcp/config.local.json"
-LOG_DIR="$HOME/.local/state/photointel-deploy"
+LOG_DIR="$ROOT/.photointel-reports/logs"
 MODE="${1:-menu}"
 if (( $# )); then shift; fi
 YES=0
