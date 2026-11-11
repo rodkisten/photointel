@@ -47,8 +47,10 @@ def commands(config: dict[str, Any], sha: str) -> list[list[str]]:
             "--memory", "2Gi" if kind == "video" else "1Gi",
             "--set-env-vars", f"R2_BUCKET={bucket}",
         ]
-        for env_name, secret_name in REQUIRED_SECRET_ENV:
-            args += ["--update-secrets", f"{env_name}={secret_name}:latest"]
+        args += ["--service-account", f"photointel-media@{project}.iam.gserviceaccount.com"]
+        args += ["--update-secrets", ",".join(
+            f"{env_name}={secret_name}:latest" for env_name, secret_name in REQUIRED_SECRET_ENV
+        )]
         commands_out.append(args)
     return commands_out
 
