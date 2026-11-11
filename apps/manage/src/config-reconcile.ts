@@ -66,6 +66,58 @@ export function parseConfiguration(raw: string): Record<string, string> {
   return parseDotenv(raw);
 }
 
+
+/** Produce a conservative, comment-preserving proposal. Never discard conflicting values. */
+export function optimizeDotenv(raw: string): { value: string; changes: string[]; warnings: string[] } {
+  if (raw.trimStart().startsWith('{')) return {
+    value: raw, changes: [], warnings: ['O otimizador aceita apenas .env; JSON permanece intacto.'],
+  };
+  const lines = raw.split(/(\r?\n)/);
+  const changes: string[] = [];
+  const warnings: string[] = [];
+  const seen = new Map<string, string>();
+  const secretNames = new Map<string, { name?: string; version?: string; indices: number[] }>();
+  for (let i = 0; i < lines.length; i += 2) {
+    const m = /^(\s*(?:export\s+)?)([A-Z][A-Z0-9_]*)(\s*=\s*)(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const [, , key, , value] = m;
+    if (seen.has(key) && seen.get(key) !== value) warnings.push('Conflito em ' + key + ': preservado.');
+    seen.set(key, value);
+    const ref = /^(SECRETS|WORKFLOW_SECRETS)__([A-Z][A-Z0-9_]*)__(NAME|VERSION)$/.exec(key);
+    if (!ref) continue;
+    const id = ref[1] + '__' + ref[2];
+    const entry = secretNames.get(id) || { indices: [] };
+    entry[ref[3] === 'NAME' ? 'name' : 'version'] = value.trim();
+    entry.indices.push(i);
+    secretNames.set(id, entry);
+  }
+  const remove = new Set<number>();
+  for (const [id, entry] of secretNames) {
+    if (!entry.name || !entry.version || !/^[a-z][a-z0-9-]*$/.test(entry.name) ||
+        !/^[1-9][0-9]*$/.test(entry.version) || entry.indices.length !== 2) continue;
+    const prefix = id.startsWith('SECRETS__') ? 'SECRET__' : 'WORKFLOW_SECRET__';
+    const key = id.split('__')[1];
+    const compact = prefix + key;
+    if (seen.has(compact) || seen.has(key)) {
+      warnings.push('Referência ' + key + ' já possui outra definição; preservada.');
+      continue;
+    }
+    const first = Math.min(...entry.indices);
+    const m = /^(\s*(?:export\s+)?)[A-Z][A-Z0-9_]*(\s*=\s*).*$/.exec(lines[first]);
+    if (!m) continue;
+    lines[first] = m[1] + compact + m[2] + entry.name + '@' + entry.version;
+    remove.add(Math.max(...entry.indices));
+    changes.push(id + ' → ' + compact);
+  }
+  const result: string[] = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    if (remove.has(i)) continue;
+    result.push(lines[i]);
+    if (i + 1 < lines.length) result.push(lines[i + 1]);
+  }
+  return { value: result.join(''), changes, warnings };
+}
+
 export function planConfigChange(before: string, after: string): ConfigPlan {
   const oldConfig = parseConfiguration(before);
   const newConfig = parseConfiguration(after);
@@ -101,6 +153,14 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       manual.add(
         'Agendamentos Cloud Scheduler: executar Scheduler manualmente para evitar pausas inesperadas.',
       );
+      continue;
+    }
+    if (normalized.startsWith('cf.')) { add('worker'); continue; }
+    if (normalized.startsWith('env.')) { add('api', 'jobs'); continue; }
+    if (normalized.startsWith('secret.')) { add('api', 'jobs'); continue; }
+    if (normalized.startsWith('workflow_secret.')) {
+      manual.add('Referência de workflow: verificar IAM e versão do Secret Manager.');
+      blocked = true;
       continue;
     }
     if (normalized.startsWith('workflow_secrets.')) {
