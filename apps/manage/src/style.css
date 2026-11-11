@@ -72,18 +72,32 @@ button:disabled {
 ::selection {
   background: #555b65;
 }
+
+input, textarea, select {
+  font-size: 14px;
+}
+
+@media screen and (max-width: 767px) {
+  input:focus,
+  textarea:focus,
+  select:focus {
+    font-size: 16px;
+  }
+}
+
 @media (max-width: 767px) {
-  input {
+  /* input {
     font-size: 16px;
     zoom: 0.75;
     /* transform: scale(0.75);
-        iOS Safari needs 16px inputs, but transform: scale breaks width and hit areas. */
+        iOS Safari needs 16px inputs, 
+  but transform: scale breaks width and hit areas. 
   }
   
   textarea,
   select {
     font-size: 16px;
-  }
+  }*/
   .logbox,
   .logline {
     font-size: 12px;
