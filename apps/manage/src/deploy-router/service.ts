@@ -99,6 +99,37 @@ async function setState(database: DB, run: Run, state: string, providerId: strin
   return { ...run, state, provider_id: providerId || run.provider_id,
     status_url: url || run.status_url, detail, updated_at: now() };
 }
+async function circleciRequest(env: Env, path: string, method = 'GET', body?: unknown): Promise<Record<string, unknown>> {
+  if (!env.CIRCLECI_API_TOKEN || !env.CIRCLECI_PROJECT_SLUG || !env.CIRCLECI_DEFINITION_ID)
+    throw new ApiError(503, 'CIRCLECI_SETUP', 'Configure CircleCI API token, project slug and pipeline definition');
+  if (!/^(?:gh\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+|circleci\/[a-f0-9-]{36}\/[a-f0-9-]{36})$/.test(env.CIRCLECI_PROJECT_SLUG))
+    throw new ApiError(503, 'CIRCLECI_PROJECT', 'Invalid CircleCI project slug');
+  if (!UUID.test(env.CIRCLECI_DEFINITION_ID))
+    throw new ApiError(503, 'CIRCLECI_DEFINITION', 'Invalid CircleCI pipeline definition ID');
+  const response = await fetch('https://circleci.com/api/v2/' + path, {
+    method, redirect: 'manual',
+    headers: { 'Circle-Token': env.CIRCLECI_API_TOKEN, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new ApiError(502, 'CIRCLECI_HTTP', 'CircleCI HTTP ' + response.status);
+  return await response.json() as Record<string, unknown>;
+}
+async function pollCircleci(env: Env, database: DB, run: Run): Promise<void> {
+  if (!run.provider_id || !UUID.test(run.provider_id)) return;
+  const response = await circleciRequest(env, 'pipeline/' + run.provider_id + '/workflow');
+  const workflows = (response.items || []) as Array<{ status?: string }>;
+  if (!workflows.length) return;
+  const statuses = workflows.map((item) => item.status || '');
+  const state = statuses.some((x) => x === 'failed' || x === 'error' || x === 'failing') ? 'failed'
+    : statuses.every((x) => x === 'success') ? 'success'
+    : statuses.every((x) => x === 'canceled' || x === 'cancelled') ? 'cancelled'
+    : statuses.some((x) => x === 'running' || x === 'on_hold') ? 'running' : 'submitted';
+  if (state !== run.state) {
+    const updated = await setState(database, run, state);
+    if (FINISHED.has(state) || run.state !== 'running') await announce(env, updated, state);
+  }
+}
 async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
   const locked = await database.prepare("UPDATE deploy_runs SET state='dispatching',updated_at=? WHERE id=? AND state='queued'")
     .bind(now(), run.id).run();
@@ -106,7 +137,20 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
   try {
     let id: string | null = null;
     let url: string | null = null;
-    if (run.provider === 'cloudflare') {
+    if (run.provider === 'circleci') {
+      if (run.target !== 'release') throw new ApiError(422, 'CIRCLECI_ACTION', 'Only release is permitted');
+      // The CircleCI approval job remains mandatory; the webhook cannot bypass it.
+      const slug = env.CIRCLECI_PROJECT_SLUG || '';
+      const response = await circleciRequest(env, 'project/' + slug + '/pipeline/run', 'POST', {
+        definition_id: env.CIRCLECI_DEFINITION_ID,
+        config: { branch: 'main' },
+        checkout: { branch: 'main' },
+        parameters: { action: 'release' },
+      });
+      id = typeof response.id === 'string' ? response.id : null;
+      if (!id || !UUID.test(id)) throw new ApiError(502, 'CIRCLECI_PIPELINE_ID', 'CircleCI did not return a pipeline ID');
+      url = 'https://app.circleci.com/pipelines/' + slug + '?pipeline_id=' + id;
+    } else if (run.provider === 'cloudflare') {
       if (!(await cloudflareTriggers(env)).some((x) => x.id === run.target))
         throw new ApiError(403, 'BUILD_TRIGGER_REVOKED', 'Trigger fora do repositório autorizado');
       const response = (await cf(env, '/builds/triggers/' + run.target + '/builds', 'POST',
@@ -166,6 +210,12 @@ export async function tick(env: Env): Promise<void> {
   for (const run of waiting.results) await dispatch(env, database, run);
   const running = await database.prepare(SQL_RUNS +
     " WHERE provider='cloudflare' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+  const circleciRuns = await database.prepare(SQL_RUNS +
+    " WHERE provider='circleci' AND state IN ('submitted','running') AND provider_id IS NOT NULL ORDER BY created_at LIMIT 20").all<Run>();
+  for (const run of circleciRuns.results) {
+    try { await pollCircleci(env, database, run); }
+    catch { console.error(JSON.stringify({ event: 'circleci_poll_failed', run_id: run.id })); }
+  }
   for (const run of running.results) {
     try { await pollCloudflare(env, database, run); }
     catch { console.error(JSON.stringify({ event: 'deploy_poll_failed', run_id: run.id })); }
