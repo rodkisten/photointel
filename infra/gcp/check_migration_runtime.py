@@ -16,6 +16,7 @@ if not (APP_SRC / "photointel/__init__.py").is_file():
 
 # Exact src-layout package must be importable when this file is launched by its
 # path from infra/gcp in an otherwise empty venv.
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(APP_SRC))
 
 try:
