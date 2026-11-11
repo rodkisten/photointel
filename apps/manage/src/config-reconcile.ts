@@ -213,7 +213,7 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
       if (field === 'sentry_org') add('manage');
       continue;
     }
-    if (/^workflows\./.test(normalized)) {
+    if (/^(?:workflows|wf)\./.test(normalized)) {
       add('worker');
       continue;
     }
