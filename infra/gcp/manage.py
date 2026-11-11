@@ -1234,7 +1234,7 @@ def main() -> None:
         runner.command([
             "builds", "submit", str(ROOT),
             "--config", str(ROOT / "services/media/cloudbuild.yaml"),
-            "--substitutions", f"_REGION={config['region']},_REPOSITORY={config['repository']}",
+            "--substitutions", f"_REGION={config['region']},_REPOSITORY={config['repository']},_GIT_SHA={sha}",
         ])
     elif args.action == "media-jobs-deploy":
         from infra.gcp.media import execute as deploy_media_jobs
