@@ -35,7 +35,7 @@ import {
 import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
 import { api, send } from '../lib/client';
 import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange } from '../config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, parseConfiguration, planConfigChange } from '../config-reconcile';
 import type { ConfigPlan } from '../config-reconcile';
 import { cn, date, human, state } from '../lib/utils';
 import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
@@ -108,7 +108,12 @@ export function ConfigEditor() {
       } catch {
         return 'JSON inválido';
       }
-    return null;
+    try {
+      parseConfiguration(editor);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'Configuração inválida';
+    }
   }, [editor]);
   return (
     <div className="space-y-4">
