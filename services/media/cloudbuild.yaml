@@ -1,0 +1,28 @@
+# Build only. No automatic deployment, resource creation or billing changes.
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: photointel
+steps:
+  - id: video-tests
+    name: node:22-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd services/media/video
+        npm install --no-audit --no-fund
+        npm run build
+        npm test
+  - id: video-image
+    name: gcr.io/cloud-builders/docker
+    args: [build, -f, services/media/video/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA", services/media/video]
+    waitFor: [video-tests]
+  - id: imagor-image
+    name: gcr.io/cloud-builders/docker
+    args: [build, -f, services/media/imagor.Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA", services/media]
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:$COMMIT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:$COMMIT_SHA"
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
