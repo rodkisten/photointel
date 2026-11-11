@@ -91,3 +91,25 @@ describe('Manage Secret Manager all-secrets editor', () => {
     expect(() => validateSecretValue('photointel-example', 'hello\0world')).toThrow();
   });
 });
+
+describe('compact Secret Manager references', () => {
+  it('lists explicit, inferred and workflow references', () => {
+    const raw = [
+      'SECRET__MODAL_PROXY_KEY=photointel-modal-proxy-key@2',
+      'MODAL_PROXY_SECRET=secret://@3',
+      'WORKFLOW_SECRET__CLOUDFLARE_API_TOKEN=photointel-pages-token@2',
+    ].join('\n');
+    const refs = listReferences(raw);
+    expect(refs).toHaveLength(3);
+    expect(refs.find((ref) => ref.key === 'MODAL_PROXY_SECRET')?.name)
+      .toBe('photointel-modal-proxy-secret');
+    expect(refs.find((ref) => ref.key === 'CLOUDFLARE_API_TOKEN')?.scope)
+      .toBe('workflow_secrets');
+  });
+
+  it('updates compact versions without touching comments', () => {
+    const raw = '# Keep\nSECRET__MODAL_PROXY_KEY=photointel-modal-proxy-key@2 # pinned';
+    expect(replaceReference(raw, 'MODAL_PROXY_KEY', '2', '4', 'secrets'))
+      .toBe('# Keep\nSECRET__MODAL_PROXY_KEY=photointel-modal-proxy-key@4 # pinned');
+  });
+});
