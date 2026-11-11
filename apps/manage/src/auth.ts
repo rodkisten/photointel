@@ -10,6 +10,7 @@ export interface Env {
   DEPLOY_DB?: D1Binding;
   GITHUB_WEBHOOK_SECRET?: string;
   CIRCLECI_API_TOKEN?: string;
+  CIRCLECI_CONTEXT_ID?: string;
   CIRCLECI_PROJECT_SLUG?: string;
   CIRCLECI_DEFINITION_ID?: string;
   GCP_BUILD_WEBHOOK_RELEASE_URL?: string;
