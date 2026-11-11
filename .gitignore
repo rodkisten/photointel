@@ -32,3 +32,6 @@ infra/cloudflare/cloud-run-proxy/.wrangler/
 infra/gcp/config.local.json
 infra/gcp/rendered/
 infra/gcp/state/
+
+# Private local deployment diagnostics and logs.
+.photointel-reports/
