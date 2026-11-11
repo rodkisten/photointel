@@ -23,3 +23,22 @@ npx wrangler dev
 Do not deploy before integration tests, signature issuance, tenant authorization,
 and cost/security review. This Worker serves precomputed results only; Imagor
 and FFmpeg ingestion/job dispatch remain separate production gates.
+
+## Service-to-service URL issuance
+
+`POST /v1/sign` requires `Authorization: Bearer <MEDIA_ISSUER_TOKEN>`,
+where the token is at least 32 characters. Body:
+
+```json
+{"key":"derived/example.webp","ttl":300}
+```
+
+The gateway checks that the object exists in R2 and returns a signed URL and
+expiration. Only trusted backend services may hold the issuer token. It must
+never be exposed to browsers or mobile clients. Store both
+`MEDIA_ISSUER_TOKEN` and `MEDIA_SIGNING_KEY` as Worker secrets. The issuer
+token is an administrative capability for all derived objects; callers must
+authorize the requesting user and object **before** requesting a signed URL.
+
+This does not enqueue jobs, process images, or transcode videos. Those require
+separate processing services and integration tests before deployment.
