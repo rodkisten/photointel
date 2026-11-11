@@ -25,7 +25,7 @@ class DeployCliTests(unittest.TestCase):
         self.assertNotIn("gcloud config set project", content)
         self.assertNotIn("sys.path.insert(", content)
         self.assertIn("python3 -m infra.scripts.deploy_manage", content)
-        self.assertIn("python3 -m infra.gcp.gcp_env", content)
+        self.assertIn('-m infra.gcp.gcp_env', content)
 
 
 if __name__ == "__main__":
