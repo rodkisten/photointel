@@ -115,6 +115,22 @@ async function circleciRequest(env: Env, path: string, method = 'GET', body?: un
   if (!response.ok) throw new ApiError(502, 'CIRCLECI_HTTP', 'CircleCI HTTP ' + response.status);
   return await response.json() as Record<string, unknown>;
 }
+async function syncCircleciConfig(env: Env): Promise<void> {
+  if (!env.CIRCLECI_CONTEXT_ID || !UUID.test(env.CIRCLECI_CONTEXT_ID))
+    throw new ApiError(503, 'CIRCLECI_CONTEXT', 'CircleCI context UUID not configured');
+  // Read the authoritative GitHub repository Actions variable using Manage's GitHub token.
+  const source = await gh(env, '/actions/variables/GCP_CONFIG_ENV') as { value?: string };
+  if (!source.value || typeof source.value !== 'string')
+    throw new ApiError(503, 'GITHUB_CONFIG', 'GCP_CONFIG_ENV unavailable from GitHub');
+  const response = await fetch('https://circleci.com/api/v2/context/' +
+    env.CIRCLECI_CONTEXT_ID + '/environment-variable/GCP_CONFIG_ENV', {
+    method: 'PUT', redirect: 'manual',
+    headers: { 'Circle-Token': env.CIRCLECI_API_TOKEN!, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: source.value }),
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new ApiError(502, 'CIRCLECI_SYNC', 'CircleCI config sync HTTP ' + response.status);
+}
 async function pollCircleci(env: Env, database: DB, run: Run): Promise<void> {
   if (!run.provider_id || !UUID.test(run.provider_id)) return;
   const response = await circleciRequest(env, 'pipeline/' + run.provider_id + '/workflow');
@@ -139,6 +155,7 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
     let url: string | null = null;
     if (run.provider === 'circleci') {
       if (run.target !== 'release') throw new ApiError(422, 'CIRCLECI_ACTION', 'Only release is permitted');
+      await syncCircleciConfig(env);
       // The CircleCI approval job remains mandatory; the webhook cannot bypass it.
       const slug = env.CIRCLECI_PROJECT_SLUG || '';
       const response = await circleciRequest(env, 'project/' + slug + '/pipeline/run', 'POST', {
@@ -341,7 +358,7 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         gcp_release: Boolean(env.GCP_BUILD_WEBHOOK_RELEASE_URL),
         gcp_provision: Boolean(env.GCP_BUILD_WEBHOOK_PROVISION_URL),
         cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
-        circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID),
+        circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID && env.CIRCLECI_CONTEXT_ID),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
   }
   if (request.method === 'GET' && path === '/api/deploy-router/providers') {
