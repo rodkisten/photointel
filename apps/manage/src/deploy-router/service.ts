@@ -145,7 +145,7 @@ async function dispatch(env: Env, database: DB, run: Run): Promise<void> {
         definition_id: env.CIRCLECI_DEFINITION_ID,
         config: { branch: 'main' },
         checkout: { branch: 'main' },
-        parameters: { action: 'release' },
+        parameters: { action: 'release', expected_sha: run.sha },
       });
       id = typeof response.id === 'string' ? response.id : null;
       if (!id || !UUID.test(id)) throw new ApiError(502, 'CIRCLECI_PIPELINE_ID', 'CircleCI did not return a pipeline ID');
