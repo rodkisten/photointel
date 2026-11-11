@@ -24,20 +24,39 @@ function flatten(value: unknown, prefix = '', result: Record<string, string> = {
 }
 
 
-/** Match deployment parsing without consulting the host environment. */
+/** Resolve references from this dotenv only, never from process environment. */
 export function resolveConfigReferences(entries: Record<string, string>): Record<string, string> {
   const resolved: Record<string, string> = {};
-  const visiting = new Set<string>();
-  const pattern = /\$\$|\$\{([A-Za-z][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}/g;
-  const resolve = (key: string, depth = 0): string => {
+  const active = new Set<string>();
+  const has = (key: string) => Object.prototype.hasOwnProperty.call(entries, key);
+  const expand = (input: string, depth: number): string => {
+    if (depth > 32) throw new Error('Profundidade máxima de referências excedida');
+    return input.replace(/\$\$|\$\{([A-Za-z][A-Za-z0-9_]*)(?:(:-|-)([^}]*))?\}/g,
+      (token, name: string | undefined, operator: string | undefined, fallback: string | undefined) => {
+        if (token === '$$') return '$';
+        if (!has(name!) || (operator === ':-' && !entries[name!])) {
+          if (operator) return expand(fallback || '', depth + 1);
+          throw new Error('Referência inexistente: ' + name);
+        }
+        return resolve(name!, depth + 1);
+      });
+  };
+  const resolve = (key: string, depth: number): string => {
     if (Object.prototype.hasOwnProperty.call(resolved, key)) return resolved[key];
-    if (!Object.prototype.hasOwnProperty.call(entries, key))
-      throw new Error('Referência inexistente: ' + key);
-    if (visiting.has(key) || depth > 32) throw new Error('Referência circular: ' + key);
-    visiting.add(key);
-    const value = entries[key].replace(pattern, (token, name: string | undefined,
-      operator: string | undefined, fallback: string | undefined) => {
-      if (token === '$') return '
+    if (active.has(key) || depth > 32) throw new Error('Referência circular: ' + key);
+    active.add(key);
+    const value = expand(entries[key], depth);
+    if (new TextEncoder().encode(value).length > 65536)
+      throw new Error('Valor expandido muito grande: ' + key);
+    active.delete(key);
+    resolved[key] = value;
+    return value;
+  };
+  Object.keys(entries).forEach((key) => resolve(key, 0));
+  return resolved;
+}
+
+function parseDotenv(raw: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
