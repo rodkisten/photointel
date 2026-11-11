@@ -152,10 +152,10 @@ runs:
           config="${GCP_CONFIG_FILE:-infra/gcp/config.local.json}"
           ENDPOINT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_URL // "https://xtelegram-cf.migos.club/notifications/send"' "$config")"
           CHAT="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_CHAT_ID // ""' "$config")"
-          if [[ -z "$TELEGRAM_TOKEN" ]]; then
+          if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
             TELEGRAM_TOKEN="$(jq -r '.extra_environment.TELEGRAM_NOTIFICATION_API_TOKEN // empty' "$config")"
           fi
-          if [[ -z "$TELEGRAM_TOKEN" ]] && command -v gcloud >/dev/null 2>&1; then
+          if [[ -z "${TELEGRAM_TOKEN:-}" ]] && command -v gcloud >/dev/null 2>&1; then
             secret="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.name // empty' "$config")"
             version="$(jq -r '.secrets.TELEGRAM_NOTIFICATION_API_TOKEN.version // empty' "$config")"
             if [[ -n "$secret" && "$version" =~ ^[0-9]+$ ]]; then
@@ -163,7 +163,7 @@ runs:
             fi
           fi
         fi
-        if [[ -z "$TELEGRAM_TOKEN" ]]; then
+        if [[ -z "${TELEGRAM_TOKEN:-}" ]]; then
           echo "::notice::Telegram skipped: set TELEGRAM_NOTIFICATION_API_TOKEN in GCP_CONFIG_ENV or configure a Secret Manager reference."
           exit 0
         fi
@@ -181,8 +181,8 @@ runs:
           --arg action "$ACTION" \
           --arg workflow "$WORKFLOW_LABEL" \
           --arg job "$JOB_LABEL" \
-          --arg step "$STEP_LABEL" \
-          --arg label "$PHASE_LABEL" \
+          --arg step "${STEP_LABEL:-}" \
+          --arg label "${PHASE_LABEL:-}" \
           --arg outcome "$STEP_OUTCOME" \
           --arg completed "$NOTIFY_COMPLETED" \
           --arg total "$NOTIFY_TOTAL" \
@@ -200,7 +200,7 @@ runs:
           ($workflow | clean) as $workflow |
           ($job | clean) as $job |
           ($step | clean) as $step |
-          ($label | clean) as $label |
+          ($label | clean) as $phase_label |
           ($completed | tonumber? // 0) as $completed |
           ($total | tonumber? // 1) as $total |
 
@@ -256,8 +256,8 @@ runs:
 
               (
                 if $action == "step" then
-                  if $label != "" then
-                    "📍 " + $label
+                  if $phase_label != "" then
+                    "📍 " + $phase_label
                   elif $step != "" then
                     "📍 " + $step
                   else

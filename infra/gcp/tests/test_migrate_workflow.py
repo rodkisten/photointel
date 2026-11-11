@@ -133,22 +133,22 @@ class MigrationWorkflowTests(unittest.TestCase):
         self.assertNotIn("secret-private", str(error.exception))
 
     def test_migration_url_validation_enforces_direct_neon_and_tls(self) -> None:
-        import types
-
-        class MockURL:
-            drivername = "postgresql+psycopg"
-            host = "ep-test-pooler.us-east-1.aws.neon.tech"
-            query = {"sslmode": "verify-full"}
-
-        fake_package = types.ModuleType("photointel")
-        fake_db = types.ModuleType("photointel.db_connection")
-        fake_db.database_connection_options = lambda *args, **kwargs: (MockURL(), {})
-        with patch.dict(sys.modules, {
-            "photointel": fake_package,
-            "photointel.db_connection": fake_db,
-        }):
-            with self.assertRaises(migrate.MigrationError):
-                migrate.connection_profile("postgresql://test:pass@ep-test-pooler/db")
+        # The migration loader isolates its DB policy by file path. Mock that
+        # isolated module, not sys.modules["photointel.db_connection"].
+        with tempfile.TemporaryDirectory() as directory:
+            policy = Path(directory) / "db_policy.py"
+            policy.write_text(
+                "class URL:\n"
+                "    drivername = 'postgresql+psycopg'\n"
+                "    host = 'ep-test-pooler.us-east-1.aws.neon.tech'\n"
+                "    query = {'sslmode': 'verify-full'}\n"
+                "def database_connection_options(*args, **kwargs):\n"
+                "    return URL(), {}\n",
+                encoding="utf-8",
+            )
+            with patch.object(migrate, "DB_POLICY", policy):
+                with self.assertRaisesRegex(migrate.MigrationError, "DIRECT endpoint"):
+                    migrate.connection_profile("postgresql://test:pass@ep-test-pooler/db")
 
     def test_empty_profile_refuses_existing_tables_and_revisions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

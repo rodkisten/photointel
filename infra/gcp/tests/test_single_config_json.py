@@ -1,5 +1,6 @@
 """GCP_CONFIG_ENV single-var JSON/dotenv compatibility and secret-ref policy."""
 
+import importlib.util
 import io
 import json
 import os
