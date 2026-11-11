@@ -1058,6 +1058,7 @@ def main() -> None:
             "rollback",
             "cleanup",
             "secret-add",
+            "media-jobs-deploy",
         ],
     )
     parser.add_argument(
@@ -1225,6 +1226,12 @@ def main() -> None:
                 "roles/run.invoker",
             ]
         )
+    elif args.action == "media-jobs-deploy":
+        from infra.gcp.media import execute as deploy_media_jobs
+        sha = args.git_sha or config.get("release_git_sha")
+        if not sha or not re.fullmatch(r"[a-f0-9]{40}", sha):
+            raise ConfigurationError("Media deployment requires --git-sha with 40 hex characters")
+        deploy_media_jobs(config, sha, apply=args.apply)
     elif args.action == "jobs-deploy":
         deploy_jobs(runner, directory)
     elif args.action == "scheduler":
