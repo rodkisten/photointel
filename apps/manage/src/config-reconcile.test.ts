@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange } from './config-reconcile';
+import { findDuplicateConfigKeys, optimizeDotenv, planConfigChange, resolveConfigReferences } from './config-reconcile';
 
 const BASE = [
   'PROJECT_ID=photointel',
@@ -159,5 +159,27 @@ describe('WF__ workflow shorthand', () => {
     const plan = planConfigChange(baseline, baseline + '\nWF__WORKER__DOMAIN=photos.migos.club');
     expect(plan.targets).toEqual(['worker']);
     expect(plan.blocked).toBe(false);
+  });
+});
+
+describe('dotenv interpolation', () => {
+  it('resolves nested references and defaults', () => {
+    expect(resolveConfigReferences({
+      DOMAIN: 'migos.club',
+      HOST: 'photos.${DOMAIN}',
+      URL: 'https://${HOST}',
+      EMPTY: '',
+      FALLBACK: '${EMPTY:-default}',
+      LITERAL: '$${DOMAIN}',
+    })).toMatchObject({
+      HOST: 'photos.migos.club',
+      URL: 'https://photos.migos.club',
+      FALLBACK: 'default',
+      LITERAL: '${DOMAIN}',
+    });
+  });
+  it('rejects unknown variables and circular references', () => {
+    expect(() => resolveConfigReferences({ A: '${MISSING}' })).toThrow();
+    expect(() => resolveConfigReferences({ A: '${B}', B: '${A}' })).toThrow();
   });
 });
