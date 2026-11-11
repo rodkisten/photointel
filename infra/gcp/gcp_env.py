@@ -110,6 +110,12 @@ def decode_config(entries: dict[str, str]) -> dict[str, Any]:
             target, reference = compact
             nested_insert(config, ["secrets", target], reference, key)
             continue
+        if key.startswith("CF__") and key.count("__") == 1:
+            field = key[4:]
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", field):
+                fail(f"Invalid Cloudflare environment variable: {key}")
+            nested_insert(config, ["cloudflare_environment", field], raw_value, key)
+            continue
         if key.startswith("ENV__") and key.count("__") == 1:
             nested_insert(config, ["extra_environment", key[5:]], raw_value, key)
             continue
