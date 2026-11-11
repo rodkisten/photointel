@@ -72,25 +72,60 @@ class Status:
 def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes:
     account = (f"photointel-migrate@{project}.iam.gserviceaccount.com"
                if impersonate else None)
+
+    def invoke(environment: dict[str, str] | None = None):
+        return cloud_run(
+            args, project=project, impersonate=account,
+            text=False, timeout=90, env=environment,
+        )
+
     try:
-        result = cloud_run(args, project=project, impersonate=account,
-                           text=False, timeout=90)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        result = invoke()
+        if result.returncode and impersonate:
+            details = result.stderr.decode("utf-8", errors="replace").casefold()
+            if any(marker in details for marker in (
+                "getaccesstoken", "iam.serviceaccounts", "impersonat",
+            )):
+                # Local Codespaces authentication: user -> deployer -> migrate.
+                # gcloud's explicit --impersonate-service-account replaces the
+                # configured impersonation rather than chaining it. Mint a
+                # short-lived deployer token and use it only as the source
+                # credential for the migration identity. Never log the token.
+                deployer = f"photointel-deployer@{project}.iam.gserviceaccount.com"
+                source_env = os.environ.copy()
+                source_env.pop("CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT", None)
+                source_env.pop("CLOUDSDK_AUTH_ACCESS_TOKEN_FILE", None)
+                source = cloud_run(
+                    ["auth", "print-access-token"],
+                    project=project, impersonate=deployer,
+                    text=False, timeout=90, env=source_env,
+                )
+                if source.returncode or not source.stdout.strip():
+                    raise MigrationError(
+                        "NEON_IAM: cannot obtain a short-lived deployer token "
+                        "from the current local Google Cloud identity."
+                    )
+                with tempfile.TemporaryDirectory(prefix="photointel-iam-") as temp:
+                    token_path = Path(temp) / "deployer.token"
+                    token_path.write_bytes(source.stdout.strip() + b"\n")
+                    token_path.chmod(0o600)
+                    chained_env = source_env.copy()
+                    chained_env["CLOUDSDK_AUTH_ACCESS_TOKEN_FILE"] = str(token_path)
+                    result = invoke(chained_env)
+    except (OSError, subprocess.TimeoutExpired):
         raise MigrationError("Google Cloud credential retrieval unavailable") from None
+
     if result.returncode:
         if impersonate:
-            # Categorize provider errors without logging stderr, which may
-            # include credentials or request details.
+            # Never log raw provider stderr, which may contain sensitive data.
             details = result.stderr.decode("utf-8", errors="replace").casefold()
-            if (
-                "getaccesstoken" in details
-                or "iam.serviceaccounts" in details
-                or "impersonat" in details
-            ):
+            if any(marker in details for marker in (
+                "getaccesstoken", "iam.serviceaccounts", "impersonat",
+            )):
                 raise MigrationError(
-                    "NEON_IAM: deployer cannot impersonate photointel-migrate. "
-                    "Run Setup GCP → apply once to grant Token Creator on that "
-                    "service account. Then retry migrate → plan."
+                    "NEON_IAM: migration identity impersonation failed. "
+                    "Check the active account and Token Creator binding on "
+                    "photointel-migrate; no IAM changes were attempted."
                 )
             if "secretmanager" in details or "secret" in details:
                 raise MigrationError(
@@ -98,8 +133,8 @@ def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes
                     "to photointel-migrate. Verify Secret Manager version and IAM."
                 )
             raise MigrationError(
-                "NEON_CREDENTIALS: impersonation or pinned secret access failed. "
-                "Run Setup GCP → apply and verify the migration secret version."
+                "NEON_CREDENTIALS: migration identity or pinned secret access failed. "
+                "Verify local gcloud authentication and the migration secret IAM."
             )
         raise MigrationError("Private backup retrieval failed; verify IAM and GCS prefix")
     return result.stdout
