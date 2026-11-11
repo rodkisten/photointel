@@ -1,7 +1,16 @@
-FROM python:3.12-slim
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json tsconfig.json ./
+RUN npm install --no-audit --no-fund
+COPY src ./src
+RUN npm run build
+
+FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY render.py /app/render.py
-USER 65534:65534
-ENTRYPOINT ["python", "/app/render.py"]
+COPY package.json ./
+RUN npm install --omit=dev --no-audit --no-fund
+COPY --from=build /app/dist ./dist
+USER node
+CMD ["node", "dist/render.js"]
