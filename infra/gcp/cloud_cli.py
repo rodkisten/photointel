@@ -249,7 +249,12 @@ def print_running_command(invocation: Sequence[str]) -> None:
     if actions:
         # GitHub recognizes workflow commands only at the beginning of a line.
         # Group names are static: no untrusted command argument enters markup.
-        lines = ["::group::☁️ gcloud command"]
+        # The collapsed group title must identify the actual command on mobile.
+        # Keep the preview redacted and on one line; details remain inside.
+        preview = shell_command
+        if len(preview) > 108:
+            preview = preview[:105].rstrip() + "..."
+        lines = ["::group::☁️ " + preview]
         lines.extend(_highlight_line(raw, enabled=colors) for raw in wrapped)
         lines.append("::endgroup::")
     else:
