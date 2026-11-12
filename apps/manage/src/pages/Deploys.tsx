@@ -1,3 +1,4 @@
+import { WorkflowMessageEditor } from '../components/workflow-message-editor';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -103,6 +104,7 @@ export function Deploys() {
   return (
     <div className="space-y-6">
       <CloudflareDeployPanel />
+      <WorkflowMessageEditor />
       <Section title="Última falha do GitHub Actions" detail="Diagnóstico baseado nos jobs e etapas com falha">
         <Card className="space-y-3 p-4">
           {lastFailure.isPending ? <Spinner /> : lastFailure.error ? <IssueBanner error={lastFailure.error} /> : !lastFailure.data?.item ? (
