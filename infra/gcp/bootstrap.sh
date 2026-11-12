@@ -197,6 +197,8 @@ reconcile_manage_access() {
 # Reconcile these permissions in both IAM repair and full apply modes.
 reconcile_media_build_iam() {
   local role
+  # Explicitly restore project-level Service Usage access for the deployer.
+  # A previous grant does not override IAM Deny or conditional restrictions.
   for role in roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer; do
     change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
   done
