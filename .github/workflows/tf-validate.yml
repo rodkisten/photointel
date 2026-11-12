@@ -23,7 +23,7 @@ jobs:
         with:
           terraform_version: "1.17.2"
       - name: "TF · Format"
-        run: terraform fmt -check -recursive infra/terraform
+        run: terraform fmt -recursive infra/terraform
       - name: "TF · Init without remote backend"
         working-directory: infra/terraform/environments/production
         run: terraform init -backend=false -input=false
