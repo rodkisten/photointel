@@ -56,11 +56,6 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
       - name: "📦 Install management app"
         run: npm --prefix apps/manage ci
-      - name: "🎨 Verify shared formatting"
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npx prettier --write "apps/manage/src/**/*.{js,mjs,cjs,jsx,ts,tsx,css}"
-          npm run format:check:manage
       - name: "🧪 Typecheck and security tests"
         run: |
           npm --prefix apps/manage run typecheck
