@@ -60,6 +60,8 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
       - name: "📦 Install management app"
         run: npm --prefix apps/manage ci
+      # Formatting belongs in developer tooling, not the production release gate.
+      # Typecheck, security tests and build remain blocking.
       - name: "🧪 Typecheck and security tests"
         if: ${{ inputs.run_tests == 'true' }}
         run: |
