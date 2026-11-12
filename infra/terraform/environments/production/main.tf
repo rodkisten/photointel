@@ -35,14 +35,18 @@ resource "google_artifact_registry_repository" "docker" {
   repository_id = var.repository
   format = "DOCKER"
   description = "Private PhotoIntel images"
-  lifecycle { prevent_destroy = true }
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 resource "google_storage_bucket" "build_source" {
   name = "${var.project_id}-photointel-build-source"
   location = var.region
   uniform_bucket_level_access = true
   public_access_prevention = "enforced"
-  versioning { enabled = true }
+  versioning {
+    enabled = true
+  }
   lifecycle { prevent_destroy = true }
 }
 resource "google_storage_bucket_iam_member" "builder_source" {
@@ -59,7 +63,9 @@ resource "google_artifact_registry_repository_iam_member" "builder_push" {
 resource "google_secret_manager_secret" "existing" {
   for_each = var.manage_secret_names
   secret_id = each.key
-  replication { auto {} }
+  replication {
+    auto {}
+  }
   lifecycle { prevent_destroy = true }
 }
 resource "google_cloud_run_v2_job" "media" {
@@ -73,7 +79,9 @@ resource "google_cloud_run_v2_job" "media" {
   template {
     template {
       service_account = local.media
-      containers { image = each.value }
+      containers {
+        image = each.value
+      }
       max_retries = 1
     }
   }
@@ -91,7 +99,9 @@ resource "google_cloud_run_v2_service" "api" {
   deletion_protection = true
   template {
     service_account = google_service_account.identity["api"].email
-    containers { image = var.api_image }
+    containers {
+      image = var.api_image
+    }
   }
   lifecycle {
     precondition {
