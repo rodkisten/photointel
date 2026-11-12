@@ -60,6 +60,30 @@ jobs:
       - name: "🧰 Set up gcloud"
         if: inputs.action != 'plan'
         uses: google-github-actions/setup-gcloud@v3
+      - name: "🔐 Diagnose effective Cloud Build identity and quota project"
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
+        env:
+          EXPECTED_ACCOUNT: ${{ steps.config.outputs.service_account }}
+        run: |
+          set -euo pipefail
+          echo "::group::Cloud Build authentication preflight"
+          if [[ "$EXPECTED_ACCOUNT" != "photointel-deployer@photointel.iam.gserviceaccount.com" ]]; then
+            echo "::error::Unexpected WIF deployer identity. Check GCP_CONFIG_ENV service_account."
+            exit 1
+          fi
+          echo "Expected WIF service account: $EXPECTED_ACCOUNT"
+          gcloud auth list --filter='status:ACTIVE' --format='value(account)'
+          echo "gcloud project: $(gcloud config get-value project 2>/dev/null)"
+          echo "gcloud billing/quota_project: $(gcloud config get-value billing/quota_project 2>/dev/null || true)"
+          echo "GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-unset}"
+          echo "::endgroup::"
+          echo "::group::Cloud Build API preflight"
+          if ! gcloud services list --enabled --project photointel --filter='config.name:cloudbuild.googleapis.com' --format='value(config.name)' >/dev/null; then
+            echo "::error::Unable to list enabled APIs as the WIF deployer. Check the effective principal, quota project and serviceusage.services.use before attempting a build."
+            exit 1
+          fi
+          echo "Service Usage API read succeeded. This does not prove builds.create or services.use."
+          echo "::endgroup::"
       - name: "🔎 Plan media build and jobs (no changes)"
         if: inputs.action == 'plan'
         run: |
