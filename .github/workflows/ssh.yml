@@ -153,7 +153,7 @@ jobs:
       - name: "🧰 Setup"
         id: notify_observed_004
         if: ${{ hashFiles('apps/web/package.json') != '' }}
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/photointel-npm-cache
           key: ${{ runner.os }}-node24-photointel-npm-${{ hashFiles('apps/web/package-lock.json', 'apps/web/npm-shrinkwrap.json', 'apps/web/package.json') }}

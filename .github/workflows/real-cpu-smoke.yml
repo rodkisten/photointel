@@ -100,7 +100,7 @@ jobs:
           uv pip check
       - name: "🧰 Setup"
         id: notify_observed_006
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/photointel-real-cpu-models
           key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
