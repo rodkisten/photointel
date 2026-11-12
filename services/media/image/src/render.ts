@@ -1,5 +1,7 @@
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type Format = 'webp' | 'avif' | 'jpeg' | 'png';
 export function parseFormat(value: string): Format {
@@ -61,6 +63,6 @@ async function main(): Promise<void> {
   }));
   process.stdout.write(JSON.stringify({ status: 'ok', outputKey: output, bytes: result.length }) + '\n');
 }
-if (process.env.NODE_ENV !== 'test') {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(error => { console.error(error); process.exitCode = 1; });
 }
