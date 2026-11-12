@@ -260,9 +260,14 @@ def normalize_r2_secret_aliases(config: dict[str, Any]) -> dict[str, Any]:
     ):
         if legacy not in secrets:
             continue
-        if canonical in secrets and secrets[canonical] != secrets[legacy]:
-            fail(f"Conflicting Secret Manager references: {legacy} and {canonical}")
-        secrets[canonical] = secrets.pop(legacy)
+        if canonical in secrets:
+            # The canonical storage configuration is authoritative. Legacy R2
+            # references may remain in old GitHub Environment variables.
+            if secrets[canonical] != secrets[legacy]:
+                print(f"::warning::Ignoring legacy {legacy}; {canonical} takes precedence.")
+            secrets.pop(legacy)
+        else:
+            secrets[canonical] = secrets.pop(legacy)
 
     # The endpoint is a URL, not a credential. The renderer reads the
     # storage_endpoint configuration field, not a Secret Manager reference.
