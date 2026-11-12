@@ -1249,6 +1249,10 @@ def main() -> None:
         runner.command([
             "builds", "submit", str(ROOT),
             "--config", str(ROOT / "services/media/cloudbuild.yaml"),
+            # Reuse the provisioned bucket instead of letting gcloud attempt
+            # storage.buckets.create for its implicit staging/logs buckets.
+            "--gcs-source-staging-dir", f"gs://{config['project_id']}_cloudbuild/source",
+            "--gcs-log-dir", f"gs://{config['project_id']}_cloudbuild/logs",
             "--substitutions", f"_REGION={config['region']},_REPOSITORY={config['repository']},_GIT_SHA={sha}",
         ])
     elif args.action == "media-jobs-deploy":
