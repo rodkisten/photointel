@@ -48,7 +48,7 @@ jobs:
           python3 infra/scripts/release-manifest.py "${arguments[@]}"
       - name: "📦 Testes"
         id: notify_observed_003
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-provenance-${{ github.sha }}
           path: reports/release-manifest.json

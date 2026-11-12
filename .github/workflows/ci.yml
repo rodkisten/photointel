@@ -61,7 +61,7 @@ jobs:
         run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
       - name: "📦 Testes"
         id: notify_observed_009
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: unit-results
@@ -163,7 +163,7 @@ jobs:
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
       - name: "📦 Testes"
         id: notify_observed_034
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: integration-results
@@ -172,7 +172,7 @@ jobs:
           retention-days: 3
       - name: "📦 Testes"
         id: notify_observed_035
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
         with:
           name: browser-results
