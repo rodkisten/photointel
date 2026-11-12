@@ -67,7 +67,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_002
         uses: astral-sh/setup-uv@v6
-        with: {version: '0.12.23'}
+        with: {version: '0.13.8'}
       - name: "🧰 Config"
         id: notify_observed_003
         uses: actions/setup-node@v4

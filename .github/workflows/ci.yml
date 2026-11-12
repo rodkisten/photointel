@@ -43,7 +43,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_003
         uses: astral-sh/setup-uv@v6
-        with: {version: '0.12.23', enable-cache: true}
+        with: {version: '0.13.8', enable-cache: true}
       - name: "▶ ️  Execute command"
         id: notify_observed_004
         run: uv python install 3.12
@@ -99,7 +99,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_019
         uses: astral-sh/setup-uv@v6
-        with: {version: '0.12.23'}
+        with: {version: '0.13.8'}
       - name: "▶ ️  Execute command"
         id: notify_observed_020
         run: uv python install 3.12
@@ -213,7 +213,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_042
         uses: astral-sh/setup-uv@v6
-        with: {version: '0.12.23'}
+        with: {version: '0.13.8'}
       - name: "▶ ️  Execute command"
         id: notify_observed_043
         run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
