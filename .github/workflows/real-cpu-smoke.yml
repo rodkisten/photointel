@@ -79,7 +79,7 @@ jobs:
         with: {persist-credentials: false}
       - name: "🧰 Config"
         id: notify_observed_002
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "🧰 Setup"
         id: notify_observed_003
