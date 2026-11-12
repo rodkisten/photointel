@@ -202,16 +202,7 @@ reconcile_media_build_iam() {
   for role in roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer; do
     change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
   done
-  # gcloud builds submit uploads the source archive to this existing bucket.
-  # The deployer needs object-level write/read access, not bucket creation rights.
-  local cloudbuild_bucket="gs://${PROJECT}_cloudbuild"
-  if gcp storage buckets describe "$cloudbuild_bucket" --format='value(name)' >/dev/null 2>&1; then
-    change storage buckets add-iam-policy-binding "$cloudbuild_bucket" "--member=$DEPLOYER" --role=roles/storage.objectAdmin --format=none
-    change storage buckets add-iam-policy-binding "$cloudbuild_bucket" "--member=$BUILDER" --role=roles/storage.objectViewer --format=none
-  else
-    echo "::error::Cloud Build staging bucket $cloudbuild_bucket is missing or inaccessible to bootstrap; provision it before media build." >&2
-    return 1
-  fi
+  # Cloud Build staging bucket IAM is now managed by Terraform.
   # Build submit may specify this service account; actAs must be scoped to it.
   change iam service-accounts add-iam-policy-binding "photointel-builder@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
 }
