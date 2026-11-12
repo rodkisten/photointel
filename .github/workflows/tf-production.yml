@@ -41,6 +41,8 @@ jobs:
           service_account: ${{ vars.TF_SERVICE_ACCOUNT }}
           project_id: photointel
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.2"
       - name: "TF · Init"
         working-directory: infra/terraform/environments/production
         env:
