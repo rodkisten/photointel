@@ -110,6 +110,15 @@ export function optimizeDotenv(raw: string): { value: string; changes: string[];
   const warnings: string[] = [];
   const seen = new Map<string, string>();
   const secretNames = new Map<string, { name?: string; version?: string; indices: number[] }>();
+  // Discover all declared keys before compacting aliases: a later WF__ key
+  // must not be overwritten by an earlier WORKFLOWS__ key.
+  for (let i = 0; i < lines.length; i += 2) {
+    const declared = /^(?:\s*(?:export\s+)?)([A-Z][A-Z0-9_]*)(?:\s*=)/.exec(lines[i]);
+    if (declared) {
+      const value = lines[i].slice(declared[0].length);
+      if (!seen.has(declared[1])) seen.set(declared[1], value);
+    }
+  }
   for (let i = 0; i < lines.length; i += 2) {
     const m = /^(\s*(?:export\s+)?)([A-Z][A-Z0-9_]*)(\s*=\s*)(.*)$/.exec(lines[i]);
     if (!m) continue;
