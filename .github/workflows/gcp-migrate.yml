@@ -161,7 +161,7 @@ jobs:
 
       - name: "🧰 Gcloud"
         id: setup_gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: "📱 ! 🧰 Gcloud"
         if: ${{ always() && (steps.setup_gcloud.outcome == 'failure' || steps.setup_gcloud.outcome == 'cancelled') }}
