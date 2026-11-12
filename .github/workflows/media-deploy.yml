@@ -37,6 +37,24 @@ jobs:
           persist-credentials: false
       - name: "🧪 Validate media deployment commands (offline)"
         run: python3 -m unittest infra.gcp.tests.test_media -v
+      - name: "🧰 Node.js 22 for media validation"
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: "🧪 Validate media image and video once before publishing"
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
+        run: |
+          set -euo pipefail
+          for component in image video; do
+            echo "::group::🧪 media-${component}: npm test"
+            (
+              cd "services/media/${component}"
+              npm install --no-audit --no-fund
+              npm test
+            )
+            echo "::endgroup::"
+          done
       - name: "⚙️ Prepare production configuration"
         id: config
         uses: ./.github/actions/gcp-config
