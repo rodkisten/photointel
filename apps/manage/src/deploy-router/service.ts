@@ -1,3 +1,4 @@
+import { sendWorkflowFailure } from '../workflow-notify';
 import { ApiError, bodyJson, json, redact } from '../auth';
 import type { Env, Identity } from '../auth';
 import { cf, gh, gcpToken, provider } from '../providers';
@@ -268,6 +269,22 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
     throw new ApiError(401, 'WEBHOOK_SIGNATURE', 'Assinatura GitHub inválida');
   const event = request.headers.get('X-GitHub-Event');
   if (event === 'ping') return json({ accepted: true, kind: 'ping' });
+  if (event === 'workflow_run') {
+    const payload = JSON.parse(body) as {
+      action?: string; repository?: { full_name?: string };
+      workflow_run?: { id?: number; conclusion?: string };
+    };
+    if (payload.repository?.full_name !== (env.GITHUB_REPO || 'rodkisten/photointel'))
+      throw new ApiError(403, 'WEBHOOK_REPO', 'Evento de outro repositório');
+    if (payload.action !== 'completed' || payload.workflow_run?.conclusion !== 'failure')
+      return json({ accepted: false, reason: 'not_failure' }, 202);
+    const id = payload.workflow_run?.id;
+    if (!id || !Number.isSafeInteger(id) || id <= 0)
+      throw new ApiError(422, 'RUN_ID', 'ID de execução inválido');
+    context.waitUntil(sendWorkflowFailure(env, id).catch(() =>
+      console.error(JSON.stringify({ event: 'workflow_notification_failed', run_id: id }))));
+    return json({ accepted: true, run_id: id }, 202);
+  }
   if (event !== 'push') return json({ accepted: false, reason: 'not_push' }, 202);
   const delivery = request.headers.get('X-GitHub-Delivery') || '';
   if (!UUID.test(delivery)) throw new ApiError(422, 'DELIVERY_ID', 'Identificador de entrega inválido');
