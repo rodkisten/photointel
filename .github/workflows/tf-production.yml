@@ -47,19 +47,16 @@ jobs:
           BUCKET: ${{ vars.TF_STATE_BUCKET }}
           PREFIX: ${{ vars.TF_STATE_PREFIX }}
         run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "TF · Require apply confirmation"
+        if: inputs.action == 'apply'
+        env:
+          APPROVED: ${{ inputs.authorize_apply }}
+        run: test "$APPROVED" = true || { echo '::error::Apply checkbox required'; exit 1; }
       - name: "TF · Plan"
         working-directory: infra/terraform/environments/production
         run: |
-          terraform plan -input=false -lock-timeout=5m -out=tfplan -detailed-exitcode -no-color
-        # Exit 2 means changes; exit 1 is failure.
+          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
         id: plan
-        continue-on-error: true
-      - name: "TF · Check plan"
-        working-directory: infra/terraform/environments/production
-        env:
-          OUTCOME: ${{ steps.plan.outcome }}
-        run: |
-          test "$OUTCOME" = success || { echo "::error::Terraform plan failed or reported changes. Review the saved plan before any apply."; exit 1; }
       - name: "TF · Apply"
         if: inputs.action == 'apply' && inputs.authorize_apply
         working-directory: infra/terraform/environments/production
