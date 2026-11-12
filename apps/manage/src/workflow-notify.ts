@@ -55,6 +55,12 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   if (endpoint.protocol !== 'https:' || !endpoint.hostname.endsWith('.migos.club') ||
     endpoint.username || endpoint.password || endpoint.hash)
     throw new Error('Relay URL inválida');
+  const started = Date.parse(String(run.created_at || ''));
+  const windowMs = notificationSettings.windowMinutes * 60_000;
+  const windowId = Math.floor((Number.isFinite(started) ? started : Date.now()) / windowMs);
+  const grouping = notificationSettings.updateMode === 'edit' ? notificationSettings.grouping : 'none';
+  const groupKey = grouping === 'window' ? 'photointel:' + windowId :
+    grouping === 'run' ? 'photointel:run:' + runId : undefined;
   const response = await fetch(endpoint.href, {
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10000),
     headers: { Authorization: 'Bearer ' + env.XRELAY_NOTIFICATION_TOKEN, 'Content-Type': 'application/json' },
@@ -62,6 +68,8 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
       body: redact(message).slice(0, 3900), notification_key: 'workflow:' + repo + ':' + runId,
       sequence: Number(run.run_attempt || 1) * 100000 + 99999,
       delete_after_minutes: notificationSettings.retentionMinutes.error,
+      ...(groupKey ? { group_key: groupKey, event_key: 'workflow:' + runId,
+        severity: 'error', title: String(run.name || 'Workflow') + ' #' + String(run.run_number || runId) } : {}),
       chat_id: env.XRELAY_CHAT_ID || undefined,
       buttons: [[{ text: '📋 Logs', url }, {
         text: '🔧 Manage', url: 'https://photos-manage.migos.club/deploys/' + runId,
