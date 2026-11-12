@@ -1,3 +1,4 @@
+import { readNotificationSettings } from './notification-settings';
 import { redact } from './auth';
 import type { Env } from './auth';
 import { gh } from './providers';
@@ -33,6 +34,8 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   if (!env.XRELAY_NOTIFICATION_URL || !env.XRELAY_NOTIFICATION_TOKEN) return;
   const run = await gh(env, '/actions/runs/' + runId) as Obj;
   if (run.conclusion !== 'failure') return;
+  const notificationSettings = await readNotificationSettings(env);
+  if (!notificationSettings.events.includes('workflow_failure')) return;
   const jobs = items(await gh(env, '/actions/runs/' + runId + '/jobs?per_page=100'), 'jobs');
   const job = jobs.find(value => value.conclusion === 'failure');
   const steps = Array.isArray(job?.steps) ? job.steps as Obj[] : [];
@@ -42,7 +45,7 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   const repo = env.GITHUB_REPO || 'rodkisten/photointel';
   const configured = await gh(env, '/actions/variables/PHOTOINTEL_WORKFLOW_MESSAGE_TEMPLATE')
     .catch(() => null) as { value?: string } | null;
-  const message = renderWorkflowMessage(configured?.value || DEFAULT_TEMPLATE, {
+  const message = renderWorkflowMessage(notificationSettings.template || configured?.value || DEFAULT_TEMPLATE, {
     workflow: String(run.name || 'Workflow'), run_number: String(run.run_number || ''),
     run_id: String(runId), job: String(job?.name || 'Não identificado'),
     step: String(step?.name || 'Não identificada'), error: errorLog || 'Logs indisponíveis. Consulte a execução.',
@@ -58,7 +61,7 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10000),
     headers: { Authorization: 'Bearer ' + env.XRELAY_NOTIFICATION_TOKEN, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      body: redact(message).slice(0, 3900), notification_key: 'photointel:workflow:' + runId,
+      body: redact(message).slice(0, 3900), notification_key: 'workflow:' + repo + ':' + runId,
       sequence: Number(run.run_attempt || 1), chat_id: env.XRELAY_CHAT_ID || undefined,
       buttons: [[{ text: '📋 Logs', url }, {
         text: '🔧 Manage', url: 'https://photos-manage.migos.club/deploys/' + runId,
