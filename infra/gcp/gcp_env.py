@@ -394,7 +394,7 @@ def print_redacted_summary(config: dict[str, Any], provider: str, service_accoun
     preview = {
         "deployment_config": redact_preview(config),
         "github_workload_identity": {
-            "provider": redact_string(provider),
+            "provider": preview_mask(provider),
             "project_number": redact_string(provider_parts[1]),
             "pool_id": redact_string(provider_parts[5]),
             "provider_id": redact_string(provider_parts[7]),
@@ -426,6 +426,21 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
     return normalize_legacy_notification_fields(decode_config(entries)), entries
 
 
+def preview_mask(value: Any, path: tuple[str, ...] = ()) -> Any:
+    """Mask all scalar strings to three visible characters at either end."""
+    if isinstance(value, dict):
+        return {key: preview_mask(item, path + (key,)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [preview_mask(item, path) for item in value]
+    if isinstance(value, str):
+        if path and path[-1] == "version" and path[0] in {"secrets", "workflow_secrets"}:
+            return value
+        if len(value) < 12:
+            return "••••••••"
+        return value[:3] + "••••••" + value[-3:]
+    return value
+
+
 def preview_config(raw: str) -> dict[str, Any]:
     """Use the production parser to preview the effective config without writing files.
 
@@ -444,10 +459,10 @@ def preview_config(raw: str) -> dict[str, Any]:
                 fail(f"Missing or invalid configuration field: {key}")
         return {
             "ok": True,
-            "config": redact_preview(config),
+            "config": preview_mask(config),
             "identity": {
                 "provider": redact_string(provider),
-                "service_account": redact_string(account),
+                "service_account": preview_mask(account),
             },
             "references": [
                 {"scope": scope, "key": key, "name": ref["name"], "version": ref["version"]}
