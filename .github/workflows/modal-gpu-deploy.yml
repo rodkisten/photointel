@@ -11,7 +11,7 @@ on:
         default: validate
         options: [validate, deploy]
       confirm_deploy:
-        description: "For deploy, type DEPLOY-MODAL (may incur Modal charges)"
+        description: "Confirm GPU deployment (may incur Modal charges)"
         type: boolean
         required: false
         default: false
@@ -26,7 +26,7 @@ concurrency:
 jobs:
   modal:
     name: "🧠 Modal · ${{ inputs.mode }}"
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (inputs.mode != 'deploy' || inputs.confirm_deploy == true)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
@@ -45,13 +45,10 @@ jobs:
       - name: "🛡 Require explicit approval and existing Modal credentials"
         if: inputs.mode == 'deploy'
         env:
-          CONFIRM: ${{ inputs.confirm_deploy }}
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
           set -euo pipefail
-          print "$CONFIRM"
-          test "$CONFIRM" = "TRUE" || { echo "::error::Type DEPLOY-MODAL to authorize deployment and potential charges."; exit 1; }
           test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET" || { echo "::error::Configure MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as production environment secrets."; exit 1; }
       - name: "🚀 Deploy Modal inference (no smoke run)"
         if: inputs.mode == 'deploy'
