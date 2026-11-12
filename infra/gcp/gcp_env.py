@@ -426,6 +426,56 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
     return normalize_legacy_notification_fields(decode_config(entries)), entries
 
 
+def preview_config(raw: str) -> dict[str, Any]:
+    """Use the production parser to preview the effective config without writing files.
+
+    Never return credential payloads. Secret Manager references contain only
+    names and versions, not the underlying secret values.
+    """
+    old = os.environ.get("GCP_CONFIG_ENV")
+    try:
+        os.environ["GCP_CONFIG_ENV"] = raw
+        config, entries = read_input()
+        config = normalize_r2_secret_aliases(config)
+        validate_references(config)
+        provider, account = wif_metadata(entries)
+        for key in ("project_id", "region", "repository"):
+            if not isinstance(config.get(key), str) or not config[key].strip():
+                fail(f"Missing or invalid configuration field: {key}")
+        return {
+            "ok": True,
+            "config": redact_preview(config),
+            "identity": {
+                "provider": redact_string(provider),
+                "service_account": redact_string(account),
+            },
+            "references": [
+                {"scope": scope, "key": key, "name": ref["name"], "version": ref["version"]}
+                for scope in ("secrets", "workflow_secrets")
+                for key, ref in sorted(config.get(scope, {}).items())
+            ],
+            "note": "Secret existence and IAM permissions are not checked offline.",
+        }
+    finally:
+        if old is None:
+            os.environ.pop("GCP_CONFIG_ENV", None)
+        else:
+            os.environ["GCP_CONFIG_ENV"] = old
+
+
+def preview_main() -> None:
+    """Read dotenv from stdin; print redacted JSON only, never original input."""
+    import sys
+
+    try:
+        result = preview_config(sys.stdin.read())
+    except SystemExit as error:
+        result = {"ok": False, "error": str(error)}
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result["ok"]:
+        raise SystemExit(1)
+
+
 def main() -> None:
     config, entries = read_input()
     config = normalize_r2_secret_aliases(config)
@@ -457,4 +507,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--preview" in sys.argv:
+        preview_main()
+    else:
+        main()
