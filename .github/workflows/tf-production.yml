@@ -8,7 +8,7 @@ on:
         type: choice
         required: true
         default: plan
-        options: [plan, apply]
+        options: [plan, import, apply]
       authorize_apply:
         description: "Authorize infrastructure changes after reviewing the plan"
         type: boolean
@@ -43,12 +43,30 @@ jobs:
           BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
           PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
         run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "TF · Import existing resources"
+        if: inputs.action == 'import'
+        working-directory: infra/terraform/environments/production
+        shell: bash
+        run: bash ../../import-existing.sh
+      - name: "TF · Verify required imports before apply"
+        if: inputs.action == 'apply'
+        working-directory: infra/terraform/environments/production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for address in 'google_artifact_registry_repository.docker' 'google_storage_bucket.build_source'; do
+            terraform state show "$address" >/dev/null 2>&1 || {
+              echo "::error::Missing $address in remote state. Run TF · Production with action=import first."
+              exit 1
+            }
+          done
       - name: "TF · Require apply confirmation"
         if: inputs.action == 'apply'
         env:
           APPROVED: ${{ inputs.authorize_apply }}
         run: test "$APPROVED" = true || { echo '::error::Apply checkbox required'; exit 1; }
       - name: "TF · Plan"
+        if: inputs.action != 'import'
         working-directory: infra/terraform/environments/production
         run: |
           terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
