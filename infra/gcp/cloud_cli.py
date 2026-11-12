@@ -17,6 +17,7 @@ Safety:
 from __future__ import annotations
 
 import argparse
+import threading
 import os
 import re
 import shlex
@@ -285,6 +286,7 @@ def run(
     input: str | bytes | None = None,
     env: dict[str, str] | None = None,
     check: bool = False,
+    stream_logs: bool = False,
 ) -> subprocess.CompletedProcess:
     """Execute through subprocess without shell=True.
 
@@ -296,15 +298,61 @@ def run(
         raise ValueError("GCP command timeout must be between 1 and 3600 seconds")
     invocation = command(args, project=project, binary=binary, quiet=quiet, impersonate=impersonate)
     print_running_command(invocation)
-    completed = subprocess.run(
-        invocation,
-        input=input,
-        capture_output=capture_output,
-        text=text,
-        check=False,
-        timeout=timeout,
-        env=env,
-    )
+    if stream_logs:
+        if not capture_output or not text or input is not None:
+            raise ValueError("Streaming requires captured text output without stdin")
+        # Stream only non-sensitive build status lines. Full output remains
+        # captured for classification; arbitrary provider output is never echoed.
+        safe_status = re.compile(
+            r"^(?:Starting Step|Finished Step|Step #[0-9]+|FETCHSOURCE|BUILD|PUSH|"
+            r"STATUS:|ID:|CREATE_TIME:|SUCCESS|FAILURE|"
+            r"ERROR: build step|ERROR:.*completed with status)"
+        )
+        process = subprocess.Popen(
+            invocation, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, env=env, bufsize=1,
+        )
+        outputs: dict[str, str] = {}
+        def consume(pipe: object, channel: str) -> None:
+            chunks: list[str] = []
+            assert pipe is not None
+            for line in pipe:
+                chunks.append(line)
+                clean = line.strip()
+                if safe_status.match(clean) and not SENSITIVE_ASSIGNMENT.search(clean):
+                    # Never print arbitrary log contents or GitHub workflow commands.
+                    safe = re.sub(r"[\\x00-\\x1f\\x7f]", "", clean)[:240]
+                    print("[gcloud] " + safe, file=sys.stderr, flush=True)
+            outputs[channel] = "".join(chunks)
+            pipe.close()
+        threads = [
+            threading.Thread(target=consume, args=(process.stdout, "stdout")),
+            threading.Thread(target=consume, args=(process.stderr, "stderr")),
+        ]
+        for thread in threads:
+            thread.start()
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise
+        finally:
+            for thread in threads:
+                thread.join()
+        completed = subprocess.CompletedProcess(
+            invocation, process.returncode, outputs.get("stdout", ""), outputs.get("stderr", "")
+        )
+    else:
+        completed = subprocess.run(
+            invocation,
+            input=input,
+            capture_output=capture_output,
+            text=text,
+            check=False,
+            timeout=timeout,
+            env=env,
+        )
     if check and completed.returncode:
         failure = classify(completed.stderr if capture_output else "")
         raise CloudCommandError(invocation[1:4], failure, completed.returncode)
