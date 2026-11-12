@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import {
   Activity,
+  Bell,
   Apple,
   CloudCog,
   ServerCog,
@@ -30,6 +31,7 @@ const NAV = [
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
+  { id: 'notifications', to: '/notifications', label: 'Notificações', icon: Bell },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
   { id: 'icloud', to: '/icloud', label: 'iCloud', icon: Apple },
@@ -43,6 +45,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   triggers: 'Webhooks GitHub, regras por caminho e status de deploy',
   costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
+  notifications: 'Templates, agrupamento e limpeza automática do Telegram',
   config: 'Edição segura das configurações de produção',
   secrets: 'Versões e credenciais do Google Secret Manager',
   icloud: 'Diagnóstico e recuperação do acesso Apple',
@@ -55,6 +58,7 @@ function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';
+  if (pathname.startsWith('/notifications')) return 'notifications';
   if (pathname.startsWith('/environment')) return 'config';
   if (pathname.startsWith('/secrets')) return 'secrets';
   if (pathname.startsWith('/icloud')) return 'icloud';

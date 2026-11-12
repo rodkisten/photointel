@@ -16,6 +16,7 @@ import { RunDetail } from './components/runs';
 import { SecretManagerPage } from './features/secrets/SecretManagerPage';
 import { api } from './lib/client';
 import { readLogLink, toLogSearch } from './log-deeplink';
+import { NotificationsPage } from './pages/Notifications';
 import { ConfigEditor } from './pages/ConfigEditor';
 import { Deploys } from './pages/Deploys';
 import { Infrastructure } from './pages/Infrastructure';
@@ -170,6 +171,8 @@ const environmentRoute = createRoute({
   component: ConfigEditor,
 });
 
+const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/notifications', component: NotificationsPage });
+
 const secretsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/secrets',
@@ -198,6 +201,7 @@ const routeTree = rootRoute.addChildren([
   logsRoute,
   environmentRoute,
   secretsRoute,
+  notificationsRoute,
   icloudRoute,
   systemRoute,
 ]);
