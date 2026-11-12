@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import io
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -12,6 +13,23 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class CloudCLIContractTests(unittest.TestCase):
+    def test_github_actions_output_is_grouped_colored_and_redacted(self):
+        buffer = io.StringIO()
+        with (
+            patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "TERM": "dumb"}, clear=True),
+            patch.object(cloud_cli.sys, "stderr", buffer),
+        ):
+            cloud_cli.print_running_command([
+                "gcloud", "secrets", "versions", "access", "latest",
+                "--project=photointel", "--token=very-private-token",
+            ])
+        output = buffer.getvalue()
+        self.assertIn("::group::☁️ gcloud command", output)
+        self.assertIn("::endgroup::", output)
+        self.assertIn("\\033[1;36mgcloud", output)
+        self.assertNotIn("very-private-token", output)
+        self.assertNotIn("┌", output)
+
     def test_project_is_explicit_and_normalized_once(self):
         command = cloud_cli.command(
             ["run", "jobs", "describe", "photointel-worker", "--project", "photointel", "--quiet"],
