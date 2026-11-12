@@ -59,7 +59,7 @@ jobs:
         with: {persist-credentials: false}
       - name: "🧰 Config"
         id: notify_observed_002
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with: {python-version: '3.12'}
       - name: "🔐 Código"
         id: notify_observed_003
