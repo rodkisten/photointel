@@ -44,6 +44,7 @@ import { RunRow, RunDetail } from '../components/runs';
 import { ConfirmDialog } from '../components/confirm-dialog';
 import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
 import { DotenvFields } from '../components/dotenv-fields';
+import { organizeEnvironment } from '../env-organizer';
 import { RepositoryVariables } from './RepositoryVariables';
 export function ConfigEditor() {
   const qc = useQueryClient();
@@ -89,6 +90,8 @@ export function ConfigEditor() {
   });
   const optimization = useMemo(() => optimizeDotenv(editor), [editor]);
   const [optimizationPreview, setOptimizationPreview] = useState(false);
+  const [organizationPreview, setOrganizationPreview] = useState(false);
+  const organized = useMemo(() => organizeEnvironment(editor), [editor]);
   const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
   const secretsInventory = useQuery({
     queryKey: ['secrets', 'inventory'],
@@ -208,6 +211,37 @@ export function ConfigEditor() {
                     <Button type="button" size="sm" disabled={!optimization.changes.length}
                       onClick={() => { setEditor(optimization.value); setOptimizationPreview(false); }}>
                       Aplicar no editor (sem salvar)
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+            {detectEnvironmentFormat(editor) === 'dotenv' && (
+              <div className="space-y-2 rounded-lg border border-carbon-800 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-carbon-200">Organizar variáveis por blocos</span>
+                  <Button type="button" size="sm" variant="secondary"
+                    onClick={() => setOrganizationPreview(current => !current)}>
+                    {organizationPreview ? 'Ocultar comparação' : 'Organizar e comparar'}
+                  </Button>
+                </div>
+                {organizationPreview && (
+                  <div className="space-y-2">
+                    <p className="text-carbon-400">
+                      Prévia local. O original permanece intacto até aplicar no editor.
+                      Salvar no GitHub é uma ação separada.
+                    </p>
+                    {organized.changes.map(change => <p key={change} className="text-carbon-300">{change}</p>)}
+                    {organized.warnings.map((warning, index) =>
+                      <p key={index} className="text-amber-300">{warning}</p>)}
+                    <div className="max-h-80 overflow-auto rounded border border-carbon-800">
+                      <pre className="min-w-max whitespace-pre p-3 font-mono text-xs text-carbon-300"
+                        aria-label="Diff entre configuração original e organizada">{organized.diff}</pre>
+                    </div>
+                    <Button type="button" size="sm"
+                      disabled={!organized.safe || organized.value === editor}
+                      onClick={() => { setEditor(organized.value); setOrganizationPreview(false); }}>
+                      <Check size={14} /> Aplicar organização no editor
                     </Button>
                   </div>
                 )}
