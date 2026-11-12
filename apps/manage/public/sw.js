@@ -3,7 +3,7 @@ const BUILD = '__PHOTOINTEL_MANAGE_SW_VERSION__';
 const PRECACHE = /*__PHOTOINTEL_MANAGE_PRECACHE__*/ [];
 const SHELL_CACHE = 'photointel-manage-shell-' + BUILD;
 const ASSET_CACHE = 'photointel-manage-assets-' + BUILD;
-const BLOCKED = /^\/(?:api|auth|hooks|__|cdn-cgi)(?:\/|$)|^\/\./;
+const BLOCKED = /^\/(?:api|auth|hooks|cdn-cgi)(?:\/|$)|^\/__|^\/\./;
 const HASHED = /^\/assets\/.+[-.][A-Za-z0-9_-]{8,}\.(?:js|mjs|css|png|jpe?g|svg|webp|avif|woff2?|ico)$/i;
 
 function acceptable(response, path) {
