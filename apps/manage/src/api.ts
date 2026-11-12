@@ -1,3 +1,4 @@
+import { workflowTemplateRoute } from './workflow-message';
 import { workflowFailureRoute } from './workflow-failures';
 import { ApiError, bodyJson, json, redact } from './auth';
 import { cloudflareRoute } from './cloudflare-management';
@@ -42,6 +43,8 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+  const templateResponse = await workflowTemplateRoute(request, env);
+  if (templateResponse) return templateResponse;
   const failureResponse = await workflowFailureRoute(request, env);
   if (failureResponse) return failureResponse;
   if (path.startsWith('/api/cloudflare/')) {
