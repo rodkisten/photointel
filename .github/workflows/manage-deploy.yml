@@ -56,11 +56,8 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
       - name: "📦 Install management app"
         run: npm --prefix apps/manage ci
-      - name: "🎨 Verify shared formatting"
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npx prettier --write "apps/manage/src/**/*.{js,mjs,cjs,jsx,ts,tsx,css}"
-          npm run format:check:manage
+      # Formatting belongs in developer tooling, not the production release gate.
+      # Typecheck, security tests and build remain blocking.
       - name: "🧪 Typecheck and security tests"
         run: |
           npm --prefix apps/manage run typecheck
