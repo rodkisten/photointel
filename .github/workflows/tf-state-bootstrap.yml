@@ -48,8 +48,12 @@ jobs:
           BUCKET="${STATE_BUCKET:-photointel-terraform-state}"
           [[ "$BUCKET" =~ ^[a-z0-9][a-z0-9.-]{2,61}[a-z0-9]$ ]] || { echo "::error::Invalid bucket name"; exit 1; }
           [[ "$MODE" != apply || "$AUTHORIZED" == true ]] || { echo "::error::Explicit authorization required"; exit 1; }
-          if gcloud storage buckets describe "gs://$BUCKET" --project=photointel --format=json >/dev/null 2>&1; then
+          if gcloud storage buckets describe "gs://$BUCKET" --project=photointel --format=json >/dev/null 2>bucket-error.log; then
             echo "Bucket exists: $BUCKET"
+          elif ! grep -Eqi "404|not found|does not exist" bucket-error.log; then
+            echo "::error::Unable to inspect state bucket; refusing to create it.";
+            sed -E "s/[[:cntrl:]]//g" bucket-error.log >&2
+            exit 1
           elif [[ "$MODE" == plan ]]; then
             echo "PLAN: create private versioned state bucket $BUCKET in us-central1"
           else
