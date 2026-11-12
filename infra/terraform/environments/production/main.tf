@@ -54,6 +54,21 @@ resource "google_storage_bucket_iam_member" "builder_source" {
   role = "roles/storage.objectViewer"
   member = local.builder
 }
+# The Cloud Build CLI uploads sources to the pre-existing default bucket.
+# IAM membership is additive: do not recreate/import or destroy this bucket.
+# This is owned by Terraform, not the bootstrap IAM reconciliation.
+resource "google_storage_bucket_iam_member" "cloudbuild_deployer_objects" {
+  bucket = "${var.project_id}_cloudbuild"
+  role   = "roles/storage.objectAdmin"
+  member = local.deployer
+}
+
+resource "google_storage_bucket_iam_member" "cloudbuild_builder_objects" {
+  bucket = "${var.project_id}_cloudbuild"
+  role   = "roles/storage.objectViewer"
+  member = local.builder
+}
+
 resource "google_artifact_registry_repository_iam_member" "builder_push" {
   location = google_artifact_registry_repository.docker.location
   repository = google_artifact_registry_repository.docker.name
