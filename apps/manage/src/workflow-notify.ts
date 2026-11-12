@@ -8,6 +8,27 @@ const items = (data: unknown, key: string): Obj[] => {
   const value = (data as Obj | null)?.[key];
   return Array.isArray(value) ? value as Obj[] : [];
 };
+async function failureLog(env: Env, jobId: unknown): Promise<string> {
+  if (!Number.isSafeInteger(jobId) || Number(jobId) <= 0 || !env.GITHUB_API_TOKEN) return '';
+  const repo = env.GITHUB_REPO || 'rodkisten/photointel';
+  const response = await fetch('https://api.github.com/repos/' + repo + '/actions/jobs/' + jobId + '/logs', {
+    redirect: 'manual', signal: AbortSignal.timeout(9000),
+    headers: { Authorization: 'Bearer ' + env.GITHUB_API_TOKEN, Accept: 'application/vnd.github+json' },
+  });
+  if (response.status !== 302) return '';
+  const location = response.headers.get('location');
+  if (!location) return '';
+  const target = new URL(location);
+  if (target.protocol !== 'https:' ||
+    !(target.hostname.endsWith('.actions.githubusercontent.com') ||
+      target.hostname.endsWith('.githubusercontent.com'))) return '';
+  const logs = await fetch(target.href, { redirect: 'manual', signal: AbortSignal.timeout(9000) });
+  if (!logs.ok || Number(logs.headers.get('content-length') || 0) > 400_000) return '';
+  const raw = (await logs.text()).slice(-100_000);
+  const lines = raw.split('\n').filter(line =>
+    /(?:^|\s)(?:error|fatal|failed|exception|permission denied|traceback)(?:\s|:|$)/i.test(line));
+  return redact((lines.slice(-6).join('\n') || raw.split('\n').slice(-4).join('\n')).slice(-900));
+}
 export async function sendWorkflowFailure(env: Env, runId: number): Promise<void> {
   if (!env.XRELAY_NOTIFICATION_URL || !env.XRELAY_NOTIFICATION_TOKEN) return;
   const run = await gh(env, '/actions/runs/' + runId) as Obj;
@@ -16,6 +37,7 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   const job = jobs.find(value => value.conclusion === 'failure');
   const steps = Array.isArray(job?.steps) ? job.steps as Obj[] : [];
   const step = steps.find(value => value.conclusion === 'failure');
+  const errorLog = await failureLog(env, job?.id).catch(() => '');
   const url = String(run.html_url || '');
   const repo = env.GITHUB_REPO || 'rodkisten/photointel';
   const configured = await gh(env, '/actions/variables/PHOTOINTEL_WORKFLOW_MESSAGE_TEMPLATE')
@@ -23,8 +45,8 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   const message = renderWorkflowMessage(configured?.value || DEFAULT_TEMPLATE, {
     workflow: String(run.name || 'Workflow'), run_number: String(run.run_number || ''),
     run_id: String(runId), job: String(job?.name || 'Não identificado'),
-    step: String(step?.name || 'Não identificada'), error: 'Consulte os logs da execução',
-    diagnosis: 'Causa ainda não confirmada', url, repository: repo,
+    step: String(step?.name || 'Não identificada'), error: errorLog || 'Logs indisponíveis. Consulte a execução.',
+    diagnosis: /permission denied|403|iam/i.test(errorLog) ? 'Possível falha de permissões; verifique IAM e tokens.' : 'Causa ainda não confirmada', url, repository: repo,
     branch: String(run.head_branch || ''), sha: String(run.head_sha || '').slice(0, 8),
     status: 'failure',
   });
