@@ -285,6 +285,9 @@ def create_app() -> FastAPI:
             )
         return {"status": "ready"}
 
+    from photointel.routers.manage_config_preview import router as manage_config_preview
+
+    app.include_router(manage_config_preview, prefix="/v1")
     from photointel.routers.catalog import router as catalog
     from photointel.routers.operations import router as operations
 
