@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "vitest run",
+    "test": "vitest run src && npm run test:pwa",
     "format": "npm --prefix ../.. run format:manage",
     "format:check": "npm --prefix ../.. run format:check:manage",
     "postbuild": "node scripts/inject-precache.mjs",
