@@ -574,8 +574,23 @@ class Runner:
             return ""
         result = cloud_run(args, project=self.config["project_id"], timeout=3600)
         if result.returncode:
+            failure = cloud_classify(result.stderr)
+            # Print only the classified permission names and fixed guidance.
+            # Never print raw provider stderr, which may contain secret values.
+            permission_names = ", ".join(failure.permissions)
+            details = (" | Missing/denied permission: " + permission_names) if permission_names else ""
+            if args[:2] == ["builds", "submit"] and failure.code == "PERMISSION_DENIED":
+                guidance = (
+                    " | Cloud Build submit: verify the WIF deployer identity, "
+                    "cloudbuild.builds.create, serviceusage.services.use, "
+                    "iam.serviceAccounts.actAs on the selected build identity, "
+                    "and IAM Conditions / deny / organization policies. "
+                    "Existing project-level roles alone do not prove access."
+                )
+            else:
+                guidance = (" | " + failure.hint) if failure.hint else ""
             raise RuntimeError(
-                "Google Cloud command failed: " + cloud_classify(result.stderr).code
+                "Google Cloud command failed: " + failure.code + details + guidance
             )
         if not capture and result.stdout:
             print(result.stdout, end="", flush=True)
