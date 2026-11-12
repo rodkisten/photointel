@@ -71,6 +71,25 @@ jobs:
         run: |
           terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
         id: plan
+      - name: "TF · Block destructive or replacement changes"
+        if: inputs.action == 'apply'
+        working-directory: infra/terraform/environments/production
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > "$RUNNER_TEMP/terraform-plan.json"
+          jq -r '
+            [.resource_changes[]? |
+              select(.change.actions | index("delete")) |
+              "\\(.address): \\(.change.actions | join(" -> "))"
+            ] | .[]
+          ' "$RUNNER_TEMP/terraform-plan.json" > "$RUNNER_TEMP/terraform-destructive.txt"
+          if [[ -s "$RUNNER_TEMP/terraform-destructive.txt" ]]; then
+            echo "::error::Terraform plan includes deletion or replacement. Apply blocked."
+            cat "$RUNNER_TEMP/terraform-destructive.txt"
+            exit 1
+          fi
+          echo "Terraform plan has no delete or replace actions."
       - name: "TF · Apply"
         if: inputs.action == 'apply' && inputs.authorize_apply
         working-directory: infra/terraform/environments/production
