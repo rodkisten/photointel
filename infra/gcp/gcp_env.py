@@ -249,6 +249,31 @@ def normalize_legacy_notification_fields(config: dict[str, Any]) -> dict[str, An
     return config
 
 
+def normalize_r2_secret_aliases(config: dict[str, Any]) -> dict[str, Any]:
+    """Accept legacy R2 credential names without deploying duplicate credentials."""
+    secrets = config.get("secrets")
+    if not isinstance(secrets, dict):
+        return config
+    for legacy, canonical in (
+        ("R2_ACCESS_KEY_ID", "STORAGE_ACCESS_KEY"),
+        ("R2_SECRET_ACCESS_KEY", "STORAGE_SECRET_KEY"),
+    ):
+        if legacy not in secrets:
+            continue
+        if canonical in secrets and secrets[canonical] != secrets[legacy]:
+            fail(f"Conflicting Secret Manager references: {legacy} and {canonical}")
+        secrets[canonical] = secrets.pop(legacy)
+
+    # The endpoint is a URL, not a credential. The renderer reads the
+    # storage_endpoint configuration field, not a Secret Manager reference.
+    if "R2_ENDPOINT" in secrets:
+        if not config.get("storage_endpoint"):
+            fail("R2_ENDPOINT cannot be a Secret Manager reference: set STORAGE_ENDPOINT")
+        secrets.pop("R2_ENDPOINT")
+        print("::notice::Ignoring legacy R2_ENDPOINT secret reference; using STORAGE_ENDPOINT.")
+    return config
+
+
 def validate_references(config: dict[str, Any]) -> None:
     references = config.get("secrets")
     if not isinstance(references, dict):
@@ -398,6 +423,7 @@ def read_input() -> tuple[dict[str, Any], dict[str, str]]:
 
 def main() -> None:
     config, entries = read_input()
+    config = normalize_r2_secret_aliases(config)
     validate_references(config)
     provider, service_account = wif_metadata(entries)
 
