@@ -89,6 +89,18 @@ class CloudCLIContractTests(unittest.TestCase):
         self.assertNotIn("PRIVATE", str(error))
         self.assertNotIn("some/secret/url", str(error))
 
+    def test_permission_diagnostics_redact_provider_secrets(self):
+        failure = cloud_cli.classify(
+            "PERMISSION_DENIED Required permission cloudbuild.builds.create "
+            "Bearer highly-sensitive-value private_url=https://internal.example"
+        )
+        self.assertEqual(failure.code, "PERMISSION_DENIED")
+        self.assertIn("cloudbuild.builds.create", failure.permissions)
+        self.assertIn("iam.serviceAccounts.actAs", failure.hint)
+        rendered = str(cloud_cli.CloudCommandError(["builds", "submit"], failure, 1))
+        self.assertNotIn("highly-sensitive-value", rendered)
+        self.assertNotIn("internal.example", rendered)
+
     def test_cli_forwards_binary_stdout_without_leaking_stderr(self):
         # Bytes returned from Secret Manager are preserved exactly for callers.
         with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 0, b"secret", b"")):
