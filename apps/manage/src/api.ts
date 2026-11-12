@@ -332,6 +332,32 @@ export async function api(
       return json({ ok: true, version: await digest(value) });
     }
   }
+  if (method === 'POST' && path === '/api/config/preview') {
+    const input = await bodyJson<{ value?: unknown }>(request, 130_000);
+    if (typeof input.value !== 'string' || !input.value || input.value.length > 120_000)
+      throw new ApiError(422, 'CONFIG_PREVIEW_INPUT', 'Informe um .env válido de até 120 KB');
+    const origin = env.PHOTOINTEL_API_ORIGIN;
+    if (!origin || !/^https:\/\/[^/?#]+$/.test(origin))
+      throw new ApiError(503, 'CONFIG_PREVIEW_ORIGIN', 'Configure PHOTOINTEL_API_ORIGIN no Worker Manage');
+    const upstream = await fetch(origin + '/v1/manage/config/preview', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cf-Access-Jwt-Assertion': identity.jwt,
+      },
+      body: JSON.stringify({ value: input.value }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!upstream.ok)
+      throw new ApiError(502, 'CONFIG_PREVIEW_UPSTREAM', 'Prévia Python indisponível (HTTP ' + upstream.status + ')');
+    if (Number(upstream.headers.get('content-length') || 0) > 150_000)
+      throw new ApiError(502, 'CONFIG_PREVIEW_SIZE', 'Prévia excedeu o limite');
+    const payload = await upstream.text();
+    if (payload.length > 150_000)
+      throw new ApiError(502, 'CONFIG_PREVIEW_SIZE', 'Prévia excedeu o limite');
+    return json(JSON.parse(payload));
+  }
   if (method === 'GET' && path === '/api/config') return json(await readConfig(env));
   if (method === 'PUT' && path === '/api/config') {
     const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown }>(request);
