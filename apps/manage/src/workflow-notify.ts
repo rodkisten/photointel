@@ -62,7 +62,9 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
     headers: { Authorization: 'Bearer ' + env.XRELAY_NOTIFICATION_TOKEN, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       body: redact(message).slice(0, 3900), notification_key: 'workflow:' + repo + ':' + runId,
-      sequence: Number(run.run_attempt || 1), chat_id: env.XRELAY_CHAT_ID || undefined,
+      sequence: Number(run.run_attempt || 1) * 100000 + 99999,
+      delete_after_minutes: notificationSettings.retentionMinutes.error,
+      chat_id: env.XRELAY_CHAT_ID || undefined,
       buttons: [[{ text: '📋 Logs', url }, {
         text: '🔧 Manage', url: 'https://photos-manage.migos.club/deploys/' + runId,
       }]],
