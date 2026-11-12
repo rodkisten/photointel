@@ -55,6 +55,7 @@ export function ConfigEditor() {
     refetchOnWindowFocus: false,
   });
   const [editor, setEditor] = useState('');
+  const [pythonPreview, setPythonPreview] = useState<{ ok: boolean; config?: unknown; references?: Array<{ scope: string; key: string; name: string; version: string }>; error?: string } | null>(null);
   const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
   const [version, setVersion] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -87,6 +88,11 @@ export function ConfigEditor() {
       void qc.invalidateQueries({ queryKey: ['config'] });
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
+  });
+  const python = useMutation({
+    mutationFn: () => send<{ ok: boolean; config?: unknown; references?: Array<{ scope: string; key: string; name: string; version: string }>; error?: string }>(
+      '/config/preview', { value: editor }, 'POST'),
+    onSuccess: setPythonPreview,
   });
   const optimization = useMemo(() => optimizeDotenv(editor), [editor]);
   const [optimizationPreview, setOptimizationPreview] = useState(false);
@@ -288,6 +294,41 @@ export function ConfigEditor() {
                 })}
               </div>
             </details>
+            <div className="space-y-2 rounded-lg border border-carbon-800 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-carbon-200">Prévia Python de produção</span>
+                <Button type="button" size="sm" variant="secondary" disabled={python.isPending || !editor.trim()}
+                  onClick={() => { setPythonPreview(null); python.mutate(); }}>
+                  {python.isPending ? 'Validando…' : 'Resolver com Python'}
+                </Button>
+              </div>
+              <p className="text-carbon-400">
+                Executa o parser real no backend autenticado. A resposta contém apenas valores mascarados.
+              </p>
+              {python.error && <p role="alert" className="text-red-300 underline decoration-wavy">
+                {python.error instanceof Error ? python.error.message : 'Prévia indisponível'}
+              </p>}
+              {pythonPreview?.error && <p role="alert" className="text-red-300 underline decoration-wavy">
+                {pythonPreview.error}
+              </p>}
+              {pythonPreview?.config !== undefined && (
+                <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-all rounded border border-carbon-800 p-3 text-carbon-300">
+                  {JSON.stringify(pythonPreview.config, null, 2)}
+                </pre>
+              )}
+              {pythonPreview?.references?.map(ref => {
+                const secret = secretsInventory.data?.items.find(item => item.name === ref.name);
+                return <div key={ref.scope + ':' + ref.key} className="break-all text-carbon-300">
+                  {ref.scope}.{ref.key} → {ref.name}@{ref.version}
+                  {secret?.exists === false && <p className="text-red-300 underline decoration-wavy">
+                    Secret não encontrado. Abra Secrets para criar {ref.name}.
+                  </p>}
+                  {secret?.exists === 'unknown' && <p className="text-amber-300">
+                    Existência não verificável: confira permissões IAM.
+                  </p>}
+                </div>;
+              })}
+            </div>
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
                 Chaves repetidas:{' '}
