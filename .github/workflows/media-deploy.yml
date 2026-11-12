@@ -11,10 +11,10 @@ on:
         default: plan
         options: [plan, build, jobs-deploy]
       confirm_charges:
-        description: "For build or jobs-deploy, type AUTHORIZE-MEDIA (may incur GCP charges)"
-        type: string
-        required: false
-        default: ""
+        description: "Authorize build or deployment charges (not required for plan)"
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
         env:
           CONFIRM: ${{ inputs.confirm_charges }}
         run: |
-          test "$CONFIRM" = "AUTHORIZE-MEDIA" || { echo "::error::Type AUTHORIZE-MEDIA to authorize potential GCP charges."; exit 1; }
+          test "$CONFIRM" = "true" || { echo "::error::Check the authorization checkbox to build or deploy media."; exit 1; }
       - name: "🔐 Authenticate with existing GCP WIF"
         if: inputs.action != 'plan'
         uses: google-github-actions/auth@v3
