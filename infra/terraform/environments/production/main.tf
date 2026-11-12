@@ -41,7 +41,8 @@ resource "google_artifact_registry_repository" "docker" {
 }
 resource "google_storage_bucket" "build_source" {
   name = "${var.project_id}-photointel-build-source"
-  location = var.region
+  # Existing bucket was provisioned in the US multi-region. Location is immutable.
+  location = "US"
   uniform_bucket_level_access = true
   public_access_prevention = "enforced"
   versioning {
