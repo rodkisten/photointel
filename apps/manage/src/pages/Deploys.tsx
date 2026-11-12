@@ -1,3 +1,4 @@
+import { WorkflowMessageEditor } from '../components/workflow-message-editor';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -49,6 +50,12 @@ import { ConfirmDialog } from '../components/confirm-dialog';
 import { CloudflareDeployPanel } from '../CloudflareDeployPanel';
 export function Deploys() {
   const qc = useQueryClient();
+  const lastFailure = useQuery({
+    queryKey: ['workflow-last-failure'],
+    queryFn: () => api<{ item: { id: number; name: string; run_number: number; created_at: string; html_url: string; jobs: { id: number; name: string; steps: { name: string; number: number }[] }[] } | null }>('/workflows/last-failure'),
+    refetchInterval: 60_000,
+    retry: false,
+  });
   const workflows = useQuery({ queryKey: ['workflows'], queryFn: () => api<{ items: WF[] }>('/workflows') });
   const runs = useQuery({
     queryKey: ['runs'],
@@ -97,6 +104,30 @@ export function Deploys() {
   return (
     <div className="space-y-6">
       <CloudflareDeployPanel />
+      <WorkflowMessageEditor />
+      <Section title="Última falha do GitHub Actions" detail="Diagnóstico baseado nos jobs e etapas com falha">
+        <Card className="space-y-3 p-4">
+          {lastFailure.isPending ? <Spinner /> : lastFailure.error ? <IssueBanner error={lastFailure.error} /> : !lastFailure.data?.item ? (
+            <p className="text-sm text-carbon-400">Nenhuma execução com falha encontrada.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-red-300">{lastFailure.data.item.name} #{lastFailure.data.item.run_number}</p>
+                  <p className="text-xs text-carbon-400">{date(lastFailure.data.item.created_at)}</p>
+                </div>
+                <Link to="/deploys/$runId" params={{ runId: String(lastFailure.data.item.id) }} className="text-sm text-carbon-200 underline">Ver logs e reexecutar</Link>
+              </div>
+              {lastFailure.data.item.jobs.map(job => (
+                <div key={job.id} className="rounded-lg border border-carbon-800 p-3 text-sm">
+                  <p className="font-medium text-red-300">{job.name}</p>
+                  {job.steps.map(step => <p key={step.number} className="mt-1 text-xs text-carbon-300">Etapa com falha: {step.name}</p>)}
+                </div>
+              ))}
+            </>
+          )}
+        </Card>
+      </Section>
       <Section title="Disparar workflow" detail="Todas as execuções são criadas na branch main">
         <Card className="space-y-4 p-4 sm:p-5">
           {workflows.error && <IssueBanner error={workflows.error} />}
