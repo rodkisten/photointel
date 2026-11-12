@@ -203,6 +203,17 @@ reconcile_media_build_iam() {
   # Build submit may specify this service account; actAs must be scoped to it.
   change iam service-accounts add-iam-policy-binding "photointel-builder@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
 }
+# Restrict privileged WIF to the explicitly approved production workflows.
+reconcile_bootstrap_wif_condition() {
+  BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main']"
+  local current_condition
+  current_condition="$(gcp iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --format='value(attributeCondition)')"
+  if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
+    change iam workload-identity-pools providers update-oidc photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap "--attribute-condition=$BOOTSTRAP_WIF_CONDITION"
+  else
+    log "Bootstrap WIF condition already reconciled"
+  fi
+}
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == permissions ]]; then
   # IAM repair may create only the dedicated Manage service account if missing.
@@ -214,6 +225,7 @@ if [[ "$MODE" == permissions ]]; then
   reconcile_manage_federation
   reconcile_fcm_permissions
   reconcile_media_build_iam
+  reconcile_bootstrap_wif_condition
   log "✅ Runtime IAM, FCM permissions, and Manage federation reconciled."
   exit 0
 fi
@@ -227,15 +239,7 @@ enabled="$(gcp services list --enabled --format='value(config.name)')"
 missing=()
 for api in "${APIS[@]}"; do if ! grep -Fxq "$api" <<< "$enabled"; then missing+=("$api"); fi; done
 if (("${#missing[@]}" > 0)); then change services enable "${missing[@]}"; else log "APIs already enabled"; fi
-# Reconcile the existing privileged provider; leave the normal deploy provider intact.
-# Initial provider creation and permission to manage WIF remain administrator setup.
-BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']"
-current_condition="$(gcp iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --format='value(attributeCondition)')"
-if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
-  change iam workload-identity-pools providers update-oidc photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap "--attribute-condition=$BOOTSTRAP_WIF_CONDITION"
-else
-  log "Bootstrap WIF condition already reconciled"
-fi
+reconcile_bootstrap_wif_condition
 # The privileged bootstrap provisions the terminal VM and its firewall/custom role.
 # Keep these privileges off the normal deployer and runtime identities.
 for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
