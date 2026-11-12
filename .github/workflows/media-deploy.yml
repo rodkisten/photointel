@@ -119,10 +119,18 @@ jobs:
         run: |
           set -euo pipefail
           for kind in image video; do
-            gcloud artifacts docker images describe "us-central1-docker.pkg.dev/photointel/photointel/media-${kind}:${SHA}" --project photointel --quiet >/dev/null || {
-              echo "::error::Missing media-${kind}:${SHA} in Artifact Registry. Run build-and-deploy first."
+            image="us-central1-docker.pkg.dev/photointel/photointel/media-${kind}"
+            echo "::group::🔎 Check Artifact Registry tag media-${kind}:${SHA:0:12}"
+            tags="$(gcloud artifacts docker tags list "${image}" --project photointel --format='value(tag)' 2>&1)" || {
+              echo "::error::Unable to list Artifact Registry tags for media-${kind}: ${tags}"
               exit 1
             }
+            if ! printf '%s\n' "$tags" | grep -Fxq "${SHA}"; then
+              echo "::error::Missing media-${kind}:${SHA} in Artifact Registry. Run build first."
+              exit 1
+            fi
+            echo "Found media-${kind}:${SHA}"
+            echo "::endgroup::"
           done
       - name: "🚀 Deploy private media Cloud Run Jobs only"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
