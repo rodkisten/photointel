@@ -12,9 +12,9 @@ on:
         options: [validate, deploy]
       confirm_deploy:
         description: "For deploy, type DEPLOY-MODAL (may incur Modal charges)"
-        type: string
+        type: boolean
         required: false
-        default: ""
+        default: false
 
 permissions:
   contents: read
@@ -50,7 +50,8 @@ jobs:
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
           set -euo pipefail
-          test "$CONFIRM" = "DEPLOY-MODAL" || { echo "::error::Type DEPLOY-MODAL to authorize deployment and potential charges."; exit 1; }
+          print "$CONFIRM"
+          test "$CONFIRM" = "TRUE" || { echo "::error::Type DEPLOY-MODAL to authorize deployment and potential charges."; exit 1; }
           test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET" || { echo "::error::Configure MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as production environment secrets."; exit 1; }
       - name: "🚀 Deploy Modal inference (no smoke run)"
         if: inputs.mode == 'deploy'
