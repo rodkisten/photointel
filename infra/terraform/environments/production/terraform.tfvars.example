@@ -1,0 +1,10 @@
+project_id = "photointel"
+region = "us-central1"
+repository = "photointel"
+# Keep disabled until resources are inventoried and imported into state.
+enable_media_jobs = false
+enable_api_service = false
+enable_cloudflare = false
+# media_image = "us-central1-docker.pkg.dev/photointel/photointel/media-image@sha256:..."
+# media_video = "us-central1-docker.pkg.dev/photointel/photointel/media-video@sha256:..."
+# api_image = "us-central1-docker.pkg.dev/photointel/photointel/api@sha256:..."
