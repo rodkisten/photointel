@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'node:stream';
 
@@ -76,6 +77,8 @@ async function main(): Promise<void> {
     await rm(directory, { recursive: true, force: true });
   }
 }
-if (process.env.NODE_ENV !== 'test') {
+// Importing render helpers in node --test must never start the worker.
+// Execute only when this file is the Node.js entrypoint.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch(error => { console.error(error); process.exitCode = 1; });
 }
