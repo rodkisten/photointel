@@ -193,6 +193,16 @@ reconcile_manage_access() {
       "--member=$MANAGE" "--role=$role" --condition=None --format=none
   done
 }
+# Media build uses the deployer WIF identity, not the bootstrap identity.
+# Reconcile these permissions in both IAM repair and full apply modes.
+reconcile_media_build_iam() {
+  local role
+  for role in roles/cloudbuild.builds.editor roles/serviceusage.serviceUsageConsumer; do
+    change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
+  done
+  # Build submit may specify this service account; actAs must be scoped to it.
+  change iam service-accounts add-iam-policy-binding "photointel-builder@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
+}
 log "Project=$PROJECT Region=$REGION Repository=$REPO Mode=$MODE"
 if [[ "$MODE" == permissions ]]; then
   # IAM repair may create only the dedicated Manage service account if missing.
@@ -203,6 +213,7 @@ if [[ "$MODE" == permissions ]]; then
   reconcile_manage_access
   reconcile_manage_federation
   reconcile_fcm_permissions
+  reconcile_media_build_iam
   log "✅ Runtime IAM, FCM permissions, and Manage federation reconciled."
   exit 0
 fi
@@ -265,7 +276,8 @@ change artifacts repositories add-iam-policy-binding "$REPO" "--location=$REGION
 # Limit bootstrap's Terminal image build/pinning permission to this repository only.
 change artifacts repositories add-iam-policy-binding "$REPO" "--location=$REGION" "--member=$BOOTSTRAP" --role=roles/artifactregistry.writer --condition=None --format=none
 change projects add-iam-policy-binding "$PROJECT" "--member=$BUILDER" --role=roles/logging.logWriter --condition=None --format=none
-for role in roles/run.admin roles/cloudscheduler.admin roles/cloudbuild.builds.editor roles/artifactregistry.reader roles/logging.viewer roles/serviceusage.serviceUsageConsumer; do
+reconcile_media_build_iam
+for role in roles/run.admin roles/cloudscheduler.admin roles/artifactregistry.reader roles/logging.viewer; do
   change projects add-iam-policy-binding "$PROJECT" "--member=$DEPLOYER" "--role=$role" --condition=None --format=none
 done
 change storage buckets add-iam-policy-binding "$BUCKET" "--member=$DEPLOYER" --role=roles/storage.objectAdmin --condition=None --format=none
