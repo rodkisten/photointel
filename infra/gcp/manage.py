@@ -1260,6 +1260,8 @@ def main() -> None:
             # Use the same Terraform-managed source bucket as the API build.
             # The WIF deployer needs storage.objectAdmin here; the builder has objectViewer.
             "--gcs-source-staging-dir", f"gs://{config['project_id']}-photointel-build-source/source",
+            "--service-account",
+            f"projects/{config['project_id']}/serviceAccounts/" + identity(config, "builder"),
             "--substitutions", f"_REGION={config['region']},_REPOSITORY={config['repository']},_GIT_SHA={sha}",
         ])
     elif args.action == "media-jobs-deploy":
