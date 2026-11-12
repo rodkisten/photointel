@@ -1,4 +1,4 @@
-import { parseConfiguration } from './config-reconcile';
+import { parseEnvironment, maskValue } from '@rodkisten/photointel/env';
 
 export type EnvironmentPreviewEntry = { key: string; value: string; secretName?: string };
 export type EnvironmentPreview = { entries: EnvironmentPreviewEntry[]; error: string };
@@ -7,15 +7,13 @@ const SECRET_FIELD = /(?:SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|API_KEY|SESSIO
 
 /** Never reveal short credentials in full; no confirmation or secret retrieval required. */
 export function maskEnvironmentValue(key: string, value: string): string {
-  if (!SECRET_FIELD.test(key)) return value;
-  if (value.length < 12) return '••••••••';
-  return value.slice(0, 3) + '••••••' + value.slice(-3);
+  return maskValue(key, value);
 }
 
 /** A client-side resolved-key preview; Secret Manager payloads are never accessed. */
 export function listEnvironmentPreview(raw: string): EnvironmentPreview {
   try {
-    const parsed = parseConfiguration(raw);
+    const parsed = parseEnvironment(raw).entries;
     const entries: EnvironmentPreviewEntry[] = [];
     const prefix = parsed.SECRET_NAME_PREFIX?.replace(/-?$/, '-') || 'photointel-';
     for (const [key, value] of Object.entries(parsed)) {
@@ -24,7 +22,7 @@ export function listEnvironmentPreview(raw: string): EnvironmentPreview {
       const reference = compact ? value : value.startsWith('secret://') ? value.slice(9) : '';
       const name = legacy ? value :
         reference ? (reference.split('@')[0] || prefix + (compact?.[1] || key).toLowerCase().replaceAll('_', '-')) : undefined;
-      entries.push({ key, value, ...(name ? { secretName: name } : {}) });
+      entries.push({ key, value: maskEnvironmentValue(key, value), ...(name ? { secretName: name } : {}) });
     }
     return { entries: entries.sort((a, b) => a.key.localeCompare(b.key)), error: '' };
   } catch (error) {

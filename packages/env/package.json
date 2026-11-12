@@ -1,0 +1,15 @@
+{
+  "name": "@rodkisten/photointel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./env": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mts"
+  }
+}
