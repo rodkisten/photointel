@@ -1,68 +1,69 @@
-
 {
-  "name": "Photo Intelligence Cloud",
-
+  "name": "Codespaces Mobile | Zsh + Cloud",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": ".."
+    "context": "."
   },
-
   "remoteUser": "vscode",
-
-  "runArgs": [
-    "--device=/dev/net/tun"
-  ],
-
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "22"
-    },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/sshd:1": {},
-    "ghcr.io/tailscale/codespace/tailscale": {}
-  },
-
-  "forwardPorts": [
-    5173,
-    8000,
-    9001
-  ],
-
+  "containerUser": "vscode",
+  "updateRemoteUserUID": true,
+  "forwardPorts": [5173, 8000, 8787],
   "portsAttributes": {
-    "5173": {
-      "label": "Photo Intelligence",
-      "onAutoForward": "notify"
-    },
-    "8000": {
-      "label": "API privada",
-      "onAutoForward": "silent"
-    },
-    "9001": {
-      "label": "MinIO local",
-      "onAutoForward": "silent"
-    }
+    "5173": { "label": "Vite" },
+    "8000": { "label": "API" },
+    "8787": { "label": "Cloudflare Wrangler" }
   },
-
-  "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/.venv/bin:${containerEnv:PATH}",
-    "UV_LINK_MODE": "copy",
-    "UV_CACHE_DIR": "/tmp/photointel-uv-cache",
-    "PYTHONUNBUFFERED": "1"
-  },
-
-  "postCreateCommand": "bash -lc 'make setup && uv pip install pip'",
-
   "customizations": {
     "vscode": {
       "settings": {
-        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
-        "python.terminal.activateEnvironment": true,
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/usr/bin/zsh",
+            "args": ["-l"]
+          }
+        },
+        "terminal.integrated.tabs.enabled": false,
+        "terminal.integrated.fontSize": 13,
+        "terminal.integrated.lineHeight": 1.1,
+        "terminal.integrated.scrollback": 1500,
+        "terminal.integrated.cursorBlinking": false,
+        "terminal.integrated.shellIntegration.enabled": true,
+        "editor.wordWrap": "on",
+        "editor.minimap.enabled": false,
+        "editor.stickyScroll.enabled": false,
+        "editor.guides.indentation": false,
+        "editor.renderWhitespace": "selection",
+        "editor.smoothScrolling": false,
+        "editor.cursorSmoothCaretAnimation": "off",
+        "explorer.compactFolders": true,
+        "breadcrumbs.enabled": false,
+        "workbench.editor.showTabs": "single",
+        "workbench.list.smoothScrolling": false,
+        "git.autofetch": false,
+        "npm.autoDetect": "off",
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/node_modules/**": true,
+          "**/.venv/**": true,
+          "**/.next/**": true,
+          "**/.wrangler/**": true,
+          "**/dist/**": true
+        },
+        "search.exclude": {
+          "**/node_modules": true,
+          "**/.venv": true,
+          "**/.next": true,
+          "**/.wrangler": true,
+          "**/dist": true
+        }
       },
       "extensions": [
         "ms-python.python",
         "charliermarsh.ruff",
-        "dbaeumer.vscode-eslint"
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "GitHub.vscode-pull-request-github"
       ]
     }
   }

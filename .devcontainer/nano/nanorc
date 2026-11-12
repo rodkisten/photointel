@@ -1,0 +1,22 @@
+## Small-screen Nano: wrap visually, don't alter long source lines.
+set softwrap
+set atblanks
+set autoindent
+set smarthome
+set tabsize 2
+set tabstospaces
+set multibuffer
+set historylog
+set positionlog
+set constantshow
+set indicator
+set quickblank
+set zap
+
+## Mobile: keep keyboard help on-screen; don't use 'set zero'.
+## Mouse mode is intentionally OFF: Safari/Codespaces may not forward taps
+## as terminal mouse events. Enable only if your terminal supports it:
+## set mouse
+
+## Colorized syntax for JSON, Python, JS, shell, Dockerfiles, etc.
+include "/usr/share/nano/*.nanorc"
