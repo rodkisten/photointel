@@ -203,9 +203,34 @@ reconcile_media_build_iam() {
   # Build submit may specify this service account; actAs must be scoped to it.
   change iam service-accounts add-iam-policy-binding "photointel-builder@$PROJECT.iam.gserviceaccount.com" "--member=$DEPLOYER" --role=roles/iam.serviceAccountUser --condition=None --format=none
 }
+# Terraform credentials and IAM are owned by the GCP bootstrap, never by TF workflows.
+reconcile_terraform_identity() {
+  local email="photointel-terraform@$PROJECT.iam.gserviceaccount.com"
+  local state_bucket="${TF_STATE_BUCKET:-photointel-terraform-state}"
+  ensure "Terraform service account $email" \
+    iam service-accounts describe "$email" \
+    @@CREATE@@ iam service-accounts create photointel-terraform \
+      "--display-name=PhotoIntel Terraform production"
+  # Restrict impersonation to GitHub tokens from this repository. The provider
+  # additionally enforces main, production environment and workflow allowlist.
+  local principal="principalSet://iam.googleapis.com/projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/attribute.repository/rodkisten/photointel"
+  change iam service-accounts add-iam-policy-binding "$email" \
+    "--member=$principal" --role=roles/iam.workloadIdentityUser --condition=None --format=none
+  # Scoped state access; no bucket administration or public permissions.
+  change storage buckets add-iam-policy-binding "gs://$state_bucket" \
+    "--member=serviceAccount:$email" --role=roles/storage.objectAdmin --format=none
+  # Terraform resources currently defined in production. IAM is additive.
+  local role
+  for role in roles/iam.serviceAccountAdmin roles/resourcemanager.projectIamAdmin \
+    roles/artifactregistry.admin roles/storage.admin roles/secretmanager.admin \
+    roles/run.admin; do
+    change projects add-iam-policy-binding "$PROJECT" \
+      "--member=serviceAccount:$email" "--role=$role" --condition=None --format=none
+  done
+}
 # Restrict privileged WIF to the explicitly approved production workflows.
 reconcile_bootstrap_wif_condition() {
-  BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main']"
+  BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main']"
   local current_condition
   current_condition="$(gcp iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --format='value(attributeCondition)')"
   if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
@@ -226,6 +251,7 @@ if [[ "$MODE" == permissions ]]; then
   reconcile_fcm_permissions
   reconcile_media_build_iam
   reconcile_bootstrap_wif_condition
+  reconcile_terraform_identity
   log "✅ Runtime IAM, FCM permissions, and Manage federation reconciled."
   exit 0
 fi
@@ -240,6 +266,7 @@ missing=()
 for api in "${APIS[@]}"; do if ! grep -Fxq "$api" <<< "$enabled"; then missing+=("$api"); fi; done
 if (("${#missing[@]}" > 0)); then change services enable "${missing[@]}"; else log "APIs already enabled"; fi
 reconcile_bootstrap_wif_condition
+reconcile_terraform_identity
 # The privileged bootstrap provisions the terminal VM and its firewall/custom role.
 # Keep these privileges off the normal deployer and runtime identities.
 for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
