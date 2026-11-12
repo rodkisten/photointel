@@ -1,0 +1,63 @@
+name: "🧠 GPU · Modal"
+run-name: "🧠 Modal · ${{ inputs.mode }} · ${{ github.ref_name }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Validate without deployment, or explicitly deploy the GPU inference app"
+        type: choice
+        required: true
+        default: validate
+        options: [validate, deploy]
+      confirm_deploy:
+        description: "For deploy, type DEPLOY-MODAL (may incur Modal charges)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: photointel-modal-gpu-production
+  cancel-in-progress: false
+
+jobs:
+  modal:
+    name: "🧠 Modal · ${{ inputs.mode }}"
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: "🧪 Validate GPU deployment sources (offline)"
+        run: |
+          set -euo pipefail
+          uv run --no-project python -m compileall -q gpu/modal_app.py gpu/service.py gpu/pipelines
+          grep -q 'requires_proxy_auth=True' gpu/modal_app.py
+          grep -q 'min_containers=0' gpu/modal_app.py
+          grep -q 'max_containers=1' gpu/modal_app.py
+      - name: "🛡 Require explicit approval and existing Modal credentials"
+        if: inputs.mode == 'deploy'
+        env:
+          CONFIRM: ${{ inputs.confirm_deploy }}
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = "DEPLOY-MODAL" || { echo "::error::Type DEPLOY-MODAL to authorize deployment and potential charges."; exit 1; }
+          test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET" || { echo "::error::Configure MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as production environment secrets."; exit 1; }
+      - name: "🚀 Deploy Modal inference (no smoke run)"
+        if: inputs.mode == 'deploy'
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          set -euo pipefail
+          uv run --group gpu modal deploy gpu/modal_app.py
+          echo "Modal inference deployed. GPU smoke/inference was not executed." >> "$GITHUB_STEP_SUMMARY"
