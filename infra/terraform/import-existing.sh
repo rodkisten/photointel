@@ -9,6 +9,18 @@ import_if_missing() {
     printf 'Already imported: %s\n' "$address"
     return
   fi
+  if [[ "$address" == google_service_account.identity* ]]; then
+    local email="${id##*/}"
+    local lookup
+    if ! lookup="$(gcloud iam service-accounts describe "$email" --project="$project" --format='value(email)' 2>&1)"; then
+      if [[ "$lookup" == *"NOT_FOUND"* || "$lookup" == *"does not exist"* || "$lookup" == *"not found"* ]]; then
+        printf 'Account absent, defer to reviewed apply: %s\\n' "$address"
+        return
+      fi
+      printf 'Account lookup failed for %s: %s\\n' "$address" "$lookup" >&2
+      return 1
+    fi
+  fi
   terraform import -input=false -lock-timeout=5m "$address" "$id"
 }
 # All accounts are pre-existing; verify each before import to avoid surprises.
