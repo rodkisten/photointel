@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../lib/client';
 import { Card, Button, Textarea } from './ui';
-import { DEFAULT_TEMPLATE, PLACEHOLDERS, renderWorkflowMessage } from '../workflow-message';
+const PLACEHOLDERS = ['workflow', 'run_number', 'run_id', 'job', 'step', 'error', 'diagnosis', 'url', 'repository', 'branch', 'sha', 'status'] as const;
+const DEFAULT_TEMPLATE = '❌ {{workflow}} #{{run_number}}\\nJob: {{job}}\\nEtapa: {{step}}\\nErro: {{error}}\\nDiagnóstico: {{diagnosis}}\\n{{url}}';
+function renderWorkflowMessage(template: string, values: Record<string, string>): string {
+  return template.replace(/\\{\\{([a-z_]+)\\}\\}/g, (_, key: string) => values[key] || 'indisponível');
+}
 
 export function WorkflowMessageEditor() {
   const settings = useQuery({
