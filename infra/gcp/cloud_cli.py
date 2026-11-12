@@ -321,7 +321,7 @@ def run(
                 clean = line.strip()
                 if safe_status.match(clean) and not SENSITIVE_ASSIGNMENT.search(clean):
                     # Never print arbitrary log contents or GitHub workflow commands.
-                    safe = re.sub(r"[\\x00-\\x1f\\x7f]", "", clean)[:240]
+                    safe = re.sub(r"[\x00-\x1f\x7f]", "", clean)[:240]
                     print("[gcloud] " + safe, file=sys.stderr, flush=True)
             outputs[channel] = "".join(chunks)
             pipe.close()
