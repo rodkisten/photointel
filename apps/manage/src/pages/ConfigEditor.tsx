@@ -46,6 +46,39 @@ import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/code
 import { DotenvFields } from '../components/dotenv-fields';
 import { organizeEnvironment } from '../env-organizer';
 import { RepositoryVariables } from './RepositoryVariables';
+
+type EnvironmentPreviewEntry = { key: string; value: string; secretName: string | null };
+
+function listEnvironmentPreview(value: string): {
+  entries: EnvironmentPreviewEntry[];
+  error: string;
+} {
+  if (!value.trim()) return { entries: [], error: '' };
+  try {
+    const config = parseConfiguration(value);
+    const entries: EnvironmentPreviewEntry[] = Object.entries(config).map(([key, raw]) => {
+      const resolved = String(raw ?? '');
+      const match = /secret:\/\/([A-Za-z0-9_.-]+)/i.exec(resolved);
+      return { key, value: resolved, secretName: match?.[1] ?? null };
+    });
+    return { entries, error: '' };
+  } catch (error) {
+    return {
+      entries: [],
+      error: error instanceof Error ? error.message : 'Não foi possível interpretar o ambiente.',
+    };
+  }
+}
+
+function maskEnvironmentValue(key: string, value: string): string {
+  // Secret Manager references are identifiers, not secret payloads.
+  if (/secret:\/\//i.test(value)) return value;
+  if (/SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|API_KEY|AUTH|SESSION/i.test(key)) {
+    return value ? '••••••••' : '';
+  }
+  return value;
+}
+
 export function ConfigEditor() {
   const qc = useQueryClient();
   const q = useQuery({
