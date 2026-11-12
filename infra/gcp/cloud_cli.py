@@ -197,31 +197,49 @@ def _highlight_line(line: str, *, enabled: bool) -> str:
 
 
 def print_running_command(invocation: Sequence[str]) -> None:
-    """Draw a full-width terminal panel without altering stdout or commands."""
-    # A single stream write avoids output from concurrent calls interleaving
-    # character by character. stderr keeps stdout safe for JSON or secret bytes.
+    """Display a safe command with formatting suited to its log destination.
+
+    GitHub Actions logs use native collapsible groups, a fixed mobile-friendly
+    line width, and ANSI syntax colors. Interactive terminals retain the
+    original bordered panel. Stdout stays untouched for JSON and secret bytes.
+    """
     stream = sys.stderr
-    width = max(28, shutil.get_terminal_size(fallback=(100, 24)).columns)
-    inner_width = width - 4  # '│ ' + content + ' │'
+    actions = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    colors = (
+        "NO_COLOR" not in os.environ
+        and os.environ.get("TERM") != "dumb"
+        and (actions or stream.isatty())
+    )
+    # GitHub log viewers do not reliably expose terminal width; prevent
+    # 100+ character borders and preserve readable lines on mobile.
+    width = 100 if actions else max(28, shutil.get_terminal_size(fallback=(100, 24)).columns)
+    inner_width = width if actions else width - 4
     shell_command = " ".join(shlex.quote(item) for item in _safe_preview_args(invocation))
     wrapped = textwrap.wrap(
         shell_command,
         width=inner_width,
         break_long_words=True,
         break_on_hyphens=False,
+        replace_whitespace=False,
+        drop_whitespace=True,
     ) or [""]
-    colors = stream.isatty() and "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
-    title = "> running command:"
-    if colors:
-        title = "\033[1;33m" + title + "\033[0m"
+    if actions:
+        # GitHub recognizes workflow commands only at the beginning of a line.
+        # Group names are static: no untrusted command argument enters markup.
+        lines = ["::group::☁️ gcloud command"]
+        lines.extend(_highlight_line(raw, enabled=colors) for raw in wrapped)
+        lines.append("::endgroup::")
+    else:
+        title = "> running command:"
+        if colors:
+            title = "\033[1;33m" + title + "\033[0m"
 
-    def panel_line(raw: str, colored: str | None = None) -> str:
-        # Measure the uncolored text, not ANSI escape sequences.
-        return "│ " + (colored if colored is not None else raw) + " " * max(0, inner_width - len(raw)) + " │"
+        def panel_line(raw: str, colored: str | None = None) -> str:
+            return "│ " + (colored if colored is not None else raw) + " " * max(0, inner_width - len(raw)) + " │"
 
-    lines = ["┌" + "─" * (width - 2) + "┐", panel_line("> running command:", title), panel_line("")]
-    lines.extend(panel_line(raw, _highlight_line(raw, enabled=colors)) for raw in wrapped)
-    lines.append("└" + "─" * (width - 2) + "┘")
+        lines = ["┌" + "─" * (width - 2) + "┐", panel_line("> running command:", title), panel_line("")]
+        lines.extend(panel_line(raw, _highlight_line(raw, enabled=colors)) for raw in wrapped)
+        lines.append("└" + "─" * (width - 2) + "┘")
     stream.write("\n".join(lines) + "\n")
     stream.flush()
 
