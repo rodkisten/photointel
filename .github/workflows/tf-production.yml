@@ -1,0 +1,66 @@
+name: "TF · Production"
+run-name: "TF · ${{ inputs.action }} · production"
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Inspect the live state or apply a reviewed plan"
+        type: choice
+        required: true
+        default: plan
+        options: [plan, apply]
+      authorize_apply:
+        description: "Authorize infrastructure changes after reviewing the plan"
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-terraform-production
+  cancel-in-progress: false
+jobs:
+  terraform:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "TF · Check state configuration"
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          PREFIX: ${{ vars.TF_STATE_PREFIX }}
+        run: |
+          test -n "$BUCKET" || { echo "::error::Set TF_STATE_BUCKET in production variables after bootstrapping a versioned private GCS bucket."; exit 1; }
+          test -n "$PREFIX" || { echo "::error::Set TF_STATE_PREFIX in production variables."; exit 1; }
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.TF_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.TF_SERVICE_ACCOUNT }}
+          project_id: photointel
+      - uses: hashicorp/setup-terraform@v3
+      - name: "TF · Init"
+        working-directory: infra/terraform/environments/production
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          PREFIX: ${{ vars.TF_STATE_PREFIX }}
+        run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "TF · Plan"
+        working-directory: infra/terraform/environments/production
+        run: |
+          terraform plan -input=false -lock-timeout=5m -out=tfplan -detailed-exitcode -no-color
+        # Exit 2 means changes; exit 1 is failure.
+        id: plan
+        continue-on-error: true
+      - name: "TF · Check plan"
+        working-directory: infra/terraform/environments/production
+        env:
+          OUTCOME: ${{ steps.plan.outcome }}
+        run: |
+          test "$OUTCOME" = success || { echo "::error::Terraform plan failed or reported changes. Review the saved plan before any apply."; exit 1; }
+      - name: "TF · Apply"
+        if: inputs.action == 'apply' && inputs.authorize_apply
+        working-directory: infra/terraform/environments/production
+        run: terraform apply -input=false tfplan
