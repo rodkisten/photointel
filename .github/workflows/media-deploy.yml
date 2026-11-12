@@ -9,7 +9,7 @@ on:
         type: choice
         required: true
         default: plan
-        options: [plan, build, jobs-deploy]
+        options: [plan, build, jobs-deploy, build-and-deploy]
       confirm_charges:
         description: "Authorize build or deployment charges (not required for plan)"
         type: boolean
@@ -66,11 +66,23 @@ jobs:
           python3 -m infra.gcp.manage media-build --git-sha "${{ github.sha }}"
           python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ github.sha }}"
       - name: "🏗️ Build media images only"
-        if: inputs.action == 'build'
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         run: |
           python3 -m infra.gcp.manage media-build --git-sha "${{ github.sha }}" --apply --authorize-charges --confirm-project photointel
+      - name: "🔎 Verify immutable media images exist before deployment"
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for kind in image video; do
+            gcloud artifacts docker images describe "us-central1-docker.pkg.dev/photointel/photointel/media-${kind}:${SHA}" --project photointel --quiet >/dev/null || {
+              echo "::error::Missing media-${kind}:${SHA} in Artifact Registry. Run build-and-deploy first."
+              exit 1
+            }
+          done
       - name: "🚀 Deploy private media Cloud Run Jobs only"
-        if: inputs.action == 'jobs-deploy'
+        if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
         run: |
           python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ github.sha }}" --apply --authorize-charges --confirm-project photointel
       - name: "🧹 Remove temporary production config"
