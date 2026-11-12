@@ -51,6 +51,7 @@ jobs:
             (
               cd "services/media/${component}"
               npm install --no-audit --no-fund
+              npm run build
               npm test
             )
             echo "::endgroup::"
