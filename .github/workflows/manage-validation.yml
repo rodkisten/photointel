@@ -3,9 +3,9 @@ run-name: "🧰 Manage · ${{ github.event_name }} · ${{ github.ref_name }}"
 on:
   pull_request:
     paths: ["apps/manage/**", "infra/scripts/deploy_manage.py", ".github/workflows/manage-*.yml", ".prettierrc.json", ".prettierignore", "package.json", "package-lock.json"]
-  push:
-    branches: [main]
-    paths: ["apps/manage/**", "infra/scripts/deploy_manage.py", ".github/workflows/manage-*.yml"]
+ # push:
+ #   branches: [main]
+  #  paths: ["apps/manage/**", "infra/scripts/deploy_manage.py", ".github/workflows/manage-*.yml"]
   workflow_dispatch:
 permissions:
   contents: read
