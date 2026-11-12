@@ -60,6 +60,7 @@ HIGHLIGHT = re.compile(
 class CloudFailure:
     code: str
     permissions: tuple[str, ...] = ()
+    hint: str = ""
 
 
 def classify(stderr: str | bytes) -> CloudFailure:
@@ -79,7 +80,29 @@ def classify(stderr: str | bytes) -> CloudFailure:
     code = "PERMISSION_DENIED" if denied else "NOT_FOUND" if missing else (
         "UNAUTHENTICATED" if unauthorized else "PROVIDER_ERROR"
     )
-    return CloudFailure(code, tuple(sorted(set(PERMISSION.findall(value))))[:8])
+    # Return only allowlisted permission identifiers and fixed guidance.
+    # Provider messages may contain tokens, resource names and private URLs.
+    permissions = tuple(sorted(set(PERMISSION.findall(value))))[:8]
+    hint = ""
+    if code == "PERMISSION_DENIED":
+        if "builds submit" in lower or "cloudbuild.builds.create" in lower:
+            hint = (
+                "Cloud Build submit denied. Verify the active WIF principal, "
+                "cloudbuild.builds.create, serviceusage.services.use, and "
+                "the build service account's iam.serviceAccounts.actAs permission. "
+                "If roles already exist, inspect IAM Conditions, deny policies "
+                "and organization policies."
+            )
+        elif "serviceaccounts.actas" in lower or "actas" in lower:
+            hint = "Verify iam.serviceAccounts.actAs on the exact build service account."
+        elif "storage.objects" in lower or "bucket" in lower:
+            hint = "Verify staging bucket access and its IAM/organization policies."
+        else:
+            hint = (
+                "Check the active identity, exact resource IAM bindings, "
+                "IAM Conditions, deny policies and organization policies."
+            )
+    return CloudFailure(code, permissions, hint)
 
 
 def command(
@@ -292,7 +315,8 @@ class CloudCommandError(RuntimeError):
         safe_action = " ".join(x for x in action[:3] if ALLOWED_ACTION.fullmatch(x))
         label = safe_action or "request"
         hint = " (" + ", ".join(failure.permissions) + ")" if failure.permissions else ""
-        super().__init__(f"GCP {label}: {failure.code}{hint}")
+        guidance = ("\\n" + failure.hint) if failure.hint else ""
+        super().__init__(f"GCP {label}: {failure.code}{hint}{guidance}")
 
 
 def main(argv: list[str] | None = None) -> int:
