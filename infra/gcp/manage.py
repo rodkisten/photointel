@@ -575,8 +575,16 @@ class Runner:
         result = cloud_run(args, project=self.config["project_id"], timeout=3600)
         if result.returncode:
             failure = cloud_classify(result.stderr)
-            # Print only the classified permission names and fixed guidance.
-            # Never print raw provider stderr, which may contain secret values.
+            # Surface only Cloud SDK error summary lines. Avoid printing raw stderr,
+            # which may include credentials, headers, or environment values.
+            diagnostic_lines = []
+            for line in result.stderr.splitlines():
+                stripped = line.strip()
+                if stripped.startswith(("ERROR: (gcloud.builds.submit)", "ERROR: (gcloud.", "ResponseError:")):
+                    sanitized = re.sub(r"(?i)(access_token|id_token|refresh_token|authorization|password|secret|api_key)\\s*[:=]\\s*\\S+", r"\\1=[REDACTED]", stripped)
+                    diagnostic_lines.append(sanitized[:900])
+            if diagnostic_lines:
+                print("::error::Cloud SDK: " + " | ".join(diagnostic_lines[:3]), flush=True)
             permission_names = ", ".join(failure.permissions)
             details = (" | Missing/denied permission: " + permission_names) if permission_names else ""
             if args[:2] == ["builds", "submit"] and failure.code == "PERMISSION_DENIED":
