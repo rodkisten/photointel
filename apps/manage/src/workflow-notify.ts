@@ -43,9 +43,7 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   const errorLog = await failureLog(env, job?.id).catch(() => '');
   const url = String(run.html_url || '');
   const repo = env.GITHUB_REPO || 'rodkisten/photointel';
-  const configured = await gh(env, '/actions/variables/PHOTOINTEL_WORKFLOW_MESSAGE_TEMPLATE')
-    .catch(() => null) as { value?: string } | null;
-  const message = renderWorkflowMessage(notificationSettings.template || configured?.value || DEFAULT_TEMPLATE, {
+  const message = renderWorkflowMessage(notificationSettings.template || DEFAULT_TEMPLATE, {
     workflow: String(run.name || 'Workflow'), run_number: String(run.run_number || ''),
     run_id: String(runId), job: String(job?.name || 'Não identificado'),
     step: String(step?.name || 'Não identificada'), error: errorLog || 'Logs indisponíveis. Consulte a execução.',

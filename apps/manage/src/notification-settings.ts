@@ -24,7 +24,7 @@ export function validateNotificationSettings(value: unknown): NotificationSettin
   const v = value as Record<string, unknown>;
   const events = v.events;
   const retention = v.retentionMinutes as Record<string, unknown> | undefined;
-  if (!Array.isArray(events) || events.some(x => !NOTIFICATION_EVENTS.includes(x)) ||
+  if (!Array.isArray(events) || events.some(x => typeof x !== 'string' || !(NOTIFICATION_EVENTS as readonly string[]).includes(x)) ||
     !['window', 'run', 'none'].includes(String(v.grouping)) ||
     ![2, 5, 10].includes(Number(v.windowMinutes)) ||
     !['edit', 'new'].includes(String(v.updateMode)) ||
