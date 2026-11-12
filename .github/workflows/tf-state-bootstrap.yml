@@ -1,0 +1,63 @@
+name: "TF · State Bootstrap"
+run-name: "TF · State · ${{ inputs.mode }} · production"
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Inspect or initialize Terraform state bucket"
+        type: choice
+        required: true
+        default: plan
+        options: [plan, apply]
+      authorize_apply:
+        description: "Authorize creation or security configuration of the state bucket"
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-terraform-production
+  cancel-in-progress: false
+jobs:
+  state:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "TF · Authenticate dedicated bootstrap identity"
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: photointel
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-bootstrap@photointel.iam.gserviceaccount.com
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: photointel
+      - name: "TF · Inspect or prepare GCS backend"
+        env:
+          MODE: ${{ inputs.mode }}
+          AUTHORIZED: ${{ inputs.authorize_apply }}
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUCKET="${STATE_BUCKET:-photointel-terraform-state}"
+          [[ "$BUCKET" =~ ^[a-z0-9][a-z0-9.-]{2,61}[a-z0-9]$ ]] || { echo "::error::Invalid bucket name"; exit 1; }
+          [[ "$MODE" != apply || "$AUTHORIZED" == true ]] || { echo "::error::Explicit authorization required"; exit 1; }
+          if gcloud storage buckets describe "gs://$BUCKET" --project=photointel --format=json >/dev/null 2>&1; then
+            echo "Bucket exists: $BUCKET"
+          elif [[ "$MODE" == plan ]]; then
+            echo "PLAN: create private versioned state bucket $BUCKET in us-central1"
+          else
+            gcloud storage buckets create "gs://$BUCKET" --project=photointel --location=us-central1 --uniform-bucket-level-access --public-access-prevention
+          fi
+          if [[ "$MODE" == apply ]]; then
+            gcloud storage buckets update "gs://$BUCKET" --versioning --uniform-bucket-level-access --public-access-prevention
+            echo "::notice::Backend bucket ready. Set TF_STATE_BUCKET=$BUCKET and TF_STATE_PREFIX=photointel/production in GitHub production variables."
+          else
+            echo "PLAN: ensure versioning, uniform bucket-level access and public access prevention"
+          fi
