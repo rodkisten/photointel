@@ -1,4 +1,4 @@
-import { parseEnvironment, maskValue } from '../../../packages/env/src/index';
+import { parseEnvironment, maskValue } from '@rodkisten/photointel/env';
 
 export type EnvironmentPreviewEntry = { key: string; value: string; secretName?: string };
 export type EnvironmentPreview = { entries: EnvironmentPreviewEntry[]; error: string };
