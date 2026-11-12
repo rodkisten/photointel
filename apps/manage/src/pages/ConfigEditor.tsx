@@ -93,6 +93,12 @@ export function ConfigEditor() {
   const [organizationPreview, setOrganizationPreview] = useState(false);
   const organized = useMemo(() => organizeEnvironment(editor), [editor]);
   const duplicates = useMemo(() => findDuplicateConfigKeys(editor), [editor]);
+  const secretsInventory = useQuery({
+    queryKey: ['secrets', 'inventory'],
+    queryFn: () => api<{ items: Array<{ name: string; exists: boolean | 'unknown' }>; warning?: string }>('/secrets'),
+    retry: false,
+  });
+  const fullEnvironmentPreview = useMemo(() => listEnvironmentPreview(editor), [editor]);
   const resolvedPreview = useMemo(() => {
     if (!editor.trim() || editor.trimStart().startsWith('{')) return null;
     try {
@@ -241,24 +247,47 @@ export function ConfigEditor() {
                 )}
               </div>
             )}
-            {resolvedPreview && (
-              <details className="rounded-lg border border-carbon-800 p-3 text-xs">
-                <summary className="cursor-pointer text-carbon-200">
-                  Prévia de referências resolvidas (somente campos públicos)
-                </summary>
-                {resolvedPreview.error && <p className="mt-2 text-red-300">{resolvedPreview.error}</p>}
-                <div className="mt-2 max-h-64 space-y-1 overflow-auto font-mono">
-                  {resolvedPreview.entries.map(([key, value]) => (
-                    <div key={key} className="break-all text-carbon-400">
-                      <span className="text-carbon-200">{key}</span> = {value}
+            <details className="rounded-lg border border-carbon-800 p-3 text-xs">
+              <summary className="cursor-pointer text-carbon-200">
+                Ambiente resolvido · todas as variáveis · prévia local
+              </summary>
+              <p className="mt-2 text-carbon-400">
+                Valores calculados a partir do editor, sem ler payloads do Secret Manager.
+                Referências secret:// mostram identificadores, nunca o segredo armazenado.
+                A validação final de produção continua sendo feita pelo parser Python.
+              </p>
+              {fullEnvironmentPreview.error && <p role="alert" className="mt-2 text-red-300 underline decoration-wavy">
+                {fullEnvironmentPreview.error}
+              </p>}
+              {secretsInventory.error && <p className="mt-2 text-amber-300">
+                Não foi possível consultar o inventário IAM/Secret Manager. Existência desconhecida.
+              </p>}
+              {secretsInventory.data?.warning && <p className="mt-2 text-amber-300">
+                {secretsInventory.data.warning}
+              </p>}
+              <div className="mt-3 max-h-96 space-y-1 overflow-auto font-mono">
+                {fullEnvironmentPreview.entries.map(entry => {
+                  const known = secretsInventory.data?.items.find(item => item.name === entry.secretName);
+                  const missing = entry.secretName && known?.exists === false;
+                  return (
+                    <div key={entry.key} className="break-all border-b border-carbon-800 py-1">
+                      <span className={missing ? 'text-red-300 underline decoration-wavy' : 'text-carbon-200'}>
+                        {entry.key}
+                      </span>
+                      <span className="text-carbon-500"> = </span>
+                      <span className="text-carbon-300">{maskEnvironmentValue(entry.key, entry.value)}</span>
+                      {missing && <p className="text-red-300">
+                        Secret Manager: {entry.secretName} não encontrado.{' '}
+                        <a href="#secrets" className="underline">Abrir gerenciamento de secrets para criar</a>
+                      </p>}
+                      {entry.secretName && !known && <p className="text-amber-300">
+                        Referência ainda não verificada no inventário.
+                      </p>}
                     </div>
-                  ))}
-                </div>
-                <p className="mt-2 text-carbon-500">
-                  Campos potencialmente sensíveis são ocultados. Nenhum valor é publicado nesta prévia.
-                </p>
-              </details>
-            )}
+                  );
+                })}
+              </div>
+            </details>
             {duplicates.length > 0 && (
               <p className="text-xs leading-5 text-amber-300">
                 Chaves repetidas:{' '}
