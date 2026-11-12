@@ -4,7 +4,7 @@
 # Keep this file compatible with classic Docker builds (no RUN --mount).
 # Compose uses api.buildkit.Dockerfile for transient custom CA secrets.
 
-FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.8 AS uv
 
 FROM python:3.12-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv

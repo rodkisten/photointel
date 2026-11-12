@@ -15,7 +15,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # uv oficial, com versão fixa
-COPY --from=ghcr.io/astral-sh/uv:0.12.23 \
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 \
     /uv /uvx /usr/local/bin/
 
 # Configuração do uv
