@@ -572,7 +572,7 @@ class Runner:
         print(shlex.join(command), flush=True)
         if not self.apply:
             return ""
-        result = cloud_run(args, project=self.config["project_id"], timeout=3600)
+        result = cloud_run(\n            args, project=self.config["project_id"], timeout=3600,\n            stream_logs=(args[:2] == ["builds", "submit"] and not capture),\n        )
         if result.returncode:
             failure = cloud_classify(result.stderr)
             # Surface only Cloud SDK error summary lines. Avoid printing raw stderr,
