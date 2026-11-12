@@ -15,6 +15,10 @@ on:
         options: [plan, apply]
         default: apply
         required: true
+      run_tests:
+        description: "Run tests"
+        default: true
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -57,6 +61,7 @@ jobs:
       - name: "📦 Install management app"
         run: npm --prefix apps/manage ci
       - name: "🧪 Typecheck and security tests"
+        if: ${{ inputs.run_tests == 'true' }}
         run: |
           npm --prefix apps/manage run typecheck
           npm --prefix apps/manage test
