@@ -50,6 +50,12 @@ resource "google_storage_bucket" "build_source" {
   }
   lifecycle { prevent_destroy = true }
 }
+# The GitHub WIF deployer uploads the Cloud Build source archive.
+resource "google_storage_bucket_iam_member" "deployer_source" {
+  bucket = google_storage_bucket.build_source.name
+  role   = "roles/storage.objectAdmin"
+  member = local.deployer
+}
 resource "google_storage_bucket_iam_member" "builder_source" {
   bucket = google_storage_bucket.build_source.name
   role = "roles/storage.objectViewer"
