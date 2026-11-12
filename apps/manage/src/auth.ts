@@ -49,6 +49,7 @@ export interface Env {
   GCP_BILLING_TABLE?: string;
   MODAL_BILLING_URL?: string;
   MODAL_BILLING_TOKEN?: string;
+  PHOTOINTEL_API_ORIGIN?: string;
 }
 export type Identity = { email: string; jwt: string };
 export class ApiError extends Error {
