@@ -127,6 +127,17 @@ export function optimizeDotenv(raw: string): { value: string; changes: string[];
     seen.set(key, value);
     const ref = /^(SECRETS|WORKFLOW_SECRETS)__([A-Z][A-Z0-9_]*)__(NAME|VERSION)$/.exec(key);
     if (!ref) {
+      // EXTRA_ENVIRONMENT__NAME and ENV__NAME share the same runtime field.
+      if (key.startsWith('EXTRA_ENVIRONMENT__') && key.split('__').length === 2) {
+        const compact = 'ENV__' + key.slice('EXTRA_ENVIRONMENT__'.length);
+        if (seen.has(compact)) {
+          warnings.push('Extra env ' + compact + ' já definido; mantido sem conversão.');
+        } else if (/^ENV__[A-Z][A-Z0-9_]*$/.test(compact)) {
+          lines[i] = m[1] + compact + m[3] + value;
+          changes.push(key + ' → ' + compact);
+          seen.set(compact, value);
+        }
+      }
       // WORKFLOWS__X__Y and WF__X__Y decode to the same nested workflow path.
       if (key.startsWith('WORKFLOWS__')) {
         const compact = 'WF__' + key.slice('WORKFLOWS__'.length);
