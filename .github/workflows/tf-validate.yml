@@ -1,0 +1,30 @@
+name: "TF · Validate"
+run-name: "TF · Validate · ${{ github.ref_name }}"
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/tf-*.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/tf-*.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: hashicorp/setup-terraform@v3
+      - name: "TF · Format"
+        run: terraform fmt -check -recursive infra/terraform
+      - name: "TF · Init without remote backend"
+        working-directory: infra/terraform/environments/production
+        run: terraform init -backend=false -input=false
+      - name: "TF · Validate"
+        working-directory: infra/terraform/environments/production
+        run: terraform validate -no-color
