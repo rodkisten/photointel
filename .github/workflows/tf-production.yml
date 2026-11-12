@@ -81,7 +81,7 @@ jobs:
           jq -r '
             [.resource_changes[]? |
               select(.change.actions | index("delete")) |
-              "\\(.address): \\(.change.actions | join(" -> "))"
+              .address + ": " + (.change.actions | join(" -> "))
             ] | .[]
           ' "$RUNNER_TEMP/terraform-plan.json" > "$RUNNER_TEMP/terraform-destructive.txt"
           if [[ -s "$RUNNER_TEMP/terraform-destructive.txt" ]]; then
