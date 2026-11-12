@@ -139,6 +139,7 @@ def compact_secret_reference(key: str, value: str, prefix: str) -> tuple[str, di
     """Parse explicit or inferred Secret Manager references without fetching values."""
     if key.startswith("WORKFLOW_SECRET__"):
         target = key.removeprefix("WORKFLOW_SECRET__")
+        reference = value
     elif key.startswith("SECRET__"):
         target = key.removeprefix("SECRET__")
         reference = value
