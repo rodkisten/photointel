@@ -9,7 +9,7 @@ const items = (data: unknown, key: string): Obj[] => {
   return Array.isArray(value) ? value as Obj[] : [];
 };
 async function failureLog(env: Env, jobId: unknown): Promise<string> {
-  if (!Number.isSafeInteger(jobId) || Number(jobId) <= 0 || !env.GITHUB_API_TOKEN) return '';
+  if (!Number.isSafeInteger(Number(jobId)) || Number(jobId) <= 0 || !env.GITHUB_API_TOKEN) return '';
   const repo = env.GITHUB_REPO || 'rodkisten/photointel';
   const response = await fetch('https://api.github.com/repos/' + repo + '/actions/jobs/' + jobId + '/logs', {
     redirect: 'manual', signal: AbortSignal.timeout(9000),
