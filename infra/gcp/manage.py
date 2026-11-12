@@ -578,6 +578,18 @@ class Runner:
         )
         if result.returncode:
             failure = cloud_classify(result.stderr)
+            # A submitted build that finished FAILURE is a build-step error,
+            # not an IAM denial. Avoid interpreting the Cloud Build API URL
+            # in gcloud diagnostics as a missing permission.
+            if args[:2] == ["builds", "submit"] and re.search(
+                r'build [a-f0-9-]{36} completed with status "FAILURE"', result.stderr
+            ):
+                build_id = re.search(r"build ([a-f0-9-]{36}) completed", result.stderr)
+                identifier = build_id.group(1) if build_id else "unknown"
+                raise RuntimeError(
+                    "Cloud Build step failed (build ID: " + identifier
+                    + "). Inspect the Cloud Build step logs; IAM changes are not indicated."
+                )
             # Surface only Cloud SDK error summary lines. Avoid printing raw stderr,
             # which may include credentials, headers, or environment values.
             diagnostic_lines = []
