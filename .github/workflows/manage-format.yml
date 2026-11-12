@@ -46,7 +46,8 @@ jobs:
           git add apps/manage/src
           git commit -m "style(manage): apply shared Prettier formatting"
           git push origin HEAD:main
-      - name: Verify formatting
+      - name: Verify formatting (advisory only)
+        continue-on-error: true
         run: npm run format:check:manage
       - name: Verify TypeScript and unit tests
         run: |

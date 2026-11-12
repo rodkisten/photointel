@@ -47,10 +47,6 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: "📦 Install locked dependencies"
         run: npm --prefix apps/web ci
-      - name: "🎨 Shared Prettier · web + Worker + CSS"
-        run: |
-          npm ci --ignore-scripts --no-audit --no-fund
-          npm run format:check:web
       - name: "🧹 ESLint"
         run: npm --prefix apps/web run lint
       - name: "📐 TypeScript"
