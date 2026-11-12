@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command
+from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
 
 JOB_TYPES = ("image", "video")
 REQUIRED_SECRET_ENV = (
@@ -62,7 +62,11 @@ def execute(config: dict[str, Any], sha: str, *, apply: bool) -> None:
         if apply:
             result = cloud_run(args, project=config["project_id"], timeout=1800)
             if result.returncode:
-                raise RuntimeError("Media job deployment failed; inspect Cloud Logging")
+                failure = cloud_classify(result.stderr)
+                permissions = ", ".join(failure.permissions)
+                details = f" | Missing/denied permission: {permissions}" if permissions else ""
+                hint = f" | {failure.hint}" if failure.hint else ""
+                raise RuntimeError(f"Media {args[3]} deployment failed: {failure.code}{details}{hint}")
         else:
             # cloud_cli prints full-width highlighted command panels when run.
             from infra.gcp.cloud_cli import print_running_command
