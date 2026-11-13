@@ -331,13 +331,14 @@ export async function api(
   if (method === 'GET' && path === '/api/config') return json(await readConfig(env));
   
   if (method === 'PUT' && path === '/api/config') {
-    const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown }>(request);
+    const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown; confirm?: unknown }>(request);
     if (
       typeof input.value !== 'string' ||
       typeof input.version !== 'string' ||
       (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean')
     )
       throw new ApiError(422, 'CONFIG_FIELDS', 'Informe value, version e auto_apply booleano');
+    if (input.auto_apply !== false && input.confirm !== 'confirma') throw new ApiError(409, 'CONFIG_CONFIRM', 'Digite confirma para autorizar workflows.');
     validateConfig(input.value);
     const current = await readConfig(env);
     if (input.version !== current.version)
