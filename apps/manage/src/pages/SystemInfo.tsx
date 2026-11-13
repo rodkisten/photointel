@@ -106,6 +106,16 @@ export function SystemInfo({ meta }: { meta: Meta }) {
     retry: false,
     refetchInterval: 30_000,
   });
+  const queryClient = useQueryClient();
+  const [schedulerTarget, setSchedulerTarget] = useState<{ name: string; action: 'pause' | 'resume' } | null>(null);
+  const schedulerControl = useMutation({
+    mutationFn: (target: { name: string; action: 'pause' | 'resume' }) =>
+      send('/gcp/scheduler/control', { ...target, confirm: target.name }),
+    onSuccess: async () => {
+      setSchedulerTarget(null);
+      await queryClient.invalidateQueries({ queryKey: ['gcp-scheduler'] });
+    },
+  });
   const scheduler = useQuery({
     queryKey: ['gcp-scheduler'],
     queryFn: () =>
@@ -369,8 +379,25 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                   </p>
                 </div>
                 <Badge tone={j.state === 'ENABLED' ? 'success' : 'warning'}>{j.state}</Badge>
+                {(j.state === 'ENABLED' || j.state === 'PAUSED') && (
+                  <Button size="sm" variant="outline" disabled={schedulerControl.isPending}
+                    onClick={() => setSchedulerTarget({ name: j.name.split('/').pop() || '', action: j.state === 'ENABLED' ? 'pause' : 'resume' })}>
+                    {j.state === 'ENABLED' ? 'Pausar' : 'Retomar'}
+                  </Button>
+                )}
               </div>
             ))}
+          </Card>
+        )}
+        {schedulerControl.error && <IssueBanner error={schedulerControl.error} />}
+        {schedulerTarget && (
+          <Card className="space-y-3 p-4">
+            <p className="text-sm">Confirmar {schedulerTarget.action === 'pause' ? 'pausa' : 'retomada'} de <strong>{schedulerTarget.name}</strong>?</p>
+            <p className="text-xs text-carbon-400">Isso controla somente o Cloud Scheduler. Não suspende diretamente o Neon nem interrompe jobs já em execução.</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setSchedulerTarget(null)}>Cancelar</Button>
+              <Button size="sm" disabled={schedulerControl.isPending} onClick={() => schedulerControl.mutate(schedulerTarget)}>Confirmar</Button>
+            </div>
           </Card>
         )}
       </Section>

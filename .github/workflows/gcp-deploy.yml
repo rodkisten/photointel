@@ -2,10 +2,8 @@ name: "🚀 Deploy"
 run-name: "🚀 Deploy · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
-  # Hourly safety net: if the worker Cloud Scheduler is paused or missing,
-  # wake the finite maintenance Job without keeping the API alive.
-  schedule:
-    - cron: '23 * * * *'
+  # No automatic hourly wake-up: idle accounts must remain idle.
+  # Run maintenance explicitly or through the deliberately enabled Cloud Scheduler.
   push:
     branches: [main]
     paths:
@@ -74,13 +72,13 @@ env:
 
 concurrency:
   # Push checks must not cancel or block manually authorized production operations.
-  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || github.event_name == 'schedule' && 'photointel-preview-watchdog' || 'photointel-gcp-production' }}
+  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || 'photointel-gcp-production' }}
   cancel-in-progress: false
 
 jobs:
   preview-watchdog:
     name: "🩹 Ensure automatic preview recovery"
-    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    if: false # Archived watchdog: never wake Neon without explicit scheduling
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 12
