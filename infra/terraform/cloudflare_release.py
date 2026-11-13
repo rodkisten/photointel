@@ -114,7 +114,12 @@ def generated_configuration(inventory: dict, schemas: dict, state: set[str], *, 
                 identifier = value["id"]
                 if group == "buckets":
                     identifier = value["name"] + "/" + (value.get("jurisdiction") or "default")
-                adoptions.append({"to": address, "id": value["account_id"] + "/" + identifier})
+                # Access application imports require the account/zone discriminator.
+                # Other resources retain their provider-specific legacy IDs.
+                import_id = value["account_id"] + "/" + identifier
+                if group == "applications":
+                    import_id = "accounts/" + import_id
+                adoptions.append({"to": address, "id": import_id})
         keys = set().union(*(set(value) for value in definitions[group].values())) if definitions[group] else set()
         keys |= {key for key, attr in schemas[resource_type]["block"]["attributes"].items() if attr.get("required")}
         body = {key: '${lookup(each.value, "' + key + '", null)}' for key in sorted(keys)}
