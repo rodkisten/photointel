@@ -249,7 +249,7 @@ export async function api(
     };
     return json({
       workflows: (response.workflows || [])
-        .filter(item => item.state === 'active' && /^\\.github\\/workflows\\/[A-Za-z0-9_.-]+\\.ya?ml$/.test(item.path || ''))
+        .filter(item => item.state === 'active' && /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/.test(item.path || ''))
         .map(item => ({ name: item.name || item.path?.split('/').pop() || '', path: item.path?.split('/').pop() || '' })),
     });
   }
