@@ -11,7 +11,7 @@ import {
   statusLabel,
   FORMAT_CONFIG,
   STATUS_MAPPING
-} from './formatters'; // Adjust the import path as needed
+} from './format';
 
 describe('Data Formatting & Extraction Utilities', () => {
 
@@ -150,7 +150,6 @@ describe('Data Formatting & Extraction Utilities', () => {
       expect(isStatusKey('completed')).toBe(true);
       
       expect(isStatusKey('fake_status_key')).toBe(false);
-      // @ts-expect-error - Testing runtime safety against wrong types
       expect(isStatusKey(123)).toBe(false);
     });
 
