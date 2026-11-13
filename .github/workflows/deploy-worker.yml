@@ -9,11 +9,13 @@ on:
     paths:
       - 'apps/manage/**'
       - 'apps/web/**'
+      - 'packages/env/**'
       - '.prettierrc.json'
       - '.prettierignore'
       - 'package.json'
       - 'package-lock.json'
       - 'packages/contracts/**'
+      - 'packages/env/**'
       - 'infra/cloudflare/**'
       - 'infra/scripts/prepare_workflow_env.py'
       - 'infra/scripts/cloudflare_setup.py'
@@ -22,6 +24,10 @@ on:
       - '.github/workflows/deploy-worker.yml'
   pull_request:
     paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.prettierrc.json'
+      - '.prettierignore'
       - 'apps/web/**'
       - 'apps/manage/**'
       - 'packages/contracts/**'
@@ -46,45 +52,52 @@ jobs:
     outputs:
       apps: ${{ steps.set-matrix.outputs.apps }}
     steps:
-      - name: "📥 Checkout"
+      - name: "📥 Checkout completo"
         uses: actions/checkout@v4
-        with: {persist-credentials: false}
-        
-      - name: 🗳️ Filtrar Pastas Modificadas
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: "🗳️ Selecionar aplicações"
         id: set-matrix
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            COMMAND="git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }}"
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            apps='["web","manage"]'
           else
-            if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
-              COMMAND="git diff --name-only HEAD~1 ${{ github.sha }}"
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              base="$(git merge-base "$BASE_SHA" HEAD)"
+            elif [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+              base="$BEFORE_SHA"
             else
-              COMMAND="git diff --name-only ${{ github.event.before }} ${{ github.sha }}"
+              base=""
+            fi
+            if [[ -z "$base" ]]; then
+              apps='["web","manage"]'
+            else
+              files="$(git diff --name-only "$base" HEAD)"
+              global='^(package(-lock)?\.json|\.prettier(rc\.json|ignore)|packages/|infra/|\.github/(actions/gcp-config/|workflows/deploy-worker\.yml))'
+              if grep -Eq "$global" <<< "$files"; then
+                apps='["web","manage"]'
+              else
+                apps='[]'
+                if grep -q '^apps/web/' <<< "$files"; then apps="$(jq -c '. + ["web"]' <<< "$apps")"; fi
+                if grep -q '^apps/manage/' <<< "$files"; then apps="$(jq -c '. + ["manage"]' <<< "$apps")"; fi
+              fi
             fi
           fi
-
-          CHANGED_FILES=$($COMMAND)
-          CHANGED_FOLDERS=$(echo "$CHANGED_FILES" | xargs -I {} dirname {} | sort -u)
-          
-          APPS="[]"
-          
-          # Verifica se web mudou ou se mudou algo global/infra
-          if echo "$CHANGED_FOLDERS" | grep -q "^apps/web" || [ -z "$CHANGED_FOLDERS" ] || echo "$CHANGED_FOLDERS" | grep -qE "^(infra|packages|\.)"; then
-            APPS=$(echo $APPS | jq '. + ["web"]')
-          fi
-
-          # Verifica se manage mudou ou se mudou algo global/infra
-          if echo "$CHANGED_FOLDERS" | grep -q "^apps/manage" || [ -z "$CHANGED_FOLDERS" ] || echo "$CHANGED_FOLDERS" | grep -qE "^(infra|packages|\.)"; then
-            APPS=$(echo $APPS | jq '. + ["manage"]')
-          fi
-
-          echo "Apps selecionados para execução: $APPS"
-          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "Selected: $apps"
 
   preflight:
     name: "🧪 Build & Test · ${{ matrix.app }}"
     needs: detect-changes
-    if: ${{fromJson(needs.detect-changes.outputs.apps)[0] != '' }}
+    if: ${{ needs.detect-changes.outputs.apps != '[]' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -113,24 +126,21 @@ jobs:
         working-directory: apps/${{ matrix.app }}
 
       - name: "📐 TypeScript (${{ matrix.app }})"
-        if: matrix.app == 'web'
         run: npm run typecheck
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 Tests (${{ matrix.app }})"
         run: npm test
         working-directory: apps/${{ matrix.app }}
-        continue-on-error: ${{ matrix.app == 'manage' }}
 
       - name: "🧪 PWA tests"
         if: matrix.app == 'web'
         run: npm run test:pwa
         working-directory: apps/web
 
-      - name: "🏗 Production Vite build"
-        if: matrix.app == 'web'
+      - name: "🏗 Production build"
         run: npm run build
-        working-directory: apps/web
+        working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 Cloudflare Worker tests"
         if: matrix.app == 'manage'
@@ -139,8 +149,8 @@ jobs:
   deploy:
     name: "🌐 Publish unified Worker"
     runs-on: ubuntu-latest
-    needs: preflight
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [detect-changes, preflight]
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' }}
     environment: production
     permissions:
       contents: read
@@ -247,7 +257,7 @@ jobs:
           job: ${{ github.job }}
           step: "🧪 Worker relay + SPA"
           label: "Testes do Worker"
-          outcome: ${{ worker_tests.outcome }}
+          outcome: ${{ steps.worker_tests.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "2"
           total: "3"
