@@ -20,6 +20,15 @@ export function RepositoryVariables() {
   const [confirmation, setConfirmation] = useState('');
   const [dispatch, setDispatch] = useState<'queued' | 'failed' | 'none'>('none');
   const [mode, setMode] = useState<'code' | 'fields'>('code');
+  const [triggerMode, setTriggerMode] = useState<'none' | 'workflows' | 'webhook'>('none');
+  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [tab, setTab] = useState<'variables' | 'triggers'>('variables');
+  const workflows = useQuery({
+    queryKey: ['workflow-catalog'],
+    queryFn: () => api<{ workflows: Array<{ name: string; path: string }> }>('/github/workflow-catalog'),
+    retry: false,
+  });
   const variables = useQuery({
     queryKey: ['github-variables', scope],
     queryFn: () => api<{ scope: Scope; items: Variable[] }>('/github/variables?scope=' + scope),
@@ -52,6 +61,10 @@ export function RepositoryVariables() {
       title="Variáveis do GitHub"
       detail="Variáveis adicionais do repositório e do environment, além de GCP_CONFIG_ENV"
     >
+      <div className="flex gap-2 border-b border-carbon-800 pb-2">
+        <Button size="sm" variant={tab === 'variables' ? 'secondary' : 'ghost'} onClick={() => setTab('variables')}>Variáveis</Button>
+        <Button size="sm" variant={tab === 'triggers' ? 'secondary' : 'ghost'} onClick={() => setTab('triggers')}>Triggers</Button>
+      </div>
       <Card className="space-y-4 p-4">
         <p className="flex items-start gap-2 text-xs leading-5 text-amber-300">
           <AlertTriangle size={16} className="shrink-0" />
@@ -142,6 +155,25 @@ export function RepositoryVariables() {
           <p role="alert">Atenção: mudar esta variável acionará o workflow Manage Deploy. Digite confirma.</p>
           <Input aria-label="Confirmação de workflow" value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)} placeholder="confirma" />
+        </div>}
+        {tab === 'triggers' && <div className="space-y-3 rounded-xl border border-carbon-800 p-3 text-xs">
+          <p className="font-semibold">Ações ao alterar {name || 'a variável selecionada'}</p>
+          <Select value={triggerMode} onChange={event => setTriggerMode(event.target.value as typeof triggerMode)}>
+            <option value="none">Sem gatilho adicional</option>
+            <option value="workflows">Workflows do GitHub</option>
+            <option value="webhook">Webhook</option>
+          </Select>
+          {triggerMode === 'workflows' && <div className="max-h-64 space-y-2 overflow-y-auto">
+            {workflows.isPending && <Spinner />}
+            {workflows.error && <IssueBanner error={workflows.error} />}
+            {(workflows.data?.workflows || []).map(w => <label key={w.path} className="flex items-center gap-2">
+              <input type="checkbox" checked={selectedWorkflows.includes(w.path)}
+                onChange={event => setSelectedWorkflows(current => event.target.checked ? [...current, w.path] : current.filter(x => x !== w.path))} />
+              <span>{w.name} <span className="text-carbon-500">({w.path})</span></span>
+            </label>)}
+          </div>}
+          {triggerMode === 'webhook' && <Input value={webhookUrl} onChange={setWebhookUrl} placeholder="https://..." aria-label="URL do webhook" />}
+          <p className="text-carbon-500">Seleção local de prévia. Os gatilhos adicionais não serão disparados até a configuração persistente e a confirmação no servidor estarem prontas.</p>
         </div>}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Badge tone={unchanged ? 'success' : 'warning'}>{unchanged ? 'Sincronizado' : 'Não salvo'}</Badge>
