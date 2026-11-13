@@ -622,7 +622,7 @@ export async function api(
     const { name, schedule, confirm } = input;
     if (typeof name !== 'string' || !/^photointel-[a-z0-9-]{1,55}$/.test(name) ||
         typeof schedule !== 'string' || schedule.length > 100 ||
-        !/^[0-9*,/ -]+$/.test(schedule) || schedule.trim().split(/\s+/).length !== 5 ||
+        !/^[0-9*,\/ -]+$/.test(schedule) || schedule.trim().split(/\s+/).length !== 5 ||
         confirm !== name) {
       throw new ApiError(422, 'SCHEDULER_SCHEDULE', 'Confirme o job e informe um cron de cinco campos');
     }
