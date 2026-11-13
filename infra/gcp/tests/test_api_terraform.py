@@ -46,9 +46,20 @@ class APIAdoptionTests(unittest.TestCase):
     def test_environment_uses_references_and_rejects_inline_credentials(self):
         entries = [{"name": "DATABASE_URL", "valueFrom": {"secretKeyRef": {"name": "photointel-db", "key": "2"}}}, {"name": "FEATURE", "value": "yes"}]
         self.assertEqual(api.env_spec(entries)[0], {"name": "DATABASE_URL", "secret": "photointel-db", "version": "2"})
-        for name in ("DATABASE_URL", "TELEGRAM_NOTIFICATION_API_TOKEN", "CUSTOM_PASSWORD"):
+        for name in ("DATABASE_URL", "CUSTOM_PASSWORD"):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 api.env_spec([{"name": name, "value": "private"}])
+
+    def test_telegram_token_preserves_user_configured_literal_value(self):
+        token = "user-selected-telegram-token"
+        self.assertEqual(
+            api.env_spec([{"name": "TELEGRAM_NOTIFICATION_API_TOKEN", "value": token}]),
+            [{"name": "TELEGRAM_NOTIFICATION_API_TOKEN", "value": token}],
+        )
+        self.assertEqual(
+            api.env_spec([{"name": "TELEGRAM_NOTIFICATION_API_TOKEN", "valueFrom": {"secretKeyRef": {"name": "custom-telegram-secret", "key": "latest"}}}]),
+            [{"name": "TELEGRAM_NOTIFICATION_API_TOKEN", "secret": "custom-telegram-secret", "version": "latest"}],
+        )
 
     def test_live_custom_configuration_and_extra_env_survive(self):
         desired = {"command": ["python"], "args": ["entry.py"], "env": [{"name": "KNOWN", "value": "updated"}], "resources": {"limits": {"cpu": "1000m", "memory": "1Gi"}}}
@@ -97,6 +108,17 @@ class CloudflareAdoptionTests(unittest.TestCase):
         self.assertEqual(len(declarations["import"]), 1)
         for groups in declarations["resource"].values():
             self.assertTrue(next(iter(groups.values()))["lifecycle"]["prevent_destroy"])
+
+    def test_access_application_import_id_has_accounts_discriminator(self):
+        inventory = {key: {} for key in cf.TYPES}
+        account = "a" * 32
+        app_id = "00000000-0000-4000-8000-000000000002"
+        inventory["applications"]["app"] = {"id": app_id, "account_id": account, "name": "app"}
+        schemas = {kind: {"block": {"attributes": {"name": {"optional": True}}}} for kind in cf.TYPES.values()}
+        declarations, _ = cf.generated_configuration(inventory, schemas, set())
+        self.assertEqual(declarations["import"], [
+            {"to": 'cloudflare_zero_trust_access_application.applications["app"]', "id": f"accounts/{account}/{app_id}"}
+        ])
 
     def test_worker_publication_only_uses_version_commands(self):
         with patch("infra.scripts.publish_worker.subprocess.run", return_value=subprocess.CompletedProcess([], 0, "", "")) as run:

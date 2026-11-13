@@ -48,6 +48,8 @@ def env_spec(entries: list[dict]) -> list[dict]:
         if "valueFrom" in entry:
             ref = entry["valueFrom"]["secretKeyRef"]
             result.append({"name": name, "secret": ref["name"], "version": str(ref["key"])})
+        # FIXME: Migrate literal Telegram tokens to Secret Manager references without
+        # changing user-configured values; plaintext may enter Terraform state.
         elif name != "TELEGRAM_NOTIFICATION_API_TOKEN" and (name in SECRET_FIELDS or re.search(r"(?:^|_)(?:PASSWORD|PRIVATE_KEY|API_KEY|SECRET|TOKEN)$", name)):
             unsafe.append(name)
         else:
