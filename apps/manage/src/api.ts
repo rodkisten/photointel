@@ -587,6 +587,34 @@ export async function api(
     });
   }
 
+  // Only authenticated Manage operators may pause/resume scoped PhotoIntel schedules.
+  // Never accept arbitrary GCP resource paths from the browser.
+  if (method === 'POST' && path === '/api/gcp/scheduler/control') {
+    const input = await bodyJson(request) as { name?: unknown; action?: unknown; confirm?: unknown };
+    const name = input.name;
+    const action = input.action;
+    if (typeof name !== 'string' || !/^photointel-[a-z0-9-]{1,55}$/.test(name) ||
+        (action !== 'pause' && action !== 'resume') || input.confirm !== name) {
+      throw new ApiError(422, 'SCHEDULER_CONTROL', 'Confirme o nome do agendamento PhotoIntel');
+    }
+    const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
+    const region = env.GCP_REGION || DEFAULTS.REGION;
+    // gcpBase enforces the project/region allowlist before using Cloud Scheduler.
+    gcpBase(env);
+    const base = 'https://cloudscheduler.googleapis.com/v1/projects/' + project +
+      '/locations/' + region + '/jobs/' + name;
+    const existing = await gcp(env, identity, base) as { name?: string; state?: string };
+    if (existing.name !== 'projects/' + project + '/locations/' + region + '/jobs/' + name) {
+      throw new ApiError(409, 'SCHEDULER_SCOPE', 'Agendamento fora do projeto permitido');
+    }
+    if ((action === 'pause' && existing.state === 'PAUSED') ||
+        (action === 'resume' && existing.state === 'ENABLED')) {
+      return json({ name: existing.name, state: existing.state, unchanged: true });
+    }
+    const updated = await gcp(env, identity, base + ':' + action, {}) as { name?: string; state?: string };
+    return json({ name: updated.name, state: updated.state, unchanged: false });
+  }
+
   if (method === 'GET' && path === '/api/gcp/scheduler') {
     const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
     const region = env.GCP_REGION || DEFAULTS.REGION;
