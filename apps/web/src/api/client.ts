@@ -33,6 +33,9 @@ export const API_CONFIG = {
   HTTP_STATUS_NO_CONTENT: 204,
 } as const;
 
+/** Backward-compatible base URL for generated OpenAPI client. */
+export const API_BASE = API_CONFIG.BASE_URL;
+
 // --- CORE UTILITIES ---
 
 export const apiUrl = (path: string): string => `${API_CONFIG.BASE_URL}${path}`;
