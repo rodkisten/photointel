@@ -492,8 +492,8 @@ export function ConfigEditor() {
           placeholder="confirma" className="mt-2 w-full rounded border border-carbon-700 bg-carbon-900 p-2" />
       </div>}
       <ConfirmDialog
-        open={confirm}
-        onOpenChange={setConfirm}
+        open={confirm && (!autoApply || confirmText === 'confirma')}
+        onOpenChange={(open) => { if (!open) { setConfirm(false); setConfirmText(''); } }}
         title="Salvar configuração de produção?"
         description={
           autoApply
