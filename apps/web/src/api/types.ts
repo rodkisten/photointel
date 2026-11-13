@@ -5,6 +5,8 @@ import type { components } from './schema';
 
 // Renamed from 'Info' to 'GenericInfo' to avoid ambiguity and clarify its purpose as a JSON fallback
 export type GenericInfo = Record<string, unknown>;
+/** Compatibility alias for existing API consumers. */
+export type Info = GenericInfo;
 
 export interface Page<T> {
   items: T[];
