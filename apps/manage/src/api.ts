@@ -657,7 +657,7 @@ export async function api(
       resourceNames: ['projects/' + project],
       filter: gcpLogFilter(investigation),
       orderBy: 'timestamp desc',
-      pageSize: 100,
+      pageSize: 500,
     });
     return json({
       items: mapCloudLogs((data as { entries?: unknown }).entries),
@@ -676,7 +676,7 @@ export async function api(
     const items = await provider(
       'https://sentry.io/api/0/organizations/' +
         env.SENTRY_ORG +
-        '/issues/?query=is%3Aunresolved&sort=date&limit=30',
+        '/issues/?query=is%3Aunresolved&sort=date&limit=100',
       env.SENTRY_API_TOKEN,
     );
     return json({
