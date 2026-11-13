@@ -1,4 +1,8 @@
 name: "🌐 Cloudflare Worker"
+
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Push to {0} ({1})', github.ref_name, github.sha) }}
+
 on:
   push:
     branches: [main]
@@ -28,24 +32,26 @@ on:
       - '.github/actions/gcp-config/**'
       - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
+
 permissions: {contents: read}
+
 concurrency:
   group: photointel-cloudflare-worker-${{ github.ref }}
   cancel-in-progress: false
+
 jobs:
-  preflight:
-    name: "🧪 Frontend · lint, types, tests, production build"
+  detect-changes:
+    name: "🔍 Detectar Alterações"
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     outputs:
-      changed_apps: ${{ steps.path-check.outputs.changed_apps }}
+      apps: ${{ steps.set-matrix.outputs.apps }}
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v4
         with: {persist-credentials: false}
         
-      - name: 🗳️ Get triggered folders
-        id: path-check
+      - name: 🗳️ Filtrar Pastas Modificadas
+        id: set-matrix
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             COMMAND="git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }}"
@@ -60,68 +66,75 @@ jobs:
           CHANGED_FILES=$($COMMAND)
           CHANGED_FOLDERS=$(echo "$CHANGED_FILES" | xargs -I {} dirname {} | sort -u)
           
-          APPS=""
-          if echo "$CHANGED_FOLDERS" | grep -q "^apps/web"; then
-            APPS="${APPS}web "
-          fi
-          if echo "$CHANGED_FOLDERS" | grep -q "^apps/manage"; then
-            APPS="${APPS}manage "
-          fi
+          APPS="[]"
           
-          # Se mudou infra ou package global, roda ambos por segurança
-          if [ -z "$APPS" ]; then
-            APPS="web manage"
+          # Verifica se web mudou ou se mudou algo global/infra
+          if echo "$CHANGED_FOLDERS" | grep -q "^apps/web" || [ -z "$CHANGED_FOLDERS" ] || echo "$CHANGED_FOLDERS" | grep -qE "^(infra|packages|\.)"; then
+            APPS=$(echo $APPS | jq '. + ["web"]')
           fi
 
-          echo "Apps detectados para build/test: $APPS"
-          echo "changed_apps=$APPS" >> $GITHUB_OUTPUT
+          # Verifica se manage mudou ou se mudou algo global/infra
+          if echo "$CHANGED_FOLDERS" | grep -q "^apps/manage" || [ -z "$CHANGED_FOLDERS" ] || echo "$CHANGED_FOLDERS" | grep -qE "^(infra|packages|\.)"; then
+            APPS=$(echo $APPS | jq '. + ["manage"]')
+          fi
 
-      - name: "🧰 Node.js (Web)"
+          echo "Apps selecionados para execução: $APPS"
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+
+  preflight:
+    name: "🧪 Build & Test · ${{ matrix.app }}"
+    needs: detect-changes
+    if: ${{fromJson(needs.detect-changes.outputs.apps)[0] != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with: {persist-credentials: false}
+
+      - name: "🧰 Node.js (${{ matrix.app }})"
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
 
-      - name: "📦 Install locked dependencies (Web)"
+      - name: "📦 Install dependencies (${{ matrix.app }})"
         run: npm ci
-        working-directory: apps/web
+        working-directory: apps/${{ matrix.app }}
 
-      - name: "🧹 ESLint (Web)"
+      - name: "🧹 ESLint (${{ matrix.app }})"
+        if: matrix.app == 'web'
         run: npm run lint
-        working-directory: apps/web
+        working-directory: apps/${{ matrix.app }}
 
-      - name: "📐 TypeScript (Web)"
+      - name: "📐 TypeScript (${{ matrix.app }})"
+        if: matrix.app == 'web'
         run: npm run typecheck
-        working-directory: apps/web
+        working-directory: apps/${{ matrix.app }}
 
-      - name: "🧪 All frontend tests (Web)"
+      - name: "🧪 Tests (${{ matrix.app }})"
         run: npm test
-        working-directory: apps/web
+        working-directory: apps/${{ matrix.app }}
+        continue-on-error: ${{ matrix.app == 'manage' }}
 
-      - name: "🧪 Offline service worker tests (Web)"
+      - name: "🧪 PWA tests"
+        if: matrix.app == 'web'
         run: npm run test:pwa
         working-directory: apps/web
 
-      - name: "🧰 Node.js (Manage)"
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: apps/manage/package-lock.json
-        continue-on-error: true
-
-      - name: "📦 Install locked dependencies (Manage)"
-        run: npm ci
-        working-directory: apps/manage
-        continue-on-error: true
-
-      - name: "🧪 Cloudflare Worker tests"
-        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-
-      - name: "🏗 Production Vite build + PWA precache (Web)"
+      - name: "🏗 Production Vite build"
+        if: matrix.app == 'web'
         run: npm run build
         working-directory: apps/web
+
+      - name: "🧪 Cloudflare Worker tests"
+        if: matrix.app == 'manage'
+        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
   deploy:
     name: "🌐 Publish unified Worker"
@@ -137,6 +150,7 @@ jobs:
       - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
+
       - name: "📱 Live · Início"
         id: notify_live_start
         continue-on-error: true
@@ -149,6 +163,7 @@ jobs:
           token: ${{ secrets.NOTIFY_TOKEN }}
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
+
       - name: "⚙ GCP Config"
         id: config
         uses: ./.github/actions/gcp-config
@@ -232,7 +247,7 @@ jobs:
           job: ${{ github.job }}
           step: "🧪 Worker relay + SPA"
           label: "Testes do Worker"
-          outcome: ${{ steps.worker_tests.outcome }}
+          outcome: ${{ worker_tests.outcome }}
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "2"
           total: "3"
