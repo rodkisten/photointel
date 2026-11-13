@@ -17,6 +17,7 @@ locals {
     "roles/cloudscheduler.admin",
     "roles/artifactregistry.reader",
     "roles/logging.viewer",
+    "roles/secretmanager.versions.access",
   ])
 }
 # Import existing resources before allowing any apply. IAM members are additive
