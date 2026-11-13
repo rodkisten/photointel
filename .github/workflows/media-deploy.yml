@@ -11,10 +11,10 @@ on:
         default: plan
         options: [plan, build, jobs-deploy, build-and-deploy]
       image_sha:
-        description: "Existing image commit SHA (jobs-deploy only; pinned to last published media build)"
+        description: "Published media SHA; blank preserves Terraform release (no build for plan/jobs-deploy)"
         type: string
         required: false
-        default: f6b667c5da7d49ee6d1d059ae8dd4f8159a477cc
+        default: ''
       confirm_charges:
         description: "Authorize build or deployment charges (not required for plan)"
         type: boolean
@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
   id-token: write
 
 concurrency:
@@ -49,22 +50,24 @@ jobs:
           WORKFLOW_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ -n "$REQUESTED_SHA" && "$ACTION" != jobs-deploy && "$REQUESTED_SHA" != f6b667c5da7d49ee6d1d059ae8dd4f8159a477cc ]]; then
-            echo "::error::image_sha is only accepted for jobs-deploy."
+          if [[ -n "$REQUESTED_SHA" && "$ACTION" != jobs-deploy && "$ACTION" != plan ]]; then
+            echo "::error::image_sha is only accepted for plan or jobs-deploy."
             exit 1
           fi
           sha="$WORKFLOW_SHA"
-          if [[ "$ACTION" == jobs-deploy ]]; then
-            sha="${REQUESTED_SHA:-$WORKFLOW_SHA}"
+          if [[ "$ACTION" == jobs-deploy || "$ACTION" == plan ]]; then
+            sha="$REQUESTED_SHA"
           fi
-          if [[ ! "$sha" =~ ^[a-f0-9]{40}$ ]]; then
+          if [[ -n "$sha" && ! "$sha" =~ ^[a-f0-9]{40}$ ]]; then
             echo "::error::A full lowercase Git commit SHA is required."
             exit 1
           fi
-          git cat-file -e "${sha}^{commit}"
-          git merge-base --is-ancestor "$sha" "$WORKFLOW_SHA"
+          if [[ -n "$sha" ]]; then
+            git cat-file -e "${sha}^{commit}"
+            git merge-base --is-ancestor "$sha" "$WORKFLOW_SHA"
+          fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "Workflow commit: $WORKFLOW_SHA; media image source commit: $sha"
+          echo "Workflow commit: $WORKFLOW_SHA; media image source commit: ${sha:-preserve Terraform release}"
       - name: "🧪 Validate media deployment commands (offline)"
         run: python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
       - name: "🧰 Node.js 22 for media validation"
@@ -101,13 +104,13 @@ jobs:
         run: |
           test "$CONFIRM" = "true" || { echo "::error::Check the authorization checkbox to build or deploy media."; exit 1; }
       - name: "🔐 Authenticate with existing GCP WIF"
-        if: inputs.action != 'plan'
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
       - name: "🧰 Set up gcloud"
-        if: inputs.action != 'plan'
+        if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         uses: google-github-actions/setup-gcloud@v3
       - name: "🔐 Diagnose effective Cloud Build identity and quota project"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
@@ -133,39 +136,19 @@ jobs:
           fi
           echo "Service Usage API read succeeded. This does not prove builds.create or services.use."
           echo "::endgroup::"
-      - name: "🔎 Plan media build and jobs (no changes)"
-        if: inputs.action == 'plan'
-        run: |
-          python3 -m infra.gcp.manage media-build --git-sha "${{ github.sha }}"
-          python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ github.sha }}"
       - name: "🏗️ Build media images only"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         run: |
           python3 -m infra.gcp.manage media-build --git-sha "${{ github.sha }}" --apply --authorize-charges --confirm-project photointel
-      - name: "🔎 Verify immutable media images exist before deployment"
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
+      # TF Production remains the single WIF-authorized infrastructure writer.
+      # Dispatch and wait rather than adding Media to privileged WIF trust.
+      - name: "TF · Plan or apply existing media images and verify Jobs"
+        if: inputs.action != 'build'
         env:
-          SHA: ${{ steps.images.outputs.sha }}
-        run: |
-          set -euo pipefail
-          for kind in image video; do
-            image="us-central1-docker.pkg.dev/photointel/photointel/media-${kind}"
-            echo "::group::🔎 Check Artifact Registry tag media-${kind}:${SHA:0:12}"
-            tags="$(gcloud artifacts docker tags list "${image}" --project photointel --format='value(tag)' 2>&1)" || {
-              echo "::error::Unable to list Artifact Registry tags for media-${kind}: ${tags}"
-              exit 1
-            }
-            if ! printf '%s\n' "$tags" | grep -Fxq "${SHA}"; then
-              echo "::error::Missing media-${kind}:${SHA} in Artifact Registry. Run build first."
-              exit 1
-            fi
-            echo "Found media-${kind}:${SHA}"
-            echo "::endgroup::"
-          done
-      - name: "🚀 Deploy private media Cloud Run Jobs only"
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
-        run: |
-          python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ steps.images.outputs.sha }}" --apply --authorize-charges --confirm-project photointel
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_SHA: ${{ steps.images.outputs.sha }}
+          MEDIA_ACTION: ${{ inputs.action }}
+        run: python3 -m infra.terraform.dispatch_media
       - name: "🧹 Remove temporary production config"
         if: always()
         uses: ./.github/actions/gcp-config

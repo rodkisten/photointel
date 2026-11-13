@@ -35,3 +35,9 @@ infra/gcp/state/
 
 # Private local deployment diagnostics and logs.
 .photointel-reports/
+
+# Generated release parameters and declarative adoption; never commit local plans.
+infra/terraform/environments/production/media-release.auto.tfvars.json
+infra/terraform/environments/production/media-imports.auto.tf.json
+infra/terraform/environments/production/tfplan
+infra/terraform/**/.terraform/

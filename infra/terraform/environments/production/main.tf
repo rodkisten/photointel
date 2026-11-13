@@ -1,8 +1,8 @@
 locals {
   deployer = "serviceAccount:photointel-deployer@${var.project_id}.iam.gserviceaccount.com"
   builder  = "serviceAccount:photointel-builder@${var.project_id}.iam.gserviceaccount.com"
-  api     = "serviceAccount:photointel-api@${var.project_id}.iam.gserviceaccount.com"
-  media   = "photointel-media@${var.project_id}.iam.gserviceaccount.com"
+  api      = "serviceAccount:photointel-api@${var.project_id}.iam.gserviceaccount.com"
+  media    = "photointel-media@${var.project_id}.iam.gserviceaccount.com"
   # Must match REQUIRED_SECRET_ENV in infra/gcp/media.py. Terraform owns only
   # these access bindings; secret values remain outside Terraform/state.
   media_secret_names = toset([
@@ -23,20 +23,20 @@ locals {
 # Import existing resources before allowing any apply. IAM members are additive
 # and deliberately do not replace full project IAM policies.
 resource "google_service_account" "identity" {
-  for_each = var.service_accounts
-  account_id = "photointel-${each.key}"
+  for_each     = var.service_accounts
+  account_id   = "photointel-${each.key}"
   display_name = "PhotoIntel ${each.key}"
 }
 resource "google_project_iam_member" "deployer" {
   for_each = local.build_roles
-  project = var.project_id
-  role = each.key
-  member = local.deployer
+  project  = var.project_id
+  role     = each.key
+  member   = local.deployer
 }
 resource "google_service_account_iam_member" "deployer_builder" {
   service_account_id = google_service_account.identity["builder"].name
-  role = "roles/iam.serviceAccountUser"
-  member = local.deployer
+  role               = "roles/iam.serviceAccountUser"
+  member             = local.deployer
 }
 # The deployer must be allowed to attach the media runtime identity to Cloud Run Jobs.
 # Grant only on that service account, not across the entire project.
@@ -60,10 +60,10 @@ resource "google_secret_manager_secret_iam_member" "media_runtime" {
   member    = "serviceAccount:${google_service_account.identity["media"].email}"
 }
 resource "google_artifact_registry_repository" "docker" {
-  location = var.region
+  location      = var.region
   repository_id = var.repository
-  format = "DOCKER"
-  description = "Private PhotoIntel images"
+  format        = "DOCKER"
+  description   = "Private PhotoIntel images"
   lifecycle {
     prevent_destroy = true
   }
@@ -71,9 +71,9 @@ resource "google_artifact_registry_repository" "docker" {
 resource "google_storage_bucket" "build_source" {
   name = "${var.project_id}-photointel-build-source"
   # Existing bucket was provisioned in the US multi-region. Location is immutable.
-  location = "US"
+  location                    = "US"
   uniform_bucket_level_access = true
-  public_access_prevention = "enforced"
+  public_access_prevention    = "enforced"
   versioning {
     enabled = true
   }
@@ -87,7 +87,7 @@ resource "google_storage_bucket_iam_member" "deployer_source" {
 }
 resource "google_storage_bucket_iam_member" "builder_source" {
   bucket = google_storage_bucket.build_source.name
-  role = "roles/storage.objectViewer"
+  role   = "roles/storage.objectViewer"
   member = local.builder
 }
 # The Cloud Build CLI uploads sources to the pre-existing default bucket.
@@ -106,47 +106,23 @@ resource "google_storage_bucket_iam_member" "cloudbuild_builder_objects" {
 }
 
 resource "google_artifact_registry_repository_iam_member" "builder_push" {
-  location = google_artifact_registry_repository.docker.location
+  location   = google_artifact_registry_repository.docker.location
   repository = google_artifact_registry_repository.docker.name
-  role = "roles/artifactregistry.writer"
-  member = local.builder
+  role       = "roles/artifactregistry.writer"
+  member     = local.builder
 }
 resource "google_secret_manager_secret" "existing" {
-  for_each = var.manage_secret_names
+  for_each  = var.manage_secret_names
   secret_id = each.key
   replication {
     auto {}
   }
   lifecycle { prevent_destroy = true }
 }
-resource "google_cloud_run_v2_job" "media" {
-  for_each = var.enable_media_jobs ? {
-    image = var.media_image
-    video = var.media_video
-  } : {}
-  name = "photointel-media-${each.key}"
-  location = var.region
-  deletion_protection = true
-  template {
-    template {
-      service_account = local.media
-      containers {
-        image = each.value
-      }
-      max_retries = 1
-    }
-  }
-  lifecycle {
-    precondition {
-      condition = length(each.value) > 0
-      error_message = "Provide immutable media image digests before enabling media jobs."
-    }
-  }
-}
 resource "google_cloud_run_v2_service" "api" {
-  count = var.enable_api_service ? 1 : 0
-  name = "photointel-api"
-  location = var.region
+  count               = var.enable_api_service ? 1 : 0
+  name                = "photointel-api"
+  location            = var.region
   deletion_protection = true
   template {
     service_account = google_service_account.identity["api"].email
@@ -156,7 +132,7 @@ resource "google_cloud_run_v2_service" "api" {
   }
   lifecycle {
     precondition {
-      condition = length(var.api_image) > 0
+      condition     = length(var.api_image) > 0
       error_message = "Provide the existing API image before enabling the service."
     }
   }

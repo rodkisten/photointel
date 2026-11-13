@@ -1,0 +1,63 @@
+"""Dispatch the existing TF workflow using the runner's scoped GitHub token.
+
+The TF workflow keeps its existing WIF trust boundary. No bootstrap credential,
+service account key, or expanded WIF workflow allowlist is needed by Media.
+"""
+import json
+import os
+import re
+import subprocess
+import time
+
+
+def gh(*args: str, payload=None):
+    result = subprocess.run(["gh", *args], input=json.dumps(payload) if payload else None,
+                            capture_output=True, text=True, check=False)
+    if result.returncode:
+        raise RuntimeError("GitHub Actions request failed; check Actions write permission")
+    return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def main():
+    repo = os.environ["GITHUB_REPOSITORY"]
+    if repo != "rodkisten/photointel":
+        raise ValueError("Unexpected repository")
+    sha = os.environ["IMAGE_SHA"]
+    if sha and not re.fullmatch(r"[a-f0-9]{40}", sha):
+        raise ValueError("Full media source SHA required")
+    action = "plan" if os.environ["MEDIA_ACTION"] == "plan" else "apply"
+    correlation = f"media-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+    title = f"TF · {action} · production · {correlation}"
+    endpoint = f"repos/{repo}/actions/workflows/tf-production.yml"
+    gh("api", "--method", "POST", endpoint + "/dispatches", "--input", "-", payload={
+        "ref": "main", "inputs": {"action": action, "authorize_apply": str(action == "apply").lower(),
+        "image_sha": sha, "request_id": correlation, "expected_sha": os.environ["GITHUB_SHA"]},
+    })
+    deadline = time.monotonic() + 3000
+    run = None
+    while time.monotonic() < deadline:
+        if run is None:
+            runs = gh("api", endpoint + "/runs?branch=main&event=workflow_dispatch&per_page=100")
+            matches = [r for r in runs["workflow_runs"] if r["display_title"] == title]
+            if len(matches) > 1:
+                raise RuntimeError("Ambiguous Terraform dispatch; inspect Actions")
+            if matches:
+                run = matches[0]
+                print(f"Terraform run: {run['html_url']}", flush=True)
+                summary = os.environ.get("GITHUB_STEP_SUMMARY")
+                if summary:
+                    with open(summary, "a") as handle:
+                        handle.write(f"\nTerraform {action}: {run['html_url']}\nMedia source: `{sha}`\n")
+        else:
+            run = gh("api", f"repos/{repo}/actions/runs/{run['id']}")
+            if run["status"] == "completed":
+                if run["conclusion"] != "success":
+                    raise RuntimeError(f"Terraform {action} failed: {run['html_url']}")
+                print(f"Terraform {action} and verification succeeded: {run['html_url']}")
+                return
+        time.sleep(15)
+    raise RuntimeError("Timed out waiting for Terraform; inspect the linked run before retrying")
+
+
+if __name__ == "__main__":
+    main()

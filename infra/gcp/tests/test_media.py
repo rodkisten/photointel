@@ -41,15 +41,11 @@ class MediaCommandsTests(unittest.TestCase):
         self.assertIn("runtime", failure.hint)
         self.assertNotIn("build service account", failure.hint)
 
-    def test_failure_stops_before_second_job_without_leaking_provider_text(self):
-        result = subprocess.CompletedProcess([], 1, "", "PERMISSION_DENIED iam.serviceAccounts.actAs on photointel-media@photointel.iam.gserviceaccount.com Bearer PRIVATE")
-        with patch("infra.gcp.media.cloud_run", return_value=result) as run:
-            with self.assertRaises(RuntimeError) as error:
+    def test_legacy_apply_cannot_bypass_terraform_ownership(self):
+        with patch("infra.gcp.media.cloud_run") as run:
+            with self.assertRaisesRegex(RuntimeError, "owned by Terraform"):
                 execute(self.config, "a" * 40, apply=True)
-            self.assertEqual(run.call_count, 1)
-        self.assertIn("SERVICE_ACCOUNT_ACT_AS", str(error.exception))
-        self.assertIn("photointel-media@photointel.iam.gserviceaccount.com", str(error.exception))
-        self.assertNotIn("PRIVATE", str(error.exception))
+            run.assert_not_called()
 
     def test_deployed_job_checks_configuration_and_readiness(self):
         from infra.gcp.media import REQUIRED_SECRET_ENV

@@ -1,10 +1,11 @@
 project_id = "photointel"
 region = "us-central1"
 repository = "photointel"
-# Keep disabled until resources are inventoried and imported into state.
-enable_media_jobs = false
+# Media Jobs are permanently managed; prepare adoption before Plan/Apply.
+enable_media_jobs = true
+media_image_sha = "f6b667c5da7d49ee6d1d059ae8dd4f8159a477cc"
+media_bucket = "photointel"
+# Other resources remain opt-in until their live configuration is modeled.
 enable_api_service = false
 enable_cloudflare = false
-# media_image = "us-central1-docker.pkg.dev/photointel/photointel/media-image@sha256:..."
-# media_video = "us-central1-docker.pkg.dev/photointel/photointel/media-video@sha256:..."
 # api_image = "us-central1-docker.pkg.dev/photointel/photointel/api@sha256:..."

@@ -30,3 +30,8 @@ jobs:
       - name: "TF · Validate"
         working-directory: infra/terraform/environments/production
         run: terraform validate -no-color
+      - name: "TF · Test Job configuration with mocked providers"
+        working-directory: infra/terraform/environments/production
+        run: terraform test -no-color
+      - name: "TF · Test adoption, release retention and plan safety"
+        run: python3 -m unittest infra.gcp.tests.test_media_terraform infra.gcp.tests.test_media -v

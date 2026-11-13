@@ -1,5 +1,5 @@
 name: "TF · Production"
-run-name: "TF · ${{ inputs.action }} · production"
+run-name: "TF · ${{ inputs.action }} · production · ${{ inputs.request_id || 'manual' }}"
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +9,18 @@ on:
         required: true
         default: plan
         options: [plan, import, apply]
+      image_sha:
+        description: "Published media source SHA; blank preserves the release in Terraform state"
+        type: string
+        default: ''
+      request_id:
+        description: "Optional correlation ID from the media workflow"
+        type: string
+        default: ''
+      expected_sha:
+        description: "Optional caller commit; refuse a concurrent main change"
+        type: string
+        default: ''
       authorize_apply:
         description: "Authorize infrastructure changes after reviewing the plan"
         type: boolean
@@ -27,22 +39,49 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with: {persist-credentials: false}
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: "TF · Check caller revision"
+        env:
+          EXPECTED: ${{ inputs.expected_sha }}
+          CURRENT: ${{ github.sha }}
+        run: |
+          if [[ -n "$EXPECTED" && "$EXPECTED" != "$CURRENT" ]]; then
+            echo '::error::main changed after the media workflow started; start a new run.'
+            exit 1
+          fi
+      - name: "TF · Prepare production configuration"
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
       - name: "TF · Authenticate dedicated Terraform identity"
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
           service_account: photointel-terraform@photointel.iam.gserviceaccount.com
           project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.17.2"
+          terraform_wrapper: false
       - name: "TF · Init"
         working-directory: infra/terraform/environments/production
         env:
           BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
           PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
         run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "TF · Inventory and prepare media adoption"
+        env:
+          IMAGE_SHA: ${{ inputs.image_sha }}
+        run: |
+          set -euo pipefail
+          bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
+          python3 -m infra.terraform.media_release prepare --image-sha "$IMAGE_SHA" --bucket "$bucket"
       - name: "TF · Import existing resources"
         if: inputs.action == 'import'
         working-directory: infra/terraform/environments/production
@@ -71,26 +110,18 @@ jobs:
         run: |
           terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
         id: plan
-      - name: "TF · Block destructive or replacement changes"
-        if: inputs.action == 'apply'
-        working-directory: infra/terraform/environments/production
-        shell: bash
-        run: |
-          set -euo pipefail
-          terraform show -json tfplan > "$RUNNER_TEMP/terraform-plan.json"
-          jq -r '
-            [.resource_changes[]? |
-              select(.change.actions | index("delete")) |
-              .address + ": " + (.change.actions | join(" -> "))
-            ] | .[]
-          ' "$RUNNER_TEMP/terraform-plan.json" > "$RUNNER_TEMP/terraform-destructive.txt"
-          if [[ -s "$RUNNER_TEMP/terraform-destructive.txt" ]]; then
-            echo "::error::Terraform plan includes deletion or replacement. Apply blocked."
-            cat "$RUNNER_TEMP/terraform-destructive.txt"
-            exit 1
-          fi
-          echo "Terraform plan has no delete or replace actions."
+      - name: "TF · Review plan and block destruction or replacement"
+        if: inputs.action != 'import'
+        run: python3 -m infra.terraform.media_release review
       - name: "TF · Apply"
         if: inputs.action == 'apply' && inputs.authorize_apply
         working-directory: infra/terraform/environments/production
         run: terraform apply -input=false tfplan
+      - name: "TF · Verify both media Jobs"
+        if: inputs.action == 'apply' && inputs.authorize_apply
+        run: python3 -m infra.terraform.media_release verify
+      - name: "TF · Clean temporary configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
