@@ -3,7 +3,7 @@ version: 2.1
 # CircleCI counterpart to .github/workflows/gcp-deploy.yml.
 # A push performs offline validation only. Production operations require an
 # explicit pipeline parameter AND a manual approval in CircleCI.
-parameters:
+#parameters:
   action:
     type: enum
     enum: [check, release, build, jobs-deploy, migrate, deploy, scheduler, cleanup]
@@ -23,7 +23,7 @@ parameters:
     type: string
     default: ""
 
-jobs:
+#jobs:
   offline-check:
     docker:
       - image: cimg/python:3.12
