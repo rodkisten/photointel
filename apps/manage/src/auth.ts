@@ -62,6 +62,26 @@ export class ApiError extends Error {
     this.name = 'ManageApiError';
   }
 }
+
+// Configurable constants replacing magic numbers
+const TIMEOUTS = {
+  CERTS_FETCH: 6000,
+};
+
+const CACHE = {
+  MAX_KEYS: 8,
+  DURATION_MS: 10 * 60_000, // 10 minutes
+};
+
+const LIMITS = {
+  JSON_BODY_MAX_BYTES: 120_000,
+  REDACT_MAX_LENGTH: 100_000,
+};
+
+const JWT_CONFIG = {
+  ALLOWED_SKEW_SECONDS: 30,
+};
+
 export function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
     status,
@@ -75,11 +95,14 @@ export function json(value: unknown, status = 200): Response {
 export function failure(status: number, code: string, message: string): Response {
   return json({ error: code, message }, status);
 }
+
 const cached = new Map<string, { key: CryptoKey; expires: number }>();
+
 function decode(part: string): Uint8Array {
   const raw = part.replace(/-/g, '+').replace(/_/g, '/');
   return Uint8Array.from(atob(raw + '='.repeat((4 - (raw.length % 4)) % 4)), (c) => c.charCodeAt(0));
 }
+
 function jwtJson(part: string): Record<string, unknown> {
   try {
     return JSON.parse(new TextDecoder().decode(decode(part))) as Record<string, unknown>;
@@ -87,23 +110,31 @@ function jwtJson(part: string): Record<string, unknown> {
     throw new ApiError(401, 'ACCESS_INVALID', 'Sessão Access inválida');
   }
 }
+
 export async function verifyAccess(request: Request, env: Env): Promise<Identity> {
+  // 1. Ensure Cloudflare Access environment is properly configured
   if (
     !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(env.ACCESS_TEAM_DOMAIN || '') ||
     !/^[\w-]{20,128}$/.test(env.ACCESS_AUDIENCE || '') ||
     !env.ACCESS_ALLOWED_EMAILS
   )
     throw new ApiError(503, 'ACCESS_SETUP', 'Configure Cloudflare Access e a allowlist');
+
+  // 2. Extract JWT from headers or cookies
   const jwt =
     request.headers.get('Cf-Access-Jwt-Assertion') ||
     request.headers.get('Cookie')?.match(/(?:^|;\s*)CF_Authorization=([^;]+)/)?.[1];
   if (!jwt) throw new ApiError(401, 'ACCESS_REQUIRED', 'Login Cloudflare Access necessário');
+
   const parts = jwt.split('.');
   if (parts.length !== 3) throw new ApiError(401, 'ACCESS_INVALID', 'JWT inválido');
+
   const header = jwtJson(parts[0]),
     payload = jwtJson(parts[1]),
     now = Date.now() / 1000;
   const issuer = 'https://' + env.ACCESS_TEAM_DOMAIN;
+
+  // 3. Validate claims (Algorithm, Issuer, Audience, Expiration, NBF)
   if (
     header.alg !== 'RS256' ||
     typeof header.kid !== 'string' ||
@@ -111,9 +142,11 @@ export async function verifyAccess(request: Request, env: Env): Promise<Identity
     !(Array.isArray(payload.aud) ? payload.aud : [payload.aud]).includes(env.ACCESS_AUDIENCE) ||
     typeof payload.exp !== 'number' ||
     payload.exp <= now ||
-    (typeof payload.nbf === 'number' && payload.nbf > now + 30)
+    (typeof payload.nbf === 'number' && payload.nbf > now + JWT_CONFIG.ALLOWED_SKEW_SECONDS)
   )
     throw new ApiError(401, 'ACCESS_CLAIMS', 'Token Access inválido ou expirado');
+
+  // 4. Verify Identity against Allowlist
   let allow: string[] = [];
   try {
     const parsed: unknown = JSON.parse(env.ACCESS_ALLOWED_EMAILS);
@@ -121,20 +154,27 @@ export async function verifyAccess(request: Request, env: Env): Promise<Identity
   } catch {
     allow = env.ACCESS_ALLOWED_EMAILS.split(',');
   }
+
   const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
   if (!email || !allow.map((x) => x.trim().toLowerCase()).includes(email))
     throw new ApiError(403, 'ACCESS_DENIED', 'Conta não autorizada');
+
+  // 5. Manage JWK Caching
   const keyId = env.ACCESS_TEAM_DOMAIN + ':' + header.kid;
   let entry = cached.get(keyId);
+  
   if (!entry || entry.expires < Date.now()) {
+    // 6. Fetch Public Certs if cache misses or expires
     const result = await fetch(issuer + '/cdn-cgi/access/certs', {
       redirect: 'manual',
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(TIMEOUTS.CERTS_FETCH),
     });
     if (!result.ok) throw new ApiError(503, 'ACCESS_CERTS', 'Chaves Access indisponíveis');
+    
     const certs = (await result.json()) as { keys?: Array<JsonWebKey & { kid?: string }> };
     const jwk = certs.keys?.find((k) => k.kid === header.kid && k.kty === 'RSA');
     if (!jwk) throw new ApiError(401, 'ACCESS_KEY', 'Chave Access não encontrada');
+    
     const key = await crypto.subtle.importKey(
       'jwk',
       jwk,
@@ -142,10 +182,12 @@ export async function verifyAccess(request: Request, env: Env): Promise<Identity
       false,
       ['verify'],
     );
-    entry = { key, expires: Date.now() + 10 * 60_000 };
-    if (cached.size > 8) cached.clear();
+    entry = { key, expires: Date.now() + CACHE.DURATION_MS };
+    if (cached.size > CACHE.MAX_KEYS) cached.clear();
     cached.set(keyId, entry);
   }
+
+  // 7. Verify Cryptographic Signature
   const ok = await crypto.subtle.verify(
     'RSASSA-PKCS1-v1_5',
     entry.key,
@@ -153,28 +195,40 @@ export async function verifyAccess(request: Request, env: Env): Promise<Identity
     new TextEncoder().encode(parts[0] + '.' + parts[1]),
   );
   if (!ok) throw new ApiError(401, 'ACCESS_SIGNATURE', 'Assinatura JWT inválida');
+  
   return { email, jwt };
 }
-export async function bodyJson<T>(request: Request, max = 120_000): Promise<T> {
+
+export async function bodyJson<T>(request: Request, max = LIMITS.JSON_BODY_MAX_BYTES): Promise<T> {
+  // Validate Content-Type
   if (request.headers.get('Content-Type')?.split(';')[0] !== 'application/json')
     throw new ApiError(415, 'CONTENT_TYPE', 'Use application/json');
+
+  // Pre-emptive length check via headers
   if (Number(request.headers.get('Content-Length') || 0) > max)
     throw new ApiError(413, 'BODY_LIMIT', 'Corpo muito grande');
+
+  // Absolute length check on text payload
   const text = await request.text();
   if (text.length > max) throw new ApiError(413, 'BODY_LIMIT', 'Corpo muito grande');
+
   try {
     return JSON.parse(text) as T;
   } catch {
     throw new ApiError(400, 'JSON', 'JSON inválido');
   }
 }
+
 export function requireOrigin(request: Request): void {
+  // Prevents CSRF by strictly enforcing the origin header
   if (request.headers.get('Origin') !== new URL(request.url).origin)
     throw new ApiError(403, 'CSRF', 'Origem não permitida');
 }
+
 export function redact(value: unknown): string {
+  // Replaces sensitive tokens and private URLs before logging or displaying
   return (typeof value === 'string' ? value : JSON.stringify(value) || '')
-    .slice(0, 100_000)
+    .slice(0, LIMITS.REDACT_MAX_LENGTH)
     .replace(/(bearer\s+)\S+/gi, '$1[redacted]')
     .replace(/((?:password|token|secret|authorization|cookie)\s*[:=]\s*)[^\s,;"']+/gi, '$1[redacted]')
     .replace(/https?:\/\/[^\s"']+\?[^\s"']+/gi, '[URL privada]')
