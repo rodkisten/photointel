@@ -229,6 +229,8 @@ export function redact(value: unknown): string {
   // Replaces sensitive tokens and private URLs before logging or displaying
   return (typeof value === 'string' ? value : JSON.stringify(value) || '')
     .slice(0, LIMITS.REDACT_MAX_LENGTH)
+    // Redact complete JSON credential values before the generic Bearer substitution.
+    .replace(/("(?:password|token|secret|authorization|cookie)"\s*:\s*")[^"]*(")/gi, '$1[redacted]$2')
     .replace(/(bearer\s+)\S+/gi, '$1[redacted]')
     .replace(/((?:password|token|secret|authorization|cookie)\s*[:=]\s*)[^\s,;"']+/gi, '$1[redacted]')
     .replace(/https?:\/\/[^\s"']+\?[^\s"']+/gi, '[URL privada]')
