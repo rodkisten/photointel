@@ -1,4 +1,4 @@
-name: "🌐 Cloudflare Worker"
+name: "🌐 Frontends · Cloudflare Workers"
 
 run-name: >-
   ${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Push to {0} ({1})', github.ref_name, github.sha) }}
@@ -9,7 +9,6 @@ on:
     paths:
       - 'apps/manage/**'
       - 'apps/web/**'
-      - 'packages/env/**'
       - '.prettierrc.json'
       - '.prettierignore'
       - 'package.json'
@@ -20,6 +19,8 @@ on:
       - 'infra/scripts/prepare_workflow_env.py'
       - 'infra/scripts/cloudflare_setup.py'
       - 'infra/scripts/diagnose_access.py'
+      - 'infra/scripts/deploy_manage.py'
+      - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
       - '.github/workflows/deploy-worker.yml'
   pull_request:
@@ -31,10 +32,13 @@ on:
       - 'apps/web/**'
       - 'apps/manage/**'
       - 'packages/contracts/**'
+      - 'packages/env/**'
       - 'infra/cloudflare/**'
       - 'infra/scripts/prepare_workflow_env.py'
       - 'infra/scripts/cloudflare_setup.py'
       - 'infra/scripts/diagnose_access.py'
+      - 'infra/scripts/deploy_manage.py'
+      - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
       - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
@@ -42,7 +46,7 @@ on:
 permissions: {contents: read}
 
 concurrency:
-  group: photointel-cloudflare-worker-${{ github.ref }}
+  group: photointel-frontends-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -143,14 +147,18 @@ jobs:
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 Cloudflare Worker tests"
-        if: matrix.app == 'manage'
+        if: matrix.app == 'web'
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
-  deploy:
-    name: "🌐 Publish unified Worker"
+      - name: "🐍 Validate Manage deployment script"
+        if: matrix.app == 'manage'
+        run: python3 -m py_compile infra/scripts/deploy_manage.py
+
+  deploy-web:
+    name: "🌐 Publish Photos Worker"
     runs-on: ubuntu-latest
     needs: [detect-changes, preflight]
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'web') }}
     environment: production
     permissions:
       contents: read
@@ -309,3 +317,63 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "3"
           total: "3"
+
+  deploy-manage:
+    name: "🧰 Publish Manage Worker"
+    runs-on: ubuntu-latest
+    needs: [detect-changes, preflight]
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'manage') }}
+    environment: production
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CONFIRM_PROJECT: photointel
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v4
+        with: {persist-credentials: false}
+
+      - name: "🟢 Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/manage/package-lock.json
+
+      - name: "⚙️ Prepare production configuration"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+
+      - name: "🔐 Authenticate GCP WIF"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+
+      - name: "🧰 Setup gcloud"
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: "📦 Install Manage"
+        run: npm --prefix apps/manage ci
+
+      - name: "🔎 Configure Sentry browser DSN"
+        run: python3 -m infra.scripts.deploy_manage browser-env
+
+      - name: "🏗 Build Manage"
+        run: npm --prefix apps/manage run build
+
+      - name: "🚀 Deploy Manage Worker, Access and domain"
+        run: python3 -m infra.scripts.deploy_manage apply
+
+      - name: "🧹 Remove temporary production config"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
