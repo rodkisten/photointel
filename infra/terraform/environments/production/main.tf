@@ -30,6 +30,13 @@ resource "google_service_account_iam_member" "deployer_builder" {
   role = "roles/iam.serviceAccountUser"
   member = local.deployer
 }
+# The deployer must be allowed to attach the media runtime identity to Cloud Run Jobs.
+# Grant only on that service account, not across the entire project.
+resource "google_service_account_iam_member" "deployer_media" {
+  service_account_id = google_service_account.identity["media"].name
+  role               = "roles/iam.serviceAccountUser"
+  member             = local.deployer
+}
 resource "google_artifact_registry_repository" "docker" {
   location = var.region
   repository_id = var.repository
