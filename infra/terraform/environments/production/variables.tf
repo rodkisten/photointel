@@ -108,3 +108,14 @@ variable "processing_invokers" {
   type    = any
   default = {}
 }
+
+# Existing billing export dataset. Terraform grants read access but does not
+# create, replace, or manage the billing export dataset or its tables.
+variable "billing_export_project_id" {
+  type    = string
+  default = "photointel"
+}
+variable "billing_export_dataset_id" {
+  type    = string
+  default = "custos"
+}

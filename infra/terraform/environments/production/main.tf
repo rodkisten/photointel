@@ -119,3 +119,19 @@ resource "google_secret_manager_secret" "existing" {
   }
   lifecycle { prevent_destroy = true }
 }
+
+# The Manage Worker impersonates this service account through WIF.
+# BigQuery job creation is project-scoped; billing data access is dataset-scoped.
+# Billing export setup itself belongs to the Cloud Billing console.
+resource "google_project_iam_member" "manage_billing_query_jobs" {
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = "serviceAccount:${google_service_account.identity["manage"].email}"
+}
+
+resource "google_bigquery_dataset_iam_member" "manage_billing_reader" {
+  project    = var.billing_export_project_id
+  dataset_id = var.billing_export_dataset_id
+  role       = "roles/bigquery.dataViewer"
+  member     = "serviceAccount:${google_service_account.identity["manage"].email}"
+}
