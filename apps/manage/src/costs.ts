@@ -125,6 +125,13 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
   const rows = (data.rows || []).map((x) => x.f?.map((v) => v.v) || []);
   const currencies = [...new Set(rows.map((x) => String(x[2] || 'USD')))];
   if (currencies.length > 1) return unavailable('Exportação contém múltiplas moedas. Separe os valores por moeda.');
+  // A newly enabled billing export can be empty for hours. Distinguish this
+  // from a verified zero-cost month so the UI does not mislead operators.
+  if (rows.length === 0) return {
+    status: 'unavailable', currency: 'USD', total: null, items: [],
+    url: 'https://console.cloud.google.com/bigquery?project=' + encodeURIComponent(billingProject),
+    note: 'Exportação de faturamento sem registros para o período. Se foi ativada hoje, aguarde a primeira carga do BigQuery. Isso não significa custo zero.',
+  };
   const items = rows.map((x) => ({
     name: String(x[0] || 'GCP'),
     detail: String(x[1] || ''),
