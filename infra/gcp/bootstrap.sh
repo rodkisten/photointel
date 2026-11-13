@@ -234,7 +234,7 @@ reconcile_terraform_identity() {
 }
 # Restrict privileged WIF to the explicitly approved production workflows.
 reconcile_bootstrap_wif_condition() {
-  BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main']"
+  BOOTSTRAP_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-permissions.yml@refs/heads/main']"
   local current_condition
   current_condition="$(gcp iam workload-identity-pools providers describe photo-intelligence-bootstrap --location=global --workload-identity-pool=github-bootstrap --format='value(attributeCondition)')"
   if [[ "$current_condition" != "$BOOTSTRAP_WIF_CONDITION" ]]; then
