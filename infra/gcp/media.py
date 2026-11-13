@@ -14,9 +14,9 @@ from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, clas
 
 JOB_TYPES = ("image", "video")
 REQUIRED_SECRET_ENV = (
-    ("R2_ENDPOINT", "photointel-media-r2-endpoint"),
-    ("R2_ACCESS_KEY_ID", "photointel-media-r2-access-key"),
-    ("R2_SECRET_ACCESS_KEY", "photointel-media-r2-secret-key"),
+    ("R2_ENDPOINT", "photointel-r2-endpoint"),
+    ("R2_ACCESS_KEY_ID", "photointel-r2-access-key"),
+    ("R2_SECRET_ACCESS_KEY", "photointel-r2-secret-key"),
 )
 
 
