@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'apps/manage/**'
       - 'apps/web/**'
       - '.prettierrc.json'
       - '.prettierignore'
@@ -18,6 +19,7 @@ on:
   pull_request:
     paths:
       - 'apps/web/**'
+      - 'apps/manage/**'
       - 'packages/contracts/**'
       - 'infra/cloudflare/**'
       - 'infra/scripts/prepare_workflow_env.py'
@@ -35,30 +37,91 @@ jobs:
     name: "🧪 Frontend · lint, types, tests, production build"
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      changed_apps: ${{ steps.path-check.outputs.changed_apps }}
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🧰 Node.js"
+        
+      - name: 🗳️ Get triggered folders
+        id: path-check
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            COMMAND="git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }}"
+          else
+            if [ "${{ github.event.before }}" == "0000000000000000000000000000000000000000" ]; then
+              COMMAND="git diff --name-only HEAD~1 ${{ github.sha }}"
+            else
+              COMMAND="git diff --name-only ${{ github.event.before }} ${{ github.sha }}"
+            fi
+          fi
+
+          CHANGED_FILES=$($COMMAND)
+          CHANGED_FOLDERS=$(echo "$CHANGED_FILES" | xargs -I {} dirname {} | sort -u)
+          
+          APPS=""
+          if echo "$CHANGED_FOLDERS" | grep -q "^apps/web"; then
+            APPS="${APPS}web "
+          fi
+          if echo "$CHANGED_FOLDERS" | grep -q "^apps/manage"; then
+            APPS="${APPS}manage "
+          fi
+          
+          # Se mudou infra ou package global, roda ambos por segurança
+          if [ -z "$APPS" ]; then
+            APPS="web manage"
+          fi
+
+          echo "Apps detectados para build/test: $APPS"
+          echo "changed_apps=$APPS" >> $GITHUB_OUTPUT
+
+      - name: "🧰 Node.js (Web)"
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: "📦 Install locked dependencies"
-        run: npm --prefix apps/web ci
-      - name: "🧹 ESLint"
-        run: npm --prefix apps/web run lint
-      - name: "📐 TypeScript"
-        run: npm --prefix apps/web run typecheck
-      - name: "🧪 All frontend tests"
-        run: npm --prefix apps/web test
-      - name: "🧪 Offline service worker tests"
-        run: npm --prefix apps/web run test:pwa
+
+      - name: "📦 Install locked dependencies (Web)"
+        run: npm ci
+        working-directory: apps/web
+
+      - name: "🧹 ESLint (Web)"
+        run: npm run lint
+        working-directory: apps/web
+
+      - name: "📐 TypeScript (Web)"
+        run: npm run typecheck
+        working-directory: apps/web
+
+      - name: "🧪 All frontend tests (Web)"
+        run: npm test
+        working-directory: apps/web
+
+      - name: "🧪 Offline service worker tests (Web)"
+        run: npm run test:pwa
+        working-directory: apps/web
+
+      - name: "🧰 Node.js (Manage)"
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/manage/package-lock.json
+        continue-on-error: true
+
+      - name: "📦 Install locked dependencies (Manage)"
+        run: npm ci
+        working-directory: apps/manage
+        continue-on-error: true
+
       - name: "🧪 Cloudflare Worker tests"
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-      - name: "🏗 Production Vite build + PWA precache"
-        run: npm --prefix apps/web run build
+
+      - name: "🏗 Production Vite build + PWA precache (Web)"
+        run: npm run build
+        working-directory: apps/web
 
   deploy:
     name: "🌐 Publish unified Worker"
@@ -120,14 +183,18 @@ jobs:
         id: notify_observed_002
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - name: "▶ ️  Execute command"
+        
+      - name: "▶ ️ Execute command (Web install)"
         id: notify_observed_003
-        run: npm --prefix apps/web ci
+        run: npm ci
+        working-directory: apps/web
+
       - name: "🏗 Build do frontend"
         id: notify_observed_004
         env:
           CONFIRM_PROJECT: photointel
         run: python3 -m infra.scripts.prepare_workflow_env worker-build
+        
       - name: "📱 Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
@@ -144,12 +211,15 @@ jobs:
           completed: "1"
           total: "3"
           outcome: ${{ steps.notify_observed_004.outcome }}
+          
       - name: "🧪 API error diagnostics"
-        run: npm --prefix apps/web test -- src/test/api-security.test.tsx
+        run: npm test -- src/test/api-security.test.tsx
+        working-directory: apps/web
 
       - name: "🧪 Worker relay + SPA"
         id: worker_tests
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        
       - name: "📱 Testes"
         if: ${{ always() && (steps.worker_tests.outcome == 'success' || steps.worker_tests.outcome == 'failure' || steps.worker_tests.outcome == 'cancelled') }}
         continue-on-error: true
@@ -167,9 +237,10 @@ jobs:
           completed: "2"
           total: "3"
 
-      - name: "▶ ️  Execute command"
+      - name: "▶ ️ Execute command (Headers copy)"
         id: notify_observed_005
         run: cp infra/cloudflare/worker-headers apps/web/dist/_headers
+        
       - name: "🚀 Publicar Worker"
         id: notify_observed_006
         env:
@@ -213,5 +284,3 @@ jobs:
           activity-id: ${{ steps.notify_live_start.outputs.activity_id }}
           completed: "3"
           total: "3"
-
-
