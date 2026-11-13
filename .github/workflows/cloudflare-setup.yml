@@ -1,17 +1,6 @@
 name: "☁️ Cloudflare Setup"
 run-name: "☁️ Cloudflare · ${{ inputs.mode || 'plan' }}"
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'infra/cloudflare/**'
-      - 'infra/scripts/cloudflare_setup.py'
-      - 'infra/scripts/prepare_workflow_env.py'
-      - 'infra/scripts/diagnose_access.py'
-      - 'infra/gcp/tests/test_cloudflare_setup.py'
-      - '.github/actions/gcp-config/**'
-      - 'apps/web/**'
-      - '.github/workflows/cloudflare-setup.yml'
   workflow_dispatch:
     inputs:
       mode:
