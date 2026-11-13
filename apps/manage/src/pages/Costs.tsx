@@ -149,7 +149,11 @@ function GcpBreakdown({ source }: { source: CostSource }) {
 
 function SourceDetails({ source, id }: { source: CostSource; id: string }) {
   if (source.status !== 'ok') {
-    return <p className="text-xs leading-5 text-carbon-400">{source.note || 'Fonte indisponível.'}</p>;
+    return <div className="space-y-2">
+      <p className="text-xs leading-5 text-carbon-400">{source.note || 'Fonte indisponível.'}</p>
+      {source.url && <a className="inline-flex items-center gap-1 text-xs text-carbon-300 underline underline-offset-4"
+        href={source.url} target="_blank" rel="noreferrer">Verificar no provedor <ExternalLink size={12} /></a>}
+    </div>;
   }
   return (
     <div className="space-y-3">
