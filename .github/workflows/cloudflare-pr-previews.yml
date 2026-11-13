@@ -2,7 +2,7 @@ name: "🧪 Cloudflare · PR Previews"
 run-name: "🧪 Previews · PR #${{ github.event.pull_request.number }} · ${{ github.head_ref }}"
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened]
     paths:
       - "apps/web/**"
       - "apps/manage/**"
@@ -12,7 +12,7 @@ permissions:
   contents: read
 concurrency:
   group: photointel-preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   previews:
     name: "🌐 Manage + Fotos · isolated preview"
