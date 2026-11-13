@@ -16,6 +16,9 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        root: [production, cloudflare]
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
@@ -25,13 +28,16 @@ jobs:
       - name: "TF · Format"
         run: terraform fmt -recursive infra/terraform
       - name: "TF · Init without remote backend"
-        working-directory: infra/terraform/environments/production
+        working-directory: infra/terraform/environments/${{ matrix.root }}
         run: terraform init -backend=false -input=false
+      - name: "TF · Generate offline Cloudflare schema fixture"
+        if: matrix.root == 'cloudflare'
+        run: python3 -m infra.terraform.cloudflare_release fixture
       - name: "TF · Validate"
-        working-directory: infra/terraform/environments/production
+        working-directory: infra/terraform/environments/${{ matrix.root }}
         run: terraform validate -no-color
       - name: "TF · Test Job configuration with mocked providers"
-        working-directory: infra/terraform/environments/production
+        working-directory: infra/terraform/environments/${{ matrix.root }}
         run: terraform test -no-color
       - name: "TF · Test adoption, release retention and plan safety"
-        run: python3 -m unittest infra.gcp.tests.test_media_terraform infra.gcp.tests.test_media -v
+        run: python3 -m unittest discover -s infra/gcp/tests -v

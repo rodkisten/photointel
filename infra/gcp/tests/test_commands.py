@@ -52,18 +52,7 @@ class CloudRunCommandsTests(unittest.TestCase):
             line for line in output.getvalue().splitlines()
             if "secrets add-iam-policy-binding" in line
         ]
-        self.assertTrue(any(
-            "photointel-sentry-dsn" in line
-            and "photointel-jobs@" in line for line in commands
-        ))
-        self.assertTrue(any(
-            "photointel-sentry-api-token" in line
-            and "photointel-api@" in line for line in commands
-        ))
-        self.assertFalse(any(
-            "photointel-sentry-api-token" in line
-            and "photointel-jobs@" in line for line in commands
-        ))
+        self.assertFalse(any("photointel-api@" in line or "photointel-jobs@" in line for line in commands))
         self.assertTrue(any(
             "photointel-sentry-build-token" in line
             and "photointel-deployer@" in line for line in commands

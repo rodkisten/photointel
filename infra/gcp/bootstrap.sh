@@ -80,7 +80,8 @@ done < <(jq -r '(.workflow_secrets // {}) | keys[]' "$CONFIG")
 reconcile_secret_access() {
   for key in "${KEYS[@]}"; do
     name="${SECRET_NAMES[$key]}"
-    for role in api jobs migrate; do
+    # API/processing secret IAM is owned by Terraform after adoption.
+    for role in migrate; do
       case "$role:$key" in
         api:MIGRATION_DATABASE_URL|jobs:MIGRATION_DATABASE_URL|jobs:SENTRY_API_TOKEN) continue ;;
         migrate:*) if [[ "$key" != DATABASE_URL && "$key" != MIGRATION_DATABASE_URL ]]; then continue; fi ;;

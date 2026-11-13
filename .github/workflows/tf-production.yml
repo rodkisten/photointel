@@ -1,5 +1,5 @@
 name: "TF · Production"
-run-name: "TF · ${{ inputs.action }} · production · ${{ inputs.request_id || 'manual' }}"
+run-name: "TF · ${{ inputs.action }} · ${{ inputs.scope || 'gcp' }} · ${{ inputs.request_id || 'manual' }}"
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +9,19 @@ on:
         required: true
         default: plan
         options: [plan, import, apply]
+      scope:
+        description: "Infrastructure state to plan/apply"
+        type: choice
+        options: [gcp, cloudflare]
+        default: gcp
+      runtime_targets:
+        description: "Runtime env subset; images and unselected settings are preserved"
+        type: string
+        default: api,jobs
+      api_sha:
+        description: "Optional published API source SHA; blank keeps each current image"
+        type: string
+        default: ''
       image_sha:
         description: "Published media source SHA; blank preserves the release in Terraform state"
         type: string
@@ -34,7 +47,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   terraform:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (inputs.scope == 'gcp' || inputs.scope == '')
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -82,6 +95,13 @@ jobs:
           set -euo pipefail
           bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
           python3 -m infra.terraform.media_release prepare --image-sha "$IMAGE_SHA" --bucket "$bucket"
+      - name: "TF · Inventory API and processing Jobs"
+        env:
+          API_SHA: ${{ inputs.api_sha }}
+          RUNTIME_TARGETS: ${{ inputs.runtime_targets || 'api,jobs' }}
+        run: |
+          python3 -m infra.scripts.cloudflare_setup sync
+          python3 -m infra.terraform.api_release prepare --image-sha "$API_SHA" --targets "$RUNTIME_TARGETS"
       - name: "TF · Import existing resources"
         if: inputs.action == 'import'
         working-directory: infra/terraform/environments/production
@@ -120,6 +140,73 @@ jobs:
       - name: "TF · Verify both media Jobs"
         if: inputs.action == 'apply' && inputs.authorize_apply
         run: python3 -m infra.terraform.media_release verify
+      - name: "TF · Verify API and processing Jobs"
+        if: inputs.action == 'apply' && inputs.authorize_apply
+        run: python3 -m infra.terraform.api_release verify
+      - name: "TF · Clean temporary configuration"
+        if: always()
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
+
+  cloudflare:
+    if: github.ref == 'refs/heads/main' && inputs.scope == 'cloudflare'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "TF · Check caller revision"
+        env:
+          EXPECTED: ${{ inputs.expected_sha }}
+          CURRENT: ${{ github.sha }}
+        run: |
+          if [[ -n "$EXPECTED" && "$EXPECTED" != "$CURRENT" ]]; then
+            echo '::error::main changed after dispatch; start a new run.'
+            exit 1
+          fi
+      - name: "TF · Prepare production configuration"
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+      - name: "TF · Init isolated Cloudflare state"
+        working-directory: infra/terraform/environments/cloudflare
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+          PREFIX: ${{ vars.TF_CF_STATE_PREFIX || 'photointel/cloudflare' }}
+        run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "TF · Inventory and prepare Cloudflare adoption"
+        run: python3 -m infra.terraform.cloudflare_release prepare
+      - name: "TF · Require apply confirmation"
+        if: inputs.action == 'apply'
+        env:
+          APPROVED: ${{ inputs.authorize_apply }}
+        run: test "$APPROVED" = true || { echo '::error::Apply checkbox required'; exit 1; }
+      - name: "TF · Plan Cloudflare metadata only"
+        working-directory: infra/terraform/environments/cloudflare
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+      - name: "TF · Review and block destruction/replacement"
+        run: python3 -m infra.terraform.media_release review --root infra/terraform/environments/cloudflare
+      - name: "TF · Apply adopted Cloudflare infrastructure"
+        if: inputs.action == 'apply' && inputs.authorize_apply
+        working-directory: infra/terraform/environments/cloudflare
+        run: terraform apply -input=false tfplan
+      - name: "TF · Verify preserved domains, Access, D1 and R2"
+        if: inputs.action == 'apply' && inputs.authorize_apply
+        run: python3 -m infra.terraform.cloudflare_release verify
       - name: "TF · Clean temporary configuration"
         if: always()
         uses: ./.github/actions/gcp-config

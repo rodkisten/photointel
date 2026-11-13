@@ -369,35 +369,13 @@ def save_config(config):
 
 
 def sync_runtime(config):
-    project, region = config['project_id'], config['region']
-    values = {'ACCESS_AUDIENCE': config['access_audience'], 'ACCESS_TEAM_DOMAIN': config['access_team_domain']}
-    for key in ('ACCESS_BRIDGE_AUDIENCE', 'ACCESS_BRIDGE_SERVICE_TOKENS'):
-        if key in config.get('extra_environment', {}):
-            values[key] = config['extra_environment'][key]
-    if any('|' in value for value in values.values()):
-        raise SetupError('Unexpected environment delimiter')
-    update = '^|^' + '|'.join(key + '=' + value for key, value in values.items())
-    # Update only auth metadata, preserving images, secret references and other env.
-    def run(args):
-        result = cloud_run(args, project=project, timeout=180)
-        if result.returncode:
-            code = cloud_classify(result.stderr).code
-            raise SetupError(
-                f'Cloud Run auth synchronization failed ({code}); '
-                'verify deployer run.admin permission and API health'
-            )
-        return result.stdout
-    run(['run', 'services', 'update', 'photointel-api', '--region', region, '--update-env-vars', update])
-    jobs = json.loads(run(['run', 'jobs', 'list', '--region', region, '--format=json']))
-    for job in jobs:
-        name = job.get('metadata', {}).get('name', '').rsplit('/', 1)[-1]
-        if name.startswith('photointel-'):
-            run(['run', 'jobs', 'update', name, '--region', region, '--update-env-vars', update])
-    print('Cloud Run API/Jobs auth metadata synchronized without Docker build.')
+    raise SetupError("Cloud Run runtime configuration is owned by Terraform. Run TF · Production (scope=gcp) to apply the synchronized config.")
 
 
 def reconcile(config, api, apply=False):
     spec, apps, idps, hosts = inspect(config, api)
+    if apply:
+        raise SetupError("Cloudflare infrastructure is owned by Terraform. Use TF · Production with scope=cloudflare; legacy mutation is disabled.")
     r2_reconcile(api, spec['bucket'], False)
     otp = [p for p in idps if p.get('type') == 'onetimepin']
     if not otp and apply:

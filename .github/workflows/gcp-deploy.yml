@@ -32,6 +32,12 @@ on:
           - cleanup
         required: true
 
+      api_sha:
+        description: 'Published API SHA for deploy/jobs-deploy; blank preserves current images'
+        type: string
+        default: ''
+        required: false
+
       migration_mode:
         description: 'Neon: inspect, apply, or diagnose'
         type: choice
@@ -150,7 +156,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      actions: read
+      actions: write
 
     defaults:
       run:
@@ -448,10 +454,10 @@ jobs:
           region: "us-central1"
       - name: "🏗 Imagem"
         id: verify_image
-        if: inputs.action == 'build' || inputs.action == 'jobs-deploy' || inputs.action == 'deploy' || inputs.action == 'release'
+        if: inputs.action == 'build' || inputs.action == 'release' || ((inputs.action == 'jobs-deploy' || inputs.action == 'deploy') && inputs.api_sha != '')
         env:
           CONFIRM_PROJECT: photointel
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ (inputs.action == 'build' || inputs.action == 'release') && github.sha || inputs.api_sha }}
         run: bash infra/gcp/release.sh verify
 
       - name: "📱 ✓ Build"
@@ -516,9 +522,12 @@ jobs:
           region: "us-central1"
       - name: "📦 Jobs"
         id: deploy_jobs
-        if: inputs.action == 'jobs-deploy' || inputs.action == 'release'
+        if: inputs.action == 'jobs-deploy'
         env:
           CONFIRM_PROJECT: photointel
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.api_sha }}
+          TF_TARGETS: jobs
         run: bash infra/gcp/release.sh jobs-deploy
 
       - name: "📱 ✓ Jobs"
@@ -617,6 +626,9 @@ jobs:
         if: inputs.action == 'deploy' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: photointel
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ inputs.action == 'release' && github.sha || inputs.api_sha }}
+          TF_TARGETS: ${{ inputs.action == 'release' && 'api,jobs' || 'api' }}
         run: bash infra/gcp/release.sh deploy
 
       - name: "📱 ✓ API"

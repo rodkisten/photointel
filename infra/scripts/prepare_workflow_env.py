@@ -270,9 +270,8 @@ def worker_deploy(config: dict) -> None:
             "run_worker_first": True,
             "not_found_handling": "single-page-application",
         },
-        "routes": [
-            {"pattern": public["WORKER_DOMAIN"], "custom_domain": True},
-        ],
+        # Terraform owns domain associations; code publication preserves them.
+        "routes": [],
     }
     env = os.environ.copy()
     env["CLOUDFLARE_API_TOKEN"] = token
@@ -288,15 +287,8 @@ def worker_deploy(config: dict) -> None:
             temporary.chmod(0o600)
             json.dump(wrangler, stream, indent=2)
             stream.write("\n")
-        result = subprocess.run(
-            ["npx", "--yes", "wrangler@4", "deploy", "--config", str(temporary)],
-            env=env, cwd=config_dir, check=False,
-        )
-        if result.returncode:
-            raise WorkflowEnvironmentError(
-                "Unified Cloudflare Worker deploy failed; inspect Wrangler logs. "
-                "An existing DNS CNAME for the frontend custom domain may need adjustment."
-            )
+        from infra.scripts.publish_worker import publish_version
+        publish_version(temporary, cwd=config_dir, env=env)
         count = sum(1 for path in dist.rglob("*") if path.is_file())
         print(f"Published {public['WORKER_NAME']}: Worker code + {count} static asset files; important logs enabled.")
         summary = os.environ.get("GITHUB_STEP_SUMMARY")

@@ -41,3 +41,10 @@ infra/terraform/environments/production/media-release.auto.tfvars.json
 infra/terraform/environments/production/media-imports.auto.tf.json
 infra/terraform/environments/production/tfplan
 infra/terraform/**/.terraform/
+
+# Secret-free adoption metadata is private runtime config, not source.
+infra/terraform/environments/production/api-release.auto.tfvars.json
+infra/terraform/environments/production/api-imports.auto.tf.json
+infra/terraform/environments/cloudflare/adoption.auto.tf.json
+infra/terraform/environments/cloudflare/inventory.auto.tfvars.json
+infra/terraform/environments/cloudflare/tfplan

@@ -163,8 +163,8 @@ class WorkflowEnvTests(unittest.TestCase):
                 patch.object(loader.subprocess, "run", side_effect=fake_run),
             ):
                 loader.worker_deploy(example_config())
-            self.assertEqual(observed["argv"][:4],
-                             ["npx", "--yes", "wrangler@4", "deploy"])
+            self.assertEqual(observed["argv"][:5],
+                             ["npx", "--yes", "wrangler@4", "versions", "deploy"])
             self.assertEqual(observed["cwd"], relay)
             self.assertEqual(observed["mode"], 0o600)
             self.assertEqual(observed["env"]["CLOUDFLARE_API_TOKEN"], "private-token")
@@ -190,9 +190,8 @@ class WorkflowEnvTests(unittest.TestCase):
                 "run_worker_first": True,
                 "not_found_handling": "single-page-application",
             })
-            self.assertEqual(cfg["routes"], [
-                {"pattern": "photos.example.org", "custom_domain": True},
-            ])
+            self.assertEqual(cfg["routes"], [])
+            self.assertNotIn("triggers", observed["argv"])
             self.assertIn("--format=value(status.url)", observed["gcloud"])
             self.assertNotIn("private-token", json.dumps(cfg))
             self.assertEqual(list(relay.glob(".wrangler-deploy-*.json")), [])

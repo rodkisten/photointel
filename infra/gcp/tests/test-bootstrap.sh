@@ -118,19 +118,10 @@ jq '.secrets.SENTRY_DSN = {"name":"photointel-sentry-dsn","version":"1"} |
 : > "$GCLOUD_TRACE"
 GCP_CONFIG_FILE="$TMP/config-sentry.json" BOOTSTRAP_MODE=permissions \
     bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/permissions"
-grep -F 'secrets add-iam-policy-binding photointel-sentry-dsn' "$GCLOUD_TRACE" |
-    grep -F 'photointel-jobs@replace-project-id.iam.gserviceaccount.com' |
-    grep -Fq 'roles/secretmanager.secretAccessor'
-grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
-    grep -Fq 'photointel-api@replace-project-id.iam.gserviceaccount.com'
-# Apple browser 2FA needs the existing AES session key in API, not a longer Apple password.
-# Grant only Secret Manager accessor on this specific secret, never project-wide.
-grep -F 'secrets add-iam-policy-binding photointel-session-aead-key' "$GCLOUD_TRACE" |
-    grep -F 'photointel-api@replace-project-id.iam.gserviceaccount.com' |
-    grep -Fq -- '--role=roles/secretmanager.secretAccessor'
-if grep -F 'secrets add-iam-policy-binding photointel-sentry-api-token' "$GCLOUD_TRACE" |
-    grep -Fq 'photointel-jobs@'; then
-    echo "ERROR: private Sentry API token granted to worker identity" >&2; exit 1
+# Terraform owns API/processing secret grants; bootstrap must not compete.
+if grep -F 'secrets add-iam-policy-binding' "$GCLOUD_TRACE" |
+    grep -Eq -- '--member=serviceAccount:photointel-(api|jobs)@'; then
+    echo "ERROR: bootstrap mutated Terraform-owned runtime secret IAM" >&2; exit 1
 fi
 grep -F 'secrets add-iam-policy-binding photointel-sentry-build-token' "$GCLOUD_TRACE" |
     grep -Fq 'photointel-deployer@replace-project-id.iam.gserviceaccount.com'

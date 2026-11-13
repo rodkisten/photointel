@@ -119,21 +119,3 @@ resource "google_secret_manager_secret" "existing" {
   }
   lifecycle { prevent_destroy = true }
 }
-resource "google_cloud_run_v2_service" "api" {
-  count               = var.enable_api_service ? 1 : 0
-  name                = "photointel-api"
-  location            = var.region
-  deletion_protection = true
-  template {
-    service_account = google_service_account.identity["api"].email
-    containers {
-      image = var.api_image
-    }
-  }
-  lifecycle {
-    precondition {
-      condition     = length(var.api_image) > 0
-      error_message = "Provide the existing API image before enabling the service."
-    }
-  }
-}

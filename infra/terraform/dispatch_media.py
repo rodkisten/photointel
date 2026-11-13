@@ -22,16 +22,19 @@ def main():
     repo = os.environ["GITHUB_REPOSITORY"]
     if repo != "rodkisten/photointel":
         raise ValueError("Unexpected repository")
-    sha = os.environ["IMAGE_SHA"]
+    sha = os.environ.get("IMAGE_SHA", "")
     if sha and not re.fullmatch(r"[a-f0-9]{40}", sha):
         raise ValueError("Full media source SHA required")
-    action = "plan" if os.environ["MEDIA_ACTION"] == "plan" else "apply"
+    action = os.environ.get("TF_ACTION") or ("plan" if os.environ.get("MEDIA_ACTION") == "plan" else "apply")
+    scope = os.environ.get("TF_SCOPE", "gcp")
+    if action not in {"plan", "apply"} or scope not in {"gcp", "cloudflare"}:
+        raise ValueError("Invalid Terraform dispatch scope/action")
     correlation = f"media-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
-    title = f"TF · {action} · production · {correlation}"
+    title = f"TF · {action} · {scope} · {correlation}"
     endpoint = f"repos/{repo}/actions/workflows/tf-production.yml"
     gh("api", "--method", "POST", endpoint + "/dispatches", "--input", "-", payload={
         "ref": "main", "inputs": {"action": action, "authorize_apply": str(action == "apply").lower(),
-        "image_sha": sha, "request_id": correlation, "expected_sha": os.environ["GITHUB_SHA"]},
+        "runtime_targets": os.environ.get("TF_TARGETS", "api,jobs"), "image_sha": sha, "api_sha": os.environ.get("API_SHA", ""), "scope": scope, "request_id": correlation, "expected_sha": os.environ["GITHUB_SHA"]},
     })
     deadline = time.monotonic() + 3000
     run = None

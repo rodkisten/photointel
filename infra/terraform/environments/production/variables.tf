@@ -88,3 +88,23 @@ variable "service_accounts" {
   type    = set(string)
   default = ["api", "jobs", "migrate", "scheduler", "builder", "deployer", "bootstrap", "media", "manage"]
 }
+
+variable "api_definition" {
+  description = "Validated API spec generated from production config and live settings; references only, never secret payloads."
+  type        = any
+  default     = null
+}
+variable "processing_jobs" {
+  description = "Finite processing Jobs adopted from existing deployments."
+  type        = any
+  default     = {}
+}
+variable "api_invokers" {
+  description = "Existing API transport IAM, including conditions; never inferred from a deploy flag."
+  type        = any
+  default     = {}
+}
+variable "processing_invokers" {
+  type    = any
+  default = {}
+}

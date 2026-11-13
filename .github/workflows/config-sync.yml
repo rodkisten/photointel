@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: write
     defaults:
       run:
         shell: bash
@@ -73,6 +74,7 @@ jobs:
       - name: "⚙️ Apply runtime environment (reuse existing images)"
         env:
           TARGETS: ${{ inputs.targets }}
+          GH_TOKEN: ${{ github.token }}
         run: python3 -m infra.gcp.config_sync --targets "$TARGETS"
       - name: "🧹 Remove temporary configuration"
         if: always()

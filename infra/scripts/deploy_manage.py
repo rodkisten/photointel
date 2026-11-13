@@ -121,8 +121,9 @@ def ensure_manage_d1(api) -> str:
     matching = [row for row in rows if row.get("name") == D1_NAME]
     if len(matching) > 1:
         raise SetupError("Multiple D1 databases named photointel-manage")
-    database = matching[0] if matching else api.write(
-        "POST", api.base + "/d1/database", {"name": D1_NAME})
+    if not matching:
+        raise SetupError("Manage D1 must exist and be adopted by Terraform before publishing")
+    database = matching[0]
     database_id = database.get("uuid")
     if not isinstance(database_id, str) or not re.fullmatch(
             r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", database_id):
@@ -158,14 +159,11 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         raise SetupError("Webhooks hostname must not be gated by Cloudflare Access")
     idps = api.pages(api.base + "/access/identity_providers")
     otp = [x for x in idps if x.get("type") == "onetimepin"]
-    if not otp and apply:
-        otp = [api.write("POST", api.base + "/access/identity_providers",
-                         {"name": "PhotoIntel Manage PIN", "type": "onetimepin", "config": {}})]
-    app = reconcile_app(
-        api, apps, APP_NAME, [DOMAIN], None,
-        [policy(sorted({e.casefold() for e in emails}))], apply,
-        [x["id"] for x in otp],
-    )
+    # Terraform owns Access and D1. Publication may only discover existing IDs.
+    matches = [a for a in apps if a.get("name") == APP_NAME and DOMAIN in str(a.get("domain", ""))]
+    if len(matches) != 1:
+        raise SetupError("Manage Access must be adopted/applied with TF · Production (scope=cloudflare) first")
+    app = matches[0]
     result: dict[str, object] = {
         "domain": DOMAIN, "worker": WORKER_NAME,
         "access": app.get("id") if app else None,
@@ -287,15 +285,14 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             "run_worker_first": True,
             "not_found_handling": "single-page-application",
         },
-        "routes": [
-            {"pattern": DOMAIN, "custom_domain": True},
-            {"pattern": HOOK_DOMAIN, "custom_domain": True},
-        ],
+        # Custom domains are owned by Terraform, never reconciled by Wrangler.
+        "routes": [],
+        "keep_vars": True,
         "d1_databases": [{
             "binding": "DEPLOY_DB", "database_name": D1_NAME,
             "database_id": d1_id, "migrations_dir": "./migrations",
         }],
-        "triggers": {"crons": ["*/2 * * * *"]},
+        # Cron schedules are adopted and managed by Terraform.
         "vars": {
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": app["aud"],
@@ -340,7 +337,8 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         run(["npx", "--yes", "wrangler@4", "d1", "migrations", "apply", "DEPLOY_DB",
              "--remote", "--config", str(temp_path)], env=env)
         print("Manage D1 migrations applied before deploy")
-        run(["npx", "--yes", "wrangler@4", "deploy", "--config", str(temp_path)], env=env)
+        from infra.scripts.publish_worker import publish_version
+        publish_version(temp_path, cwd=MANAGE, env=env)
         secrets = {"GITHUB_API_TOKEN": gh_token,
                    "CLOUDFLARE_API_TOKEN": cf_token}
         secret_map = {

@@ -92,30 +92,15 @@ def patch(path: Path, image: str, sha: str, *, kind: str) -> None:
 
 
 def reconcile(targets: set[str], *, config_path: Path = CONFIG) -> None:
-    config = json.loads(config_path.read_text(encoding="utf-8"))
-    if config.get("project_id") != "photointel" or config.get("region") != "us-central1":
-        raise ConfigurationSyncError("Automatic configuration sync is restricted to photointel/us-central1")
-    rendered = ROOT / "infra/gcp/rendered"
-    render(config, rendered)
-    # Look up all current images BEFORE touching any Cloud Run resource.
-    revisions: list[tuple[str, str, str, Path, str, str]] = []
-    if "jobs" in targets:
-        for mode in MODES:
-            name = "photointel-" + mode
-            image, sha = live_image_and_sha("jobs", name, "us-central1")
-            revisions.append(("jobs", name, "us-central1", rendered / (name + ".json"), image, sha))
-    if "api" in targets:
-        image, sha = live_image_and_sha("services", "photointel-api", "us-central1")
-        revisions.append((
-            "services", "photointel-api", "us-central1",
-            rendered / "photointel-api.json", image, sha,
-        ))
-    for kind, name, region, path, image, sha in revisions:
-        patch(path, image, sha, kind="service" if kind == "services" else "job")
-        gcloud(["run", kind, "replace", str(path), "--region=" + region])
-        print(f"✅ {name}: runtime variables synchronized; existing image and release SHA retained.")
-    if not revisions:
-        print("No Cloud Run components selected; nothing changed.")
+    # Keep this entry point for existing Manage/CLI callers; Terraform owns writes.
+    from infra.terraform.dispatch_media import main as dispatch
+    import os
+    if not targets or targets - {"api", "jobs"}:
+        raise ConfigurationSyncError("Targets must be an api/jobs subset")
+    os.environ["TF_SCOPE"] = "gcp"
+    os.environ["TF_ACTION"] = "apply"
+    os.environ["TF_TARGETS"] = ",".join(sorted(targets))
+    dispatch()
 
 
 def main() -> int:

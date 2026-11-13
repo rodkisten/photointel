@@ -80,48 +80,30 @@ class FakeAPI:
 
 
 class SetupTests(unittest.TestCase):
-    def test_apex_application_is_preserved_and_frontend_gets_its_own_audience(self):
-        api, cfg = FakeAPI(), config()
-        apex = {'id': 'apex', 'name': 'photointel', 'type': 'self_hosted',
-                'domain': 'migos.club', 'aud': 'b' * 64}
+    def test_apex_application_is_preserved_by_read_only_inspection(self):
+        api = FakeAPI()
+        apex = {'id': 'apex', 'name': 'photointel', 'type': 'self_hosted', 'domain': 'migos.club', 'aud': 'b' * 64}
         api.apps = [copy.deepcopy(apex)]
-        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
-            app.reconcile(cfg, api, True)
-        self.assertEqual(api.apps[0], apex)
-        self.assertEqual(api.apps[1]['name'], 'photointel-web')
-        self.assertEqual(cfg['access_audience'], 'c' * 64)
+        app.reconcile(config(), api, False)
+        self.assertEqual(api.apps, [apex])
+        self.assertEqual(api.writes, [])
 
     def test_orphaned_bridge_selector_is_preserved_without_credential_creation(self):
-        api, cfg = FakeAPI(), config()
+        api = FakeAPI()
         api.tokens = []
-        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
-                     'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
-        api.policies['bridge-old'] = [{'id': 'orphan-policy', 'name': 'device',
-            'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'orphan-id'}}]}]
-        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
-            app.reconcile(cfg, api, True)
-        service = api.policies['bridge-old'][0]
-        self.assertEqual(service['include'], [{'service_token': {'token_id': 'orphan-id'}}])
-        self.assertNotIn('ACCESS_BRIDGE_SERVICE_TOKENS', cfg['extra_environment'])
-        self.assertFalse(any('/service_tokens' in path for _, path, _ in api.writes))
+        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted', 'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
+        api.policies['bridge-old'] = [{'id': 'orphan-policy', 'name': 'device', 'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'orphan-id'}}]}]
+        app.reconcile(config(), api, False)
+        self.assertEqual(api.policies['bridge-old'][0]['include'], [{'service_token': {'token_id': 'orphan-id'}}])
+        self.assertEqual(api.writes, [])
 
-    def test_adopt_existing_bridge_and_recover_credentials_on_next_release(self):
+    def test_bridge_inspection_retains_id_and_credentials_without_mutation(self):
         api, cfg = FakeAPI(), config()
-        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted',
-                     'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
-        api.policies['bridge-old'] = [{'id': 'existing-policy', 'name': 'device',
-            'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'service-id'}}],
-            'exclude': [], 'require': []}]
-        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
-            app.reconcile(cfg, api, True)
-            fresh = config()
-            app.sync_config(fresh, api)
-            app.reconcile(fresh, api, True)
-        bridge = next(a for a in api.apps if a['name'] == 'photointel-bridge')
-        self.assertEqual((bridge['id'], bridge['aud']), ('bridge-old', 'd' * 64))
-        self.assertEqual(json.loads(fresh['extra_environment']['ACCESS_BRIDGE_SERVICE_TOKENS']), ['unit.access'])
-        self.assertEqual(len(api.apps), 2)
-        self.assertFalse(any('/service_tokens' in path for _, path, _ in api.writes))
+        api.apps = [{'id': 'bridge-old', 'name': 'photos', 'type': 'self_hosted', 'domain': 'photos.migos.club/v1/bridge/*', 'aud': 'd' * 64}]
+        api.policies['bridge-old'] = [{'id': 'existing-policy', 'name': 'device', 'decision': 'non_identity', 'include': [{'service_token': {'token_id': 'service-id'}}]}]
+        app.adopt_bridge(cfg, api, api.apps, ['photos.migos.club'])
+        self.assertEqual(json.loads(cfg['extra_environment']['ACCESS_BRIDGE_SERVICE_TOKENS']), ['unit.access'])
+        self.assertEqual(api.writes, [])
 
     def test_bridge_bypass_is_not_automatically_adopted(self):
         api = FakeAPI()
@@ -140,25 +122,18 @@ class SetupTests(unittest.TestCase):
         save.assert_not_called()
         runtime.assert_not_called()
 
-    def test_apply_creates_allowlisted_app_and_uses_real_audience(self):
-        api, cfg = FakeAPI(), config()
-        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime') as runtime:
-            app.reconcile(cfg, api, True)
-        self.assertEqual(cfg['access_audience'], 'c' * 64)
-        runtime.assert_called_once()
-        self.assertEqual(api.apps[0]['name'], 'photointel')
-        self.assertEqual(api.apps[0]['destinations'], [{'type': 'public', 'uri': 'photos.migos.club'}])
-        self.assertEqual(api.policies['app-0'][0]['include'], [{'email': {'email': 'rod@example.com'}}])
-        self.assertFalse(any(p['decision'] == 'bypass' for p in api.policies['app-0']))
+    def test_legacy_apply_refuses_resource_writes_after_terraform_migration(self):
+        api = FakeAPI()
+        with self.assertRaisesRegex(app.SetupError, 'Terraform'):
+            app.reconcile(config(), api, True)
+        self.assertEqual(api.writes, [])
 
-    def test_second_apply_reuses_app_and_policy_ids(self):
-        api, cfg = FakeAPI(), config()
-        with patch.object(app, 'save_config'), patch.object(app, 'sync_runtime'):
-            app.reconcile(cfg, api, True)
-            app.reconcile(cfg, api, True)
-        self.assertEqual(len(api.apps), 1)
-        self.assertEqual(len(api.policies['app-0']), 1)
-        self.assertEqual(api.apps[0]['policies'], [{'id': 'policy-0'}])
+    def test_repeated_legacy_apply_never_competes_with_terraform(self):
+        api = FakeAPI()
+        for _ in range(2):
+            with self.assertRaisesRegex(app.SetupError, 'Terraform'):
+                app.reconcile(config(), api, True)
+        self.assertEqual(api.writes, [])
 
     def test_reject_unrelated_domain_and_ambiguous_apps(self):
         unrelated = {'id': 'x', 'type': 'self_hosted', 'name': 'photointel',
@@ -186,17 +161,11 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(result['policies'][0]['include'], [{'service_token': {'token_id': 'service-id'}}])
         self.assertEqual(result['policies'][1]['precedence'], 2)
 
-    def test_runtime_sync_updates_auth_only_without_build_or_secret_replacement(self):
-        class Success:
-            returncode = 0
-            stdout = '[]'
-        with patch.object(app.subprocess, 'run', return_value=Success()) as run:
-            app.sync_runtime(config())
-        command = run.call_args_list[0].args[0]
-        self.assertIn('--update-env-vars', command)
-        self.assertNotIn('--env-vars-file', command)
-        self.assertNotIn('--image', command)
-        self.assertNotIn('build', command)
+    def test_runtime_sync_requires_terraform_and_never_calls_gcloud(self):
+        with patch.object(app, 'cloud_run') as run:
+            with self.assertRaisesRegex(app.SetupError, 'Terraform'):
+                app.sync_runtime(config())
+        run.assert_not_called()
 
     def test_permission_denial_is_never_treated_as_missing_and_does_not_print_body(self):
         client = app.Cloudflare('a' * 32, 'PRIVATE_TOKEN')

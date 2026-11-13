@@ -93,6 +93,7 @@ def main() -> None:
     parser.add_argument("--bucket", default="")
     parser.add_argument("--project", default="photointel")
     parser.add_argument("--region", default="us-central1")
+    parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
     if args.action == "prepare":
         settings = release_settings(terraform_json("output", "-json"), args.image_sha, args.bucket)
@@ -107,7 +108,7 @@ def main() -> None:
         (ROOT / "media-imports.auto.tf.json").write_text(json.dumps({"import": imports}, indent=2) + "\n")
         print(f"Media source: {settings['media_image_sha']}; existing Jobs to import: {len(imports)}")
     elif args.action == "review":
-        changes = review_plan(terraform_json("show", "-json", "tfplan"))
+        changes = review_plan(terraform_json("show", "-json", "tfplan", root=args.root))
         print("Plan reviewed: no deletion or replacement.\n" + "\n".join(changes))
     else:
         release = terraform_json("output", "-json")["media_release"]["value"]

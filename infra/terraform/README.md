@@ -30,16 +30,29 @@ permissions to manage only the imported resources. Never store tokens in tfvars.
 
 ## Scope and boundaries
 
-Currently modeled: project deployer IAM, service accounts, Artifact Registry,
-source bucket, optional Secret Manager containers, optional API service and
-production Media Image/Video Jobs. Media Jobs are permanently enabled and
-fully modeled; the optional API remains a skeleton and must be expanded to
-match its live configuration before import.
-Cloudflare resources, WIF pool/providers, Cloud Scheduler, all other Cloud Run
-services, DNS, Access, R2 and Manage integration are **not migrated yet**.
+The `production` state now models the API, existing finite processing Jobs,
+Media Jobs, runtime secret IAM, service identities, deployer IAM, Artifact
+Registry and source buckets. The API and processing adoption inventory preserves
+live images, runtime identities, CPU/memory, probes, scaling, timeout, traffic,
+extra environment and conditional invoker IAM. Configuration changes merge the
+configured env names while retaining extra live names. Missing unused processors
+are not created; a missing resource already in state fails closed.
 
-Existing scripts and workflows remain authoritative until explicitly retired
-after import. Never run Terraform and bootstrap IAM reconciliation concurrently.
+The isolated `cloudflare` state models the three PhotoIntel custom domains,
+existing Access applications/policies for photos and Manage, Manage D1, the
+existing private R2 bucket and both Workers' cron triggers. It excludes the
+separate Access app on the apex migos.club. Worker versions, assets, bindings,
+secrets and D1 schema migrations remain in the unified frontend pipeline.
+Wrangler publication uses `versions upload` and `versions deploy`, which do not
+reconcile Terraform-owned domains or triggers.
+
+WIF providers/initial credentials remain bootstrap-owned. Cloud Scheduler and
+the temporary iCloud diagnostic Job remain in the existing operations scripts;
+they are not adopted by this API/Worker migration. No old resource is deleted.
+
+Legacy API, processing Job, auth sync and Cloudflare infrastructure writers are
+disabled or forwarded to TF Production. Bootstrap no longer grants runtime
+secret access to API/processors; Terraform owns those per-secret grants. Never run Terraform and bootstrap IAM reconciliation concurrently.
 
 Terraform state may contain sensitive metadata. Do not manage secret payloads
 through Terraform; keep values in Secret Manager.
@@ -92,3 +105,37 @@ python3 -m infra.terraform.media_release verify
 Offline validation: `terraform init -backend=false`, `terraform validate`, and
 `terraform test` from the production directory, plus
 `python3 -m unittest infra.gcp.tests.test_media_terraform -v` from the repo root.
+
+## API and Cloudflare migration / next operations
+
+Use `TF · Production` with `action=plan`, first `scope=gcp`, then
+`scope=cloudflare`. Keep `api_sha` and `image_sha` blank for adoption without a
+build. Review each Plan before `action=apply` with the checkbox authorized.
+The same workflow retains its existing WIF allowlist; no bootstrap credential
+change is needed. Cloudflare state uses `TF_CF_STATE_PREFIX` (default
+`photointel/cloudflare`); GCP keeps `TF_STATE_PREFIX` (default
+`photointel/production`) in the existing private state bucket.
+
+Cloudflare preparation reads existing metadata using the existing deployment
+token from Secret Manager. It generates resource JSON against the pinned
+provider schema, with declarative imports and `prevent_destroy` on every
+resource. Adopted desired metadata is retained in private state on later runs;
+configured email allowlists update only the named PhotoIntel email policies.
+Provider-computed fields and SCIM credentials are excluded. No Worker source or
+secret payload is stored in Terraform. Generated `.auto.tf.json`/`.tfvars.json`
+are private, ignored runtime files, not source artifacts.
+
+For a release, build once, then supply that full published commit as `api_sha`.
+A blank SHA uses the ready API digest and each processor's existing digest.
+`runtime_targets` preserves the config-sync selector (`api`, `jobs`, or both).
+The release workflow dispatches Terraform instead of `run services/jobs replace`;
+build, migration checks, scheduler operations, diagnostics and temporary probes
+still use the shared gcloud transport. `release.sh` therefore remains necessary,
+but no longer deploys production API/processor definitions itself.
+
+The GCP Apply verifies API readiness and its image/env plus processing image and
+runtime identity. The Cloudflare Apply verifies domains, Access, D1, R2 and cron
+metadata. Unknown sidecars, volumes, custom networking, inline credentials or
+unsupported probes stop adoption and require explicit modeling, rather than
+silently dropping live settings. Split/pinned API traffic blocks a new image
+release until its intended traffic migration is reviewed.

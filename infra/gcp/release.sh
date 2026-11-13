@@ -50,10 +50,8 @@ case "$PHASE" in
     summary "✅ Docker image for this exact commit built and verified."
     ;;
   jobs-deploy)
-    python3 -m infra.scripts.cloudflare_setup sync
-    python3 -m infra.gcp.manage render
-    manage jobs-deploy
-    summary "✅ Cloud Run processing Jobs deployed. Neon migrations run separately in GitHub Actions."
+    TF_SCOPE=gcp TF_ACTION=apply API_SHA="$SHA" python3 -m infra.terraform.dispatch_media
+    summary "✅ Terraform applied and verified the API/processing Job release."
     ;;
   migrate)
     mode="${MIGRATION_MODE:-plan}"
@@ -73,17 +71,8 @@ case "$PHASE" in
     ;;
   deploy)
     database_gate
-    python3 -m infra.scripts.cloudflare_setup sync
-    python3 -m infra.gcp.manage render
-    if manage deploy; then
-      summary "✅ Cloud Run API deployment requested. Test authentication before importing data."
-    else
-      status=$?
-      log "::error::Cloud Run service deployment failed. Collecting safe startup diagnostics."
-      # Do not mask the deployment failure; troubleshooting is read-only and best-effort.
-      python3 -m infra.gcp.diagnose_startup --project "$PROJECT" || true
-      exit "$status"
-    fi
+    TF_SCOPE=gcp TF_ACTION=apply API_SHA="$SHA" python3 -m infra.terraform.dispatch_media
+    summary "✅ Terraform applied and verified the API/processing Job release."
     ;;
   scheduler)
     manage scheduler

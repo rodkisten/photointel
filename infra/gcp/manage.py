@@ -694,7 +694,8 @@ def bootstrap(runner: Runner) -> None:
             ["secrets", "describe", reference["name"]],
             ["secrets", "create", reference["name"], "--replication-policy", "automatic"],
         )
-    for role in ("api", "jobs", "migrate"):
+    # Runtime API/processing secret grants are owned by Terraform.
+    for role in ("migrate",):
         permitted = (
             API_SECRETS
             if role == "api"
@@ -869,6 +870,8 @@ def bootstrap(runner: Runner) -> None:
 
 
 def deploy_jobs(runner: Runner, directory: Path) -> None:
+    if runner.apply:
+        raise ConfigurationError("Processing Jobs are owned by Terraform. Use TF · Production; direct deployment is disabled.")
     config = runner.config
     for mode in MODES:
         # Alembic now runs from GitHub Actions directly against Neon.
@@ -1240,31 +1243,9 @@ def main() -> None:
                 flush=True,
             )
     elif args.action == "deploy":
-        runner.command(
-            [
-                "run",
-                "services",
-                "replace",
-                str(directory / "photointel-api.json"),
-                "--region",
-                config["region"],
-            ]
-        )
-        # Public network transport, authenticated inside FastAPI. Never call it private.
-        runner.command(
-            [
-                "run",
-                "services",
-                "add-iam-policy-binding",
-                "photointel-api",
-                "--region",
-                config["region"],
-                "--member",
-                "allUsers",
-                "--role",
-                "roles/run.invoker",
-            ]
-        )
+        if runner.apply:
+            raise ConfigurationError("Cloud Run API is owned by Terraform. Use TF · Production; direct deployment is disabled.")
+        print("PLAN ONLY: API definition rendered; Terraform owns deployment.")
     elif args.action == "media-build":
         sha = args.git_sha
         if not sha or not re.fullmatch(r"[a-f0-9]{40}", sha):
@@ -1309,22 +1290,7 @@ def main() -> None:
             ]
         )
     elif args.action == "rollback":
-        if not args.revision or not re.fullmatch(
-            r"photointel-api-[a-z0-9-]{1,45}", args.revision
-        ):
-            raise ConfigurationError("Specify the exact previously verified API revision")
-        runner.command(
-            [
-                "run",
-                "services",
-                "update-traffic",
-                "photointel-api",
-                "--region",
-                config["region"],
-                "--to-revisions",
-                args.revision + "=100",
-            ]
-        )
+        raise ConfigurationError("Rollback is owned by Terraform. Select a previously published API SHA and review its Plan.")
     elif args.action == "cleanup":
         # Pause only; never destroy the database, bucket, secret versions or images.
         for mode in SCHEDULED:
