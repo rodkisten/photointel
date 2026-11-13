@@ -351,6 +351,15 @@ export async function api(
         if (input.confirm !== 'confirma')
           throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: mudar esta variável acionará Manage Deploy. Digite confirma.');
       }
+      const triggerStore = '/environments/' + encodeURIComponent(env.GITHUB_ENVIRONMENT || 'production') + '/variables/MANAGE_VARIABLE_TRIGGERS';
+      const stored = await gh(env, triggerStore).catch(() => null) as { value?: string } | null;
+      let rule: { mode?: string; workflows?: string[]; webhook?: string } = {};
+      try { rule = (JSON.parse(stored?.value || '{}') as Record<string, typeof rule>)[name] || {}; }
+      catch { /* invalid legacy rule is ignored */ }
+      const hasRule = rule.mode === 'workflows' && !!rule.workflows?.length ||
+        rule.mode === 'webhook' && !!rule.webhook;
+      if (hasRule && input.confirm !== 'confirma')
+        throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: alterar esta variável acionará gatilhos. Digite confirma.');
       const existing = await gh(env, base + '?per_page=100');
       const match = safeList(existing, 'variables').find((entry) => entry.name === name);
       if (match) {
@@ -376,7 +385,37 @@ export async function api(
           dispatch = 'failed';
         }
       }
-      return json({ ok: true, version: await digest(value), dispatch });
+      const triggered: Array<{ target: string; status: 'queued' | 'failed' }> = [];
+      if (hasRule) {
+        const catalog = await gh(env, '/actions/workflows?per_page=100') as {
+          workflows?: Array<{ path?: string; state?: string }>;
+        };
+        const allowed = new Set((catalog.workflows || []).filter(x => x.state === 'active')
+          .map(x => x.path?.split('/').pop()));
+        if (rule.mode === 'workflows') {
+          for (const workflow of (rule.workflows || []).slice(0, 10)) {
+            if (!allowed.has(workflow)) continue;
+            try {
+              await gh(env, '/actions/workflows/' + encodeURIComponent(workflow) + '/dispatches', 'POST',
+                { ref: 'main' });
+              triggered.push({ target: workflow, status: 'queued' });
+            } catch {
+              triggered.push({ target: workflow, status: 'failed' });
+            }
+          }
+        } else if (rule.mode === 'webhook' && rule.webhook?.startsWith('https://relay.migos.club/')) {
+          // Never transmit variable values, secrets or user-controlled Authorization headers.
+          try {
+            const response = await fetch(rule.webhook, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: 'variable.changed', name, scope }),
+              redirect: 'error', signal: AbortSignal.timeout(8000),
+            });
+            triggered.push({ target: 'Relay webhook', status: response.ok ? 'queued' : 'failed' });
+          } catch { triggered.push({ target: 'Relay webhook', status: 'failed' }); }
+        }
+      }
+      return json({ ok: true, version: await digest(value), dispatch, triggered });
     }
   }
 
