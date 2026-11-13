@@ -11,6 +11,6 @@
     "format:check:manage": "prettier --check \"apps/manage/**/*.{js,mjs,cjs,jsx,ts,tsx,css,html,json,jsonc}\""
   },
   "devDependencies": {
-    "prettier": "3.6.2"
+    "prettier": "3.10.1"
   }
 }
