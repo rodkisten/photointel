@@ -407,7 +407,7 @@ export function SystemInfo({ meta }: { meta: Meta }) {
             <Input value={scheduleEdit.schedule} onChange={(event) => setScheduleEdit({ ...scheduleEdit, schedule: event.target.value })} aria-label="Expressão cron" />
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setScheduleEdit(null)}>Cancelar</Button>
-              <Button size="sm" disabled={scheduleMutation.isPending || scheduleEdit.schedule.trim().split(/\\s+/).length !== 5} onClick={() => scheduleMutation.mutate(scheduleEdit)}>Salvar horário</Button>
+              <Button size="sm" disabled={scheduleMutation.isPending || scheduleEdit.schedule.trim().split(/\s+/).length !== 5} onClick={() => scheduleMutation.mutate(scheduleEdit)}>Salvar horário</Button>
             </div>
           </Card>
         )}
