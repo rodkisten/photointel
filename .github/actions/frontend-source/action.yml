@@ -1,0 +1,25 @@
+name: "📌 Fonte"
+description: "Select frontend source while retaining trusted main deployment tooling"
+inputs:
+  sha:
+    description: "SHA"
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SOURCE_SHA: ${{ inputs.sha }}
+        HEAD_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        sha="${SOURCE_SHA:-$HEAD_SHA}"
+        [[ "$sha" =~ ^[a-f0-9]{40}$ ]] || { echo '::error::SHA inválido'; exit 1; }
+        if [[ -n "$SOURCE_SHA" ]]; then
+          git cat-file -e "$sha^{commit}"
+          git merge-base --is-ancestor "$sha" "$HEAD_SHA"
+          # Source apps/packages may be historical; deployment code stays on main.
+          git restore --source="$sha" --worktree -- apps packages
+        fi
+        echo "PHOTOINTEL_BUILD_SHA=$sha" >> "$GITHUB_ENV"
+        echo "Fonte: $sha"

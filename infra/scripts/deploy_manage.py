@@ -108,7 +108,7 @@ def export_browser_sentry(config: dict) -> None:
             handle.write("VITE_MANAGE_SENTRY_DSN=" + dsn + "\n")
         if org:
             handle.write("VITE_MANAGE_SENTRY_ORG=" + org + "\n")
-        sha = os.environ.get("GITHUB_SHA", "")
+        sha = os.environ.get("PHOTOINTEL_BUILD_SHA") or os.environ.get("GITHUB_SHA", "")
         if re.fullmatch(r"[a-f0-9]{40}", sha):
             handle.write("VITE_MANAGE_RELEASE=" + sha + "\n")
     print("Manage browser Sentry ingest:", "configured" if dsn else "disabled")
@@ -294,6 +294,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         }],
         # Cron schedules are adopted and managed by Terraform.
         "vars": {
+            "BUILD_SOURCE_SHA": os.environ.get("PHOTOINTEL_BUILD_SHA") or os.environ.get("GITHUB_SHA", ""),
             "ACCESS_TEAM_DOMAIN": config["access_team_domain"],
             "ACCESS_AUDIENCE": app["aud"],
             "ACCESS_ALLOWED_EMAILS": json.dumps(emails),

@@ -139,3 +139,26 @@ metadata. Unknown sidecars, volumes, custom networking, inline credentials or
 unsupported probes stop adoption and require explicit modeling, rather than
 silently dropping live settings. Split/pinned API traffic blocks a new image
 release until its intended traffic migration is reviewed.
+
+## Compact Release UI
+
+Use `🚀 Release` on main. Its five short fields are `Ação`, `Destino`, `Origem`,
+`SHA opcional` and `Confirmar`. Targets: `api`, `media`, `web`, `manage`, `all`.
+
+- An explicit full SHA wins over the source selector and must be an ancestor of main.
+- `main` selects the workflow's main commit. `last` selects the latest published
+  API image, latest common source of both media images, or deployed Worker source.
+- `build` tests/publishes without deploy; existing immutable images are reused.
+- `deploy` and `build-and-deploy` build missing container images once, then use
+  Terraform. Failed build/verification stops that target before deploy.
+- Worker build/deploy uses the existing unified frontend workflow, filtered to
+  the selected app. Historical apps/packages are restored from the chosen SHA;
+  trusted deployment tooling remains on main. Version publication records its
+  true source SHA, so `last` never mistakes the orchestrator commit for the code.
+- `plan` never builds. With main and blank SHA it reviews infrastructure against
+  existing images. An explicit SHA/last selects the published image to review.
+- API deployment retains the read-only Neon schema gate. No migration is automatic.
+- `all` serializes targets to avoid competing dispatches in the shared TF queue.
+
+Existing workflows remain available for compatibility and specialized operations.
+No token or secret input is added to the release form.

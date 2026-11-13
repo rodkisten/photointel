@@ -1,7 +1,7 @@
 name: "🌐 Frontends · Cloudflare Workers"
 
 run-name: >-
-  ${{ github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Push to {0} ({1})', github.ref_name, github.sha) }}
+  ${{ github.event_name == 'workflow_dispatch' && format('🌐 {0} · {1} · {2}', inputs.action, inputs.app, inputs.request_id || 'manual') || github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Push to {0} ({1})', github.ref_name, github.sha) }}
 
 on:
   push:
@@ -22,6 +22,7 @@ on:
       - 'infra/scripts/deploy_manage.py'
       - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
+      - '.github/actions/frontend-source/**'
       - '.github/workflows/deploy-worker.yml'
   pull_request:
     paths:
@@ -40,8 +41,28 @@ on:
       - 'infra/scripts/deploy_manage.py'
       - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
+      - '.github/actions/frontend-source/**'
       - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
+    inputs:
+      action:
+        description: "Ação"
+        type: choice
+        options: [build, build-and-deploy]
+        default: build-and-deploy
+      app:
+        description: "App"
+        type: choice
+        options: [all, web, manage]
+        default: all
+      sha:
+        description: "SHA opcional"
+        type: string
+        default: ''
+      request_id:
+        description: "ID"
+        type: string
+        default: ''
 
 permissions: {contents: read}
 
@@ -67,12 +88,17 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_APP: ${{ inputs.app || 'all' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            apps='["web","manage"]'
+            case "$REQUESTED_APP" in
+              all) apps='["web","manage"]' ;;
+              web|manage) apps="$(jq -cn --arg app "$REQUESTED_APP" '[$app]')" ;;
+              *) echo '::error::App inválido'; exit 1 ;;
+            esac
           else
             if [[ "$EVENT_NAME" == "pull_request" ]]; then
               base="$(git merge-base "$BASE_SHA" HEAD)"
@@ -85,7 +111,7 @@ jobs:
               apps='["web","manage"]'
             else
               files="$(git diff --name-only "$base" HEAD)"
-              global='^(package(-lock)?\.json|\.prettier(rc\.json|ignore)|packages/|infra/|\.github/(actions/gcp-config/|workflows/deploy-worker\.yml))'
+              global='^(package(-lock)?\.json|\.prettier(rc\.json|ignore)|packages/|infra/|\.github/(actions/(gcp-config|frontend-source)/|workflows/deploy-worker\.yml))'
               if grep -Eq "$global" <<< "$files"; then
                 apps='["web","manage"]'
               else
@@ -111,7 +137,12 @@ jobs:
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v4
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: "📌 Fonte"
+        uses: ./.github/actions/frontend-source
+        with:
+          sha: ${{ inputs.sha }}
+
 
       - name: "🧰 Node.js (${{ matrix.app }})"
         uses: actions/setup-node@v4
@@ -158,7 +189,7 @@ jobs:
     name: "🌐 Publish Photos Worker"
     runs-on: ubuntu-latest
     needs: [detect-changes, preflight]
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'web') }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.action != 'build' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'web') }}
     environment: production
     permissions:
       contents: read
@@ -168,6 +199,12 @@ jobs:
       - name: "📥 Código"
         id: notify_observed_001
         uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: "📌 Fonte"
+        uses: ./.github/actions/frontend-source
+        with:
+          sha: ${{ inputs.sha }}
+
 
       - name: "📱 Live · Início"
         id: notify_live_start
@@ -322,7 +359,7 @@ jobs:
     name: "🧰 Publish Manage Worker"
     runs-on: ubuntu-latest
     needs: [detect-changes, preflight]
-    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'manage') }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.action != 'build' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'manage') }}
     environment: production
     timeout-minutes: 20
     permissions:
@@ -333,7 +370,12 @@ jobs:
     steps:
       - name: "📥 Checkout"
         uses: actions/checkout@v4
-        with: {persist-credentials: false}
+        with: {persist-credentials: false, fetch-depth: 0}
+      - name: "📌 Fonte"
+        uses: ./.github/actions/frontend-source
+        with:
+          sha: ${{ inputs.sha }}
+
 
       - name: "🟢 Node.js"
         uses: actions/setup-node@v4

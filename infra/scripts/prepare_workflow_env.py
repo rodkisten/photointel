@@ -100,7 +100,7 @@ def worker_environment(config: dict) -> dict[str, str]:
         raise WorkflowEnvironmentError(
             "WORKFLOWS__WORKER__DOMAIN must match FRONTEND_ORIGIN, or be omitted"
         )
-    sha = os.environ.get("GITHUB_SHA", "")
+    sha = os.environ.get("PHOTOINTEL_BUILD_SHA") or os.environ.get("GITHUB_SHA", "")
     if not RELEASE_SHA.fullmatch(sha):
         raise WorkflowEnvironmentError("Invalid GitHub release commit SHA")
     # All browser fetches now hit /v1/* on the same origin.

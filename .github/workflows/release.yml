@@ -1,0 +1,85 @@
+name: "🚀 Release"
+run-name: "🚀 ${{ inputs.action || 'check' }} · ${{ inputs.target || 'main' }} · ${{ inputs.source || 'main' }}"
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Ação"
+        type: choice
+        options: [plan, build, deploy, build-and-deploy]
+        default: build-and-deploy
+      target:
+        description: "Destino"
+        type: choice
+        options: [api, media, web, manage, all]
+        default: api
+      source:
+        description: "Origem"
+        type: choice
+        options: [main, last]
+        default: main
+      sha:
+        description: "SHA opcional"
+        type: string
+        default: ''
+      confirm:
+        description: "Confirmar"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release.yml', 'infra/terraform/release_console.py', 'infra/gcp/tests/test_release_console.py']
+permissions:
+  contents: read
+  actions: write
+  id-token: write
+concurrency:
+  group: photointel-release-console
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event_name == 'push'
+    permissions: {contents: read}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest infra.gcp.tests.test_release_console -v
+  release:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target: ${{ inputs.target == 'all' && fromJSON('["api","media","web","manage"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "🚀 Executar"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTION: ${{ inputs.action }}
+          TARGET: ${{ matrix.target }}
+          SOURCE: ${{ inputs.source }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: python3 -m infra.terraform.release_console
+      - if: always()
+        uses: ./.github/actions/gcp-config
+        with: {mode: cleanup}
