@@ -1,35 +1,106 @@
-export const number = (value: unknown) =>
-  typeof value === 'number'
-    ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value)
-    : '—';
-export const date = (value: unknown, time = false) => {
-  if (typeof value !== 'string' || !value) return 'Ainda não registrado';
-  const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat(
-    'pt-BR',
-    time ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'long' },
-  ).format(parsed);
+// --- TYPES & INTERFACES ---
+
+export type GenericObject = Record<string, unknown>;
+
+// --- CONFIGURATION & CONSTANTS ---
+
+export const FORMAT_CONFIG = {
+  LOCALE: 'pt-BR',
+  FALLBACK_EMPTY: '—',
+  FALLBACK_UNREGISTERED: 'Ainda não registrado',
+  BYTE_MULTIPLIER: 1024,
+  BYTE_UNITS: ['B', 'KB', 'MB', 'GB', 'TB'],
+} as const; // 'as const' makes properties readonly and infers exact literal types
+
+// --- FORMATTERS CACHE ---
+// Caching Intl objects prevents significant performance overhead on repeated calls
+
+const CACHED_FORMATTERS = {
+  number: new Intl.NumberFormat(FORMAT_CONFIG.LOCALE, { 
+    maximumFractionDigits: 2 
+  }),
+  dateOnly: new Intl.DateTimeFormat(FORMAT_CONFIG.LOCALE, { 
+    dateStyle: 'long' 
+  }),
+  dateTime: new Intl.DateTimeFormat(FORMAT_CONFIG.LOCALE, { 
+    dateStyle: 'medium', 
+    timeStyle: 'short' 
+  }),
+} as const;
+
+// --- DATA FORMATTING UTILITIES ---
+
+export const number = (value: unknown): string => {
+  return typeof value === 'number'
+    ? CACHED_FORMATTERS.number.format(value)
+    : FORMAT_CONFIG.FALLBACK_EMPTY;
 };
-export function bytes(value: unknown) {
-  if (typeof value !== 'number') return '—';
-  if (value < 1024) return `${value} B`;
-  const unit = Math.min(Math.floor(Math.log(value) / Math.log(1024)), 4);
-  return `${number(value / 1024 ** unit)} ${['B', 'KB', 'MB', 'GB', 'TB'][unit]}`;
+
+export const date = (value: unknown, includeTime: boolean = false): string => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return FORMAT_CONFIG.FALLBACK_UNREGISTERED;
+  }
+
+  const parsed = new Date(value);
+  
+  // Return the raw string if parsing fails, preventing silent data masking
+  if (!Number.isFinite(parsed.getTime())) {
+    return value;
+  }
+
+  return includeTime 
+    ? CACHED_FORMATTERS.dateTime.format(parsed) 
+    : CACHED_FORMATTERS.dateOnly.format(parsed);
+};
+
+export function bytes(value: unknown): string {
+  if (typeof value !== 'number') return FORMAT_CONFIG.FALLBACK_EMPTY;
+  
+  const { BYTE_MULTIPLIER, BYTE_UNITS } = FORMAT_CONFIG;
+  
+  if (value < BYTE_MULTIPLIER) {
+    return `${value} ${BYTE_UNITS[0]}`;
+  }
+
+  // Calculate the appropriate unit index securely
+  const maxUnitIndex = BYTE_UNITS.length - 1;
+  const unitIndex = Math.min(
+    Math.floor(Math.log(value) / Math.log(BYTE_MULTIPLIER)),
+    maxUnitIndex
+  );
+
+  const calculatedValue = value / (BYTE_MULTIPLIER ** unitIndex);
+  
+  return `${number(calculatedValue)} ${BYTE_UNITS[unitIndex]}`;
 }
-export const text = (value: unknown): string =>
-  value === null || value === undefined
-    ? '—'
-    : typeof value === 'object'
-      ? JSON.stringify(value)
-      : String(value);
-export const obj = (value: unknown): Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-export const items = (value: unknown): Record<string, unknown>[] =>
-  Array.isArray(value) ? value.map(obj) : [];
-export const statusNames: Record<string, string> = {
+
+export const text = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return FORMAT_CONFIG.FALLBACK_EMPTY;
+  }
+  return typeof value === 'object'
+    ? JSON.stringify(value)
+    : String(value);
+};
+
+// --- DATA EXTRACTION UTILITIES (STRICT TYPED) ---
+
+// Custom Type Guard to narrow 'unknown' down to a safe GenericObject safely
+export const isPlainObject = (value: unknown): value is GenericObject => {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+};
+
+export const obj = (value: unknown): GenericObject => {
+  return isPlainObject(value) ? value : {};
+};
+
+export const items = (value: unknown): GenericObject[] => {
+  return Array.isArray(value) ? value.map(obj) : [];
+};
+
+// --- STATUS DICTIONARY & TYPE INFERENCE ---
+
+export const STATUS_MAPPING = {
   queued: 'Na fila',
   preparing: 'Preparando',
   running: 'Em execução',
@@ -72,5 +143,20 @@ export const statusNames: Record<string, string> = {
   configured: 'Configurado, não verificado',
   healthy: 'Disponível',
   degraded: 'Requer atenção',
+} as const;
+
+// Automatically generates a Union Type ('queued' | 'preparing' | 'running' | ...)
+export type StatusKey = keyof typeof STATUS_MAPPING;
+
+// Custom Type Guard to safely check if an arbitrary string is a valid StatusKey
+export const isStatusKey = (key: string): key is StatusKey => {
+  return key in STATUS_MAPPING;
 };
-export const statusLabel = (value: unknown) => statusNames[String(value)] ?? text(value);
+
+export const statusLabel = (value: unknown): string => {
+  // Enforces strictly typed dictionary access rather than casting 'String(value)'
+  if (typeof value === 'string' && isStatusKey(value)) {
+    return STATUS_MAPPING[value];
+  }
+  return text(value);
+};
