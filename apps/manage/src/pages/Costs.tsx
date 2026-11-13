@@ -50,6 +50,32 @@ const INFO = [
   { id: 'modal', label: 'Modal', icon: Activity, subtitle: 'Compute, GPU e ajustes do workspace' },
 ] as const;
 
+// These explanations describe common billing drivers, not a verified root cause.
+function costDriver(service: string, sku: string): string {
+  const label = (service + ' ' + sku).toLowerCase();
+  if (/cloud run/.test(label) && /cpu|vcpu/.test(label))
+    return 'CPU faturada: verifique duração, instâncias mínimas, alocação de CPU, concorrência e tentativas de jobs.';
+  if (/cloud run/.test(label) && /memory|ram/.test(label))
+    return 'Memória faturada: confira GiB provisionados, duração das instâncias e jobs, retries e min instances.';
+  if (/cloud run/.test(label) && /request/.test(label))
+    return 'Requisições: confira tráfego, health checks, polling, retries e chamadas entre serviços.';
+  if (/compute engine/.test(label) && /core|cpu|instance/.test(label))
+    return 'VMs: confira tipo, horas ligadas, região, descontos e recursos ociosos.';
+  if (/storage|disk|persistent disk|snapshot/.test(label))
+    return 'Armazenamento: capacidade provisionada e retenção podem gerar cobrança mesmo com a VM desligada.';
+  if (/network|egress|internet|nat|load balanc/.test(label))
+    return 'Rede: confira bytes transferidos, destinos, Cloud NAT, IP externo e balanceadores.';
+  if (/logging|monitoring/.test(label))
+    return 'Observabilidade: confira ingestão de logs, volume de métricas, retenção e consultas.';
+  if (/cloud build/.test(label))
+    return 'Builds: confira duração, classe de máquina, frequência de pipelines e tentativas repetidas.';
+  if (/artifact registry/.test(label))
+    return 'Imagens: confira GB armazenados, versões antigas e tráfego de download.';
+  if (/bigquery/.test(label))
+    return 'BigQuery: confira bytes processados por consultas, armazenamento e frequência de atualização do painel.';
+  return 'Verifique a unidade de consumo, a configuração do recurso e o histórico de uso no console GCP.';
+}
+
 function GcpBreakdown({ source }: { source: CostSource }) {
   const [filter, setFilter] = useState('');
   const [service, setService] = useState('');
@@ -89,7 +115,7 @@ function GcpBreakdown({ source }: { source: CostSource }) {
       className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-2 text-xs text-carbon-100">
       <option value="">Todos os serviços</option>{services.map((name) => <option key={name} value={name}>{name}</option>)}
     </select>
-    <p className="text-[11px] text-carbon-500">{items.length} lançamentos filtrados · {groups.size} grupos. Valores oficiais exportados, sujeitos a atraso.</p>
+    <p className="text-[11px] text-carbon-500">{items.length} lançamentos filtrados · {groups.size} grupos. Valores oficiais exportados, sujeitos a atraso. As causas são hipóteses de investigação, não diagnósticos confirmados.</p>
     {[...groups.entries()].sort((a, b) => totals(b[1]).net - totals(a[1]).net).map(([name, entries]) => {
       const summary = totals(entries);
       const open = expanded === name;
@@ -110,6 +136,7 @@ function GcpBreakdown({ source }: { source: CostSource }) {
             <div className="flex justify-between gap-2"><strong className="break-words text-carbon-200">{item.detail || item.name}</strong>
               <span className="shrink-0 tabular-nums">{money(item.cost, source.currency)}</span></div>
             <p className="mt-1 break-all text-[11px] text-carbon-500">{item.name} · {item.resource || 'Recurso não identificado'} · {item.day || 'Sem data'}</p>
+            <p className="mt-1 text-[11px] leading-4 text-carbon-400">Possíveis causas: {costDriver(item.name, item.detail || '')}</p>
             <p className="text-[11px] text-carbon-500">Uso: {item.usage_amount === null || item.usage_amount === undefined ? 'Indisponível' : item.usage_amount.toLocaleString('pt-BR')} {item.usage_unit || ''} · Bruto: {money(item.gross, source.currency)} · Créditos: {money(item.credits, source.currency)}</p>
           </div>)}
           {entries.length > 200 && <p className="text-carbon-400">Exibindo 200 de {entries.length} lançamentos deste grupo. Refine os filtros.</p>}
