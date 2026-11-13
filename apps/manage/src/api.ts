@@ -243,6 +243,17 @@ export async function api(
     return json({ text: redact(text.slice(-LIMITS.LOG_SLICE_LENGTH)).slice(-LIMITS.LOG_FINAL_LENGTH), truncated: text.length > LIMITS.LOG_FINAL_LENGTH });
   }
 
+  if (path === '/api/github/workflow-catalog' && method === 'GET') {
+    const response = await gh(env, '/actions/workflows?per_page=100') as {
+      workflows?: Array<{ name?: string; path?: string; state?: string }>;
+    };
+    return json({
+      workflows: (response.workflows || [])
+        .filter(item => item.state === 'active' && /^\\.github\\/workflows\\/[A-Za-z0-9_.-]+\\.ya?ml$/.test(item.path || ''))
+        .map(item => ({ name: item.name || item.path?.split('/').pop() || '', path: item.path?.split('/').pop() || '' })),
+    });
+  }
+
   if (path === '/api/github/variables') {
     const scope = url.searchParams.get('scope') || 'environment';
     if (scope !== 'environment' && scope !== 'repository')
