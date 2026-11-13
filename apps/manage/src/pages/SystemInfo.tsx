@@ -116,6 +116,15 @@ export function SystemInfo({ meta }: { meta: Meta }) {
       await queryClient.invalidateQueries({ queryKey: ['gcp-scheduler'] });
     },
   });
+  const [scheduleEdit, setScheduleEdit] = useState<{ name: string; schedule: string } | null>(null);
+  const scheduleMutation = useMutation({
+    mutationFn: (target: { name: string; schedule: string }) =>
+      send('/gcp/scheduler/schedule', { ...target, confirm: target.name }),
+    onSuccess: async () => {
+      setScheduleEdit(null);
+      await queryClient.invalidateQueries({ queryKey: ['gcp-scheduler'] });
+    },
+  });
   const scheduler = useQuery({
     queryKey: ['gcp-scheduler'],
     queryFn: () =>
@@ -378,6 +387,7 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                     {j.schedule} · Último {date(j.lastAttemptTime)}
                   </p>
                 </div>
+                <Button size="sm" variant="outline" onClick={() => setScheduleEdit({ name: j.name.split('/').pop() || '', schedule: j.schedule })}>Horário</Button>
                 <Badge tone={j.state === 'ENABLED' ? 'success' : 'warning'}>{j.state}</Badge>
                 {(j.state === 'ENABLED' || j.state === 'PAUSED') && (
                   <Button size="sm" variant="outline" disabled={schedulerControl.isPending}
@@ -387,6 +397,18 @@ export function SystemInfo({ meta }: { meta: Meta }) {
                 )}
               </div>
             ))}
+          </Card>
+        )}
+        {scheduleMutation.error && <IssueBanner error={scheduleMutation.error} />}
+        {scheduleEdit && (
+          <Card className="space-y-3 p-4">
+            <p className="text-sm font-semibold">Horário · {scheduleEdit.name}</p>
+            <p className="text-xs text-carbon-400">Cron UTC, cinco campos. Alterar o horário não ativa um job pausado.</p>
+            <Input value={scheduleEdit.schedule} onChange={(event) => setScheduleEdit({ ...scheduleEdit, schedule: event.target.value })} aria-label="Expressão cron" />
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setScheduleEdit(null)}>Cancelar</Button>
+              <Button size="sm" disabled={scheduleMutation.isPending || scheduleEdit.schedule.trim().split(/\\s+/).length !== 5} onClick={() => scheduleMutation.mutate(scheduleEdit)}>Salvar horário</Button>
+            </div>
           </Card>
         )}
         {schedulerControl.error && <IssueBanner error={schedulerControl.error} />}
