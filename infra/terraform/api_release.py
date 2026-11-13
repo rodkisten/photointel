@@ -40,16 +40,35 @@ def image_digest(image: str, region: str) -> str:
 
 
 def env_spec(entries: list[dict]) -> list[dict]:
+    """Preserve secret references and report all unsafe plaintext bindings at once."""
     result = []
+    unsafe = []
     for entry in entries:
         name = entry["name"]
         if "valueFrom" in entry:
             ref = entry["valueFrom"]["secretKeyRef"]
             result.append({"name": name, "secret": ref["name"], "version": str(ref["key"])})
+        elif name in SECRET_FIELDS or re.search(r"(?:^|_)(?:PASSWORD|PRIVATE_KEY|API_KEY|SECRET|TOKEN)$", name):
+            unsafe.append(name)
         else:
-            if name in SECRET_FIELDS or re.search(r"(?:^|_)(?:PASSWORD|PRIVATE_KEY|API_KEY|SECRET|TOKEN)$", name):
-                raise ValueError(f"{name} must use a Secret Manager reference before Terraform adoption")
             result.append({"name": name, "value": str(entry.get("value", ""))})
+    if unsafe:
+        names = ", ".join(sorted(set(unsafe)))
+        guidance = (
+            "Terraform adoption blocked: sensitive Cloud Run environment variables "
+            "are configured as literal values, not Secret Manager references. "
+            "A secret existing in Secret Manager is insufficient; the Cloud Run "
+            "service or Job revision must reference it via valueFrom.secretKeyRef. "
+            "Affected variables: " + names + ". "
+            "Inspect the Cloud Run service/Job environment configuration (not secret values). "
+            "Update each binding to reference the existing Secret Manager secret/version "
+            "and ensure its runtime service account can access it. "
+            "No secret values were printed; do not paste them into logs or Terraform."
+        )
+        print("::group::🔐 Terraform · Secret Manager reference check", flush=True)
+        print("::error title=Cloud Run secrets need references::" + guidance, flush=True)
+        print("::endgroup::", flush=True)
+        raise ValueError(guidance)
     if len({e["name"] for e in result}) != len(result):
         raise ValueError("Duplicate runtime environment names")
     return result
