@@ -189,9 +189,9 @@ export function RepositoryVariables() {
               <span>{w.name} <span className="text-carbon-500">({w.path})</span></span>
             </label>)}
           </div>}
-          {triggerMode === 'webhook' && <Input value={webhookUrl} onChange={setWebhookUrl} placeholder="https://..." aria-label="URL do webhook" />}
+          {triggerMode === 'webhook' && <Input value={webhookUrl} onChange={event => setWebhookUrl(event.target.value)} placeholder="https://..." aria-label="URL do webhook" />}
           <p className="text-carbon-500">As regras são salvas no GitHub Environment. Somente workflows com workflow_dispatch podem ser iniciados. Webhooks aceitam apenas o Relay autorizado e nunca recebem valores de variáveis.</p>
-          <Input value={rulesConfirm} onChange={setRulesConfirm} placeholder="confirma" aria-label="Confirmar salvamento de gatilhos" />
+          <Input value={rulesConfirm} onChange={event => setRulesConfirm(event.target.value)} placeholder="confirma" aria-label="Confirmar salvamento de gatilhos" />
           <Button size="sm" disabled={!name || rulesConfirm !== 'confirma' || saveRules.isPending || triggerRules.isPending}
             onClick={() => saveRules.mutate()}>Salvar gatilhos</Button>
           {saveRules.isSuccess && <p className="text-emerald-300">Regras salvas.</p>}
