@@ -107,7 +107,7 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
       AND usage_start_time >= TIMESTAMP(@start)
       AND usage_start_time < TIMESTAMP(@end)
     GROUP BY 1,2,3,4,5,6
-    ORDER BY usage_day DESC, net DESC LIMIT 5000`;
+    ORDER BY usage_day DESC, net DESC LIMIT 5001`;
   const data = await gcp(env, identity,
     'https://bigquery.googleapis.com/bigquery/v2/projects/' + billingProject + '/queries', {
       query, useLegacySql: false, timeoutMs: 10000, maximumBytesBilled: '100000000',
@@ -120,8 +120,8 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
     },
   ) as { jobComplete?: boolean; totalRows?: string; pageToken?: string; rows?: Array<{ f?: Array<{ v?: unknown }> }> };
   if (data.jobComplete !== true) return unavailable('Consulta ainda em execução. Tente novamente; nenhum custo foi presumido como zero.');
-  if (data.pageToken || Number(data.totalRows || 0) > (data.rows || []).length)
-    return unavailable('O detalhamento excedeu uma página do BigQuery. Total incompleto: refine o período antes de confiar na soma.');
+  if ((data.rows || []).length > 5000 || data.pageToken || Number(data.totalRows || 0) > (data.rows || []).length)
+    return unavailable('Mais de 5.000 lançamentos ou resultado paginado: o total seria incompleto. Consulte um período menor antes de confiar na soma.');
   const rows = (data.rows || []).map((x) => x.f?.map((v) => v.v) || []);
   const currencies = [...new Set(rows.map((x) => String(x[2] || 'USD')))];
   if (currencies.length > 1) return unavailable('Exportação contém múltiplas moedas. Separe os valores por moeda.');
