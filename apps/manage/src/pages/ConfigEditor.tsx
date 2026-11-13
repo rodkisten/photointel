@@ -92,6 +92,7 @@ export function ConfigEditor() {
   const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
   const [version, setVersion] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
   const [autoApply, setAutoApply] = useState(true);
   const [lastSave, setLastSave] = useState<{
     plan: ConfigPlan;
@@ -113,11 +114,12 @@ export function ConfigEditor() {
         dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }>;
         blocked?: boolean;
         auto_apply?: boolean;
-      }>('/config', { value: editor, version, auto_apply: autoApply }, 'PUT'),
+      }>('/config', { value: editor, version, auto_apply: autoApply, confirm: autoApply ? confirmText : undefined }, 'PUT'),
     onSuccess: (r) => {
       setVersion(r.version);
       setLastSave(r);
       setConfirm(false);
+      setConfirmText('');
       void qc.invalidateQueries({ queryKey: ['config'] });
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
@@ -482,9 +484,16 @@ export function ConfigEditor() {
         )}
       </Section>
       <RepositoryVariables />
+      {confirm && autoApply && <div role="alert" className="rounded-lg border border-amber-700 p-3 text-xs text-amber-200">
+        Atenção: mudar esta variável acionará {preview?.plan?.workflows.length || 0} workflow(s).
+        Digite <strong>confirma</strong> antes de salvar.
+        <input aria-label="Digite confirma para acionar workflows" value={confirmText}
+          onChange={(event) => setConfirmText(event.target.value)}
+          placeholder="confirma" className="mt-2 w-full rounded border border-carbon-700 bg-carbon-900 p-2" />
+      </div>}
       <ConfirmDialog
-        open={confirm}
-        onOpenChange={setConfirm}
+        open={confirm && (!autoApply || confirmText === 'confirma')}
+        onOpenChange={(open) => { if (!open) { setConfirm(false); setConfirmText(''); } }}
         title="Salvar configuração de produção?"
         description={
           autoApply
@@ -492,7 +501,7 @@ export function ConfigEditor() {
             : 'Isso salva GCP_CONFIG_ENV sem disparar workflows. Será necessário aplicar as alterações manualmente.'
         }
         label="Salvar"
-        onConfirm={() => update.mutate()}
+        onConfirm={() => { if (!autoApply || confirmText === 'confirma') update.mutate(); }}
         busy={update.isPending}
       />
     </div>

@@ -243,6 +243,64 @@ export async function api(
     return json({ text: redact(text.slice(-LIMITS.LOG_SLICE_LENGTH)).slice(-LIMITS.LOG_FINAL_LENGTH), truncated: text.length > LIMITS.LOG_FINAL_LENGTH });
   }
 
+  if (path === '/api/github/workflow-catalog' && method === 'GET') {
+    const response = await gh(env, '/actions/workflows?per_page=100') as {
+      workflows?: Array<{ name?: string; path?: string; state?: string }>;
+    };
+    return json({
+      workflows: (response.workflows || [])
+        .filter(item => item.state === 'active' && /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/.test(item.path || ''))
+        .map(item => ({ name: item.name || item.path?.split('/').pop() || '', path: item.path?.split('/').pop() || '' })),
+    });
+  }
+
+  // Trigger rules are stored as a versioned GitHub Environment variable.
+  // This avoids adding a database and keeps rules auditable in the existing repository.
+  if (path === '/api/github/variable-triggers') {
+    const base = '/environments/' + encodeURIComponent(env.GITHUB_ENVIRONMENT || 'production') + '/variables';
+    const key = 'MANAGE_VARIABLE_TRIGGERS';
+    if (method === 'GET') {
+      const result = await gh(env, base + '/' + key).catch(() => null) as { value?: string } | null;
+      const raw = result?.value || '{}';
+      let rules: unknown = {};
+      try { rules = JSON.parse(raw); } catch { /* legacy invalid value */ }
+      return json({ rules, version: await digest(raw) });
+    }
+    if (method === 'PUT') {
+      const input = await bodyJson<{ rules?: unknown; version?: unknown; confirm?: unknown }>(request, 12000);
+      if (input.confirm !== 'confirma') throw new ApiError(409, 'TRIGGER_CONFIRM', 'Digite confirma para salvar gatilhos.');
+      if (!input.rules || typeof input.rules !== 'object' || Array.isArray(input.rules))
+        throw new ApiError(422, 'TRIGGER_RULES', 'Regras inválidas.');
+      const rules = input.rules as Record<string, unknown>;
+      if (Object.keys(rules).length > 100) throw new ApiError(422, 'TRIGGER_LIMIT', 'Máximo de 100 regras.');
+      const catalog = await gh(env, '/actions/workflows?per_page=100') as {
+        workflows?: Array<{ path?: string; state?: string }>;
+      };
+      const allowed = new Set((catalog.workflows || []).filter(x => x.state === 'active')
+        .map(x => x.path?.split('/').pop()));
+      for (const [name, rule] of Object.entries(rules)) {
+        if (!/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) || name === key || name === 'GCP_CONFIG_ENV')
+          throw new ApiError(422, 'TRIGGER_NAME', 'Nome de variável não autorizado.');
+        if (!rule || typeof rule !== 'object' || Array.isArray(rule)) throw new ApiError(422, 'TRIGGER_RULE', 'Regra inválida.');
+        const entry = rule as { mode?: unknown; workflows?: unknown; webhook?: unknown };
+        if (!['none', 'workflows', 'webhook'].includes(String(entry.mode))) throw new ApiError(422, 'TRIGGER_MODE', 'Modo inválido.');
+        if (entry.mode === 'workflows' && (!Array.isArray(entry.workflows) || entry.workflows.length > 10 ||
+          entry.workflows.some(x => typeof x !== 'string' || !allowed.has(x))))
+          throw new ApiError(422, 'TRIGGER_WORKFLOWS', 'Selecione até dez workflows ativos.');
+        if (entry.mode === 'webhook' && (typeof entry.webhook !== 'string' ||
+          !/^https:\/\/[a-z0-9.-]+(?:\/[a-zA-Z0-9/_-]*)?$/.test(entry.webhook) ||
+          !entry.webhook.startsWith('https://relay.migos.club/')))
+          throw new ApiError(422, 'TRIGGER_WEBHOOK', 'Somente webhooks HTTPS do Relay autorizado são permitidos.');
+      }
+      const current = await gh(env, base + '/' + key).catch(() => null) as { value?: string } | null;
+      const raw = current?.value || '{}';
+      if (input.version !== await digest(raw)) throw new ApiError(409, 'TRIGGER_CONFLICT', 'Regras alteradas; recarregue.');
+      const next = JSON.stringify(rules);
+      await gh(env, current ? base + '/' + key : base, current ? 'PATCH' : 'POST', { name: key, value: next });
+      return json({ ok: true, version: await digest(next) });
+    }
+  }
+
   if (path === '/api/github/variables') {
     const scope = url.searchParams.get('scope') || 'environment';
     if (scope !== 'environment' && scope !== 'repository')
@@ -266,7 +324,7 @@ export async function api(
       });
     }
     if (method === 'PUT') {
-      const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown }>(request, 130_000);
+      const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown; confirm?: unknown }>(request, 130_000);
       const name = input.name;
       const value = input.value;
       if (
@@ -283,6 +341,25 @@ export async function api(
           'VARIABLE_VALUE',
           'Nome ou valor inválido; use Secret Manager para credenciais',
         );
+      // Only this explicit Manage setting may auto-dispatch from the generic variable editor.
+      // All other variables retain manual review, avoiding unexpected billable deploys.
+      const deployManage = name === 'GCP_COST_ALERT_USD';
+      if (deployManage) {
+        if (scope !== 'environment') throw new ApiError(422, 'VARIABLE_SCOPE', 'Limite GCP deve ficar no environment production.');
+        if (!/^\\d+(?:\\.\\d{1,2})?$/.test(value) || Number(value) <= 0 || Number(value) > 100000)
+          throw new ApiError(422, 'COST_ALERT', 'Informe limite positivo em USD, até 100000.');
+        if (input.confirm !== 'confirma')
+          throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: mudar esta variável acionará Manage Deploy. Digite confirma.');
+      }
+      const triggerStore = '/environments/' + encodeURIComponent(env.GITHUB_ENVIRONMENT || 'production') + '/variables/MANAGE_VARIABLE_TRIGGERS';
+      const stored = await gh(env, triggerStore).catch(() => null) as { value?: string } | null;
+      let rule: { mode?: string; workflows?: string[]; webhook?: string } = {};
+      try { rule = (JSON.parse(stored?.value || '{}') as Record<string, typeof rule>)[name] || {}; }
+      catch { /* invalid legacy rule is ignored */ }
+      const hasRule = rule.mode === 'workflows' && !!rule.workflows?.length ||
+        rule.mode === 'webhook' && !!rule.webhook;
+      if (hasRule && input.confirm !== 'confirma')
+        throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: alterar esta variável acionará gatilhos. Digite confirma.');
       const existing = await gh(env, base + '?per_page=100');
       const match = safeList(existing, 'variables').find((entry) => entry.name === name);
       if (match) {
@@ -297,7 +374,48 @@ export async function api(
       console.log(
         JSON.stringify({ event: 'github_variable_updated', name, scope, operator: identity.email }),
       );
-      return json({ ok: true, version: await digest(value) });
+      let dispatch: 'queued' | 'failed' | 'none' = 'none';
+      if (deployManage) {
+        try {
+          await gh(env, '/actions/workflows/manage-deploy.yml/dispatches', 'POST', {
+            ref: 'main', inputs: { mode: 'apply' },
+          });
+          dispatch = 'queued';
+        } catch {
+          dispatch = 'failed';
+        }
+      }
+      const triggered: Array<{ target: string; status: 'queued' | 'failed' }> = [];
+      if (hasRule) {
+        const catalog = await gh(env, '/actions/workflows?per_page=100') as {
+          workflows?: Array<{ path?: string; state?: string }>;
+        };
+        const allowed = new Set((catalog.workflows || []).filter(x => x.state === 'active')
+          .map(x => x.path?.split('/').pop()));
+        if (rule.mode === 'workflows') {
+          for (const workflow of (rule.workflows || []).slice(0, 10)) {
+            if (!allowed.has(workflow)) continue;
+            try {
+              await gh(env, '/actions/workflows/' + encodeURIComponent(workflow) + '/dispatches', 'POST',
+                { ref: 'main' });
+              triggered.push({ target: workflow, status: 'queued' });
+            } catch {
+              triggered.push({ target: workflow, status: 'failed' });
+            }
+          }
+        } else if (rule.mode === 'webhook' && rule.webhook?.startsWith('https://relay.migos.club/')) {
+          // Never transmit variable values, secrets or user-controlled Authorization headers.
+          try {
+            const response = await fetch(rule.webhook, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ event: 'variable.changed', name, scope }),
+              redirect: 'error', signal: AbortSignal.timeout(8000),
+            });
+            triggered.push({ target: 'Relay webhook', status: response.ok ? 'queued' : 'failed' });
+          } catch { triggered.push({ target: 'Relay webhook', status: 'failed' }); }
+        }
+      }
+      return json({ ok: true, version: await digest(value), dispatch, triggered });
     }
   }
 
@@ -331,13 +449,14 @@ export async function api(
   if (method === 'GET' && path === '/api/config') return json(await readConfig(env));
   
   if (method === 'PUT' && path === '/api/config') {
-    const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown }>(request);
+    const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown; confirm?: unknown }>(request);
     if (
       typeof input.value !== 'string' ||
       typeof input.version !== 'string' ||
       (input.auto_apply !== undefined && typeof input.auto_apply !== 'boolean')
     )
       throw new ApiError(422, 'CONFIG_FIELDS', 'Informe value, version e auto_apply booleano');
+    if (input.auto_apply !== false && input.confirm !== 'confirma') throw new ApiError(409, 'CONFIG_CONFIRM', 'Digite confirma para autorizar workflows.');
     validateConfig(input.value);
     const current = await readConfig(env);
     if (input.version !== current.version)

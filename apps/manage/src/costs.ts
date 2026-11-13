@@ -149,6 +149,101 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
   };
 }
 
+
+type BillingGroup = 'service' | 'sku' | 'resource' | 'day';
+const GROUP_SQL: Record<BillingGroup, string> = {
+  service: 'service.description',
+  sku: 'CONCAT(service.description, \' / \', sku.description)',
+  resource: "COALESCE(resource.name, resource.global_name, '(sem recurso)')",
+  day: "FORMAT_TIMESTAMP('%Y-%m-%d', usage_start_time, 'America/Sao_Paulo')",
+};
+
+/** Aggregation stays inside BigQuery: never page a partial result and sum it as the bill. */
+async function billingGroups(env: Env, identity: Identity, url: URL): Promise<Response> {
+  const table = env.GCP_BILLING_TABLE || '';
+  if (!/^[a-z][a-z0-9-]{4,62}\\.[A-Za-z_][A-Za-z0-9_]{0,1023}\\.gcp_billing_export_(?:resource_)?v1_[A-Za-z0-9_]+$/.test(table))
+    throw new ApiError(422, 'BILLING_TABLE', 'Configure uma tabela de exportação de billing válida.');
+  const group = url.searchParams.get('group') || 'service';
+  if (!Object.prototype.hasOwnProperty.call(GROUP_SQL, group))
+    throw new ApiError(422, 'BILLING_GROUP', 'Agrupamento inválido.');
+  if (group === 'resource' && !table.includes('.gcp_billing_export_resource_v1_'))
+    throw new ApiError(422, 'BILLING_RESOURCE', 'Recursos exigem a exportação detalhada.');
+  const month = monthWindow(url.searchParams.get('month') || new Date().toISOString().slice(0, 7));
+  const page = Number(url.searchParams.get('page') || '1');
+  const size = Number(url.searchParams.get('size') || '20');
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || ![10, 20, 50].includes(size))
+    throw new ApiError(422, 'BILLING_PAGE', 'Página ou tamanho inválido.');
+  const expression = GROUP_SQL[group as BillingGroup];
+  const query = `WITH grouped AS (
+    SELECT ${expression} AS name, ANY_VALUE(currency) AS currency,
+      ROUND(SUM(cost), 6) AS gross,
+      ROUND(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 6) AS credits,
+      ROUND(SUM(cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 6) AS net
+    FROM \`${table}\`
+    WHERE project.id = @project AND usage_start_time >= TIMESTAMP(@start)
+      AND usage_start_time < TIMESTAMP(@end)
+    GROUP BY 1
+  )
+  SELECT name, currency, gross, credits, net, COUNT(*) OVER() AS group_count,
+    SUM(net) OVER() AS all_groups_net
+  FROM grouped ORDER BY net DESC, name
+  LIMIT @limit OFFSET @offset`;
+  const data = await gcp(env, identity, 'https://bigquery.googleapis.com/bigquery/v2/projects/' + table.split('.')[0] + '/queries', {
+    query, useLegacySql: false, timeoutMs: 10000, maximumBytesBilled: '100000000',
+    parameterMode: 'NAMED',
+    queryParameters: [
+      { name: 'project', parameterType: { type: 'STRING' }, parameterValue: { value: env.GCP_PROJECT_ID || 'photointel' } },
+      { name: 'start', parameterType: { type: 'STRING' }, parameterValue: { value: month.start } },
+      { name: 'end', parameterType: { type: 'STRING' }, parameterValue: { value: month.end } },
+      { name: 'limit', parameterType: { type: 'INT64' }, parameterValue: { value: String(size) } },
+      { name: 'offset', parameterType: { type: 'INT64' }, parameterValue: { value: String((page - 1) * size) } },
+    ],
+  }) as { jobComplete?: boolean; rows?: Array<{ f?: Array<{ v?: unknown }> }>; pageToken?: string };
+  if (!data.jobComplete || data.pageToken)
+    return json({ status: 'pending', items: [], note: 'Consulta ainda em execução ou resultado incompleto.' }, 202);
+  const rows = (data.rows || []).map((r) => r.f?.map((v) => v.v) || []);
+  return json({
+    status: rows.length ? 'ok' : 'empty', group, page, size,
+    count: Number(rows[0]?.[5] || 0), total: asNumber(rows[0]?.[6]),
+    currency: rows[0]?.[1] || 'USD',
+    items: rows.map((r) => ({
+      name: String(r[0]), currency: String(r[1]), gross: asNumber(r[2]),
+      credits: asNumber(r[3]), cost: asNumber(r[4]),
+    })),
+    note: rows.length ? 'Valores faturados, sujeitos a atraso de exportação.' : 'Sem lançamentos neste período ou página.',
+  });
+}
+
+/** Recent Cloud Run request counts are operational metrics, NOT billed costs. */
+async function monitoringUsage(env: Env, identity: Identity): Promise<Response> {
+  const project = env.GCP_PROJECT_ID || 'photointel';
+  if (project !== 'photointel') throw new ApiError(422, 'GCP_SCOPE', 'Projeto inválido.');
+  const end = new Date();
+  const start = new Date(end.getTime() - 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    filter: 'metric.type="run.googleapis.com/request_count" AND resource.type="cloud_run_revision"',
+    'interval.startTime': start.toISOString(),
+    'interval.endTime': end.toISOString(),
+    'aggregation.alignmentPeriod': '300s',
+    'aggregation.perSeriesAligner': 'ALIGN_SUM',
+    'pageSize': '100',
+  });
+  const result = await gcp(env, identity,
+    'https://monitoring.googleapis.com/v3/projects/' + project + '/timeSeries?' + params) as {
+      timeSeries?: Array<{ resource?: { labels?: { service_name?: string } };
+        points?: Array<{ value?: { int64Value?: string } }> }>; nextPageToken?: string;
+    };
+  const services = (result.timeSeries || []).map((series) => ({
+    name: series.resource?.labels?.service_name || 'Cloud Run',
+    requests: (series.points || []).reduce((sum, p) => sum + (Number(p.value?.int64Value || 0) || 0), 0),
+  }));
+  return json({
+    checked_at: end.toISOString(), window_minutes: 60, status: result.nextPageToken ? 'partial' : 'ok',
+    services, total_requests: services.reduce((sum, x) => sum + x.requests, 0),
+    note: 'Requisições Cloud Run nos últimos 60 minutos. Não representam custo faturado.',
+  });
+}
+
 async function cloudflareCosts(env: Env, start: string, end: string): Promise<Source> {
   if (!env.CLOUDFLARE_API_TOKEN || !env.CLOUDFLARE_ACCOUNT_ID)
     return unavailable('Token ou account ID do Cloudflare ausente.', 'unconfigured');
@@ -240,6 +335,8 @@ export async function costRoute(request: Request, env: Env, identity: Identity):
   const url = new URL(request.url);
   const path = url.pathname;
   if (request.method !== 'GET') return null;
+  if (path === '/api/costs/groups') return billingGroups(env, identity, url);
+  if (path === '/api/costs/monitoring') return monitoringUsage(env, identity);
   if (path === '/api/costs/runs') {
     const raw = url.searchParams.get('ids') || '';
     if (!/^\d{1,16}(,\d{1,16}){0,39}$/.test(raw))
@@ -280,6 +377,14 @@ export async function costRoute(request: Request, env: Env, identity: Identity):
     providers, total_usd: known.length ? round(known.reduce((sum, x) => sum + (x.total || 0), 0)) : null,
     complete: known.length === billed.length && providers.cloudflare.status === 'ok' &&
       providers.cloudflare.total !== null,
+    alert: (() => {
+      const limit = asNumber(env.GCP_COST_ALERT_USD);
+      const actual = providers.gcp.total;
+      return limit !== null && limit > 0 && providers.gcp.status === 'ok' && actual !== null
+        ? { threshold_usd: limit, actual_usd: actual, exceeded: providers.gcp.currency === 'USD' && actual >= limit,
+            supported: providers.gcp.currency === 'USD' }
+        : null;
+    })(),
     note: 'Total parcial: Cloudflare Workers não possui custo faturado por script nesta API. Outras fontes podem faltar.',
   });
 }

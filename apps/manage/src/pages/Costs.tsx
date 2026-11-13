@@ -23,6 +23,7 @@ export type CostsResponse = {
   providers: Record<'github' | 'gcp' | 'cloudflare' | 'modal', CostSource>;
   total_usd: number | null;
   complete: boolean;
+  alert?: { threshold_usd: number; actual_usd: number; exceeded: boolean; supported: boolean } | null;
   note: string;
 };
 
@@ -147,6 +148,86 @@ function GcpBreakdown({ source }: { source: CostSource }) {
   </div>;
 }
 
+type GroupResponse = {
+  status: 'ok' | 'empty' | 'pending';
+  group?: string; page?: number; size?: number; count?: number;
+  currency?: string; total?: number | null;
+  items: Array<{ name: string; cost: number | null; gross: number | null; credits: number | null }>;
+  note?: string;
+};
+type MonitoringResponse = {
+  status: 'ok' | 'partial'; checked_at: string; total_requests: number;
+  services: Array<{ name: string; requests: number }>; note: string;
+};
+
+function BillingAnalytics({ month }: { month: string }) {
+  const [group, setGroup] = useState('service');
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(20);
+  const query = useQuery({
+    queryKey: ['billing-groups', month, group, page, size],
+    queryFn: () => api<GroupResponse>('/costs/groups?month=' + month + '&group=' + group + '&page=' + page + '&size=' + size),
+    retry: false, staleTime: 5 * 60_000,
+  });
+  const monitoring = useQuery({
+    queryKey: ['costs-monitoring'],
+    queryFn: () => api<MonitoringResponse>('/costs/monitoring'),
+    retry: false, refetchInterval: 5 * 60_000,
+  });
+  const rows = query.data?.items || [];
+  const max = Math.max(0, ...rows.map((item) => Math.abs(item.cost || 0)));
+  const pages = Math.max(1, Math.ceil((query.data?.count || 0) / size));
+  return <div className="space-y-4">
+    <Section title="Faturamento detalhado" detail="Agrupado no BigQuery, com paginação no servidor">
+      <div className="space-y-3 rounded-xl border border-carbon-800 p-3">
+        <div className="flex flex-wrap gap-2">
+          <select aria-label="Agrupamento BigQuery" value={group}
+            onChange={(event) => { setGroup(event.target.value); setPage(1); }}
+            className="min-w-0 flex-1 rounded-lg bg-carbon-900 p-2 text-xs text-carbon-100">
+            <option value="service">Serviço</option><option value="sku">SKU</option>
+            <option value="resource">Recurso</option><option value="day">Dia</option>
+          </select>
+          <select aria-label="Itens por página BigQuery" value={size}
+            onChange={(event) => { setSize(Number(event.target.value)); setPage(1); }}
+            className="rounded-lg bg-carbon-900 p-2 text-xs text-carbon-100">
+            <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
+          </select>
+        </div>
+        {query.isPending ? <Spinner /> : query.error ? <IssueBanner error={query.error} /> :
+          <div className="space-y-2">
+            {query.data?.note && <p className="text-xs text-carbon-500">{query.data.note}</p>}
+            {rows.map((item) => <div key={item.name} className="space-y-1 border-b border-carbon-800 py-2 last:border-0">
+              <div className="flex justify-between gap-2 text-xs">
+                <span className="min-w-0 break-words">{item.name}</span>
+                <strong className="shrink-0 tabular-nums">{money(item.cost, query.data?.currency)}</strong>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-carbon-800" role="img" aria-label={'Proporção do custo de ' + item.name}>
+                <div className="h-full rounded-full bg-carbon-300" style={{ width: (max ? Math.abs(item.cost || 0) / max * 100 : 0) + '%' }} />
+              </div>
+              <p className="text-[11px] text-carbon-500">Bruto {money(item.gross, query.data?.currency)} · Créditos {money(item.credits, query.data?.currency)}</p>
+            </div>)}
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border border-carbon-700 p-2 disabled:opacity-40">Anterior</button>
+              <span>{page} / {pages} · {query.data?.count || 0} grupos</span>
+              <button type="button" disabled={page >= pages} onClick={() => setPage(page + 1)} className="rounded border border-carbon-700 p-2 disabled:opacity-40">Próxima</button>
+            </div>
+          </div>}
+      </div>
+    </Section>
+    <Section title="Operação recente" detail="Cloud Monitoring, separado do faturamento">
+      <div className="space-y-2 rounded-xl border border-carbon-800 p-3">
+        {monitoring.isPending ? <Spinner /> : monitoring.error ? <IssueBanner error={monitoring.error} /> :
+          <><p className="text-sm font-semibold">{monitoring.data?.total_requests.toLocaleString('pt-BR')} requisições na última hora</p>
+            {monitoring.data?.services.map((service, index) => <p key={service.name + index} className="flex justify-between gap-2 text-xs">
+              <span className="break-all">{service.name}</span><span>{service.requests.toLocaleString('pt-BR')}</span>
+            </p>)}
+            <p className="text-[11px] text-carbon-500">{monitoring.data?.note}{monitoring.data?.status === 'partial' ? ' Resultado parcial.' : ''}</p>
+          </>}
+      </div>
+    </Section>
+  </div>;
+}
+
 function SourceDetails({ source, id }: { source: CostSource; id: string }) {
   if (source.status !== 'ok') {
     return <p className="text-xs leading-5 text-carbon-400">{source.note || 'Fonte indisponível.'}</p>;
@@ -261,6 +342,15 @@ export function CostsPage() {
                 não inclui valores não informados, impostos ou conversões cambiais.
               </p>
             </Card>
+            {data.alert && <Card className="space-y-2 p-4">
+              <p className="text-sm font-medium">Alerta mensal GCP</p>
+              <p className="text-xs text-carbon-400">{money(data.alert.actual_usd)} / {money(data.alert.threshold_usd)}</p>
+              <Badge tone={data.alert.exceeded ? 'warning' : 'success'}>
+                {data.alert.supported ? data.alert.exceeded ? 'Limite de aviso ultrapassado' : 'Abaixo do limite de aviso' : 'Moeda não comparável'}
+              </Badge>
+              <p className="text-[11px] text-carbon-500">Aviso visual, não bloqueia serviços nem substitui orçamento do Cloud Billing.</p>
+            </Card>}
+            <BillingAnalytics month={month} />
             <div className="grid gap-3 sm:grid-cols-2">
               {INFO.map(({ id, label, icon: Icon, subtitle }) => {
                 const source = data.providers[id];

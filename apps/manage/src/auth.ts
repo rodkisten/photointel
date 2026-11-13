@@ -47,6 +47,8 @@ export interface Env {
   GITHUB_BILLING_SCOPE?: string;
   GITHUB_ACTIONS_INCLUDED_USD?: string;
   GCP_BILLING_TABLE?: string;
+  /** Optional monthly GCP billing alert in USD, not a hard spending cap. */
+  GCP_COST_ALERT_USD?: string;
   MODAL_BILLING_URL?: string;
   MODAL_BILLING_TOKEN?: string;
   PHOTOINTEL_API_ORIGIN?: string;
