@@ -82,6 +82,8 @@ function GcpBreakdown({ source }: { source: CostSource }) {
   const [service, setService] = useState('');
   const [group, setGroup] = useState<'service' | 'resource' | 'sku' | 'day'>('service');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
   const items = source.items.filter((item) =>
     (!service || item.name === service) &&
     [item.name, item.detail, item.resource, item.day].some((value) =>
@@ -93,7 +95,12 @@ function GcpBreakdown({ source }: { source: CostSource }) {
       : group === 'sku' ? item.detail || 'SKU desconhecida' : item.day || 'Dia desconhecido';
     groups.set(key, [...(groups.get(key) || []), item]);
   }
-  const totals = (entries: typeof items) => ({
+  const sortedGroups = [...groups.entries()].sort((a, b) =>
+    b[1].reduce((sum, item) => sum + (item.cost || 0), 0) - a[1].reduce((sum, item) => sum + (item.cost || 0), 0));
+  const pageCount = Math.max(1, Math.ceil(sortedGroups.length / rowsPerPage));
+  const currentPage = Math.min(page, pageCount);
+  const visibleGroups = sortedGroups.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const totals = (entries: typeof items) => ({ 
     net: entries.reduce((sum, item) => sum + (item.cost || 0), 0),
     gross: entries.reduce((sum, item) => sum + (item.gross || 0), 0),
     credits: entries.reduce((sum, item) => sum + (item.credits || 0), 0),
@@ -101,23 +108,23 @@ function GcpBreakdown({ source }: { source: CostSource }) {
   return <div className="space-y-3">
     <div className="grid grid-cols-2 gap-2">
       <label className="text-xs text-carbon-400">Buscar serviço, SKU, recurso ou dia
-        <input aria-label="Filtrar lançamentos GCP" value={filter} onChange={(event) => setFilter(event.target.value)}
+        <input aria-label="Filtrar lançamentos GCP" value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1); }}
           placeholder="Buscar custos..." className="mt-1 w-full min-w-0 rounded-lg border border-carbon-700 bg-carbon-900 p-2 text-carbon-100" />
       </label>
       <label className="text-xs text-carbon-400">Agrupar por
-        <select aria-label="Agrupar custos GCP" value={group} onChange={(event) => { setGroup(event.target.value as typeof group); setExpanded(null); }}
+        <select aria-label="Agrupar custos GCP" value={group} onChange={(event) => { setGroup(event.target.value as typeof group); setExpanded(null); setPage(1); }}
           className="mt-1 w-full rounded-lg border border-carbon-700 bg-carbon-900 p-2 text-carbon-100">
           <option value="service">Serviço</option><option value="resource">Recurso</option>
           <option value="sku">SKU</option><option value="day">Dia</option>
         </select>
       </label>
     </div>
-    <select aria-label="Serviço GCP" value={service} onChange={(event) => setService(event.target.value)}
+    <select aria-label="Serviço GCP" value={service} onChange={(event) => { setService(event.target.value); setPage(1); }}
       className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-2 text-xs text-carbon-100">
       <option value="">Todos os serviços</option>{services.map((name) => <option key={name} value={name}>{name}</option>)}
     </select>
     <p className="text-[11px] text-carbon-500">{items.length} lançamentos filtrados · {groups.size} grupos. Valores oficiais exportados, sujeitos a atraso. As causas são hipóteses de investigação, não diagnósticos confirmados.</p>
-    {[...groups.entries()].sort((a, b) => totals(b[1]).net - totals(a[1]).net).map(([name, entries]) => {
+    {visibleGroups.map(([name, entries]) => {
       const summary = totals(entries);
       const open = expanded === name;
       return <div key={name} className="rounded-lg border border-carbon-800">
@@ -144,6 +151,18 @@ function GcpBreakdown({ source }: { source: CostSource }) {
         </div>}
       </div>;
     })}
+    {sortedGroups.length > 0 && <nav aria-label="Paginação dos custos GCP" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-carbon-800 p-2 text-xs">
+      <label className="flex items-center gap-2">Grupos por página
+        <select aria-label="Grupos por página" value={rowsPerPage} onChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(1); }} className="rounded bg-carbon-900 p-2 text-carbon-100">
+          <option value={10}>10</option><option value={20}>20</option><option value={50}>50</option>
+        </select>
+      </label>
+      <div className="flex items-center gap-2">
+        <button type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setExpanded(null); }} className="rounded border border-carbon-700 px-3 py-2 disabled:opacity-40">Anterior</button>
+        <span className="tabular-nums">{currentPage} / {pageCount}</span>
+        <button type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setExpanded(null); }} className="rounded border border-carbon-700 px-3 py-2 disabled:opacity-40">Próxima</button>
+      </div>
+    </nav>}
     {!items.length && <Empty title="Nenhum lançamento para os filtros selecionados" />}
   </div>;
 }
