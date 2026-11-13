@@ -19,11 +19,25 @@ export function RepositoryVariables() {
   const [version, setVersion] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState('');
   const [dispatch, setDispatch] = useState<'queued' | 'failed' | 'none'>('none');
+  const [triggerResults, setTriggerResults] = useState<Array<{ target: string; status: string }>>([]);
   const [mode, setMode] = useState<'code' | 'fields'>('code');
   const [triggerMode, setTriggerMode] = useState<'none' | 'workflows' | 'webhook'>('none');
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [tab, setTab] = useState<'variables' | 'triggers'>('variables');
+  const triggerRules = useQuery({
+    queryKey: ['variable-triggers'],
+    queryFn: () => api<{ rules: Record<string, { mode: 'none' | 'workflows' | 'webhook'; workflows?: string[]; webhook?: string }>; version: string }>('/github/variable-triggers'),
+    retry: false,
+  });
+  const [rulesConfirm, setRulesConfirm] = useState('');
+  const saveRules = useMutation({
+    mutationFn: () => send('/github/variable-triggers', {
+      rules: { ...(triggerRules.data?.rules || {}), [name]: { mode: triggerMode, workflows: selectedWorkflows, webhook: webhookUrl } },
+      version: triggerRules.data?.version, confirm: rulesConfirm,
+    }, 'PUT'),
+    onSuccess: () => { setRulesConfirm(''); void client.invalidateQueries({ queryKey: ['variable-triggers'] }); },
+  });
   const workflows = useQuery({
     queryKey: ['workflow-catalog'],
     queryFn: () => api<{ workflows: Array<{ name: string; path: string }> }>('/github/workflow-catalog'),
@@ -35,6 +49,8 @@ export function RepositoryVariables() {
     retry: false,
   });
 
+  const activeRule = triggerRules.data?.rules[name];
+  useEffect(() => { setTriggerMode(activeRule?.mode || 'none'); setSelectedWorkflows(activeRule?.workflows || []); setWebhookUrl(activeRule?.webhook || ''); }, [name, activeRule?.mode, triggerRules.data?.version]);
   const existing = useMemo(
     () => variables.data?.items.find((item) => item.name === selected),
     [variables.data, selected],
@@ -46,14 +62,15 @@ export function RepositoryVariables() {
     setVersion(existing.version);
   }, [existing]);
   const save = useMutation({
-    mutationFn: () => send<{ dispatch: 'queued' | 'failed' | 'none' }>('/github/variables?scope=' + scope, { name, value, version, confirm: confirmation }, 'PUT'),
+    mutationFn: () => send<{ dispatch: 'queued' | 'failed' | 'none'; triggered?: Array<{ target: string; status: string }> }>('/github/variables?scope=' + scope, { name, value, version, confirm: confirmation }, 'PUT'),
     onSuccess: (result) => {
       setDispatch(result.dispatch);
+      setTriggerResults(result.triggered || []);
       setConfirmation('');
       void client.invalidateQueries({ queryKey: ['github-variables', scope] });
     },
   });
-  const triggersManage = name === 'GCP_COST_ALERT_USD' && scope === 'environment';
+  const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
   return (
@@ -173,7 +190,12 @@ export function RepositoryVariables() {
             </label>)}
           </div>}
           {triggerMode === 'webhook' && <Input value={webhookUrl} onChange={setWebhookUrl} placeholder="https://..." aria-label="URL do webhook" />}
-          <p className="text-carbon-500">Seleção local de prévia. Os gatilhos adicionais não serão disparados até a configuração persistente e a confirmação no servidor estarem prontas.</p>
+          <p className="text-carbon-500">As regras são salvas no GitHub Environment. Somente workflows com workflow_dispatch podem ser iniciados. Webhooks aceitam apenas o Relay autorizado e nunca recebem valores de variáveis.</p>
+          <Input value={rulesConfirm} onChange={setRulesConfirm} placeholder="confirma" aria-label="Confirmar salvamento de gatilhos" />
+          <Button size="sm" disabled={!name || rulesConfirm !== 'confirma' || saveRules.isPending || triggerRules.isPending}
+            onClick={() => saveRules.mutate()}>Salvar gatilhos</Button>
+          {saveRules.isSuccess && <p className="text-emerald-300">Regras salvas.</p>}
+          {saveRules.error && <IssueBanner error={saveRules.error} />}
         </div>}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Badge tone={unchanged ? 'success' : 'warning'}>{unchanged ? 'Sincronizado' : 'Não salvo'}</Badge>
@@ -185,6 +207,9 @@ export function RepositoryVariables() {
             {save.isPending ? 'Salvando…' : selected ? 'Salvar variável' : 'Criar variável'}
           </Button>
         </div>
+        {triggerResults.map((result, index) => <p key={index} className="text-xs text-carbon-300">
+          {result.target}: {result.status === 'queued' ? 'Solicitado' : 'Falhou'}
+        </p>)}
         {save.isSuccess && (
           <p className="text-xs text-emerald-300">
             Variável salva. {dispatch === 'queued' ? 'Manage Deploy solicitado.' : dispatch === 'failed' ? 'Atenção: falhou o disparo do Manage Deploy; execute manualmente.' : 'Reabra a lista para conferir a versão atual.'}
