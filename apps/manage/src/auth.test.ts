@@ -30,7 +30,7 @@ describe('Auth & Utilities', () => {
 
     it('redacts sensitive keys (password, token, secret, cookie)', () => {
       const log = 'DB connection failed: password=supersecret, user=admin';
-      expect(redact(log)).toBe('DB connection failed: password=[redacted] user=admin');
+      expect(redact(log)).toBe('DB connection failed: password=[redacted], user=admin');
       
       const jsonLog = { authorization: 'Bearer xyz', other: 'public' };
       expect(redact(jsonLog)).toContain('authorization":"[redacted]');
