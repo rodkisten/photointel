@@ -221,7 +221,7 @@ reconcile_terraform_identity() {
     "--member=$principal" --role=roles/iam.workloadIdentityUser --condition=None --format=none
   # Scoped state access; no bucket administration or public permissions.
   change storage buckets add-iam-policy-binding "gs://$state_bucket" \
-    "--member=serviceAccount:$email" --role=roles/storage.objectAdmin --format=none
+    "--member=serviceAccount:$email" --role=roles/storage.objectAdmin --condition=None --format=none
   # Terraform resources currently defined in production. IAM is additive.
   local role
   for role in roles/iam.serviceAccountAdmin roles/resourcemanager.projectIamAdmin \
@@ -253,8 +253,7 @@ if [[ "$MODE" == permissions ]]; then
   reconcile_manage_federation
   reconcile_fcm_permissions
   reconcile_media_build_iam
-  reconcile_bootstrap_wif_condition
-  reconcile_terraform_identity
+  # WIF and Terraform identity provisioning belong to full bootstrap apply.
   log "✅ Runtime IAM, FCM permissions, and Manage federation reconciled."
   exit 0
 fi

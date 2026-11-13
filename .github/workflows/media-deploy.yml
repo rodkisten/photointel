@@ -11,10 +11,10 @@ on:
         default: plan
         options: [plan, build, jobs-deploy, build-and-deploy]
       image_sha:
-        description: "Existing image commit SHA (40 lowercase hex; jobs-deploy only; blank uses workflow commit)"
+        description: "Existing image commit SHA (jobs-deploy only; pinned to last published media build)"
         type: string
         required: false
-        default: ''
+        default: f6b667c5da7d49ee6d1d059ae8dd4f8159a477cc
       confirm_charges:
         description: "Authorize build or deployment charges (not required for plan)"
         type: boolean
@@ -49,11 +49,14 @@ jobs:
           WORKFLOW_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ -n "$REQUESTED_SHA" && "$ACTION" != jobs-deploy ]]; then
+          if [[ -n "$REQUESTED_SHA" && "$ACTION" != jobs-deploy && "$REQUESTED_SHA" != f6b667c5da7d49ee6d1d059ae8dd4f8159a477cc ]]; then
             echo "::error::image_sha is only accepted for jobs-deploy."
             exit 1
           fi
-          sha="${REQUESTED_SHA:-$WORKFLOW_SHA}"
+          sha="$WORKFLOW_SHA"
+          if [[ "$ACTION" == jobs-deploy ]]; then
+            sha="${REQUESTED_SHA:-$WORKFLOW_SHA}"
+          fi
           if [[ ! "$sha" =~ ^[a-f0-9]{40}$ ]]; then
             echo "::error::A full lowercase Git commit SHA is required."
             exit 1

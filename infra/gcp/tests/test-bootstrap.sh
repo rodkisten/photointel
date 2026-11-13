@@ -25,7 +25,7 @@ case "$*" in
     exit 0 ;;
   "auth list"*) echo fake-admin@testing.invalid; exit 0 ;;
   "services list"*)
-    printf '%s\n' run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
+    printf '%s\n' compute.googleapis.com bigquery.googleapis.com run.googleapis.com cloudscheduler.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
     if [[ "${FAKE_FCM_ENABLED:-false}" == true ]]; then printf '%s\n' fcm.googleapis.com; fi
     exit 0 ;;
   "artifacts repositories describe "*"--format=value(format)"*) echo DOCKER; exit 0 ;;
@@ -45,7 +45,7 @@ FAKE
 chmod 700 "$TMP/gcloud"
 export PATH="$TMP:$PATH" GCLOUD_TRACE="$TMP/trace"
 export GCP_CONFIG_FILE="$ROOT/infra/gcp/config.example.json" CONFIRM_PROJECT=replace-project-id
-export EXPECTED_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main']"
+export EXPECTED_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main']"
 : > "$GCLOUD_TRACE"
 BOOTSTRAP_MODE=plan bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/plan"
 if grep -Eq '(^| )create | add-iam-policy-binding | services enable ' "$GCLOUD_TRACE"; then
@@ -60,6 +60,7 @@ for attempt in 1 2; do
   grep -Fq -- "--attribute-condition=$EXPECTED_WIF_CONDITION" "$GCLOUD_TRACE"
   grep -q 'iam service-accounts add-iam-policy-binding' "$GCLOUD_TRACE"
   for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/bigquery.jobUser roles/bigquery.dataViewer projects/replace-project-id/roles/photointelManageInfrastructure \
     roles/secretmanager.viewer roles/secretmanager.secretAccessor \
     roles/secretmanager.secretVersionAdder projects/replace-project-id/roles/photointelManageSecretCreator; do
     grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
@@ -68,7 +69,7 @@ for attempt in 1 2; do
   done
   if grep -F "projects add-iam-policy-binding" "$GCLOUD_TRACE" |
       grep -F "photointel-manage@" |
-      grep -Ev -- "--role=(roles/(run.viewer|logging.viewer|cloudscheduler.viewer|secretmanager.viewer|secretmanager.secretAccessor|secretmanager.secretVersionAdder)|projects/replace-project-id/roles/photointelManageSecretCreator)" >/dev/null; then
+      grep -Ev -- "--role=(roles/(run.viewer|logging.viewer|cloudscheduler.viewer|bigquery.jobUser|bigquery.dataViewer|secretmanager.viewer|secretmanager.secretAccessor|secretmanager.secretVersionAdder)|projects/replace-project-id/roles/photointelManage(SecretCreator|Infrastructure))" >/dev/null; then
     echo "ERROR: Manage service account received an unexpected IAM role" >&2; exit 1
   fi
   for role in roles/compute.instanceAdmin.v1 roles/compute.securityAdmin roles/iam.roleAdmin; do
@@ -136,16 +137,22 @@ grep -F 'secrets add-iam-policy-binding photointel-sentry-build-token' "$GCLOUD_
 grep -F 'projects add-iam-policy-binding replace-project-id' "$GCLOUD_TRACE" |
     grep -F -- '--member=serviceAccount:photointel-api@replace-project-id.iam.gserviceaccount.com' |
     grep -Fq -- '--role=roles/logging.viewer'
-if grep -Eq 'services enable|artifacts |storage |iam service-accounts (add-iam-policy-binding|create)|secrets create|providers update-oidc' "$GCLOUD_TRACE"; then
+# IAM repair retains the existing, narrowly scoped builder actAs grant.
+grep -F 'iam service-accounts add-iam-policy-binding photointel-builder@replace-project-id.iam.gserviceaccount.com' "$GCLOUD_TRACE" |
+    grep -F -- '--member=serviceAccount:photointel-deployer@replace-project-id.iam.gserviceaccount.com' |
+    grep -Fq -- '--role=roles/iam.serviceAccountUser --condition=None'
+if grep -Ev '^iam service-accounts add-iam-policy-binding photointel-builder@replace-project-id\.iam\.gserviceaccount\.com ' "$GCLOUD_TRACE" |
+    grep -Eq 'services enable|artifacts |storage |iam service-accounts (add-iam-policy-binding|create)|secrets create|providers update-oidc'; then
     echo "ERROR: IAM-only mode attempted broader provisioning" >&2; exit 1
 fi
 for role in roles/run.viewer roles/logging.viewer roles/cloudscheduler.viewer \
+    roles/bigquery.jobUser roles/bigquery.dataViewer projects/replace-project-id/roles/photointelManageInfrastructure \
     roles/secretmanager.viewer roles/secretmanager.secretAccessor \
     roles/secretmanager.secretVersionAdder projects/replace-project-id/roles/photointelManageSecretCreator; do
   grep -F "projects add-iam-policy-binding replace-project-id" "$GCLOUD_TRACE" |
     grep -Fq -- "--member=serviceAccount:photointel-manage@replace-project-id.iam.gserviceaccount.com --role=$role"
 done
-if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 8 ]]; then
+if [[ "$(grep -c 'projects add-iam-policy-binding' "$GCLOUD_TRACE")" != 13 ]]; then
   echo "ERROR: IAM-only mode changed unexpected project policies" >&2; exit 1
 fi
 : > "$GCLOUD_TRACE"
