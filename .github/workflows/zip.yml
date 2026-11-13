@@ -44,7 +44,7 @@ jobs:
   push-check:
     name: "🧪 ZIP patch policy"
     if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {contents: read}
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +55,7 @@ jobs:
   apply-zip:
     if: github.event_name == 'workflow_dispatch'
     name: "📦 Apply"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
 
     steps:

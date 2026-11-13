@@ -24,7 +24,7 @@ jobs:
   push-check:
     name: "🧪 Terminal plan (offline)"
     if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
@@ -35,7 +35,7 @@ jobs:
     name: "📱 ${{ inputs.action }}"
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     environment: production
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
