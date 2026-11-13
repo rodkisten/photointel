@@ -3,6 +3,13 @@ locals {
   builder  = "serviceAccount:photointel-builder@${var.project_id}.iam.gserviceaccount.com"
   api     = "serviceAccount:photointel-api@${var.project_id}.iam.gserviceaccount.com"
   media   = "photointel-media@${var.project_id}.iam.gserviceaccount.com"
+  # Must match REQUIRED_SECRET_ENV in infra/gcp/media.py. Terraform owns only
+  # these access bindings; secret values remain outside Terraform/state.
+  media_secret_names = toset([
+    "photointel-media-r2-endpoint",
+    "photointel-media-r2-access-key",
+    "photointel-media-r2-secret-key",
+  ])
   build_roles = toset([
     "roles/cloudbuild.builds.editor",
     "roles/serviceusage.serviceUsageConsumer",
@@ -36,6 +43,20 @@ resource "google_service_account_iam_member" "deployer_media" {
   service_account_id = google_service_account.identity["media"].name
   role               = "roles/iam.serviceAccountUser"
   member             = local.deployer
+}
+# Read metadata during Plan so a missing secret is caught before deployment.
+# Do not read secret versions or payloads into Terraform state.
+data "google_secret_manager_secret" "media" {
+  for_each  = local.media_secret_names
+  project   = var.project_id
+  secret_id = each.key
+}
+resource "google_secret_manager_secret_iam_member" "media_runtime" {
+  for_each  = data.google_secret_manager_secret.media
+  project   = var.project_id
+  secret_id = each.value.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.identity["media"].email}"
 }
 resource "google_artifact_registry_repository" "docker" {
   location = var.region
