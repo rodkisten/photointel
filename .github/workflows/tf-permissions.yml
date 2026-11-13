@@ -1,0 +1,66 @@
+name: "TF · Permissions"
+run-name: "🔐 TF IAM · ${{ inputs.mode }} · photointel"
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Review or apply additive IAM grants"
+        type: choice
+        required: true
+        default: plan
+        options: [plan, apply]
+      authorize_apply:
+        description: "I reviewed the plan and authorize IAM changes"
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-terraform-permissions
+  cancel-in-progress: false
+jobs:
+  permissions:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "🔐 Authenticate administrative bootstrap identity"
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: photointel
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-bootstrap@photointel.iam.gserviceaccount.com
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.2"
+      - name: "🔎 Initialize isolated permissions state"
+        working-directory: infra/terraform/environments/permissions
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          set -euo pipefail
+          terraform init -input=false -backend-config="bucket=${STATE_BUCKET:-photointel-terraform-state}" -backend-config="prefix=photointel/permissions"
+      - name: "🧪 Validate and plan"
+        working-directory: infra/terraform/environments/permissions
+        run: |
+          set -euo pipefail
+          terraform fmt -check
+          terraform validate
+          terraform plan -input=false -out=permissions.tfplan -no-color
+      - name: "🛡 Apply reviewed permissions"
+        if: inputs.mode == 'apply'
+        working-directory: infra/terraform/environments/permissions
+        env:
+          AUTHORIZED: ${{ inputs.authorize_apply }}
+        run: |
+          set -euo pipefail
+          if [[ "$AUTHORIZED" != "true" ]]; then
+            echo "::error title=IAM apply requires approval::Select authorize_apply after reviewing the permissions plan."
+            exit 1
+          fi
+          terraform apply -input=false -no-color permissions.tfplan
