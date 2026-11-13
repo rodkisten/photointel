@@ -103,7 +103,10 @@ def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes
                 if source.returncode or not source.stdout.strip():
                     raise MigrationError(
                         "NEON_IAM: cannot obtain a short-lived deployer token "
-                        "from the current local Google Cloud identity."
+                        "from the current local Google Cloud identity. "
+                        "Check the active account and the Token Creator binding "
+                        "on photointel-deployer in Setup GCP; no IAM changes "
+                        "were attempted."
                     )
                 with tempfile.TemporaryDirectory(prefix="photointel-iam-") as temp:
                     token_path = Path(temp) / "deployer.token"
@@ -125,7 +128,7 @@ def gcloud(args: list[str], *, project: str, impersonate: bool = False) -> bytes
                 raise MigrationError(
                     "NEON_IAM: migration identity impersonation failed. "
                     "Check the active account and Token Creator binding on "
-                    "photointel-migrate; no IAM changes were attempted."
+                    "photointel-migrate in Setup GCP; no IAM changes were attempted."
                 )
             if "secretmanager" in details or "secret" in details:
                 raise MigrationError(
