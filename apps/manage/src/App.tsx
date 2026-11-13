@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import {
@@ -15,6 +16,8 @@ import {
   Shield,
   Workflow,
   GitPullRequestArrow,
+  Menu,
+  GripVertical,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -67,6 +70,34 @@ function sectionForPath(pathname: string): Tab {
 }
 
 export default function App() {
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [topVisible, setTopVisible] = useState(true);
+  const [navOrder, setNavOrder] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
+    catch { return []; }
+  });
+  const [dragged, setDragged] = useState<string | null>(null);
+  useEffect(() => {
+    let last = window.scrollY;
+    const onScroll = () => {
+      const current = window.scrollY;
+      if (Math.abs(current - last) > 8) setTopVisible(current < 70 || current < last);
+      last = current;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  const orderedNav = [...NAV].sort((a, b) => {
+    const rank = (id: string) => { const index = navOrder.indexOf(id); return index < 0 ? NAV.findIndex(x => x.id === id) + NAV.length : index; };
+    return rank(a.id) - rank(b.id);
+  });
+  const reorder = (from: string, to: string) => {
+    const ids = orderedNav.map(item => item.id);
+    ids.splice(ids.indexOf(from), 1);
+    ids.splice(ids.indexOf(to), 0, from);
+    setNavOrder(ids);
+    localStorage.setItem('photointel-manage-nav-v1', JSON.stringify(ids));
+  };
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
@@ -85,7 +116,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
-      <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl">
+      <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full -mb-[66px]")}>
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
@@ -116,7 +147,7 @@ export default function App() {
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
         <aside className="hidden w-48 shrink-0 md:block">
           <nav aria-label="Navegação principal" className="sticky top-24 space-y-1">
-            {NAV.map((item) => {
+            {orderedNav.map((item) => {
               const isActive = tab === item.id;
               return (
                 <Link
@@ -169,30 +200,36 @@ export default function App() {
         </main>
       </div>
 
-      <nav
-        aria-label="Navegação principal mobile"
-        className="fixed inset-x-0 bottom-0 z-30 flex overflow-x-auto border-t border-carbon-800 bg-carbon-950/90 px-1 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
-      >
-        {NAV.map((item) => {
-          const isActive = tab === item.id;
-          return (
-            <Link
-              key={item.id}
-              to={item.to}
-              preload="intent"
-              aria-current={isActive ? 'page' : undefined}
-              className={cn(
-                'flex min-w-[56px] flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] transition-colors',
-                isActive ? 'text-carbon-200' : 'text-carbon-500 hover:text-carbon-400',
-              )}
-            >
-              <item.icon size={21} className={isActive ? 'text-carbon-300' : 'opacity-80'} />
-              <span className="truncate font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
+      <nav aria-label="Navegação principal mobile"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
+        {mobileMenu && <div className="absolute bottom-full inset-x-2 mb-2 max-h-[65vh] overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl">
+          <p className="mb-2 text-xs text-carbon-400">Arraste para organizar os atalhos</p>
+          {orderedNav.map(item => <div key={item.id} draggable
+            onDragStart={() => setDragged(item.id)}
+            onDragOver={event => event.preventDefault()}
+            onDrop={() => { if (dragged && dragged !== item.id) reorder(dragged, item.id); setDragged(null); }}
+            className="flex items-center gap-2 rounded-lg p-1 hover:bg-carbon-900">
+            <GripVertical size={16} className="text-carbon-500" />
+            <Link to={item.to} onClick={() => setMobileMenu(false)}
+              className="flex flex-1 items-center gap-3 p-2 text-sm"><item.icon size={17} />{item.label}</Link>
+            <button type="button" aria-label={'Mover ' + item.label + ' para cima'} className="rounded px-2 py-1 text-xs"
+              onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index > 0) reorder(item.id, orderedNav[index - 1].id); }}>↑</button>
+            <button type="button" aria-label={'Mover ' + item.label + ' para baixo'} className="rounded px-2 py-1 text-xs"
+              onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id); }}>↓</button>
+          </div>)}
+        </div>}
+        <div className="flex items-center justify-around gap-1">
+          {orderedNav.slice(0, 4).map(item => <Link key={item.id} to={item.to} aria-current={tab === item.id ? 'page' : undefined}
+            className={cn("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]", tab === item.id ? "bg-carbon-800 text-white" : "text-carbon-400")}>
+            <item.icon size={20} /><span className="truncate">{item.label}</span>
+          </Link>)}
+          <button type="button" aria-expanded={mobileMenu} aria-label="Mais páginas e organizar menu"
+            onClick={() => setMobileMenu(value => !value)}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] text-carbon-300">
+            <Menu size={20} /><span>Mais</span>
+          </button>
+        </div>
+      </nav>   </div>
   );
   
 }
