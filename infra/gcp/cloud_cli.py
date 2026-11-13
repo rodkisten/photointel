@@ -62,6 +62,8 @@ class CloudFailure:
     code: str
     permissions: tuple[str, ...] = ()
     hint: str = ""
+    category: str = ""
+    evidence: tuple[str, ...] = ()
 
 
 def classify(stderr: str | bytes) -> CloudFailure:
@@ -83,7 +85,8 @@ def classify(stderr: str | bytes) -> CloudFailure:
     )
     # Return only allowlisted permission identifiers and fixed guidance.
     # Provider messages may contain tokens, resource names and private URLs.
-    permissions = tuple(sorted(set(PERMISSION.findall(value))))[:8]
+    permissions = tuple(sorted({p for p in PERMISSION.findall(value)
+                                if p not in {"iam.gserviceaccount.com", "run.jobs.deploy"}}))[:8]
     hint = ""
     if code == "PERMISSION_DENIED":
         if "builds submit" in lower or "cloudbuild.builds.create" in lower:
@@ -95,7 +98,7 @@ def classify(stderr: str | bytes) -> CloudFailure:
                 "and organization policies."
             )
         elif "serviceaccounts.actas" in lower or "actas" in lower:
-            hint = "Verify iam.serviceAccounts.actAs on the exact build service account."
+            hint = "Verify iam.serviceAccounts.actAs on the exact service account attached to this operation (runtime identity for Cloud Run Jobs)."
         elif "storage.objects" in lower or "bucket" in lower:
             hint = "Verify staging bucket access and its IAM/organization policies."
         else:
@@ -103,7 +106,40 @@ def classify(stderr: str | bytes) -> CloudFailure:
                 "Check the active identity, exact resource IAM bindings, "
                 "IAM Conditions, deny policies and organization policies."
             )
-    return CloudFailure(code, permissions, hint)
+    category = ""
+    if "deny policy" in lower or "deny policies" in lower or "denypolicy" in lower:
+        category = "IAM_DENY"
+    elif "condition" in lower and (denied or "not satisfied" in lower):
+        category = "IAM_CONDITION"
+    elif missing and ("service account" in lower or "serviceaccounts/" in lower):
+        category = "SERVICE_ACCOUNT_NOT_FOUND"
+    elif "serviceaccounts.actas" in lower:
+        category = "SERVICE_ACCOUNT_ACT_AS"
+    elif any(p.startswith("secretmanager.") for p in permissions) or "secret manager" in lower:
+        category = "SECRET_MANAGER"
+    elif any(p.startswith("artifactregistry.") for p in permissions) or "artifact registry" in lower:
+        category = "ARTIFACT_REGISTRY"
+    elif any(p in {"run.jobs.create", "run.jobs.update"} for p in permissions):
+        category = "CLOUD_RUN_JOB_IAM"
+    elif any(marker in lower for marker in ("invalid_argument", "invalid value", "invalid configuration")):
+        category = "JOB_CONFIGURATION"
+    # Preserve only typed identifiers from provider diagnostics, never arbitrary
+    # stderr. This also prevents tokens, secret payloads and workflow commands
+    # from reaching logs. These are evidence, not proof of effective IAM.
+    evidence = tuple(sorted(set(re.findall(
+        r"(?<![\w.-])photointel-[a-z0-9-]+@photointel\.iam\.gserviceaccount\.com\b", value
+    ))))[:8]
+    guidance = {
+        "IAM_DENY": "Inspect inherited IAM deny policies; an allow binding cannot override a deny.",
+        "IAM_CONDITION": "Inspect IAM binding conditions and WIF attribute conditions for this identity and resource.",
+        "SERVICE_ACCOUNT_NOT_FOUND": "Verify the exact runtime service account exists; bootstrap owns initial identity provisioning.",
+        "SECRET_MANAGER": "Verify referenced secret versions exist and the runtime identity has secretmanager.versions.access on those secrets only.",
+        "ARTIFACT_REGISTRY": "Verify the image reference and repository-scoped read access for the deploying identity and Cloud Run service agent.",
+        "CLOUD_RUN_JOB_IAM": "Verify run.jobs.create or run.jobs.update for the deployer on the target project/job.",
+        "JOB_CONFIGURATION": "Validate Cloud Run Job image, environment, secrets, CPU, memory and timeout configuration.",
+    }
+    hint = guidance.get(category, hint)
+    return CloudFailure(code, permissions, hint, category, evidence)
 
 
 def command(

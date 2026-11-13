@@ -10,6 +10,11 @@ on:
         required: true
         default: plan
         options: [plan, build, jobs-deploy, build-and-deploy]
+      image_sha:
+        description: "Existing image commit SHA (40 lowercase hex; jobs-deploy only; blank uses workflow commit)"
+        type: string
+        required: false
+        default: ''
       confirm_charges:
         description: "Authorize build or deployment charges (not required for plan)"
         type: boolean
@@ -35,8 +40,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: "🔎 Select traceable media image commit"
+        id: images
+        env:
+          REQUESTED_SHA: ${{ inputs.image_sha }}
+          ACTION: ${{ inputs.action }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_SHA" && "$ACTION" != jobs-deploy ]]; then
+            echo "::error::image_sha is only accepted for jobs-deploy."
+            exit 1
+          fi
+          sha="${REQUESTED_SHA:-$WORKFLOW_SHA}"
+          if [[ ! "$sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::A full lowercase Git commit SHA is required."
+            exit 1
+          fi
+          git cat-file -e "${sha}^{commit}"
+          git merge-base --is-ancestor "$sha" "$WORKFLOW_SHA"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Workflow commit: $WORKFLOW_SHA; media image source commit: $sha"
       - name: "🧪 Validate media deployment commands (offline)"
-        run: python3 -m unittest infra.gcp.tests.test_media -v
+        run: python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
       - name: "🧰 Node.js 22 for media validation"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         uses: actions/setup-node@v4
@@ -93,7 +120,7 @@ jobs:
           echo "Expected WIF service account: $EXPECTED_ACCOUNT"
           gcloud auth list --filter='status:ACTIVE' --format='value(account)'
           echo "gcloud project: $(gcloud config get-value project 2>/dev/null)"
-          echo "gcloud billing/quota_project: $(gcloud config get-value billing/quota_project 2>/dev/null || true)"
+          echo "gcloud billing/quota_project: $(gcloud config get-value billing/quota_project)"
           echo "GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-unset}"
           echo "::endgroup::"
           echo "::group::Cloud Build API preflight"
@@ -115,7 +142,7 @@ jobs:
       - name: "🔎 Verify immutable media images exist before deployment"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
         env:
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.images.outputs.sha }}
         run: |
           set -euo pipefail
           for kind in image video; do
@@ -135,7 +162,7 @@ jobs:
       - name: "🚀 Deploy private media Cloud Run Jobs only"
         if: inputs.action == 'jobs-deploy' || inputs.action == 'build-and-deploy'
         run: |
-          python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ github.sha }}" --apply --authorize-charges --confirm-project photointel
+          python3 -m infra.gcp.manage media-jobs-deploy --git-sha "${{ steps.images.outputs.sha }}" --apply --authorize-charges --confirm-project photointel
       - name: "🧹 Remove temporary production config"
         if: always()
         uses: ./.github/actions/gcp-config

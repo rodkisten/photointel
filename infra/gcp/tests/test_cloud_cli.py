@@ -16,7 +16,7 @@ class CloudCLIContractTests(unittest.TestCase):
     def test_github_actions_output_is_grouped_colored_and_redacted(self):
         buffer = io.StringIO()
         with (
-            patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "TERM": "dumb"}, clear=True),
+            patch.dict("os.environ", {"GITHUB_ACTIONS": "true", "TERM": "xterm"}, clear=True),
             patch.object(cloud_cli.sys, "stderr", buffer),
         ):
             cloud_cli.print_running_command([
@@ -24,9 +24,9 @@ class CloudCLIContractTests(unittest.TestCase):
                 "--project=photointel", "--token=very-private-token",
             ])
         output = buffer.getvalue()
-        self.assertIn("::group::☁️ gcloud command", output)
+        self.assertIn("::group::☁️ gcloud secrets versions access", output)
         self.assertIn("::endgroup::", output)
-        self.assertIn("\\033[1;36mgcloud", output)
+        self.assertIn("\033[1;36mgcloud", output)
         self.assertNotIn("very-private-token", output)
         self.assertNotIn("┌", output)
 

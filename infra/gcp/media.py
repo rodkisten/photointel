@@ -7,6 +7,7 @@ Media images must already exist in the configured Artifact Registry repository.
 from __future__ import annotations
 
 import re
+import json
 from typing import Any
 
 from infra.gcp.cloud_cli import run as cloud_run, command as cloud_command, classify as cloud_classify
@@ -66,10 +67,53 @@ def execute(config: dict[str, Any], sha: str, *, apply: bool) -> None:
                 permissions = ", ".join(failure.permissions)
                 details = f" | Missing/denied permission: {permissions}" if permissions else ""
                 hint = f" | {failure.hint}" if failure.hint else ""
-                raise RuntimeError(f"Media {args[3]} deployment failed: {failure.code}{details}{hint}")
+                context = f" | Category: {failure.category}" if failure.category else ""
+                evidence = f" | Provider account references: {', '.join(failure.evidence)}" if failure.evidence else ""
+                raise RuntimeError(f"Media {args[3]} deployment failed: {failure.code}{context}{details}{evidence}{hint}")
         else:
             # cloud_cli prints full-width highlighted command panels when run.
             from infra.gcp.cloud_cli import print_running_command
             print_running_command(invocation)
+    if apply:
+        verify_jobs(config, sha)
     if not apply:
         print("PLAN ONLY: no Cloud Run jobs were created or updated.")
+
+
+def validate_job(job: dict[str, Any], config: dict[str, Any], kind: str, sha: str) -> None:
+    """Check the deployed definition without printing secret values or provider JSON."""
+    expected = commands(config, sha)[JOB_TYPES.index(kind)]
+    task = job["spec"]["template"]["spec"]["template"]["spec"]
+    container = task["containers"][0]
+    checks = {
+        "image": container.get("image") == expected[expected.index("--image") + 1],
+        "service account": task.get("serviceAccountName") == expected[expected.index("--service-account") + 1],
+        "retry policy": task.get("maxRetries") == 0,
+        "timeout": str(task.get("timeoutSeconds")) == ("1800" if kind == "video" else "600"),
+        "CPU": str(container.get("resources", {}).get("limits", {}).get("cpu")) in (("2", "2000m") if kind == "video" else ("1", "1000m")),
+        "memory": container.get("resources", {}).get("limits", {}).get("memory") == ("2Gi" if kind == "video" else "1Gi"),
+        "readiness": any(c.get("type") == "Ready" and str(c.get("status")).lower() == "true" for c in job.get("status", {}).get("conditions", [])),
+    }
+    env = {e["name"]: e for e in container.get("env", [])}
+    checks["bucket"] = env.get("R2_BUCKET", {}).get("value") == config["storage_bucket"]
+    for name, secret in REQUIRED_SECRET_ENV:
+        ref = env.get(name, {}).get("valueFrom", {}).get("secretKeyRef", {})
+        checks[f"secret reference {name}"] = ref.get("name") == secret and ref.get("key") == "latest"
+    failed = [name for name, ok in checks.items() if not ok]
+    if failed:
+        raise RuntimeError(f"Media {kind} verification failed: " + ", ".join(failed))
+
+
+def verify_jobs(config: dict[str, Any], sha: str) -> None:
+    for kind in JOB_TYPES:
+        result = cloud_run(["run", "jobs", "describe", f"photointel-media-{kind}",
+                            "--region", config["region"], "--format=json"],
+                           project=config["project_id"])
+        if result.returncode:
+            failure = cloud_classify(result.stderr)
+            raise RuntimeError(f"Media {kind} verification failed: {failure.code} {failure.hint}")
+        try:
+            validate_job(json.loads(result.stdout), config, kind, sha)
+        except (KeyError, IndexError, TypeError, ValueError) as error:
+            raise RuntimeError(f"Media {kind} verification returned an invalid Job definition") from None
+        print(f"Verified photointel-media-{kind}: image source {sha}, runtime identity, secret references and resource settings.")
