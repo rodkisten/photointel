@@ -9,7 +9,7 @@ type Source = {
   currency: string;
   total: number | null;
   gross_total?: number | null;
-  items: Array<{ name: string; cost: number | null; detail?: string; units?: number | null }>;
+  items: Array<{ name: string; cost: number | null; detail?: string; units?: number | null; gross?: number | null; credits?: number | null; resource?: string; day?: string; usage_unit?: string; usage_amount?: number | null }>;
   note?: string;
   url?: string;
   quota?: { used_usd: number; included_usd: number | null; percent: number | null; unit: string };
@@ -91,12 +91,23 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
   if (!/^[a-z][a-z0-9-]{4,62}\.[A-Za-z_][A-Za-z0-9_]{0,1023}\.gcp_billing_export_(?:resource_)?v1_[A-Za-z0-9_]+$/.test(table))
     return unavailable('GCP_BILLING_TABLE inválida.', 'unconfigured');
   const billingProject = table.split('.')[0];
-  const query = 'SELECT service.description AS service, sku.description AS sku, currency, ' +
-    'ROUND(SUM(cost),6) AS gross, ' +
-    'ROUND(SUM(cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c),0)),6) AS net ' +
-    'FROM `' + table + '` WHERE project.id = @project ' +
-    'AND usage_start_time >= TIMESTAMP(@start) AND usage_start_time < TIMESTAMP(@end) ' +
-    'GROUP BY 1,2,3 ORDER BY net DESC LIMIT 500';
+  const detailed = table.includes('.gcp_billing_export_resource_v1_');
+  // Resource identifiers exist only in the detailed billing export. Do not invent attribution.
+  const resourceSql = detailed ? "COALESCE(resource.name, resource.global_name, '(sem recurso)')" : "'(exportação padrão: recurso indisponível)'";
+  const query = `SELECT service.description AS service, sku.description AS sku, currency,
+    ${resourceSql} AS resource_name,
+    FORMAT_TIMESTAMP('%Y-%m-%d', usage_start_time, 'America/Sao_Paulo') AS usage_day,
+    usage.unit AS usage_unit,
+    ROUND(SUM(usage.amount), 6) AS usage_amount,
+    ROUND(SUM(cost), 6) AS gross,
+    ROUND(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 6) AS credits,
+    ROUND(SUM(cost + IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 6) AS net
+    FROM \`${table}\`
+    WHERE project.id = @project
+      AND usage_start_time >= TIMESTAMP(@start)
+      AND usage_start_time < TIMESTAMP(@end)
+    GROUP BY 1,2,3,4,5,6
+    ORDER BY usage_day DESC, net DESC LIMIT 5000`;
   const data = await gcp(env, identity,
     'https://bigquery.googleapis.com/bigquery/v2/projects/' + billingProject + '/queries', {
       query, useLegacySql: false, timeoutMs: 10000, maximumBytesBilled: '100000000',
@@ -107,20 +118,34 @@ async function gcpCosts(env: Env, identity: Identity, start: string, end: string
         { name: 'end', parameterType: { type: 'STRING' }, parameterValue: { value: end } },
       ],
     },
-  ) as { jobComplete?: boolean; rows?: Array<{ f?: Array<{ v?: unknown }> }> };
-  if (data.jobComplete !== true) return unavailable('BigQuery não concluiu a consulta. Tente novamente.');
+  ) as { jobComplete?: boolean; totalRows?: string; pageToken?: string; rows?: Array<{ f?: Array<{ v?: unknown }> }> };
+  if (data.jobComplete !== true) return unavailable('Consulta ainda em execução. Tente novamente; nenhum custo foi presumido como zero.');
+  if (data.pageToken || Number(data.totalRows || 0) > (data.rows || []).length)
+    return unavailable('O detalhamento excedeu uma página do BigQuery. Total incompleto: refine o período antes de confiar na soma.');
   const rows = (data.rows || []).map((x) => x.f?.map((v) => v.v) || []);
   const currencies = [...new Set(rows.map((x) => String(x[2] || 'USD')))];
   if (currencies.length > 1) return unavailable('Exportação contém múltiplas moedas. Separe os valores por moeda.');
+  const items = rows.map((x) => ({
+    name: String(x[0] || 'GCP'),
+    detail: String(x[1] || ''),
+    resource: String(x[3] || ''),
+    day: String(x[4] || ''),
+    usage_unit: String(x[5] || ''),
+    usage_amount: asNumber(x[6]),
+    units: asNumber(x[6]),
+    gross: asNumber(x[7]),
+    credits: asNumber(x[8]),
+    cost: asNumber(x[9]),
+  }));
   return {
     status: 'ok', currency: currencies[0] || 'USD',
-    total: round(rows.reduce((sum, x) => sum + (asNumber(x[4]) || 0), 0)),
-    gross_total: round(rows.reduce((sum, x) => sum + (asNumber(x[3]) || 0), 0)),
-    items: rows.map((x) => ({
-      name: String(x[0] || 'GCP'), detail: String(x[1] || ''), cost: asNumber(x[4]),
-    })),
+    total: round(items.reduce((sum, x) => sum + (x.cost || 0), 0)),
+    gross_total: round(items.reduce((sum, x) => sum + (x.gross || 0), 0)),
+    items,
     url: 'https://console.cloud.google.com/billing?project=' + encodeURIComponent(env.GCP_PROJECT_ID || 'photointel'),
-    note: 'Custo real exportado, com créditos, apenas do projeto e mês selecionados. Exportações podem atrasar.',
+    note: detailed
+      ? 'Valores faturados exportados por serviço, SKU, recurso, dia, unidade, consumo e créditos. Não são tempo real; podem chegar com atraso.'
+      : 'Exportação padrão: custos reais por serviço, SKU, dia, unidade, consumo e créditos. Ative a exportação detalhada para atribuição por recurso. Dados podem atrasar.',
   };
 }
 
