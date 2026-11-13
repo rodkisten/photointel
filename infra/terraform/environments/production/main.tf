@@ -6,9 +6,9 @@ locals {
   # Must match REQUIRED_SECRET_ENV in infra/gcp/media.py. Terraform owns only
   # these access bindings; secret values remain outside Terraform/state.
   media_secret_names = toset([
-    "photointel-media-r2-endpoint",
-    "photointel-media-r2-access-key",
-    "photointel-media-r2-secret-key",
+    "photointel-r2-endpoint",
+    "photointel-r2-access-key",
+    "photointel-r2-secret-key",
   ])
   build_roles = toset([
     "roles/cloudbuild.builds.editor",
