@@ -92,7 +92,7 @@ export default function App() {
     return rank(a.id) - rank(b.id);
   });
   const reorder = (from: string, to: string) => {
-    const ids = orderedNav.map(item => item.id);
+    const ids: string[] = orderedNav.map(item => item.id);
     ids.splice(ids.indexOf(from), 1);
     ids.splice(ids.indexOf(to), 0, from);
     setNavOrder(ids);
