@@ -11,6 +11,8 @@ import { runManageDiagnostics } from './diagnostics';
 import { parseLogRequest, gcpLogFilter } from './log-query';
 import { secretRoutes } from './routes/secrets';
 import { icloudAuthRoute } from './routes/icloud-auth';
+import { handleIcloudDiagnostics } from './api-handlers';
+import { PATTERNS, LIMITS, DEFAULTS, safeList } from './api-utils';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -27,13 +29,6 @@ import {
   provider,
 } from './providers';
 
-const ID = /^[1-9][0-9]{0,15}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-type Item = { [key: string]: any };
-function list(data: unknown, key: string): Item[] {
-  const v = data as Record<string, unknown>;
-  return Array.isArray(v?.[key]) ? (v[key] as Item[]) : [];
-}
 export async function api(
   request: Request,
   env: Env,
@@ -44,12 +39,15 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  // Interceptações de rotas modulares
   const notificationSettingsResponse = await notificationSettingsRoute(request, env);
   if (notificationSettingsResponse) return notificationSettingsResponse;
   const templateResponse = await workflowTemplateRoute(request, env);
   if (templateResponse) return templateResponse;
   const failureResponse = await workflowFailureRoute(request, env);
   if (failureResponse) return failureResponse;
+
   if (path.startsWith('/api/cloudflare/')) {
     const response = await cloudflareRoute(request, env);
     if (response) return response;
@@ -74,69 +72,26 @@ export async function api(
     const response = await icloudAuthRoute(request, env, identity);
     if (response) return response;
   }
+
+  // Endpoints Nativos
   if (method === 'GET' && path === '/api/meta')
     return json({
       email: identity.email,
-      repo: env.GITHUB_REPO || 'rodkisten/photointel',
-      project: env.GCP_PROJECT_ID || 'photointel',
+      repo: env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
+      project: env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID,
       gcp: Boolean(env.GCP_WIF_AUDIENCE),
       cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
       sentry: Boolean(env.SENTRY_DSN),
       sentry_reader: Boolean(env.SENTRY_API_TOKEN),
       sentry_org: env.SENTRY_ORG || null,
       cloudflare_account_id: env.CLOUDFLARE_ACCOUNT_ID || null,
-      gcp_region: env.GCP_REGION || 'us-central1',
+      gcp_region: env.GCP_REGION || DEFAULTS.REGION,
     });
+
   if (method === 'GET' && path === '/api/diagnostics') return json(await runManageDiagnostics(env));
+  
   if (method === 'GET' && path === '/api/icloud/diagnostics') {
-    const project = env.GCP_PROJECT_ID || 'photointel';
-    const [cloud, runs] = await Promise.allSettled([
-      gcp(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
-        resourceNames: ['projects/' + project],
-        filter:
-          '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision") ' +
-          'AND timestamp>="' +
-          new Date(Date.now() - 86400_000).toISOString() +
-          '" ' +
-          'AND (SEARCH("icloud") OR SEARCH("apple") OR SEARCH("auth_expired"))',
-        orderBy: 'timestamp desc',
-        pageSize: 30,
-      }),
-      gh(env, '/actions/workflows/icloud-setup.yml/runs?per_page=5'),
-    ]);
-    const events =
-      cloud.status === 'fulfilled' ? mapCloudLogs((cloud.value as { entries?: unknown }).entries) : [];
-    const sanitized = events.map((event) => ({
-      timestamp: event.timestamp,
-      service: event.service,
-      severity: event.severity,
-      message: redact(event.message).slice(0, 450),
-    }));
-    const suspected = sanitized.some((item) =>
-      /ICLOUD_AUTH_EXPIRED|2fa|session.expired|authentication.failed|reauth/i.test(String(item.message)),
-    );
-    return json({
-      checked_at: new Date().toISOString(),
-      configuration: { project, region: env.GCP_REGION || 'us-central1' },
-      apple_probe: 'not_performed',
-      apple_session: 'unknown',
-      recent_events: sanitized,
-      preflight_runs:
-        runs.status === 'fulfilled'
-          ? list(runs.value, 'workflow_runs').map((run) => ({
-              id: run.id,
-              name: run.name,
-              status: run.status,
-              conclusion: run.conclusion,
-              created_at: run.created_at,
-              html_url: run.html_url,
-            }))
-          : [],
-      suggest_reauth: suspected,
-      reason: suspected
-        ? 'Os logs mostram indícios de sessão expirada. Recomenda-se testar e renovar a autenticação no terminal seguro.'
-        : 'Não há confirmação recente de falha de autenticação. Um teste ao vivo com a Apple ainda é necessário para comprovar o acesso.',
-    });
+    return handleIcloudDiagnostics(env, identity, gcp, gh, mapCloudLogs);
   }
 
   if (method === 'GET' && path === '/api/overview') {
@@ -151,17 +106,17 @@ export async function api(
     const ghData = show(0),
       cfData = show(1),
       gcpData = show(2);
-    // Promise.allSettled is essential to keep the dashboard usable, but it
-    // must not swallow token/WIF failures without a Sentry occurrence.
+
     const providerEvents = tasks.map((task, index) =>
       task.status === 'rejected'
         ? reportError?.(task.reason, ['github', 'cloudflare', 'gcp'][index])
         : undefined,
     );
+
     return json({
       provider_events: providerEvents,
       correlation_id: correlationId,
-      runs: list(ghData, 'workflow_runs').map((x) => ({
+      runs: safeList(ghData, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
         status: x.status,
@@ -170,8 +125,8 @@ export async function api(
         html_url: x.html_url,
         run_number: x.run_number,
       })),
-      workers: list(cfData, 'result').map((x) => ({ name: x.id, modified_on: x.modified_on })),
-      services: list(gcpData, 'services').map((x) => ({
+      workers: safeList(cfData, 'result').map((x) => ({ name: x.id, modified_on: x.modified_on })),
+      services: safeList(gcpData, 'services').map((x) => ({
         name: x.name,
         uri: x.uri,
         latestReadyRevision: x.latestReadyRevision,
@@ -185,10 +140,11 @@ export async function api(
       checked_at: new Date().toISOString(),
     });
   }
+
   if (method === 'GET' && path === '/api/workflows') {
     const data = await gh(env, '/actions/workflows?per_page=100');
     return json({
-      items: list(data, 'workflows')
+      items: safeList(data, 'workflows')
         .filter((x) =>
           Object.prototype.hasOwnProperty.call(
             WORKFLOW_INPUTS,
@@ -207,10 +163,11 @@ export async function api(
         })),
     });
   }
+
   if (method === 'GET' && path === '/api/runs') {
     const data = await gh(env, '/actions/runs?per_page=50');
     return json({
-      items: list(data, 'workflow_runs').map((x) => ({
+      items: safeList(data, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
         display_title: x.display_title,
@@ -226,11 +183,12 @@ export async function api(
       })),
     });
   }
+
   const jobs = path.match(/^\/api\/runs\/([1-9]\d*)\/jobs$/);
   if (method === 'GET' && jobs) {
     const data = await gh(env, '/actions/runs/' + jobs[1] + '/jobs?per_page=100');
     return json({
-      items: list(data, 'jobs').map((x) => ({
+      items: safeList(data, 'jobs').map((x) => ({
         id: x.id,
         name: x.name,
         status: x.status,
@@ -238,7 +196,7 @@ export async function api(
         started_at: x.started_at,
         completed_at: x.completed_at,
         html_url: x.html_url,
-        steps: (Array.isArray(x.steps) ? x.steps : []).map((s: Item) => ({
+        steps: (Array.isArray(x.steps) ? x.steps : []).map((s: any) => ({
           name: s.name,
           number: s.number,
           conclusion: s.conclusion,
@@ -247,18 +205,19 @@ export async function api(
       })),
     });
   }
+
   const jobLogs = path.match(/^\/api\/runs\/([1-9]\d*)\/jobs\/([1-9]\d*)\/logs$/);
   if (method === 'GET' && jobLogs) {
     const data = await gh(env, '/actions/runs/' + jobLogs[1] + '/jobs?per_page=100');
-    if (!list(data, 'jobs').some((x) => String(x.id) === jobLogs[2]))
+    if (!safeList(data, 'jobs').some((x) => String(x.id) === jobLogs[2]))
       throw new ApiError(404, 'JOB_ID', 'O job não pertence à execução');
-    const repo = env.GITHUB_REPO || 'rodkisten/photointel';
+    const repo = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
     const response = await fetch(
       'https://api.github.com/repos/' + repo + '/actions/jobs/' + jobLogs[2] + '/logs',
       {
         headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + env.GITHUB_API_TOKEN },
         redirect: 'manual',
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(LIMITS.TIMEOUT_DEFAULT),
       },
     );
     if (response.status !== 302) throw new ApiError(502, 'LOG_REDIRECT', 'Logs do job ainda não disponíveis');
@@ -277,12 +236,13 @@ export async function api(
       )
     )
       throw new ApiError(502, 'LOG_HOST', 'Destino externo não permitido');
-    const logResponse = await fetch(target.href, { redirect: 'manual', signal: AbortSignal.timeout(10000) });
-    if (!logResponse.ok || Number(logResponse.headers.get('content-length') || 0) > 400_000)
+    const logResponse = await fetch(target.href, { redirect: 'manual', signal: AbortSignal.timeout(LIMITS.TIMEOUT_DEFAULT) });
+    if (!logResponse.ok || Number(logResponse.headers.get('content-length') || 0) > LIMITS.LOG_MAX_BYTES)
       throw new ApiError(502, 'LOG_SIZE', 'Log não disponível ou excede 400 KB');
     const text = await logResponse.text();
-    return json({ text: redact(text.slice(-100_000)).slice(-65_000), truncated: text.length > 65_000 });
+    return json({ text: redact(text.slice(-LIMITS.LOG_SLICE_LENGTH)).slice(-LIMITS.LOG_FINAL_LENGTH), truncated: text.length > LIMITS.LOG_FINAL_LENGTH });
   }
+
   if (path === '/api/github/variables') {
     const scope = url.searchParams.get('scope') || 'environment';
     if (scope !== 'environment' && scope !== 'repository')
@@ -296,7 +256,7 @@ export async function api(
       return json({
         scope,
         items: await Promise.all(
-          list(data, 'variables').map(async (entry) => ({
+          safeList(data, 'variables').map(async (entry) => ({
             name: entry.name,
             value: entry.name === 'GCP_CONFIG_ENV' ? null : entry.value,
             version: await digest(String(entry.value || '')),
@@ -311,12 +271,12 @@ export async function api(
       const value = input.value;
       if (
         typeof name !== 'string' ||
-        !/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) ||
+        !PATTERNS.VARIABLE_NAME.test(name) ||
         name === 'GCP_CONFIG_ENV' ||
         typeof value !== 'string' ||
-        value.length > 120_000 ||
+        value.length > LIMITS.CONFIG_MAX_LENGTH ||
         value.includes('\0') ||
-        /(?:github_pat_|ghp_|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----)/.test(value)
+        PATTERNS.SECRET_SENSITIVE.test(value)
       )
         throw new ApiError(
           422,
@@ -324,7 +284,7 @@ export async function api(
           'Nome ou valor inválido; use Secret Manager para credenciais',
         );
       const existing = await gh(env, base + '?per_page=100');
-      const match = list(existing, 'variables').find((entry) => entry.name === name);
+      const match = safeList(existing, 'variables').find((entry) => entry.name === name);
       if (match) {
         if (typeof input.version !== 'string' || input.version !== (await digest(String(match.value || ''))))
           throw new ApiError(409, 'VARIABLE_CONFLICT', 'A variável foi alterada; recarregue antes de salvar');
@@ -334,16 +294,16 @@ export async function api(
           throw new ApiError(409, 'VARIABLE_CONFLICT', 'Nova variável exige versão vazia');
         await gh(env, base, 'POST', { name, value });
       }
-      // No values in logs. Never dispatch workflows for unrelated GitHub variables.
       console.log(
         JSON.stringify({ event: 'github_variable_updated', name, scope, operator: identity.email }),
       );
       return json({ ok: true, version: await digest(value) });
     }
   }
+
   if (method === 'POST' && path === '/api/config/preview') {
     const input = await bodyJson<{ value?: unknown }>(request, 130_000);
-    if (typeof input.value !== 'string' || !input.value || input.value.length > 120_000)
+    if (typeof input.value !== 'string' || !input.value || input.value.length > LIMITS.CONFIG_MAX_LENGTH)
       throw new ApiError(422, 'CONFIG_PREVIEW_INPUT', 'Informe um .env válido de até 120 KB');
     const origin = env.PHOTOINTEL_API_ORIGIN;
     if (!origin || !/^https:\/\/[^/?#]+$/.test(origin))
@@ -356,7 +316,7 @@ export async function api(
       },
       body: JSON.stringify({ value: input.value }),
       redirect: 'manual',
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(LIMITS.TIMEOUT_PREVIEW),
     });
     if (!upstream.ok)
       throw new ApiError(502, 'CONFIG_PREVIEW_UPSTREAM', 'Prévia Python indisponível (HTTP ' + upstream.status + ')');
@@ -367,7 +327,9 @@ export async function api(
       throw new ApiError(502, 'CONFIG_PREVIEW_SIZE', 'Prévia excedeu o limite');
     return json(JSON.parse(payload));
   }
+
   if (method === 'GET' && path === '/api/config') return json(await readConfig(env));
+  
   if (method === 'PUT' && path === '/api/config') {
     const input = await bodyJson<{ value?: unknown; version?: unknown; auto_apply?: unknown }>(request);
     if (
@@ -392,15 +354,12 @@ export async function api(
     }
     const version = await digest(input.value);
     if (plan.changed.length === 0) {
-      // Formatting-only edits still save, but never spend compute on no-op runs.
       if (current.value !== input.value)
         await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
       return json({ ok: true, version, updated_at: new Date().toISOString(), plan, dispatches: [] });
     }
     await gh(env, configPath(env), 'PATCH', { name: 'GCP_CONFIG_ENV', value: input.value });
-    const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> =
-      [];
-    // Structural IAM/identity changes must not be published before administrator approval.
+    const dispatches: Array<{ file: string; label: string; status: 'queued' | 'failed'; error?: string }> = [];
     const requiresAdmin = plan.blocked;
     if (input.auto_apply !== false && !requiresAdmin) {
       for (const workflow of plan.workflows) {
@@ -414,7 +373,6 @@ export async function api(
           });
           dispatches.push({ file: workflow.file, label: workflow.label, status: 'queued' });
         } catch (error) {
-          // Saving the variable already succeeded. Never claim that deployment succeeded.
           dispatches.push({
             file: workflow.file,
             label: workflow.label,
@@ -444,6 +402,7 @@ export async function api(
       blocked: requiresAdmin,
     });
   }
+
   if (method === 'POST' && path === '/api/dispatch') {
     const input = await bodyJson<{ workflow?: string; inputs?: Record<string, string>; confirm?: string }>(
       request,
@@ -480,6 +439,7 @@ export async function api(
     );
     return json({ ok: true, result }, 202);
   }
+
   const rerun = path.match(/^\/api\/runs\/([1-9]\d*)\/rerun-failed$/);
   if (method === 'POST' && rerun) {
     const input = await bodyJson<{ confirm?: string }>(request, 1000);
@@ -489,23 +449,23 @@ export async function api(
     console.log(JSON.stringify({ event: 'manage_rerun', run: rerun[1], operator: identity.email }));
     return json({ ok: true, result }, 202);
   }
+
   if (method === 'GET' && path === '/api/cloudflare/workers') {
     const [scripts, domains] = await Promise.all([cf(env, '/workers/scripts'), cf(env, '/workers/domains')]);
     return json({
-      items: list(scripts, 'result').map((x) => ({
+      items: safeList(scripts, 'result').map((x) => ({
         name: x.id,
         modified_on: x.modified_on,
       })),
-      domains: list(domains, 'result').map((x) => ({
+      domains: safeList(domains, 'result').map((x) => ({
         hostname: x.hostname,
         service: x.service,
       })),
     });
   }
+
   if (method === 'GET' && path === '/api/cloudflare/logs') {
     const investigation = parseLogRequest(url.searchParams);
-    // This API currently exposes one indexed search needle; correlation takes
-    // priority over the job ID when a deep link contains both.
     const search = investigation.terms[0] || investigation.entry || '';
     const data = await cf(env, '/workers/observability/telemetry/query', 'POST', {
       queryId: 'photointel-manage-logs',
@@ -520,7 +480,7 @@ export async function api(
       },
     });
     const result = (data as { result?: Record<string, unknown> }).result;
-    const events = list(result?.events, 'events');
+    const events = safeList(result?.events, 'events');
     const matching = investigation.entry
       ? events.filter((x) => String(x.$metadata?.id || '') === investigation.entry)
       : events;
@@ -535,9 +495,8 @@ export async function api(
       })),
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/telegram') {
-    // Inspect Cloud Run env metadata only. Never access or return token values,
-    // chat destination, secret resource IDs or original URLs.
     const service = (await gcp(env, identity, gcpBase(env) + '/services/photointel-api')) as {
       template?: {
         containers?: Array<{
@@ -556,7 +515,6 @@ export async function api(
     const endpoint = /^https:\/\//.test(byName.get('TELEGRAM_NOTIFICATION_URL')?.value || '');
     const destination = Boolean(byName.get('TELEGRAM_NOTIFICATION_CHAT_ID')?.value);
     const token = byName.get('TELEGRAM_NOTIFICATION_API_TOKEN');
-    // Never return a token, only whether it is present in the deployed env.
     const tokenBound = Boolean(
       (typeof token?.value === 'string' && token.value.length > 0) ||
         token?.valueSource?.secretKeyRef ||
@@ -574,10 +532,11 @@ export async function api(
           : 'Telegram não está completamente configurado na revisão do Cloud Run; confira GCP_CONFIG_ENV (token direto ou referência Secret Manager).',
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/services') {
     const data = await gcp(env, identity, gcpBase(env) + '/services?pageSize=40');
     return json({
-      items: list(data, 'services').map((x) => ({
+      items: safeList(data, 'services').map((x) => ({
         name: x.name,
         uri: x.uri,
         latestReadyRevision: x.latestReadyRevision,
@@ -588,10 +547,11 @@ export async function api(
       })),
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/jobs') {
     const data = await gcp(env, identity, gcpBase(env) + '/jobs?pageSize=60');
     return json({
-      items: list(data, 'jobs').map((x) => ({
+      items: safeList(data, 'jobs').map((x) => ({
         name: x.name,
         updateTime: x.updateTime,
         latestCreatedExecution: x.latestCreatedExecution?.name,
@@ -599,9 +559,10 @@ export async function api(
       })),
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/executions') {
     const name = url.searchParams.get('job') || '';
-    if (!/^photointel-[a-z0-9-]{1,48}$/.test(name))
+    if (!PATTERNS.GCP_JOB_NAME.test(name))
       throw new ApiError(422, 'GCP_JOB', 'Selecione um job PhotoIntel válido');
     const data = await gcp(
       env,
@@ -610,7 +571,7 @@ export async function api(
     );
     return json({
       job: name,
-      items: list(data, 'executions').map((x) => ({
+      items: safeList(data, 'executions').map((x) => ({
         name: x.name,
         createTime: x.createTime,
         startTime: x.startTime,
@@ -625,9 +586,10 @@ export async function api(
       })),
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/scheduler') {
-    const project = env.GCP_PROJECT_ID || 'photointel';
-    const region = env.GCP_REGION || 'us-central1';
+    const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
+    const region = env.GCP_REGION || DEFAULTS.REGION;
     const data = await gcp(
       env,
       identity,
@@ -638,7 +600,7 @@ export async function api(
         '/jobs?pageSize=60',
     );
     return json({
-      items: list(data, 'jobs')
+      items: safeList(data, 'jobs')
         .filter((x) => (String(x.name).split('/').pop() || '').startsWith('photointel-'))
         .map((x) => ({
           name: x.name,
@@ -650,9 +612,10 @@ export async function api(
         })),
     });
   }
+
   if (method === 'GET' && path === '/api/gcp/logs') {
     const investigation = parseLogRequest(url.searchParams);
-    const project = env.GCP_PROJECT_ID || 'photointel';
+    const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
     const data = await gcp(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
       resourceNames: ['projects/' + project],
       filter: gcpLogFilter(investigation),
@@ -666,12 +629,12 @@ export async function api(
         : 'https://console.cloud.google.com/logs/query?project=' + project,
     });
   }
+
   if (method === 'GET' && path === '/api/sentry/issues') {
     if (!env.SENTRY_ORG) return json({ items: [], read_enabled: false, dashboard_url: null });
-    if (!/^[a-z0-9-]{1,64}$/.test(env.SENTRY_ORG))
+    if (!PATTERNS.SENTRY_ORG.test(env.SENTRY_ORG))
       throw new ApiError(503, 'SENTRY_ORG', 'Organização inválida');
     const dashboardUrl = 'https://' + env.SENTRY_ORG + '.sentry.io/issues/';
-    // Ingestion via SENTRY_DSN works independently of this optional read token.
     if (!env.SENTRY_API_TOKEN) return json({ items: [], read_enabled: false, dashboard_url: dashboardUrl });
     const items = await provider(
       'https://sentry.io/api/0/organizations/' +
@@ -682,7 +645,7 @@ export async function api(
     return json({
       read_enabled: true,
       dashboard_url: dashboardUrl,
-      items: (Array.isArray(items) ? items : []).map((x) => ({
+      items: (Array.isArray(items) ? items : []).map((x: any) => ({
         id: x.id,
         title: redact(x.title).slice(0, 180),
         level: x.level,
@@ -694,5 +657,6 @@ export async function api(
       })),
     });
   }
+
   throw new ApiError(404, 'NOT_FOUND', 'Recurso não encontrado');
 }
