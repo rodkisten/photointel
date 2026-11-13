@@ -56,3 +56,9 @@ To restore Builds:
 
 Do not place Cloudflare API tokens into repository files, PR comments, or
 Cloudflare build variables that print to logs.
+
+## One preview per pull request
+
+GitHub Actions `cloudflare-pr-previews.yml` now starts only when a PR is opened or reopened, not on each `synchronize` commit. This means its initial preview is **not automatically refreshed** by later commits; reopen the PR to rebuild it.
+
+**Cloudflare Workers Builds is a separate trigger.** If Preview Builds remain enabled for every branch push, Cloudflare will continue to create independent preview versions on each commit, regardless of GitHub Actions settings. Disable automatic Preview Builds for both Workers (`photointel` and `photointel-manage`) in Cloudflare Dashboard > Workers & Pages > Worker > Settings > Builds > Branch control. Keep GitHub Actions as the single PR preview publisher. Verify the actual dashboard setting after applying the change.
