@@ -1,8 +1,5 @@
 """Compact main-only release UI: select source, reuse images, dispatch and wait."""
-from contextlib import contextmanager
-import itertools
 import json
-import logging
 import os
 import re
 import subprocess
@@ -13,23 +10,8 @@ from pathlib import Path
 from infra.gcp.cloud_cli import run as cloud_run, classify
 from infra.terraform.dispatch_media import gh, main as terraform_dispatch
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
-
-_step_counter = itertools.count(1)
-
-@contextmanager
-def auto_step(name: str):
-    step_num = next(_step_counter)
-    logger.info(f"\n▶ [Step {step_num}] {name}...\n")
-    start = time.perf_counter()
-    try:
-        yield
-        elapsed = time.perf_counter() - start
-        logger.info(f"\n✔ [Step {step_num}] Finalizado em {elapsed:.2f}s\n")
-    except Exception as e:
-        logger.error(f"\n✖ [Step {step_num}] Erro: {e}\n")
-        raise
+# Importando o auto_step e o logger centralizados
+from .utils import auto_step, logger
 
 SHA = re.compile(r"^[a-f0-9]{40}$")
 ROOT = Path(__file__).resolve().parents[2]
