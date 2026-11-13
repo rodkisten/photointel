@@ -98,6 +98,22 @@ class CloudflareAdoptionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SCIM"):
             cf.supported_metadata(schema, {"scim_config": {"authentication": {"password": "private"}}})
 
+    def test_access_application_excludes_mutually_exclusive_domain_fields(self):
+        schema = {"block": {"attributes": {
+            "destinations": {"optional": True},
+            "self_hosted_domains": {"optional": True},
+            "name": {"required": True},
+        }}}
+        metadata = cf.supported_metadata(schema, {
+            "name": "photointel",
+            "destinations": [{"type": "public", "uri": "https://photos.migos.club"}],
+            "self_hosted_domains": ["photos.migos.club"],
+        })
+        self.assertIn("destinations", metadata)
+        self.assertNotIn("self_hosted_domains", metadata)
+        legacy = cf.supported_metadata(schema, {"name": "legacy", "self_hosted_domains": ["photos.migos.club"]})
+        self.assertIn("self_hosted_domains", legacy)
+
     def test_generated_resources_are_protected_and_data_is_not_evaluated_as_code(self):
         inventory = {key: {} for key in cf.TYPES}
         inventory["domains"]["photos.migos.club"] = {"id": "domain-id", "account_id": "a" * 32, "hostname": "photos.migos.club", "service": "${untrusted}"}
