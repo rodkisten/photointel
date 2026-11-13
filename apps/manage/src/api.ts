@@ -615,6 +615,35 @@ export async function api(
     return json({ name: updated.name, state: updated.state, unchanged: false });
   }
 
+  // Edit the recurrence without enabling a paused job. Only simple five-field
+  // cron expressions are accepted; this endpoint never runs a job immediately.
+  if (method === 'POST' && path === '/api/gcp/scheduler/schedule') {
+    const input = await bodyJson<{ name?: unknown; schedule?: unknown; confirm?: unknown }>(request);
+    const { name, schedule, confirm } = input;
+    if (typeof name !== 'string' || !/^photointel-[a-z0-9-]{1,55}$/.test(name) ||
+        typeof schedule !== 'string' || schedule.length > 100 ||
+        !/^[0-9*,\\/ -]+$/.test(schedule) || schedule.trim().split(/\\s+/).length !== 5 ||
+        confirm !== name) {
+      throw new ApiError(422, 'SCHEDULER_SCHEDULE', 'Confirme o job e informe um cron de cinco campos');
+    }
+    const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
+    const region = env.GCP_REGION || DEFAULTS.REGION;
+    gcpBase(env);
+    const resource = 'projects/' + project + '/locations/' + region + '/jobs/' + name;
+    const endpoint = 'https://cloudscheduler.googleapis.com/v1/' + resource;
+    const existing = await gcp(env, identity, endpoint) as { name?: string; state?: string; schedule?: string };
+    if (existing.name !== resource) throw new ApiError(409, 'SCHEDULER_SCOPE', 'Agendamento fora do projeto permitido');
+    if (existing.schedule === schedule) return json({ name, schedule, state: existing.state, unchanged: true });
+    // Use the existing authenticated WIF token; PATCH is intentionally scoped
+    // to schedule only, preserving target, credentials and PAUSED/ENABLED state.
+    const { gcpToken } = await import('./providers');
+    const token = await gcpToken(env, identity);
+    const updated = await provider(endpoint + '?updateMask=schedule', token, {
+      method: 'PATCH', body: JSON.stringify({ schedule }),
+    }) as { schedule?: string; state?: string };
+    return json({ name, schedule: updated.schedule, state: updated.state, unchanged: false });
+  }
+
   if (method === 'GET' && path === '/api/gcp/scheduler') {
     const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
     const region = env.GCP_REGION || DEFAULTS.REGION;
