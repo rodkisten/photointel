@@ -17,6 +17,8 @@ export function RepositoryVariables() {
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [version, setVersion] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState('');
+  const [dispatch, setDispatch] = useState<'queued' | 'failed' | 'none'>('none');
   const [mode, setMode] = useState<'code' | 'fields'>('code');
   const variables = useQuery({
     queryKey: ['github-variables', scope],
@@ -35,11 +37,14 @@ export function RepositoryVariables() {
     setVersion(existing.version);
   }, [existing]);
   const save = useMutation({
-    mutationFn: () => send('/github/variables?scope=' + scope, { name, value, version }, 'PUT'),
-    onSuccess: () => {
+    mutationFn: () => send<{ dispatch: 'queued' | 'failed' | 'none' }>('/github/variables?scope=' + scope, { name, value, version, confirm: confirmation }, 'PUT'),
+    onSuccess: (result) => {
+      setDispatch(result.dispatch);
+      setConfirmation('');
       void client.invalidateQueries({ queryKey: ['github-variables', scope] });
     },
   });
+  const triggersManage = name === 'GCP_COST_ALERT_USD' && scope === 'environment';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
   return (
@@ -51,8 +56,7 @@ export function RepositoryVariables() {
         <p className="flex items-start gap-2 text-xs leading-5 text-amber-300">
           <AlertTriangle size={16} className="shrink-0" />
           GitHub Actions Variables não são secrets. Para senha Apple, tokens e credenciais, use Secret
-          Manager. Alterar estas variáveis não dispara deploy automaticamente; GCP_CONFIG_ENV mantém seu fluxo
-          próprio.
+          Manager. Alterações comuns não disparam deploy. GCP_COST_ALERT_USD aciona Manage Deploy somente após confirmação.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="space-y-1 text-xs text-carbon-400">
@@ -134,10 +138,15 @@ export function RepositoryVariables() {
             format={detectEnvironmentFormat(value)}
           />
         )}
+        {triggersManage && <div className="space-y-2 rounded-lg border border-amber-700 p-3 text-xs text-amber-200">
+          <p role="alert">Atenção: mudar esta variável acionará o workflow Manage Deploy. Digite confirma.</p>
+          <Input aria-label="Confirmação de workflow" value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)} placeholder="confirma" />
+        </div>}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Badge tone={unchanged ? 'success' : 'warning'}>{unchanged ? 'Sincronizado' : 'Não salvo'}</Badge>
           <Button
-            disabled={!valid || unchanged || variables.isPending || save.isPending}
+            disabled={!valid || unchanged || variables.isPending || save.isPending || (triggersManage && confirmation !== 'confirma')}
             onClick={() => save.mutate()}
           >
             {selected ? <Save size={15} /> : <Plus size={15} />}
@@ -146,7 +155,7 @@ export function RepositoryVariables() {
         </div>
         {save.isSuccess && (
           <p className="text-xs text-emerald-300">
-            Variável salva. Reabra a lista para conferir a versão atual.
+            Variável salva. {dispatch === 'queued' ? 'Manage Deploy solicitado.' : dispatch === 'failed' ? 'Atenção: falhou o disparo do Manage Deploy; execute manualmente.' : 'Reabra a lista para conferir a versão atual.'}
           </p>
         )}
         {save.error && <IssueBanner error={save.error} />}
