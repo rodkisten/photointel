@@ -52,9 +52,14 @@ def supported_metadata(schema: dict, value: dict) -> dict:
     # SCIM credentials must never be adopted into state, even if API echoes them.
     if value.get("scim_config"):
         raise ValueError("SCIM configuration requires a separate secret-safe migration")
-    return {key: item for key, item in value.items() if key in attributes
-            and (attributes[key].get("optional") or attributes[key].get("required"))
-            and item is not None and key not in {"scim_config"}}
+    metadata = {key: item for key, item in value.items() if key in attributes
+                and (attributes[key].get("optional") or attributes[key].get("required"))
+                and item is not None and key not in {"scim_config"}}
+    # Cloudflare's Access provider rejects these mutually exclusive fields.
+    # Prefer the modern destinations representation when both are present.
+    if "destinations" in metadata and "self_hosted_domains" in metadata:
+        metadata.pop("self_hosted_domains")
+    return metadata
 
 
 def snapshot(api, config: dict) -> dict:
