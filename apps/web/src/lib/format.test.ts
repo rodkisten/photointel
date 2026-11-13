@@ -150,6 +150,7 @@ describe('Data Formatting & Extraction Utilities', () => {
       expect(isStatusKey('completed')).toBe(true);
       
       expect(isStatusKey('fake_status_key')).toBe(false);
+      // @ts-expect-error: intentionally verify runtime handling of an invalid argument.
       expect(isStatusKey(123)).toBe(false);
     });
 
