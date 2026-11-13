@@ -1,14 +1,14 @@
 name: "🧱 Setup GCP"
 run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · photointel"
 on:
-  push:
-    branches: [main]
-    paths:
+  #push:
+  #  branches: [main]
+  #  paths:
      # - 'infra/gcp/bootstrap.sh'
       # - 'infra/gcp/**'
      # - 'infra/docker/**'
-      - '.github/actions/gcp-config/**'
-      - '.github/workflows/gcp-bootstrap.yml'
+   #   - '.github/actions/gcp-config/**'
+ #     - '.github/workflows/gcp-bootstrap.yml'
   pull_request:
     branches: [main]
     paths:
