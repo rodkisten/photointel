@@ -17,6 +17,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         root: [production, cloudflare]
     steps:
@@ -25,6 +26,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.17.2"
+          terraform_wrapper: false
       - name: "TF · Format"
         run: terraform fmt -recursive infra/terraform
       - name: "TF · Init without remote backend"
@@ -32,6 +34,8 @@ jobs:
         run: terraform init -backend=false -input=false
       - name: "TF · Generate offline Cloudflare schema fixture"
         if: matrix.root == 'cloudflare'
+        env:
+          TF_OFFLINE_FIXTURE: 'true'
         run: python3 -m infra.terraform.cloudflare_release fixture
       - name: "TF · Validate"
         working-directory: infra/terraform/environments/${{ matrix.root }}

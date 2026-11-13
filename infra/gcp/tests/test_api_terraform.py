@@ -74,6 +74,13 @@ class APIAdoptionTests(unittest.TestCase):
 
 
 class CloudflareAdoptionTests(unittest.TestCase):
+    def test_new_backend_is_distinct_from_a_state_access_failure(self):
+        with patch.object(cf.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "No state file was found!")):
+            self.assertEqual(cf.state_addresses(), set())
+        with patch.object(cf.subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", "403 Permission denied")):
+            with self.assertRaisesRegex(RuntimeError, "refusing adoption"):
+                cf.state_addresses()
+
     def test_schema_filter_never_copies_computed_ids_or_scim_credentials(self):
         schema = {"block": {"attributes": {"name": {"required": True}, "id": {"computed": True}}}}
         self.assertEqual(cf.supported_metadata(schema, {"id": "uuid", "name": "worker", "unrelated": "x"}), {"name": "worker"})

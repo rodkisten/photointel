@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -33,6 +34,17 @@ def terraform(*args):
     if result.returncode:
         raise RuntimeError("Cloudflare Terraform metadata read failed")
     return json.loads(result.stdout)
+
+
+def state_addresses() -> set[str]:
+    result = subprocess.run(["terraform", "state", "list"], cwd=ROOT, capture_output=True, text=True, check=False)
+    if result.returncode == 0:
+        return set(result.stdout.splitlines())
+    # A new, initialized state prefix is expected on first adoption. Never
+    # confuse credential/transport failures with that explicit CLI condition.
+    if "No state file was found!" in result.stderr:
+        return set()
+    raise RuntimeError("Cannot read Cloudflare Terraform state; refusing adoption")
 
 
 def supported_metadata(schema: dict, value: dict) -> dict:
@@ -120,6 +132,13 @@ def main():
     parser.add_argument("action", choices=["prepare", "verify", "fixture"])
     args = parser.parse_args()
     if args.action == "fixture":
+        if os.environ.get("TF_OFFLINE_FIXTURE") != "true":
+            raise ValueError("fixture is restricted to the explicit offline validation job")
+        # Schema inspection loads a backend, unlike validate. CI must use a
+        # local backend so it cannot contact production GCS. Never run fixture
+        # in a production execution; prepare/verify keep the GCS declaration.
+        versions = ROOT / "versions.tf"
+        versions.write_text(re.sub(r'\s*backend\s+"gcs"\s*\{\s*\}', '', versions.read_text()))
         # Only for CI's mocked provider test; no GCP/Cloudflare credentials.
         inventory = {key: {} for key in TYPES}
         account = "a" * 32
@@ -176,7 +195,7 @@ def main():
                 if policy and policy.get("name") == "photointel-allowed-emails" and policy.get("decision") == "allow":
                     policy["include"] = [{"email": {"email": email}} for email in sorted(set(email.casefold() for email in configured))]
     provider = terraform("providers", "schema", "-json")["provider_schemas"]["registry.terraform.io/cloudflare/cloudflare"]
-    state = set(subprocess.run(["terraform", "state", "list"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines())
+    state = state_addresses()
     declarations, variables = generated_configuration(live, provider["resource_schemas"], state)
     for filename, contents in (("adoption.auto.tf.json", declarations), ("inventory.auto.tfvars.json", variables)):
         path = ROOT / filename
