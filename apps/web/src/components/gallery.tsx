@@ -13,15 +13,54 @@ import { Button } from './ui/button';
 import { Dialog } from './ui/dialog';
 import { PhotoViewer } from './viewer';
 
+// --- TYPES & INTERFACES ---
+
+export interface GalleryProps {
+  search: SearchRequest;
+  compact?: boolean;
+  albumId?: string;
+}
+
+export interface PhotoTileProps {
+  asset: Asset;
+  selected: boolean;
+  selecting: boolean;
+  onSelect: () => void;
+  onOpen: () => void;
+  sizes: string;
+}
+
+type BulkActionType = 'tag' | 'album' | null;
+
+// --- CONFIGURATION & CONSTANTS ---
+
+const GALLERY_CONFIG = {
+  MIN_WIDTH_TABLET: 600,
+  MIN_WIDTH_DESKTOP: 1000,
+  HASH_ROW_MAX: 20_000,
+  RESTORATION_MAX_ATTEMPTS: 50,
+  SCROLL_RESTORE_DELAY: 280,
+  TOUCH_PULL_THRESHOLD: 65,
+  TOUCH_PULL_MAX: 110,
+  LONG_PRESS_MS: 550,
+  VIRTUALIZER_OVERSCAN: 5,
+  ROW_HEIGHT_OFFSET: 36,
+  MAX_KEYWORD_LENGTH: 1500,
+} as const;
+
+const DENSITY_COLUMNS = {
+  mobile: [3, 4, 2] as const,
+  tablet: [5, 7, 4] as const,
+  desktop: [7, 10, 5] as const,
+};
+
+// --- COMPONENT ---
+
 export function Gallery({
   search,
   compact = false,
   albumId,
-}: {
-  search: SearchRequest;
-  compact?: boolean;
-  albumId?: string;
-}) {
+}: GalleryProps) {
   const [params, setParams] = useSearchParams();
   const viewerId = params.get('photo');
   const scroll = useRef<HTMLDivElement>(null);
@@ -31,56 +70,77 @@ export function Gallery({
   const [pullDistance, setPullDistance] = useState(0);
   const restored = useRef(false);
   const [width, setWidth] = useState(800);
+  
   const density = useUi((state) => state.density);
   const selected = useUi((state) => state.selected);
   const selecting = useUi((state) => state.selecting);
   const toggle = useUi((state) => state.toggle);
   const clear = useUi((state) => state.clear);
-  const [bulk, setBulk] = useState<'tag' | 'album' | null>(null);
+  
+  const [bulk, setBulk] = useState<BulkActionType>(null);
   const [keyword, setKeyword] = useState('');
   const [album, setAlbum] = useState('');
+  
   const mutation = useAction();
   const tagMutation = useAction('/v1/assets/tags', 'PATCH');
   const remove = useAction(undefined, 'DELETE');
   const albums = useApi<Page<Album>>('/v1/albums?limit=100');
+  
   const query = useInfiniteQuery({
     queryKey: ['gallery', search],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam }) => searchAssets({ ...search, cursor: pageParam }),
     getNextPageParam: (page) => page.next_cursor ?? undefined,
   });
+
   const assets = query.data?.pages.flatMap((page) => page.items) ?? [];
   const explanation = obj(query.data?.pages[0]?.explanation);
-  const columns = width < 600 ? [3, 4, 2][density] : width < 1000 ? [5, 7, 4][density] : [7, 10, 5][density];
+
+  const columns = width < GALLERY_CONFIG.MIN_WIDTH_TABLET 
+    ? DENSITY_COLUMNS.mobile[density] 
+    : width < GALLERY_CONFIG.MIN_WIDTH_DESKTOP 
+      ? DENSITY_COLUMNS.tablet[density] 
+      : DENSITY_COLUMNS.desktop[density];
+
   const rowCount = Math.ceil(assets.length / columns);
-  const rowHeight = width / columns + 36;
+  const rowHeight = width / columns + GALLERY_CONFIG.ROW_HEIGHT_OFFSET;
+
   const virtualizer = useVirtualizer({
     count: rowCount + (query.hasNextPage ? 1 : 0),
     getScrollElement: () => scroll.current,
     estimateSize: () => rowHeight,
-    overscan: 5,
+    overscan: GALLERY_CONFIG.VIRTUALIZER_OVERSCAN,
   });
+
   const visible = virtualizer.getVirtualItems();
   const lastIndex = visible.at(-1)?.index ?? 0;
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+
   if (initialRow.current === null) {
     const matched = window.location.hash.match(/^#grid=(\d{1,6})$/);
-    initialRow.current = matched ? Math.min(20000, Number(matched[1])) : 0;
+    initialRow.current = matched ? Math.min(GALLERY_CONFIG.HASH_ROW_MAX, Number(matched[1])) : 0;
   }
+
   const savedRow = initialRow.current;
   const restoreRequests = useRef(0);
+
   useEffect(() => {
-    if (lastIndex >= rowCount - 3 && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+    if (lastIndex >= rowCount - 3 && hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
   }, [lastIndex, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   useEffect(() => {
     if (!scroll.current) return;
     const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
     observer.observe(scroll.current);
     return () => observer.disconnect();
   }, []);
+
   useEffect(() => {
     virtualizer.measure();
   }, [columns, virtualizer]);
+
   useEffect(() => {
     if (!restored.current) {
       restored.current = true;
@@ -93,16 +153,18 @@ export function Gallery({
       history.replaceState(history.state, '', window.location.pathname + window.location.search);
     }
   }, [search]);
+
   useEffect(() => {
     if (savedRow <= 0 || !query.data) return;
     if (rowCount > savedRow || !hasNextPage) {
       virtualizer.scrollToIndex(Math.min(savedRow, Math.max(0, rowCount - 1)), { align: 'start' });
       initialRow.current = 0;
-    } else if (!isFetchingNextPage && restoreRequests.current < 50) {
+    } else if (!isFetchingNextPage && restoreRequests.current < GALLERY_CONFIG.RESTORATION_MAX_ATTEMPTS) {
       restoreRequests.current += 1;
       void fetchNextPage();
     }
   }, [savedRow, rowCount, hasNextPage, isFetchingNextPage, fetchNextPage, query.data, virtualizer]);
+
   useEffect(() => {
     if (!query.data || !assets.length || initialRow.current !== 0 || viewerId) return;
     const id = window.setTimeout(() => {
@@ -114,17 +176,18 @@ export function Gallery({
           window.location.pathname + window.location.search + '#grid=' + row,
         );
       }
-    }, 280);
+    }, GALLERY_CONFIG.SCROLL_RESTORE_DELAY);
     return () => window.clearTimeout(id);
   }, [lastIndex, query.data, assets.length, viewerId, visible.length]);
 
-  function open(id: string | null) {
+  function open(id: string | null): void {
     const next = new URLSearchParams(params);
     if (id) next.set('photo', id);
     else next.delete('photo');
     setParams(next, { replace: true });
   }
-  async function refreshGallery() {
+
+  async function refreshGallery(): Promise<void> {
     setRefreshing(true);
     try {
       await query.refetch();
@@ -133,22 +196,29 @@ export function Gallery({
       setPullDistance(0);
     }
   }
-  function onPullStart(event: TouchEvent<HTMLDivElement>) {
+
+  function onPullStart(event: TouchEvent<HTMLDivElement>): void {
     pullStart.current =
       event.touches.length === 1 && (scroll.current?.scrollTop ?? 1) <= 0 && !viewerId
         ? event.touches[0].clientY
         : null;
   }
-  function onPullMove(event: TouchEvent<HTMLDivElement>) {
+
+  function onPullMove(event: TouchEvent<HTMLDivElement>): void {
     if (pullStart.current === null || event.touches.length !== 1) return;
-    setPullDistance(Math.min(110, Math.max(0, event.touches[0].clientY - pullStart.current)));
+    setPullDistance(Math.min(GALLERY_CONFIG.TOUCH_PULL_MAX, Math.max(0, event.touches[0].clientY - pullStart.current)));
   }
-  function onPullEnd() {
-    if (pullDistance >= 65 && !refreshing) void refreshGallery();
-    else setPullDistance(0);
+
+  function onPullEnd(): void {
+    if (pullDistance >= GALLERY_CONFIG.TOUCH_PULL_THRESHOLD && !refreshing) {
+      void refreshGallery();
+    } else {
+      setPullDistance(0);
+    }
     pullStart.current = null;
   }
-  async function applyBulk() {
+
+  async function applyBulk(): Promise<void> {
     if (bulk === 'tag' && keyword.trim()) {
       await tagMutation.mutateAsync({
         body: {
@@ -161,12 +231,16 @@ export function Gallery({
       });
     } else if (bulk === 'album' && album) {
       await mutation.mutateAsync({ url: `/v1/albums/${album}/assets`, body: { asset_ids: [...selected] } });
-    } else return;
+    } else {
+      return;
+    }
+
     useUi.getState().notify('Alterações salvas no catálogo.');
     setBulk(null);
     setKeyword('');
     clear();
   }
+
   return (
     <>
       <div className="toolbar">
@@ -197,6 +271,7 @@ export function Gallery({
           {selecting ? 'Sair da seleção' : 'Selecionar'}
         </Button>
       </div>
+
       {selecting && selected.size > 0 && (
         <div className="selection-bar">
           <strong>{selected.size} selecionadas</strong>
@@ -215,10 +290,11 @@ export function Gallery({
                 size="sm"
                 disabled={remove.isPending}
                 onClick={async () => {
-                  for (const id of selected)
+                  for (const id of selected) {
                     await remove.mutateAsync({
                       url: `/v1/albums/${albumId}/assets/${id}`,
                     });
+                  }
                   clear();
                 }}
               >
@@ -231,6 +307,7 @@ export function Gallery({
           </div>
         </div>
       )}
+
       {explanation.semantic_status === 'unavailable' && (
         <div className="notice warning" role="status">
           <span>
@@ -252,6 +329,7 @@ export function Gallery({
           )}
         </div>
       )}
+
       {query.isPending ? (
         <Skeleton count={8} />
       ) : query.error ? (
@@ -259,8 +337,7 @@ export function Gallery({
       ) : !assets.length ? (
         <Empty
           title="Seu próximo olhar começa aqui"
-          description="Nenhuma fotografia corresponde a esta
-          visualização. Ajuste os filtros ou importe um primeiro lote em Sincronização iCloud."
+          description="Nenhuma fotografia corresponde a esta visualização. Ajuste os filtros ou importe um primeiro lote em Sincronização iCloud."
         />
       ) : (
         <div
@@ -280,24 +357,26 @@ export function Gallery({
             <div className="gallery-pull-indicator" role="status">
               {refreshing
                 ? 'Atualizando fotografias…'
-                : pullDistance >= 65
+                : pullDistance >= GALLERY_CONFIG.TOUCH_PULL_THRESHOLD
                   ? 'Solte para atualizar'
                   : 'Puxe para atualizar'}
             </div>
           )}
           <div className="virtual-grid" style={{ height: virtualizer.getTotalSize() }}>
             {visible.map((row) => {
-              if (row.index >= rowCount)
+              if (row.index >= rowCount) {
                 return (
                   <div className="load-more" key="load" style={{ position: 'absolute', top: row.start }}>
                     <LoaderCircle size={16} />
                     Carregando…
                   </div>
                 );
+              }
               const group = assets.slice(row.index * columns, (row.index + 1) * columns);
               const previous = assets[row.index * columns - 1];
               const day = group[0]?.captured_at?.slice(0, 10);
               const showDate = row.index === 0 || day !== previous?.captured_at?.slice(0, 10);
+              
               return (
                 <div
                   key={row.key}
@@ -338,10 +417,13 @@ export function Gallery({
           )}
         </div>
       )}
+
       {query.isFetchNextPageError && (
         <ErrorState error={query.error!} retry={() => void query.fetchNextPage()} />
       )}
+
       {viewerId && <PhotoViewer id={viewerId} assets={assets} onNavigate={open} onClose={() => open(null)} />}
+
       <Dialog
         open={bulk !== null}
         onOpenChange={(value) => !value && setBulk(null)}
@@ -356,7 +438,7 @@ export function Gallery({
               onChange={(event) => setKeyword(event.target.value)}
               autoFocus
               placeholder="viagem, favoritas"
-              maxLength={1500}
+              maxLength={GALLERY_CONFIG.MAX_KEYWORD_LENGTH}
             />
           </label>
         ) : (
@@ -389,27 +471,24 @@ export function Gallery({
     </>
   );
 }
-function PhotoTile({
+
+export function PhotoTile({
   asset,
   selected,
   selecting,
   onSelect,
   onOpen,
   sizes,
-}: {
-  asset: Asset;
-  selected: boolean;
-  selecting: boolean;
-  onSelect: () => void;
-  onOpen: () => void;
-  sizes: string;
-}) {
+}: PhotoTileProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
-  const cancel = () => {
+
+  const cancel = (): void => {
     if (timer.current) clearTimeout(timer.current);
   };
+
   useEffect(() => cancel, []);
+
   return (
     <div
       role="button"
@@ -438,7 +517,7 @@ function PhotoTile({
           timer.current = setTimeout(() => {
             held.current = true;
             onSelect();
-          }, 550);
+          }, GALLERY_CONFIG.LONG_PRESS_MS);
         }
       }}
       onPointerUp={cancel}
