@@ -266,7 +266,7 @@ export async function api(
       });
     }
     if (method === 'PUT') {
-      const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown }>(request, 130_000);
+      const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown; confirm?: unknown }>(request, 130_000);
       const name = input.name;
       const value = input.value;
       if (
@@ -283,6 +283,16 @@ export async function api(
           'VARIABLE_VALUE',
           'Nome ou valor inválido; use Secret Manager para credenciais',
         );
+      // Only this explicit Manage setting may auto-dispatch from the generic variable editor.
+      // All other variables retain manual review, avoiding unexpected billable deploys.
+      const deployManage = name === 'GCP_COST_ALERT_USD';
+      if (deployManage) {
+        if (scope !== 'environment') throw new ApiError(422, 'VARIABLE_SCOPE', 'Limite GCP deve ficar no environment production.');
+        if (!/^\\d+(?:\\.\\d{1,2})?$/.test(value) || Number(value) <= 0 || Number(value) > 100000)
+          throw new ApiError(422, 'COST_ALERT', 'Informe limite positivo em USD, até 100000.');
+        if (input.confirm !== 'confirma')
+          throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: mudar esta variável acionará Manage Deploy. Digite confirma.');
+      }
       const existing = await gh(env, base + '?per_page=100');
       const match = safeList(existing, 'variables').find((entry) => entry.name === name);
       if (match) {
@@ -297,7 +307,18 @@ export async function api(
       console.log(
         JSON.stringify({ event: 'github_variable_updated', name, scope, operator: identity.email }),
       );
-      return json({ ok: true, version: await digest(value) });
+      let dispatch: 'queued' | 'failed' | 'none' = 'none';
+      if (deployManage) {
+        try {
+          await gh(env, '/actions/workflows/manage-deploy.yml/dispatches', 'POST', {
+            ref: 'main', inputs: { mode: 'apply' },
+          });
+          dispatch = 'queued';
+        } catch {
+          dispatch = 'failed';
+        }
+      }
+      return json({ ok: true, version: await digest(value), dispatch });
     }
   }
 
