@@ -59,8 +59,10 @@ def _audit_predicates():
         or_(
             Asset.ingestion_status.in_(
                 (
-                    "completed", "failed", "quarantined", "pending",
-                    "queued", "retrying", "downloading", "downloaded", "processing",
+                    # Pending discovery is not a broken preview. Audit only
+                    # assets with a completed or interrupted ingestion attempt.
+                    "completed", "failed", "quarantined",
+                    "downloaded", "processing",
                 )
             ),
             failed_job,
