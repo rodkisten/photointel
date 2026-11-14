@@ -43,7 +43,7 @@ jobs:
           service_account: photointel-terraform@photointel.iam.gserviceaccount.com
           project_id: photointel
       - uses: google-github-actions/setup-gcloud@v3
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.2"
           terraform_wrapper: false
