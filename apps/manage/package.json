@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit && vite build",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.worker.json --noEmit",
+    "typecheck": "node scripts/typecheck-all.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run src && npm run test:pwa",
     "format": "npm --prefix ../.. run format:manage",

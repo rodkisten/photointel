@@ -330,13 +330,12 @@ function SourceDetails({ source, id }: { source: CostSource; id: string }) {
 
 function TopSpenders({ data }: { data: CostsResponse }) {
   // The provider and GCP rankings are separate: never double-count GCP in the total.
-  const providers = INFO.map(({ id, label }) => ({
-    name: label,
-    amount: data.providers[id].status === 'ok' && data.providers[id].currency === 'USD'
-      ? data.providers[id].total : null,
-  })).filter((item): item is { name: string; amount: number } =>
-    item.amount !== null && Number.isFinite(item.amount) && item.amount > 0
-  ).sort((a, b) => b.amount - a.amount);
+  const providers: Array<{ name: string; amount: number }> = INFO.flatMap(({ id, label }) => {
+    const amount = data.providers[id].status === 'ok' && data.providers[id].currency === 'USD'
+      ? data.providers[id].total : null;
+    return amount !== null && Number.isFinite(amount) && amount > 0
+      ? [{ name: label, amount }] : [];
+  }).sort((a, b) => b.amount - a.amount);
   const gcp = data.providers.gcp;
   const totals = new Map<string, number>();
   if (gcp.status === 'ok') {

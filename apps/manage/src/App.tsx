@@ -8,6 +8,7 @@ import {
   CloudCog,
   ServerCog,
   Timer,
+  PlayCircle,
   Wallet,
   Code2,
   Images,
@@ -31,6 +32,7 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'jobs', to: '/jobs', label: 'Jobs', icon: PlayCircle },
   { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
@@ -44,12 +46,13 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  jobs: 'Dispare jobs e acompanhe logs de execução',
   operations: 'Cron, pausas e execuções dos serviços',
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
@@ -65,6 +68,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
   if (pathname.startsWith('/deploys')) return 'deploy';
   if (pathname.startsWith('/triggers')) return 'triggers';

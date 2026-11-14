@@ -1,4 +1,4 @@
-export type Tab = 'overview' | 'operations' | 'deploy' | 'infrastructure' | 'triggers' | 'costs' | 'logs' | 'notifications' | 'config' | 'secrets' | 'icloud' | 'settings';
+export type Tab = 'overview' | 'operations' | 'jobs' | 'deploy' | 'infrastructure' | 'triggers' | 'costs' | 'logs' | 'notifications' | 'config' | 'secrets' | 'icloud' | 'settings';
 export type Meta = {
   email: string;
   repo: string;
