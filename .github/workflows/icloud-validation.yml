@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.15'
       - name: "Unit contracts without credentials"
         run: python3 -m unittest discover -s infra/gcp/tests -p test_icloud_setup.py -v
       # The legacy terminal-only installer downloads a mutable, unversioned
