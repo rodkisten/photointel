@@ -21,6 +21,21 @@ export function OperationsPage() {
     queryFn: () => api<{ items: Array<{ name: string; schedules: Array<{ cron: string }>; error?: string }> }>('/cloudflare/worker-crons'),
     retry: false,
   });
+  const [workerEdit, setWorkerEdit] = useState<{ name: string; crons: string } | null>(null);
+  const [workerConfirm, setWorkerConfirm] = useState(false);
+  const workerSave = useMutation({
+    mutationFn: (target: { name: string; crons: string }) =>
+      send('/cloudflare/worker-crons', {
+        name: target.name,
+        crons: target.crons.split('\n').map(cron => cron.trim()).filter(Boolean),
+        confirm: target.name,
+      }),
+    onSuccess: async () => {
+      setWorkerEdit(null);
+      setWorkerConfirm(false);
+      await client.invalidateQueries({ queryKey: ['operations-worker-crons'] });
+    },
+  });
   const jobs = useQuery({ queryKey: ['gcp-jobs'], queryFn: () => api<{ items: Job[] }>('/gcp/jobs'), retry: false });
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
@@ -103,7 +118,27 @@ export function OperationsPage() {
           <p key={index} className="mt-1 text-xs text-carbon-400">Cron UTC: {schedule.cron}</p>)}
         {workerCrons.data?.items.find(item => item.name === worker.name)?.error &&
           <p className="text-xs text-carbon-400">Cron indisponível</p>}
+        {!workerCrons.data?.items.find(item => item.name === worker.name)?.error && workerCrons.data?.items.some(item => item.name === worker.name) &&
+          <Button size="sm" variant="outline" className="mt-2" onClick={() => {
+            setWorkerEdit({ name: worker.name, crons: (workerCrons.data?.items.find(item => item.name === worker.name)?.schedules || []).map(item => item.cron).join('\n') });
+            setWorkerConfirm(false);
+          }}>Editar crons</Button>}
+        {workerEdit?.name === worker.name && <div className="mt-2 space-y-2 rounded-lg border border-carbon-700 p-3">
+          <label htmlFor="worker-crons" className="text-xs text-carbon-300">Um cron UTC por linha</label>
+          <textarea id="worker-crons" rows={3} value={workerEdit.crons} onChange={event => { setWorkerEdit({ ...workerEdit, crons: event.target.value }); setWorkerConfirm(false); }}
+            className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-2 font-mono text-xs text-carbon-100" />
+          <p className="text-xs text-carbon-400">Deixar vazio remove todos os agendamentos deste Worker. Requisições HTTP continuam disponíveis.</p>
+          {workerConfirm && <p className="text-xs text-carbon-200">Confirma substituir os crons de {worker.name}?</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={workerSave.isPending} onClick={() => {
+              if (workerConfirm) workerSave.mutate(workerEdit);
+              else setWorkerConfirm(true);
+            }}>{workerConfirm ? 'Confirmar alteração' : 'Revisar alteração'}</Button>
+            <Button size="sm" variant="outline" onClick={() => { setWorkerEdit(null); setWorkerConfirm(false); }}>Cancelar</Button>
+          </div>
+        </div>}
       </div>)}
+      {workerSave.error && <IssueBanner error={workerSave.error} />}
       {workerCrons.error && <IssueBanner error={workerCrons.error} />}
     </Card>
     <Card className="space-y-3 p-4">
