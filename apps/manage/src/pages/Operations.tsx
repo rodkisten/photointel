@@ -10,6 +10,18 @@ const shortName = (name: string) => name.split('/').pop() || name;
 
 export function OperationsPage() {
   const client = useQueryClient();
+  const queue = useQuery({
+    queryKey: ['photos-queue-control'],
+    queryFn: () => api<{ paused: boolean; waiting: number; running: number; paused_jobs: number }>('/photos/jobs/control'),
+    refetchInterval: 15000,
+    retry: false,
+  });
+  const queueControl = useMutation({
+    mutationFn: (action: 'pause' | 'resume') => send('/photos/jobs/control', { action, confirm: action }),
+    onSuccess: async () => { await client.invalidateQueries({ queryKey: ['photos-queue-control'] }); },
+  });
+  const [queueConfirm, setQueueConfirm] = useState<'pause' | 'resume' | null>(null);
+
   const schedules = useQuery({ queryKey: ['gcp-scheduler'], queryFn: () => api<{ items: Schedule[] }>('/gcp/scheduler'), retry: false });
   const workers = useQuery({
     queryKey: ['operations-cloudflare-workers'],
@@ -61,7 +73,23 @@ export function OperationsPage() {
   return <div className="space-y-5">
     <Card className="space-y-3 p-4">
       <h2 className="font-semibold text-carbon-100">Fila do Photos</h2>
-      <p className="text-xs text-carbon-400">O Photos já possui controle persistente de pausa, retomada e cancelamento da fila. Use esse controle para impedir novas tarefas sem apagar os jobs. O estado é mantido pelo backend do Photos.</p>
+      <p className="text-xs text-carbon-400">Estado persistente compartilhado com Photos. A pausa impede novas tarefas e revoga jobs ativos cooperativamente, sem excluir a fila.</p>
+      {queue.isPending && <Spinner />}
+      {queue.error && <IssueBanner error={queue.error} />}
+      {queue.data && <div className="space-y-2">
+        <p className="text-sm text-carbon-200">{queue.data.paused ? 'Fila pausada' : 'Fila ativa'} · {queue.data.waiting} aguardando · {queue.data.running} executando · {queue.data.paused_jobs} pausados</p>
+        <Button size="sm" variant="outline" onClick={() => setQueueConfirm(queue.data.paused ? 'resume' : 'pause')}>
+          {queue.data.paused ? 'Retomar fila' : 'Pausar fila'}
+        </Button>
+        {queueConfirm && <div className="space-y-2 rounded-lg border border-carbon-700 p-3">
+          <p className="text-xs text-carbon-300">Confirmar {queueConfirm === 'pause' ? 'pausa' : 'retomada'} de toda a fila?</p>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={queueControl.isPending} onClick={() => queueControl.mutate(queueConfirm, { onSuccess: () => setQueueConfirm(null) })}>Confirmar</Button>
+            <Button size="sm" variant="outline" onClick={() => setQueueConfirm(null)}>Cancelar</Button>
+          </div>
+        </div>}
+      </div>}
+      {queueControl.error && <IssueBanner error={queueControl.error} />}
       <a href="https://photos.migos.club/jobs" target="_blank" rel="noopener noreferrer"
         className="inline-flex rounded-lg border border-carbon-700 px-3 py-2 text-xs font-medium text-carbon-100">
         Abrir fila do Photos ↗
