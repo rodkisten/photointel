@@ -101,3 +101,18 @@ test('rejects excessive dimensions and unsupported transforms before gateway acc
     assert.equal(response.status, 400);
   }
 });
+
+test('gateway network errors are handled without leaking credentials', async () => {
+  globalThis.fetch = async () => { throw Error('network failed with secret'); };
+  const response = await api.fetch(request('originals/tenants/tenant-a/a.jpg'), env);
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: 'Source unavailable' });
+});
+test('malformed gateway JSON returns a controlled error', async () => {
+  globalThis.fetch = async () => new Response('{broken', {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const response = await api.fetch(request('originals/tenants/tenant-a/a.jpg'), env);
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: 'Invalid source response' });
+});
