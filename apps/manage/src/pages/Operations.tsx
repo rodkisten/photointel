@@ -16,6 +16,11 @@ export function OperationsPage() {
     queryFn: () => api<{ workers: Array<{ name: string; modified_on?: string }> }>('/overview'),
     retry: false,
   });
+  const workerCrons = useQuery({
+    queryKey: ['operations-worker-crons'],
+    queryFn: () => api<{ items: Array<{ name: string; schedules: Array<{ cron: string }>; error?: string }> }>('/cloudflare/worker-crons'),
+    retry: false,
+  });
   const jobs = useQuery({ queryKey: ['gcp-jobs'], queryFn: () => api<{ items: Job[] }>('/gcp/jobs'), retry: false });
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
@@ -39,6 +44,14 @@ export function OperationsPage() {
     onSuccess: async () => { setEdit(null); await client.invalidateQueries({ queryKey: ['gcp-scheduler'] }); },
   });
   return <div className="space-y-5">
+    <Card className="space-y-3 p-4">
+      <h2 className="font-semibold text-carbon-100">Fila do Photos</h2>
+      <p className="text-xs text-carbon-400">O Photos já possui controle persistente de pausa, retomada e cancelamento da fila. Use esse controle para impedir novas tarefas sem apagar os jobs. O estado é mantido pelo backend do Photos.</p>
+      <a href="https://photos.migos.club/jobs" target="_blank" rel="noopener noreferrer"
+        className="inline-flex rounded-lg border border-carbon-700 px-3 py-2 text-xs font-medium text-carbon-100">
+        Abrir fila do Photos ↗
+      </a>
+    </Card>
     <Card className="space-y-2 p-4">
       <h2 className="font-semibold text-carbon-100">Agendamentos</h2>
       <p className="text-xs text-carbon-400">Pause a origem das execuções para economizar. Um cron pausado continua pausado após a edição. Horários em UTC.</p>
@@ -81,10 +94,17 @@ export function OperationsPage() {
       {workers.isPending && <Spinner />}
       {workers.error && <IssueBanner error={workers.error} />}
       {workers.data?.workers.length === 0 && <p className="text-xs text-carbon-400">Nenhum Worker encontrado.</p>}
-      {workers.data?.workers.map(worker => <div key={worker.name} className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2">
-        <p className="min-w-0 break-all text-sm text-carbon-200">{worker.name}</p>
-        <span className="shrink-0 text-xs text-carbon-500">Implantado</span>
+      {workers.data?.workers.map(worker => <div key={worker.name} className="border-t border-carbon-800 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 break-all text-sm text-carbon-200">{worker.name}</p>
+          <span className="shrink-0 text-xs text-carbon-500">Implantado</span>
+        </div>
+        {workerCrons.data?.items.find(item => item.name === worker.name)?.schedules.map((schedule, index) =>
+          <p key={index} className="mt-1 text-xs text-carbon-400">Cron UTC: {schedule.cron}</p>)}
+        {workerCrons.data?.items.find(item => item.name === worker.name)?.error &&
+          <p className="text-xs text-carbon-400">Cron indisponível</p>}
       </div>)}
+      {workerCrons.error && <IssueBanner error={workerCrons.error} />}
     </Card>
     <Card className="space-y-3 p-4">
       <h2 className="font-semibold text-carbon-100">Cloud Run Jobs</h2>
