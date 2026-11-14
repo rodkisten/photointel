@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.29
 # Build the real upstream server because vendor registries can withdraw releases.
-FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-bookworm AS build
 ARG TARGETOS=linux
 ARG TARGETARCH
 ARG MINIO_REVISION=07c3a429bfed433e49018cb0f78a52145d4bedeb
