@@ -113,17 +113,25 @@ export default {
       if (origin.protocol !== 'https:' || origin.username || origin.password ||
           origin.search || origin.hash || origin.pathname !== '/') throw Error('Invalid gateway');
     } catch { return json({ error: 'Unavailable' }, 503); }
-    const response = await fetch(new URL('/v1/source/sign', origin), {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + env.MEDIA_SOURCE_TOKEN,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ key }),
-      redirect: 'error',
-    });
+    let response: Response;
+    try {
+      response = await fetch(new URL('/v1/source/sign', origin), {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + env.MEDIA_SOURCE_TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key }),
+        redirect: 'error',
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      return json({ error: 'Source unavailable' }, 502);
+    }
     if (!response.ok) return json({ error: 'Source unavailable' }, 502);
-    const result: unknown = await response.json();
+    let result: unknown;
+    try { result = await response.json(); }
+    catch { return json({ error: 'Invalid source response' }, 502); }
     if (!result || typeof result !== 'object' ||
         typeof (result as Record<string, unknown>).url !== 'string' ||
         typeof (result as Record<string, unknown>).expires !== 'number') {
