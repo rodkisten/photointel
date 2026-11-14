@@ -57,13 +57,32 @@ def run(*args):
     subprocess.run(args, check=True, timeout=180)
 
 
+def latest_plan_id(ctx):
+    """Find newest matching plan; never silently select an incompatible plan."""
+    prefix = f"gs://{ctx['bucket']}/terraform-reviewed-plans/{ctx['scope']}/"
+    result = subprocess.run(
+        ["gcloud", "storage", "ls", prefix + "*/manifest.json"],
+        capture_output=True, text=True, check=True, timeout=120,
+    )
+    ids = set()
+    for line in result.stdout.splitlines():
+        match = re.fullmatch(re.escape(prefix) + r"([0-9]{1,20})/manifest\\.json", line.strip())
+        if match:
+            ids.add(match.group(1))
+    if not ids:
+        raise ValueError("No saved plans for this scope. Run Plan first.")
+    # GitHub run IDs are monotonically increasing. Only use the latest
+    # successful Plan, never fall back to an older plan without permission.
+    return str(max(map(int, ids)))
+
+
 def main():
     action = sys.argv[1]
     ctx = context()
     if action == "save":
         run_id = required("GITHUB_RUN_ID")
     elif action == "restore":
-        run_id = required("PLAN_RUN_ID")
+        run_id = os.environ.get("PLAN_RUN_ID", "").strip() or latest_plan_id(ctx)
     else:
         raise ValueError("Expected save or restore")
     if not re.fullmatch(r"[0-9]{1,20}", run_id):
