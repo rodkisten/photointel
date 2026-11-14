@@ -7,6 +7,8 @@ export interface Env {
   MEDIA_TENANTS_JSON: string;
   MEDIA_SOURCE_GATEWAY_URL: string;
   MEDIA_SOURCE_TOKEN: string;
+  MEDIA_IMAGOR_URL?: string;
+  MEDIA_IMAGOR_SECRET?: string;
 }
 const encoder = new TextEncoder();
 function safeEqual(a: string, b: string): boolean {
@@ -44,6 +46,31 @@ function validKey(key: unknown, prefix: string): key is string {
     !key.includes('%') && !key.includes('\\') &&
     key.split('/').every(part => part !== '' && part !== '.' && part !== '..');
 }
+function transformOptions(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  if (Object.keys(input).some(key => !['width', 'height', 'quality', 'format', 'fit'].includes(key))) return null;
+  const { width, height, quality = 80, format = 'webp', fit = 'contain' } = input;
+  if (!Number.isInteger(width) || !Number.isInteger(height) ||
+      (width as number) < 1 || (height as number) < 1 ||
+      (width as number) > 4096 || (height as number) > 4096 ||
+      (width as number) * (height as number) > 16000000 ||
+      !Number.isInteger(quality) || (quality as number) < 30 || (quality as number) > 95 ||
+      !['webp', 'avif', 'jpeg', 'png'].includes(format as string) ||
+      !['contain', 'cover'].includes(fit as string)) return null;
+  return (fit === 'contain' ? 'fit-in/' : '') + width + 'x' + height +
+    '/filters:quality(' + quality + '):format(' + format + ')';
+}
+function base64Url(value: Uint8Array): string {
+  let binary = '';
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function signImagor(path: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return base64Url(new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(path))));
+}
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }
@@ -51,7 +78,8 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/healthz') return json({ ok: true });
-    if (url.pathname !== '/v1/source/sign') return json({ error: 'Not found' }, 404);
+    const transform = url.pathname === '/v1/image/transform';
+    if (!transform && url.pathname !== '/v1/source/sign') return json({ error: 'Not found' }, 404);
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
     const auth = request.headers.get('Authorization') || '';
     if (!auth.startsWith('Bearer ') || auth.length > 512) return json({ error: 'Unauthorized' }, 401);
@@ -71,7 +99,10 @@ export default {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       return json({ error: 'Invalid request' }, 400);
     }
-    const key = (payload as Record<string, unknown>).key;
+    const input = payload as Record<string, unknown>;
+    const key = input.key;
+    const options = transform ? transformOptions(input.transform) : null;
+    if (transform && !options) return json({ error: 'Invalid transform' }, 400);
     if (!validKey(key, tenant.sourcePrefix)) return json({ error: 'Forbidden' }, 403);
     if (!env.MEDIA_SOURCE_TOKEN || env.MEDIA_SOURCE_TOKEN.length < 32) {
       return json({ error: 'Unavailable' }, 503);
@@ -103,6 +134,25 @@ export default {
         signed.pathname !== '/v1/source/' + key.split('/').map(encodeURIComponent).join('/')) {
       return json({ error: 'Invalid source response' }, 502);
     }
-    return json(result);
+    if (!transform) return json(result);
+    if (!env.MEDIA_IMAGOR_SECRET || env.MEDIA_IMAGOR_SECRET.length < 32) {
+      return json({ error: 'Imagor unavailable' }, 503);
+    }
+    let imagor: URL;
+    try {
+      imagor = new URL(env.MEDIA_IMAGOR_URL);
+      if (imagor.protocol !== 'https:' || imagor.username || imagor.password ||
+          imagor.search || imagor.hash || imagor.pathname !== '/') throw Error('Invalid Imagor');
+    } catch { return json({ error: 'Imagor unavailable' }, 503); }
+    const imageSource = 'b64:' + base64Url(encoder.encode(signed.toString()));
+    const expires = (result as { expires: number }).expires;
+    const now = Math.floor(Date.now() / 1000);
+    if (!Number.isSafeInteger(expires) || expires < now || expires > now + 60) {
+      return json({ error: 'Invalid source expiration' }, 502);
+    }
+    // Imagor expire() uses milliseconds; never exceed the source URL's lifetime.
+    const path = options + '/filters:expire(' + expires * 1000 + ')/' + imageSource;
+    const signature = await signImagor(path, env.MEDIA_IMAGOR_SECRET);
+    return json({ url: new URL('/' + signature + '/' + path, imagor).toString(), expires });
   },
 };
