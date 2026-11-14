@@ -115,3 +115,42 @@ test('fails closed on invalid or absent R2 prefixes', async () => {
     assert.equal(response.status, 503, prefix);
   }
 });
+
+test('private Imagor origin is disabled without its own secret', async () => {
+  const response = await worker.fetch(new Request('https://media.example/v1/source/originals/a.jpg'), env);
+  assert.equal(response.status, 404);
+});
+test('private Imagor origin requires separate bearer authorization', async () => {
+  const sourceEnv = { ...env, MEDIA_SOURCE_TOKEN: 'o'.repeat(48), MEDIA_SOURCE_PREFIX: 'originals/tenant-a/' };
+  const response = await worker.fetch(new Request('https://media.example/v1/source/originals/tenant-a/a.jpg'), sourceEnv);
+  assert.equal(response.status, 401);
+});
+test('private Imagor origin restricts tenant and rejects traversal', async () => {
+  const sourceEnv = { ...env, MEDIA_SOURCE_TOKEN: 'o'.repeat(48), MEDIA_SOURCE_PREFIX: 'originals/tenant-a/' };
+  for (const path of ['originals/tenant-b/a.jpg', 'originals/tenant-a/../tenant-b/a.jpg', 'originals/tenant-a/%252e%252e/a.jpg']) {
+    const response = await worker.fetch(new Request('https://media.example/v1/source/' + path, {
+      headers: { Authorization: 'Bearer ' + sourceEnv.MEDIA_SOURCE_TOKEN },
+    }), sourceEnv);
+    assert.equal(response.status, 404, path);
+  }
+});
+test('private Imagor origin reads only the permitted R2 object', async () => {
+  const sourceEnv = {
+    ...env,
+    MEDIA_SOURCE_TOKEN: 'o'.repeat(48),
+    MEDIA_SOURCE_PREFIX: 'originals/tenant-a/',
+    MEDIA_BUCKET: {
+      ...env.MEDIA_BUCKET,
+      async get(key) {
+        assert.equal(key, 'originals/tenant-a/a.jpg');
+        return { body: new TextEncoder().encode('private image'), httpMetadata: { contentType: 'image/jpeg' } };
+      },
+    },
+  };
+  const response = await worker.fetch(new Request('https://media.example/v1/source/originals/tenant-a/a.jpg', {
+    headers: { Authorization: 'Bearer ' + sourceEnv.MEDIA_SOURCE_TOKEN },
+  }), sourceEnv);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+  assert.equal(await response.text(), 'private image');
+});
