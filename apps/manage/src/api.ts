@@ -622,7 +622,7 @@ export async function api(
     const origin = env.PHOTOINTEL_API_ORIGIN;
     if (!origin || !/^https:\/\/[^/?#]+$/.test(origin))
       throw new ApiError(503, 'PHOTOS_CONTROL_ORIGIN', 'Configure PHOTOINTEL_API_ORIGIN');
-    let upstreamPath = '/v1/jobs/control';
+    let upstreamPath = '/v1/manage/jobs/control';
     if (method === 'POST') {
       const input = await bodyJson<{ action?: unknown; confirm?: unknown }>(request);
       if ((input.action !== 'pause' && input.action !== 'resume') ||
