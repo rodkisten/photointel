@@ -81,8 +81,15 @@ export function Deploys() {
   const [confirm, setConfirm] = useState(false);
   const [workflowDialog, setWorkflowDialog] = useState(false);
   const [workflowSearch, setWorkflowSearch] = useState('');
+  const [manualInputs, setManualInputs] = useState('{}');
+  const [manualInputError, setManualInputError] = useState('');
   const mutation = useMutation({
-    mutationFn: () => send('/dispatch', { workflow: selected, inputs, confirm: 'DEPLOY ' + selected }),
+    mutationFn: () => {
+      const parsed: unknown = active && !Object.keys(active.inputs).length ? JSON.parse(manualInputs) : inputs;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.values(parsed).some(value => typeof value !== 'string'))
+        throw new Error('Os parâmetros devem ser um objeto JSON com valores de texto.');
+      return send('/dispatch', { workflow: selected, inputs: parsed, confirm: 'DEPLOY ' + selected });
+    },
     onSuccess: () => {
       setConfirm(false);
       setWorkflowDialog(false);
@@ -96,6 +103,8 @@ export function Deploys() {
   }, [selected, workflows.data]);
   function changeFile(value: string) {
     setSelected(value);
+    setManualInputs('{}');
+    setManualInputError('');
     const fields = workflows.data?.items.find((x) => x.file === value)?.inputs || {};
     setInputs(
       Object.fromEntries(
@@ -163,7 +172,17 @@ export function Deploys() {
               <Dialog.Close asChild><Button size="icon" variant="ghost" aria-label="Fechar"><X size={18} /></Button></Dialog.Close>
             </div>
             <div className="space-y-3">
-              {active && !Object.keys(active.inputs).length && <p className="text-xs text-carbon-400">Nenhum parâmetro configurado para este workflow.</p>}
+              {active && !Object.keys(active.inputs).length && <label className="block space-y-2 text-xs text-carbon-300">
+                <span>Parâmetros workflow_dispatch · JSON (opcional)</span>
+                <Textarea rows={4} value={manualInputs} onChange={event => {
+                  setManualInputs(event.target.value);
+                  try { const parsed: unknown = JSON.parse(event.target.value);
+                    setManualInputError(!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.values(parsed).some(value => typeof value !== 'string') ? 'Use um objeto JSON com valores de texto.' : '');
+                  } catch { setManualInputError('JSON inválido'); }
+                }} />
+                <span className="text-carbon-500">Use as chaves definidas em workflow_dispatch.inputs. Deixe {} se não houver parâmetros.</span>
+                {manualInputError && <span role="alert" className="text-red-300">{manualInputError}</span>}
+              </label>}
               {active && Object.entries(active.inputs).map(([key, values]) => <label key={key} className="block space-y-1 text-xs text-carbon-300">
                 <span>{key.replaceAll('_', ' ')}</span>
                 {values.length ? <Select value={inputs[key] ?? values[0]} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))}>
@@ -174,7 +193,7 @@ export function Deploys() {
               {mutation.error && <IssueBanner error={mutation.error} />}
               <div className="flex justify-end gap-2 border-t border-carbon-800 pt-3">
                 <Button size="sm" variant="ghost" onClick={() => setWorkflowDialog(false)}>Cancelar</Button>
-                <Button size="sm" disabled={!selected || mutation.isPending} onClick={() => setConfirm(true)}>
+                <Button size="sm" disabled={!selected || mutation.isPending || !!manualInputError} onClick={() => setConfirm(true)}>
                   <Play size={15} />{mutation.isPending ? 'Enviando…' : 'Executar'}
                 </Button>
               </div>
