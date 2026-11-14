@@ -1,3 +1,4 @@
+import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
@@ -41,6 +42,9 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  const cloudRunJobsResponse = await cloudRunJobsRoute(request, env, identity);
+  if (cloudRunJobsResponse) return cloudRunJobsResponse;
 
   // Interceptações de rotas modulares
   const notificationSettingsResponse = await notificationSettingsRoute(request, env);
