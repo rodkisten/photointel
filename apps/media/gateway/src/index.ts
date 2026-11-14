@@ -34,7 +34,11 @@ function parseRequest(url: URL): { key: string; expires: number; sig: string } |
   if (!key.startsWith('derived/')) return null;
   const ext = key.split('.').pop()?.toLowerCase();
   if (!ext || !allowedFormats.has(ext)) return null;
-  if ([...url.searchParams.keys()].some(param => param !== 'exp' && param !== 'sig')) return null;
+  let hasUnexpectedQueryParam = false;
+  url.searchParams.forEach((_value, param) => {
+    if (param !== 'exp' && param !== 'sig') hasUnexpectedQueryParam = true;
+  });
+  if (hasUnexpectedQueryParam) return null;
   const rawExp = url.searchParams.get('exp') || '';
   const sig = url.searchParams.get('sig') || '';
   if (!/^\d{10,13}$/.test(rawExp) || !/^[a-f0-9]{64}$/.test(sig)) return null;
