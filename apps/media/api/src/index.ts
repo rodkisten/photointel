@@ -151,7 +151,7 @@ export default {
       return json({ error: 'Invalid source expiration' }, 502);
     }
     // Imagor expire() uses milliseconds; never exceed the source URL's lifetime.
-    const path = options + '/filters:expire(' + expires * 1000 + ')/' + imageSource;
+    const path = options + ':expire(' + expires * 1000 + ')/' + imageSource;
     const signature = await signImagor(path, env.MEDIA_IMAGOR_SECRET);
     return json({ url: new URL('/' + signature + '/' + path, imagor).toString(), expires });
   },
