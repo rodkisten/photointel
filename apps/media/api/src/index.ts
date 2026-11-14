@@ -129,9 +129,17 @@ export default {
         typeof (result as Record<string, unknown>).expires !== 'number') {
       return json({ error: 'Invalid source response' }, 502);
     }
-    const signed = new URL((result as { url: string }).url);
-    if (signed.origin !== origin.origin ||
-        signed.pathname !== '/v1/source/' + key.split('/').map(encodeURIComponent).join('/')) {
+    let signed: URL;
+    try { signed = new URL((result as { url: string }).url); }
+    catch { return json({ error: 'Invalid source response' }, 502); }
+    const expectedPath = '/v1/source/' + key.split('/').map(encodeURIComponent).join('/');
+    const sourceExpiry = Number(signed.searchParams.get('exp'));
+    if (signed.origin !== origin.origin || signed.username || signed.password ||
+        signed.hash || signed.pathname !== expectedPath ||
+        signed.searchParams.size !== 2 || !signed.searchParams.has('sig') ||
+        !/^[a-f0-9]{64}$/.test(signed.searchParams.get('sig') || '') ||
+        !/^\d{10}$/.test(signed.searchParams.get('exp') || '') ||
+        sourceExpiry !== (result as { expires: number }).expires) {
       return json({ error: 'Invalid source response' }, 502);
     }
     if (!transform) return json(result);
