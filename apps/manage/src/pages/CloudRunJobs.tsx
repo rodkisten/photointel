@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button, Card, Input } from '../components/ui';
+import { JsonView } from '../components/json-view';
 import { IssueBanner, Spinner } from '../components/shared';
 import { api, send } from '../lib/client';
 
@@ -8,13 +9,6 @@ type Job = { name: string; updateTime?: string; latestCreatedExecution?: string 
 type Entry = { timestamp?: string; severity?: string; textPayload?: string; jsonPayload?: unknown; insertId?: string };
 const short = (name: string) => name.split('/').pop() || name;
 const fieldClass = 'w-full rounded-lg border border-carbon-700 bg-carbon-950 p-2 text-sm text-carbon-100';
-function JsonNode({ value, depth = 0 }: { value: unknown; depth?: number }) {
-  if (value === null || typeof value !== 'object') return <span className={typeof value === 'string' ? 'text-emerald-300' : 'text-amber-300'}>{JSON.stringify(value)}</span>;
-  const entries = Object.entries(value);
-  return <details open={depth < 2} className="pl-2"><summary className="cursor-pointer text-sky-300">{Array.isArray(value) ? '[' + entries.length + ']' : '{' + entries.length + '}'}</summary>
-    <div className="border-l border-carbon-700 pl-2">{entries.map(([key, child]) => <div key={key} className="break-all"><span className="text-violet-300">{key}: </span><JsonNode value={child} depth={depth + 1} /></div>)}</div>
-  </details>;
-}
 export function CloudRunJobsPage() {
   const jobs = useQuery({ queryKey: ['cloud-run-jobs'], queryFn: () => api<{ items: Job[] }>('/cloud-run-jobs'), retry: false });
   const [selected, setSelected] = useState('');
@@ -95,7 +89,7 @@ export function CloudRunJobsPage() {
       <div aria-live="polite" className="max-h-[65dvh] space-y-2 overflow-auto rounded-lg bg-carbon-950 p-2 font-mono text-xs">
         {visible.map((entry, index) => <div key={entry.insertId || index} className="border-b border-carbon-800 pb-2">
           <p className="text-carbon-500">{entry.timestamp || ''} <span className={entry.severity === 'ERROR' ? 'text-red-400' : 'text-sky-300'}>{entry.severity || 'INFO'}</span></p>
-          {entry.jsonPayload !== undefined ? <JsonNode value={entry.jsonPayload} /> : <pre className="whitespace-pre-wrap break-all text-carbon-200">{entry.textPayload || ''}</pre>}
+          <JsonView data={entry.jsonPayload ?? entry.textPayload ?? ''} search={search} showSearch={false} maxHeight={360} title="Log da execução" />
         </div>)}
         {!logs.isFetching && !visible.length && <p className="text-carbon-500">Nenhum log disponível para esta execução.</p>}
       </div>
