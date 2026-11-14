@@ -70,37 +70,13 @@ function ProviderList({ source, empty }: { source: Source; empty: string }) {
   </div>;
 }
 function LogLine({ item, search }: { item: Log; search: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const fragments = useMemo(() => {
-    const value = (item.message || '').slice(0, 6000);
-    if (!search.trim()) return [value];
-    const needle = search.trim().slice(0, 100).toLowerCase();
-    const pieces: Array<{ value: string; match: boolean }> = [];
-    let offset = 0, index = value.toLowerCase().indexOf(needle);
-    while (index >= 0 && pieces.length < 100) {
-      if (index > offset) pieces.push({ value: value.slice(offset, index), match: false });
-      pieces.push({ value: value.slice(index, index + needle.length), match: true });
-      offset = index + needle.length;
-      index = value.toLowerCase().indexOf(needle, offset);
-    }
-    if (offset < value.length) pieces.push({ value: value.slice(offset), match: false });
-    return pieces;
-  }, [item.message, search]);
-  const json = Boolean(item.message && (item.message.trim().startsWith('{') || item.message.trim().startsWith('[')));
   return (
-    <div className="border-b border-carbon-800/70 px-3 py-2 text-xs leading-5">
+    <div className="min-w-0 space-y-2 border-b border-carbon-800/70 px-3 py-2 text-xs leading-5">
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-carbon-500">{date(item.timestamp)}</span>
         <Badge tone={statusTone(item.severity)}>{item.severity || 'INFO'}</Badge>
-        {json && <button className="text-carbon-400 underline" onClick={() => setExpanded((x) => !x)}>
-          {expanded ? 'Ocultar JSON' : 'Ver JSON'}
-        </button>}
       </div>
-      <div className="mt-1 min-w-0 whitespace-pre-wrap break-words font-mono text-[12px] text-carbon-200">
-        {fragments.map((frag, i) => typeof frag === 'string' ? <span key={i}>{frag}</span> :
-          frag.match ? <mark key={i} className="bg-amber-400/30 text-amber-100">{frag.value}</mark> : <span key={i}>{frag.value}</span>)}
-      </div>
-      {expanded && json && <div className="mt-2 min-w-0"><JsonView data={item.message} search={search} maxHeight={320} /></div>}
+      <JsonView data={item.message} search={search} title="Mensagem" maxHeight={340} showSearch={false} />
     </div>
   );
 }
