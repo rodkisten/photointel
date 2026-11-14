@@ -706,6 +706,30 @@ export async function api(
     });
   }
 
+  // Cancellation is scoped to an existing PhotoIntel Cloud Run execution.
+  // Never accept a caller-supplied project, region or arbitrary resource path.
+  if (method === 'POST' && path === '/api/gcp/executions/cancel') {
+    const input = await bodyJson<{ job?: unknown; execution?: unknown; confirm?: unknown }>(request);
+    const { job, execution, confirm } = input;
+    if (typeof job !== 'string' || !PATTERNS.GCP_JOB_NAME.test(job) ||
+        typeof execution !== 'string' || !/^photointel-[a-z0-9-]{1,110}$/.test(execution) ||
+        confirm !== execution) {
+      throw new ApiError(422, 'EXECUTION_CANCEL', 'Confirme a execução PhotoIntel válida');
+    }
+    const base = gcpBase(env);
+    const resource = base + '/jobs/' + encodeURIComponent(job) + '/executions/' + encodeURIComponent(execution);
+    const existing = await gcp(env, identity, resource) as {
+      name?: string; completionTime?: string; conditions?: Array<{ type?: string; state?: string }>;
+    };
+    if (existing.name?.split('/').pop() !== execution ||
+        existing.name?.split('/').slice(-3, -2)[0] !== job) {
+      throw new ApiError(409, 'EXECUTION_SCOPE', 'Execução fora do job permitido');
+    }
+    if (existing.completionTime) return json({ name: existing.name, unchanged: true, completed: true });
+    const updated = await gcp(env, identity, resource + ':cancel', {}) as { name?: string };
+    return json({ name: updated.name || existing.name, cancellationRequested: true });
+  }
+
   // Only authenticated Manage operators may pause/resume scoped PhotoIntel schedules.
   // Never accept arbitrary GCP resource paths from the browser.
   if (method === 'POST' && path === '/api/gcp/scheduler/control') {
