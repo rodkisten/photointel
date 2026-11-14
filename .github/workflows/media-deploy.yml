@@ -72,7 +72,7 @@ jobs:
         run: python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
       - name: "🧰 Node.js 22 for media validation"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
       - name: "🧪 Validate media image and video once before publishing"
