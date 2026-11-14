@@ -154,3 +154,46 @@ test('private Imagor origin reads only the permitted R2 object', async () => {
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
   assert.equal(await response.text(), 'private image');
 });
+
+test('mints an Imagor-compatible short-lived private source URL', async () => {
+  const sourceEnv = {
+    ...env,
+    MEDIA_SOURCE_TOKEN: 'o'.repeat(48),
+    MEDIA_SOURCE_PREFIX: 'originals/tenant-a/',
+    MEDIA_BUCKET: {
+      ...env.MEDIA_BUCKET,
+      async get(key) {
+        assert.equal(key, 'originals/tenant-a/a.jpg');
+        return { body: new TextEncoder().encode('private image'), httpMetadata: { contentType: 'image/jpeg' } };
+      },
+    },
+  };
+  const mint = await worker.fetch(new Request('https://media.example/v1/source/sign', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + sourceEnv.MEDIA_SOURCE_TOKEN },
+    body: JSON.stringify({ key: 'originals/tenant-a/a.jpg' }),
+  }), sourceEnv);
+  assert.equal(mint.status, 200);
+  const { url, expires } = await mint.json();
+  assert.ok(expires <= Math.floor(Date.now() / 1000) + 60);
+  assert.ok(!url.includes(sourceEnv.MEDIA_SOURCE_TOKEN));
+  const image = await worker.fetch(new Request(url), sourceEnv);
+  assert.equal(image.status, 200);
+  assert.equal(await image.text(), 'private image');
+  const tampered = new URL(url);
+  tampered.searchParams.set('sig', '0'.repeat(64));
+  assert.equal((await worker.fetch(new Request(tampered), sourceEnv)).status, 401);
+  const expired = new URL(url);
+  expired.searchParams.set('exp', String(Math.floor(Date.now() / 1000) - 1));
+  assert.equal((await worker.fetch(new Request(expired), sourceEnv)).status, 401);
+});
+test('source URL minting rejects cross-tenant keys and unauthenticated clients', async () => {
+  const sourceEnv = { ...env, MEDIA_SOURCE_TOKEN: 'o'.repeat(48), MEDIA_SOURCE_PREFIX: 'originals/tenant-a/' };
+  const mint = (key, authorized) => worker.fetch(new Request('https://media.example/v1/source/sign', {
+    method: 'POST',
+    headers: authorized ? { Authorization: 'Bearer ' + sourceEnv.MEDIA_SOURCE_TOKEN } : {},
+    body: JSON.stringify({ key }),
+  }), sourceEnv);
+  assert.equal((await mint('originals/tenant-a/a.jpg', false)).status, 401);
+  assert.equal((await mint('originals/tenant-b/a.jpg', true)).status, 403);
+});
