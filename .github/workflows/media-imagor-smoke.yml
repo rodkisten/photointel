@@ -1,0 +1,48 @@
+name: "🎞️ Media · Imagor smoke (manual)"
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Reviewed immutable Imagor image (shumc/imagor@sha256:...)"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: media-imagor-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify immutable image reference and registry digest
+        env:
+          IMAGOR_BASE_IMAGE: ${{ inputs.image }}
+        run: bash apps/media/imagor/verify-base-image.sh "$IMAGOR_BASE_IMAGE" --verify-remote
+      - name: Build staged Imagor container
+        env:
+          IMAGOR_BASE_IMAGE: ${{ inputs.image }}
+        run: docker build --build-arg "IMAGOR_BASE_IMAGE=$IMAGOR_BASE_IMAGE" -f apps/media/imagor.Dockerfile -t media-imagor-smoke apps/media
+      - name: Check runtime starts without unsafe mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name media-imagor-smoke -p 127.0.0.1:18080:8000 \
+            -e IMAGOR_SECRET=smoke-test-only-secret-not-for-production-12345 \
+            media-imagor-smoke
+          trap 'docker logs media-imagor-smoke || true; docker rm -f media-imagor-smoke || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:18080/; then
+              echo "Imagor HTTP listener responds (not a full transformation test)"
+              exit 0
+            fi
+            if ! docker inspect -f '{{.State.Running}}' media-imagor-smoke | grep -qx true; then
+              echo "::error::Imagor container exited before readiness"
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::Imagor container did not become ready"
+          exit 1

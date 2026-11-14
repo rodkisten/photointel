@@ -1,0 +1,17 @@
+{
+  "name": "@photointel/media-image",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.900.0",
+    "sharp": "^0.34.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.3"
+  }
+}

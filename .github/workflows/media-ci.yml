@@ -1,0 +1,28 @@
+name: "🎞️ Media · CI"
+on:
+  pull_request:
+    paths:
+      - "apps/media/**"
+      - ".github/workflows/media-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/media/**"
+      - ".github/workflows/media-ci.yml"
+permissions:
+  contents: read
+concurrency:
+  group: media-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run all checks and summarize failures
+        shell: bash
+        run: bash apps/media/ci/check-all.sh
