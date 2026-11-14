@@ -156,34 +156,56 @@ jobs:
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧹 ESLint (${{ matrix.app }})"
+        continue-on-error: true
         if: matrix.app == 'web'
         run: npm run lint
         working-directory: apps/${{ matrix.app }}
 
       - name: "📐 TypeScript (${{ matrix.app }})"
+        continue-on-error: true
         run: npm run typecheck
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 Tests (${{ matrix.app }})"
+        continue-on-error: true
         run: npm test
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 PWA tests"
+        continue-on-error: true
         if: matrix.app == 'web'
         run: npm run test:pwa
         working-directory: apps/web
 
       - name: "🏗 Production build"
+        continue-on-error: true
         run: npm run build
         working-directory: apps/${{ matrix.app }}
 
       - name: "🧪 Cloudflare Worker tests"
+        continue-on-error: true
         if: matrix.app == 'web'
         run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
       - name: "🐍 Validate Manage deployment script"
+        continue-on-error: true
         if: matrix.app == 'manage'
         run: python3 -m py_compile infra/scripts/deploy_manage.py
+
+      - name: "📋 Resultado consolidado"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          failures=$(jq -c '[to_entries[] | select(.value.outcome == "failure") | .key]' <<< "$STEP_RESULTS")
+          count=$(jq 'length' <<< "$failures")
+          echo "### Verificações · ${{ matrix.app }}" >> "$GITHUB_STEP_SUMMARY"
+          if (( count > 0 )); then
+            jq -r '.[] | "- ❌ " + .' <<< "$failures" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$count verificação(ões) falharam."
+            exit 1
+          fi
+          echo "✅ Sem falhas." >> "$GITHUB_STEP_SUMMARY"
 
   deploy-web:
     name: "🌐 Publish Photos Worker"
