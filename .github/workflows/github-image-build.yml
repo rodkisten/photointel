@@ -10,7 +10,7 @@ on:
         default: api
         required: true
       source_ref:
-        description: "Git commit SHA or branch (blank = main)"
+        description: "Full commit SHA from main (blank = latest main)"
         type: string
         default: ""
         required: false
@@ -39,6 +39,12 @@ jobs:
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
+          # Production images may only be built from commits reachable from main.
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::Selected revision is not contained in main"
+            exit 1
+          fi
           case "$TARGET" in
             api)
               echo "context=." >> "$GITHUB_OUTPUT"
@@ -63,11 +69,36 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
+      - name: "Verify image build context"
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET" == "api" ]]; then
+            test -f uv.lock
+            test -f infra/docker/api.Dockerfile
+          else
+            test -f "services/media/${TARGET#media-}/Dockerfile"
+            test -f "services/media/${TARGET#media-}/package.json"
+          fi
       - name: "Verify Artifact Registry writer permissions"
         run: |
           set -euo pipefail
           gcloud artifacts repositories describe photointel --location=us-central1 --project=photointel >/dev/null
+      - name: "Check for existing published image"
+        id: existing
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          if gcloud artifacts docker images describe "$IMAGE" --project=photointel --format='value(image_summary.digest)' >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image already published; skipping duplicate build." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: "Build and publish"
+        if: steps.existing.outputs.exists != 'true'
         id: publish
         uses: docker/build-push-action@v6
         with:
