@@ -67,7 +67,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions: {contents: read}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - run: |
           bash -n scripts/commit-session.sh
@@ -91,7 +91,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0

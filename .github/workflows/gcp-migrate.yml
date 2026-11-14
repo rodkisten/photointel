@@ -61,7 +61,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - run: bash -n infra/gcp/release.sh && bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
@@ -83,7 +83,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 

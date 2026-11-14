@@ -58,7 +58,7 @@ jobs:
       # Shared confirmation guard for scripts that read config.local.json.
       CONFIRM_PROJECT: photointel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -181,7 +181,7 @@ jobs:
       # Shared confirmation guard for scripts that read config.local.json.
       CONFIRM_PROJECT: photointel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "TF · Check caller revision"
         env:

@@ -36,12 +36,12 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_002
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_003
@@ -80,7 +80,7 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_010
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_011
@@ -113,7 +113,7 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_018
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_019
@@ -217,7 +217,7 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_036
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Build"
         continue-on-error: true
         id: notify_observed_037
@@ -247,7 +247,7 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_041
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
