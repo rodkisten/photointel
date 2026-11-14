@@ -4,42 +4,42 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "Inspect the live state or apply a reviewed plan"
+        description: "Inspect state or apply plan"
         type: choice
         required: true
         default: plan
         options: [plan, import, apply]
       scope:
-        description: "Infrastructure state to plan/apply"
+        description: "Scope"
         type: choice
         options: [gcp, cloudflare]
         default: gcp
       runtime_targets:
-        description: "Runtime env subset; images and unselected settings are preserved"
+        description: "Runtime env subset"
         type: string
         default: api,jobs
       api_sha:
-        description: "Optional published API source SHA; blank keeps each current image"
+        description: "Opt: published API SHA; blank is current"
         type: string
         default: ''
       image_sha:
-        description: "Published media source SHA; blank preserves the release in Terraform state"
+        description: "Live media SHA; blank keeps release in TF state"
         type: string
         default: ''
       request_id:
-        description: "Optional correlation ID from the media workflow"
+        description: "Opt: corr ID from media WF"
         type: string
         default: ''
       expected_sha:
-        description: "Optional caller commit; refuse a concurrent main change"
+        description: "Opt: caller commit; refuse concurrent change"
         type: string
         default: ''
       plan_run_id:
-        description: "Optional: reviewed Plan run ID (blank = latest for selected scope)"
+        description: "Opt: plan run ID or latest blank"
         type: string
         default: ''
       authorize_apply:
-        description: "Authorize infrastructure changes after reviewing the plan"
+        description: "🚨 Authorize changes!"
         type: boolean
         default: false
         required: true
