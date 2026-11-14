@@ -500,7 +500,9 @@ async def repair_preview(
         # historical imports are not permanently condemned if an authorized
         # remote manifest or a durable source is still available.
         from photointel.services.preview_repair import (
-            manifest_recoverable, rearm_manifest, repair_stage,
+            manifest_recoverable,
+            rearm_manifest,
+            repair_stage,
         )
 
         resources = set((await session.scalars(
@@ -567,13 +569,12 @@ async def repair_preview(
                 "Em outros casos, refaça a descoberta para renovar a fonte.",
                 409, {"reason": reason},
             )
-        if job_type == "media_download" and manifest:
-            if not await rearm_manifest(session, manifest):
-                raise AppError(
-                    ErrorCode.MEDIA_DOWNLOAD_FAILED,
-                    "Manifesto remoto não pode ser recuperado automaticamente.",
-                    409, {"reason": "SOURCE_UNRECOVERABLE"},
-                )
+        if job_type == "media_download" and manifest and not await rearm_manifest(session, manifest):
+            raise AppError(
+                ErrorCode.MEDIA_DOWNLOAD_FAILED,
+                "Manifesto remoto não pode ser recuperado automaticamente.",
+                409, {"reason": "SOURCE_UNRECOVERABLE"},
+            )
         job = await enqueue_job(
             session, job_type=job_type, asset_id=asset_id,
             payload={"force": True, "content_revision": asset.content_revision},
