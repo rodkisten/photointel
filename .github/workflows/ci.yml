@@ -274,5 +274,13 @@ jobs:
         id: notify_observed_046
         uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
-
-
+      - name: "📋 Resultado consolidado (sem interromper diagnósticos)"
+        if: ${{ always() }}
+        env:
+          FAILED: ${{ steps.notify_observed_001.outcome == 'failure' || steps.notify_observed_002.outcome == 'failure' || steps.notify_observed_003.outcome == 'failure' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_005.outcome == 'failure' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_007.outcome == 'failure' || steps.notify_observed_008.outcome == 'failure' || steps.notify_observed_009.outcome == 'failure' || steps.notify_observed_010.outcome == 'failure' || steps.notify_observed_011.outcome == 'failure' || steps.notify_observed_012.outcome == 'failure' || steps.notify_observed_013.outcome == 'failure' || steps.notify_observed_014.outcome == 'failure' || steps.notify_observed_015.outcome == 'failure' || steps.notify_observed_016.outcome == 'failure' || steps.notify_observed_017.outcome == 'failure' || steps.notify_observed_018.outcome == 'failure' || steps.notify_observed_019.outcome == 'failure' || steps.notify_observed_020.outcome == 'failure' || steps.notify_observed_021.outcome == 'failure' || steps.notify_observed_022.outcome == 'failure' || steps.notify_observed_023.outcome == 'failure' || steps.notify_observed_024.outcome == 'failure' || steps.notify_observed_025.outcome == 'failure' || steps.notify_observed_026.outcome == 'failure' || steps.notify_observed_027.outcome == 'failure' || steps.notify_observed_028.outcome == 'failure' || steps.notify_observed_029.outcome == 'failure' || steps.notify_observed_030.outcome == 'failure' || steps.notify_observed_031.outcome == 'failure' || steps.notify_observed_032.outcome == 'failure' || steps.notify_observed_033.outcome == 'failure' || steps.notify_observed_034.outcome == 'failure' || steps.notify_observed_035.outcome == 'failure' || steps.notify_observed_036.outcome == 'failure' || steps.notify_observed_037.outcome == 'failure' || steps.notify_observed_038.outcome == 'failure' || steps.notify_observed_039.outcome == 'failure' || steps.notify_observed_040.outcome == 'failure' || steps.notify_observed_041.outcome == 'failure' || steps.notify_observed_042.outcome == 'failure' || steps.notify_observed_043.outcome == 'failure' || steps.notify_observed_044.outcome == 'failure' || steps.notify_observed_045.outcome == 'failure' || steps.notify_observed_046.outcome == 'failure' }}
+        run: |
+          if [[ "$FAILED" == "true" ]]; then
+            echo "::error::Uma ou mais verificações falharam. Consulte todas as etapas acima."
+            exit 1
+          fi
+          echo "Todas as verificações concluíram sem falhas."
