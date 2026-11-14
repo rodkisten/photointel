@@ -18,6 +18,7 @@ import {
   GitPullRequestArrow,
   Menu,
   GripVertical,
+  ChevronDown,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -39,6 +40,12 @@ const NAV = [
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
   { id: 'icloud', to: '/icloud', label: 'iCloud', icon: Apple },
   { id: 'settings', to: '/system', label: 'Sistema', icon: Settings2 },
+] as const;
+
+const NAV_GROUPS = [
+  { label: 'Operação', ids: ['overview', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
+  { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
@@ -77,6 +84,13 @@ export default function App() {
     catch { return []; }
   });
   const [dragged, setDragged] = useState<string | null>(null);
+  const [editNav, setEditNav] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem('photointel-manage-pinned-v1') || 'null');
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string').slice(0, 4) : ['overview', 'deploy', 'costs', 'settings'];
+    } catch { return ['overview', 'deploy', 'costs', 'settings']; }
+  });
   useEffect(() => {
     let last = window.scrollY;
     let directionDistance = 0;
@@ -103,6 +117,13 @@ export default function App() {
     ids.splice(ids.indexOf(to), 0, from);
     setNavOrder(ids);
     localStorage.setItem('photointel-manage-nav-v1', JSON.stringify(ids));
+  };
+  const pinned = pinnedIds.map(id => orderedNav.find(item => item.id === id)).filter((item): item is (typeof NAV)[number] => Boolean(item));
+  const togglePin = (id: string) => {
+    const next = pinnedIds.includes(id) ? pinnedIds.filter(value => value !== id) :
+      pinnedIds.length < 4 ? [...pinnedIds, id] : [...pinnedIds.slice(1), id];
+    setPinnedIds(next);
+    localStorage.setItem('photointel-manage-pinned-v1', JSON.stringify(next));
   };
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
@@ -153,27 +174,16 @@ export default function App() {
 
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
         <aside className="hidden w-48 shrink-0 md:block">
-          <nav aria-label="Navegação principal" className="sticky top-24 space-y-1">
-            {orderedNav.map((item) => {
-              const isActive = tab === item.id;
-              return (
-                <Link
-                  key={item.id}
-                  to={item.to}
-                  preload="intent"
-                  aria-current={isActive ? 'page' : undefined}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-carbon-800/80 text-carbon-100 shadow-sm'
-                      : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200',
-                  )}
-                >
-                  <item.icon size={17} className={isActive ? 'text-carbon-200' : 'text-carbon-500'} />
-                  {item.label}
-                </Link>
-              );
-            })}
+          <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
+            {NAV_GROUPS.map(group => <div key={group.label} className="space-y-1">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-carbon-500">{group.label}</p>
+              {orderedNav.filter(item => (group.ids as readonly string[]).includes(item.id)).map(item => <Link
+                key={item.id} to={item.to} preload="intent" aria-current={tab === item.id ? 'page' : undefined}
+                className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  tab === item.id ? 'bg-carbon-800 text-carbon-100' : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200')}>
+                <item.icon size={17} />{item.label}
+              </Link>)}
+            </div>)}
           </nav>
         </aside>
 
@@ -209,26 +219,45 @@ export default function App() {
 
       {mobileMenu && <button type="button" aria-label="Fechar menu" onClick={() => setMobileMenu(false)}
         className="fixed inset-0 z-[50] bg-black/60 md:hidden" />}
-      {mobileMenu && <div role="dialog" aria-label="Organizar navegação" className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[61] max-h-[65dvh] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl md:hidden">
-          <p className="mb-2 text-xs text-carbon-400">Arraste para organizar os atalhos</p>
-          {orderedNav.map(item => <div key={item.id} draggable
-            onDragStart={() => setDragged(item.id)}
-            onDragOver={event => event.preventDefault()}
-            onDrop={() => { if (dragged && dragged !== item.id) reorder(dragged, item.id); setDragged(null); }}
-            className="flex items-center gap-2 rounded-lg p-1 hover:bg-carbon-900">
-            <GripVertical size={16} className="text-carbon-500" />
-            <Link to={item.to} onClick={() => setMobileMenu(false)}
-              className="flex flex-1 items-center gap-3 p-2 text-sm"><item.icon size={17} />{item.label}</Link>
-            <button type="button" aria-label={'Mover ' + item.label + ' para cima'} className="rounded px-2 py-1 text-xs"
-              onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index > 0) reorder(item.id, orderedNav[index - 1].id); }}>↑</button>
-            <button type="button" aria-label={'Mover ' + item.label + ' para baixo'} className="rounded px-2 py-1 text-xs"
-              onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id); }}>↓</button>
-          </div>)}
-        </div>}
+      {mobileMenu && <div role="dialog" aria-label="Menu de navegação"
+        className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[61] max-h-[65dvh] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl md:hidden">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-carbon-100">Navegação</p>
+          <button type="button" onClick={() => setEditNav(value => !value)}
+            className="rounded-lg border border-carbon-700 px-3 py-1.5 text-xs text-carbon-300">
+            {editNav ? 'Concluir' : 'Organizar'}
+          </button>
+        </div>
+        {NAV_GROUPS.map(group => <section key={group.label} className="mb-3">
+          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-carbon-500">{group.label}</p>
+          {orderedNav.filter(item => (group.ids as readonly string[]).includes(item.id)).map(item =>
+            <div key={item.id} draggable={editNav} onDragStart={() => setDragged(item.id)}
+              onDragOver={event => { if (editNav) event.preventDefault(); }}
+              onDrop={() => { if (editNav && dragged && dragged !== item.id) reorder(dragged, item.id); setDragged(null); }}
+              className="flex min-h-11 items-center gap-2 rounded-lg hover:bg-carbon-900">
+              {editNav && <GripVertical size={16} className="ml-1 text-carbon-500" />}
+              <Link to={item.to} onClick={() => setMobileMenu(false)}
+                className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-sm text-carbon-200">
+                <item.icon size={17} />{item.label}
+              </Link>
+              {editNav && <button type="button" aria-label={pinnedIds.includes(item.id) ? 'Desafixar ' + item.label : 'Fixar ' + item.label}
+                onClick={() => togglePin(item.id)} className="rounded-lg px-3 py-2 text-xs text-carbon-300">
+                {pinnedIds.includes(item.id) ? '★' : '☆'}
+              </button>}
+              {editNav && <button type="button" aria-label={'Mover ' + item.label + ' para cima'}
+                onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index > 0) reorder(item.id, orderedNav[index - 1].id); }}
+                className="rounded-lg px-2 py-2 text-sm">↑</button>}
+              {editNav && <button type="button" aria-label={'Mover ' + item.label + ' para baixo'}
+                onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id); }}
+                className="rounded-lg px-2 py-2 text-sm">↓</button>}
+            </div>)}
+        </section>)}
+        {editNav && <p className="text-xs text-carbon-500">Marque até quatro favoritos para a barra inferior. Use as setas para organizar no iPhone.</p>}
+      </div>}
       <nav aria-label="Navegação principal mobile"
         className="fixed inset-x-0 bottom-0 z-[60] border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around gap-1">
-          {orderedNav.slice(0, 4).map(item => <Link key={item.id} to={item.to} aria-current={tab === item.id ? 'page' : undefined}
+          {pinned.map(item => <Link key={item.id} to={item.to} aria-current={tab === item.id ? 'page' : undefined}
             className={cn("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]", tab === item.id ? "bg-carbon-800 text-white" : "text-carbon-400")}>
             <item.icon size={20} /><span className="truncate">{item.label}</span>
           </Link>)}
