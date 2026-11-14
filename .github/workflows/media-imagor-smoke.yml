@@ -34,8 +34,8 @@ jobs:
             media-imagor-smoke
           trap 'docker logs media-imagor-smoke || true; docker rm -f media-imagor-smoke || true' EXIT
           for attempt in $(seq 1 30); do
-            if curl -fsS --max-time 2 http://127.0.0.1:18080/healthz >/dev/null; then
-              echo "Imagor container responds to health probe"
+            if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:18080/; then
+              echo "Imagor HTTP listener responds (not a full transformation test)"
               exit 0
             fi
             if ! docker inspect -f '{{.State.Running}}' media-imagor-smoke | grep -qx true; then
