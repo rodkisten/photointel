@@ -140,7 +140,7 @@ export default {
     }
     let imagor: URL;
     try {
-      imagor = new URL(env.MEDIA_IMAGOR_URL);
+      imagor = new URL(env.MEDIA_IMAGOR_URL || '');
       if (imagor.protocol !== 'https:' || imagor.username || imagor.password ||
           imagor.search || imagor.hash || imagor.pathname !== '/') throw Error('Invalid Imagor');
     } catch { return json({ error: 'Imagor unavailable' }, 503); }
