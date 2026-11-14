@@ -61,3 +61,9 @@ Before enabling Imagor in production:
 6. Keep Sharp as the fallback and do not switch live traffic until end-to-end verification succeeds.
 
 No production GCP resources or secrets are changed by this PR.
+
+## Manual container startup check
+
+The `🎞️ Media · Imagor smoke (manual)` GitHub Actions workflow builds and starts the staged Imagor Dockerfile **without deploying anything**. It requires a reviewed immutable `shumc/imagor@sha256:<digest>` image reference and verifies the remote digest before building. The smoke check proves only that the HTTP listener starts; it does **not** validate decoding, signed URLs, loader source restrictions, or real R2 access. Those remain required production gates.
+
+The Media API bounds private gateway signing requests to five seconds and converts network failures and malformed JSON into controlled 502 responses.
