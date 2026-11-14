@@ -138,7 +138,7 @@ export default {
         const sig = url.searchParams.get('sig') || '';
         const expires = Number(rawExp);
         const now = Math.floor(Date.now() / 1000);
-        if (/^\\d{10}$/.test(rawExp) && /^[a-f0-9]{64}$/.test(sig) &&
+        if (/^\d{10}$/.test(rawExp) && /^[a-f0-9]{64}$/.test(sig) &&
             expires >= now && expires <= now + 60 &&
             env.MEDIA_SIGNING_KEY && env.MEDIA_SIGNING_KEY.length >= 32) {
           const expected = await signature(env.MEDIA_SIGNING_KEY, `SOURCE\n${key}\n${expires}`);
