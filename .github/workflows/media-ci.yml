@@ -44,3 +44,4 @@ jobs:
           cd apps/media/gateway
           npm install --no-audit --no-fund
           npm run typecheck
+          npm test
