@@ -4,6 +4,13 @@ import { gcp, gcpBase, gcpToken, provider } from './providers';
 
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+
+/** Preserve structured JSON where possible; truncated redaction is displayed as plain text. */
+function safeLogPayload(value: unknown): unknown {
+  const sanitized = redact(value);
+  try { return JSON.parse(sanitized) as unknown; }
+  catch { return sanitized; }
+}
 type Overrides = { env?: Array<{ name: string; value: string }>; args?: string[]; taskCount?: number; timeout?: string };
 
 function validate(input: Overrides): Overrides {
@@ -46,7 +53,7 @@ export async function cloudRunJobsRoute(request: Request, env: Env, identity: Id
     const execution = logMatch[2];
     const filter = 'resource.type="cloud_run_job" AND resource.labels.job_name="' + logMatch[1] + '" AND labels."run.googleapis.com/execution_name"="' + execution + '"';
     const result = await gcpLogging(env, identity, project, filter);
-    return json({ entries: (result.entries || []).reverse().map(entry => ({ ...entry, jsonPayload: entry.jsonPayload ? redact(entry.jsonPayload) : undefined, textPayload: entry.textPayload ? redact(entry.textPayload) : undefined })) });
+    return json({ entries: (result.entries || []).reverse().map(entry => ({ ...entry, jsonPayload: entry.jsonPayload ? safeLogPayload(entry.jsonPayload) : undefined, textPayload: entry.textPayload ? redact(entry.textPayload) : undefined })) });
   }
   const match = url.pathname.match(/^\/api\/cloud-run-jobs\/([a-z][a-z0-9-]{0,62})\/(run|executions)$/);
   if (!match || !NAME.test(match[1])) return null;
