@@ -23,25 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate pinned Imagor reference rules
-        run: bash apps/media/imagor/test-verify-base-image.sh
-      - name: Build and test staged media processors
+      - name: Run all checks and summarize failures
         shell: bash
-        run: |
-          set -euo pipefail
-          for component in image video; do
-            (
-              cd "apps/media/$component"
-              npm install --no-audit --no-fund
-              npm run build
-              npm test
-            )
-          done
-      - name: Typecheck staged Cloudflare gateway
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd apps/media/gateway
-          npm install --no-audit --no-fund
-          npm run typecheck
-          npm test
+        run: bash apps/media/ci/check-all.sh
