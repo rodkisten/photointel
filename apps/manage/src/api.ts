@@ -358,6 +358,10 @@ export async function api(
       catch { /* invalid legacy rule is ignored */ }
       const hasRule = rule.mode === 'workflows' && !!rule.workflows?.length ||
         rule.mode === 'webhook' && !!rule.webhook;
+      // GCP_ENV_VARS is a high-impact configuration variable. Require confirmation
+      // even without trigger rules; never dispatch unconfigured workflows.
+      if (name === 'GCP_ENV_VARS' && input.confirm !== 'confirma')
+        throw new ApiError(409, 'VARIABLE_CONFIRM', 'ATENÇÃO: GCP_ENV_VARS pode alterar serviços de produção. Revise os gatilhos e digite confirma.');
       if (hasRule && input.confirm !== 'confirma')
         throw new ApiError(409, 'VARIABLE_CONFIRM', 'Atenção: alterar esta variável acionará gatilhos. Digite confirma.');
       const existing = await gh(env, base + '?per_page=100');
