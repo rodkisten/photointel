@@ -207,7 +207,7 @@ export function RepositoryVariables() {
                 <option key={key} value={'GCP_ENV_VARS__' + key}>{key}</option>)}
             </Select>
           </label>}
-          {isGcpEnvVars && <p role="alert" className="rounded-lg border border-amber-600 bg-amber-950/40 p-3 font-semibold text-amber-200">⚠️ GCP_ENV_VARS: alterações podem modificar o ambiente de produção. Configure apenas workflows apropriados e revise antes de salvar.</p>
+          {isGcpEnvVars && <p role="alert" className="rounded-lg border border-amber-600 bg-amber-950/40 p-3 font-semibold text-amber-200">⚠️ GCP_ENV_VARS: alterações podem modificar o ambiente de produção. Configure apenas workflows apropriados e revise antes de salvar.</p>}
           <Select value={triggerMode} onChange={event => setTriggerMode(event.target.value as typeof triggerMode)}>
             <option value="none">Sem gatilho adicional</option>
             <option value="workflows">Workflows do GitHub</option>
