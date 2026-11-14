@@ -59,3 +59,45 @@ test('rejects gateway URLs pointing to a different origin', async () => {
   globalThis.fetch = async () => Response.json({ url: 'https://evil.example/v1/source/originals/tenants/tenant-a/a.jpg', expires: 1234567890 });
   assert.equal((await api.fetch(request('originals/tenants/tenant-a/a.jpg'), env)).status, 502);
 });
+
+test('generates SHA256-signed Imagor transform URL with expiring private source', async () => {
+  const expires = Math.floor(Date.now() / 1000) + 50;
+  globalThis.fetch = async () => Response.json({
+    url: 'https://media.example/v1/source/originals/tenants/tenant-a/a.jpg?exp=' + expires + '&sig=' + 'a'.repeat(64),
+    expires,
+  });
+  const transformEnv = { ...env, MEDIA_IMAGOR_URL: 'https://imagor.example/', MEDIA_IMAGOR_SECRET: 'i'.repeat(48) };
+  const response = await api.fetch(new Request('https://api.example/v1/image/transform', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ key: 'originals/tenants/tenant-a/a.jpg',
+      transform: { width: 400, height: 300, format: 'webp', quality: 75, fit: 'contain' } }),
+  }), transformEnv);
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  const url = new URL(result.url);
+  assert.equal(url.origin, 'https://imagor.example');
+  const parts = url.pathname.slice(1).split('/');
+  const signature = parts.shift();
+  const path = parts.join('/');
+  assert.ok(path.startsWith('fit-in/400x300/filters:quality(75):format(webp):expire('));
+  assert.ok(path.includes('/b64:'));
+  const expected = createHash('sha256');
+  const { createHmac } = await import('node:crypto');
+  const digest = createHmac('sha256', transformEnv.MEDIA_IMAGOR_SECRET).update(path).digest('base64url');
+  assert.equal(signature, digest);
+  assert.equal(result.expires, expires);
+});
+test('rejects excessive dimensions and unsupported transforms before gateway access', async () => {
+  globalThis.fetch = () => { throw Error('Unexpected gateway request'); };
+  for (const transform of [
+    { width: 5000, height: 300 }, { width: 400, height: 300, format: 'svg' },
+    { width: 400, height: 300, quality: 100 }, { width: 400, height: 300, blur: 10 },
+  ]) {
+    const response = await api.fetch(new Request('https://api.example/v1/image/transform', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ key: 'originals/tenants/tenant-a/a.jpg', transform }),
+    }), env);
+    assert.equal(response.status, 400);
+  }
+});
