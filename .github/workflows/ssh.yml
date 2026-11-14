@@ -146,7 +146,7 @@ jobs:
         id: notify_observed_003
         uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: "26"
           # Its automatic cache looks for a root lockfile. Our lockfile is in apps/web.
           package-manager-cache: false
 
