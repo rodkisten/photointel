@@ -820,18 +820,19 @@ wheels = [
 
 [[package]]
 name = "icloudpd"
-version = "1.32.3"
+version = "1.33.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/48/465afc4c71184bb0f492c41a527d1960df8259a5a1bf54458c019a7533f6/icloudpd-1.32.3-py2.py3-none-macosx_13_0_x86_64.macosx_13_0_arm64.whl", hash = "sha256:71910ada102bb7f935305266acaeaa46ee8dff4a87604d070d10134a7a9e54cc", size = 25874834, upload-time = "2026-05-30T20:55:07.135Z" },
-    { url = "https://files.pythonhosted.org/packages/e2/01/924dc27d1b864ab209e893f37ba1390f082fd062259cf8d9ad88a0ff0261/icloudpd-1.32.3-py2.py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:02ffe35d4efbc0254c5a080a13e911f85488dcc51261c43e9b84b46b969e9729", size = 68619490, upload-time = "2026-05-30T20:55:10.137Z" },
-    { url = "https://files.pythonhosted.org/packages/1a/3e/dddbc2f20b6b71875857de07e2a4568253e8832514240a25033137b96abc/icloudpd-1.32.3-py2.py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:b13fa6fd2f629cef3b0aad90fabb0610a1d04f8910640e392b6f1d1a44ccdcbf", size = 67225787, upload-time = "2026-05-30T20:55:13.404Z" },
-    { url = "https://files.pythonhosted.org/packages/fd/8f/caae7cf73a644893554188ea4d2bb6f0e8367ea44fedc1b59d67147e52bc/icloudpd-1.32.3-py2.py3-none-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:61328fdbf36850b5054876f2cbcf4fbc9e77b65ea880bae1f40ab8109d194748", size = 63428003, upload-time = "2026-05-30T20:55:16.718Z" },
-    { url = "https://files.pythonhosted.org/packages/f7/ef/b3a19d963fddbe56a27e24e05e0c987068a6b846d3abd1b428641ec65de5/icloudpd-1.32.3-py2.py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:5cbb92fd30e449c854373ce29a9d83e54d1cd72e30d8bcb31640d8ec1ed20629", size = 37271438, upload-time = "2026-05-30T20:55:19.577Z" },
-    { url = "https://files.pythonhosted.org/packages/ee/22/46697aeab771ad4c51b9cc99f4be8b88885b8d19bcb48cfd6e6e9d6d0846/icloudpd-1.32.3-py2.py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:8f2995e9d5f66186a77a2f1d7c72db05379b0e0e8b53b95c568755d8b437ee5d", size = 29581051, upload-time = "2026-05-30T20:55:21.889Z" },
-    { url = "https://files.pythonhosted.org/packages/9b/25/1e6e8d2cf59927a7231041386e2757045a2e0ffb82f8e1c2218d546c7239/icloudpd-1.32.3-py2.py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:310bf0c6ec3af58fd751519cea126982b6ee3924bb533a65121f681786a99ef8", size = 36882007, upload-time = "2026-05-30T20:55:24.328Z" },
-    { url = "https://files.pythonhosted.org/packages/47/a7/aebd827e7cfcdffbfba2ca05f69d55585382bfa562cbcc010080f333e06f/icloudpd-1.32.3-py2.py3-none-win_amd64.whl", hash = "sha256:695cfad0e99d44fb8bca373bc8462e0383805ade4f10624220e1fa4dec2935c9", size = 27838383, upload-time = "2026-05-30T20:55:26.789Z" },
-    { url = "https://files.pythonhosted.org/packages/b9/73/20544e68569fce262d596ebe42730aac235b8e69a36edefebdf8cfa85508/icloudpd-1.32.3-py3-none-any.whl", hash = "sha256:b80b8586ed65e0f90e82b5eb13015c1cf0066ca38f4ee3fcf6378c8688f3fc83", size = 79082, upload-time = "2026-05-30T20:55:28.468Z" },
+    { url = "https://files.pythonhosted.org/packages/12/85/c5f910222e01e033682d5adb0855ed2dd12d81e5721ccb92be5bb4d78f74/icloudpd-1.33.0-py2.py3-none-macosx_13_0_arm64.whl", hash = "sha256:a5694189fbe68f5c10bc2d91eb7f2dd7437de13fafcebe3fe0221d4ea46771b3", size = 39908557, upload-time = "2026-11-04T20:58:21.587Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/fd/3266df6a7467b8f9af0ae544ec4f0616a943392e4511c6c3b8a412cdf8a4/icloudpd-1.33.0-py2.py3-none-macosx_13_0_x86_64.whl", hash = "sha256:93255ff12a606d6af4d74526aa480eb267af2b7a04b17f0eb55a26e5dd1d24e2", size = 37467579, upload-time = "2026-11-04T20:58:24.514Z" },
+    { url = "https://files.pythonhosted.org/packages/10/b5/6aee10e13a47b3f901a26393b349a4bb1801c39c9754a727f051335f116e/icloudpd-1.33.0-py2.py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:a16a10438545d26a81646a3448e0dbf80681ea6843d5c3c3abe1d9f5c9626797", size = 76106494, upload-time = "2026-11-04T20:58:28.096Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/e6/25e2ee698e0f1c28d0763d3b31079b8f5a4bc3e4ee9c971df62f4aa222e0/icloudpd-1.33.0-py2.py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ce0d9807a4834c0155c640fdf5b831058d849311df9de27e34f5080eb36568fc", size = 74486085, upload-time = "2026-11-04T20:58:32.066Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/2e/4a660091038144861594e9192ec63db337e97ce9bc6af3033a8131a0b36a/icloudpd-1.33.0-py2.py3-none-manylinux2014_armv7l.manylinux_2_17_armv7l.whl", hash = "sha256:45a308ba8c104d706a57bb018d4caea47f98a29615615a42eb68e29e73aca911", size = 70919448, upload-time = "2026-11-04T20:58:36.108Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/47/b7855845e161d4a96e03cc83d341ad495f6501fe1252c2cce597a4c11353/icloudpd-1.33.0-py2.py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:27278bcb4ee1a408e9bc02bc522c740f6b9b9777754b833313699f438d8f0def", size = 41584430, upload-time = "2026-11-04T20:58:39.223Z" },
+    { url = "https://files.pythonhosted.org/packages/09/e2/2aef5454614449adc0919045a33b05467692d8409247d64fdfb15b6b59b3/icloudpd-1.33.0-py2.py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:8106d7e3745c102663bad228ecec331ffb8b616371e271e54264a706ec7fe8a1", size = 34179065, upload-time = "2026-11-04T20:58:42.128Z" },
+    { url = "https://files.pythonhosted.org/packages/20/b9/74f57028fa32fac53529f7a1efa595943bb556c32070809c278d52b8610a/icloudpd-1.33.0-py2.py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:77dd32d3ddefd01775ef44f935bed3f54eb9a446fe1e1560ab72ce4fcaa1e5a5", size = 41336929, upload-time = "2026-11-04T20:58:45.585Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/b2/47d72e35d4cb239a50d8bc47c9254f2de047fef27cb253eaf5b14e35802d/icloudpd-1.33.0-py2.py3-none-win_amd64.whl", hash = "sha256:a68a05625bea6e9e9c6bd391a00b2832604ec211df22c72c4df657ad74fe48fd", size = 41219936, upload-time = "2026-11-04T20:58:49.261Z" },
+    { url = "https://files.pythonhosted.org/packages/d8/55/6ebee6620714b548befcf45c4873bafaa8b5a57d25c79d40ce947f1c4e04/icloudpd-1.33.0-py3-none-any.whl", hash = "sha256:3ff27038ebc17105a5c75a4202e938d4485d80880f8e88b1b4f299e9edc000b8", size = 91701, upload-time = "2026-11-04T20:58:51.543Z" },
 ]
 
 [[package]]
@@ -1546,7 +1547,7 @@ gpu = [
     { name = "transformers", specifier = "==5.10.2" },
 ]
 ingest = [
-    { name = "icloudpd", specifier = "==1.32.3" },
+    { name = "icloudpd", specifier = "==1.33.0" },
     { name = "photointel-icloudpd-source", directory = "packages/icloudpd-source" },
 ]
 
