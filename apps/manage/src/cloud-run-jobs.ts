@@ -1,6 +1,6 @@
 import { ApiError, bodyJson, json, requireOrigin, redact } from './auth';
 import type { Env, Identity } from './auth';
-import { gcp, gcpBase } from './providers';
+import { gcp, gcpBase, gcpToken, provider } from './providers';
 
 const NAME = /^[a-z][a-z0-9-]{0,62}$/;
 const KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
@@ -23,6 +23,14 @@ function validate(input: Overrides): Overrides {
   return input;
 }
 
+async function gcpLogging(env: Env, identity: Identity, project: string, filter: string): Promise<{ entries?: unknown[] }> {
+  const token = await gcpToken(env, identity);
+  return await provider('https://logging.googleapis.com/v2/entries:list', token, {
+    method: 'POST',
+    body: JSON.stringify({ resourceNames: ['projects/' + project], filter, orderBy: 'timestamp desc', pageSize: 100 }),
+  }) as { entries?: unknown[] };
+}
+
 export async function cloudRunJobsRoute(request: Request, env: Env, identity: Identity): Promise<Response | null> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/cloud-run-jobs')) return null;
@@ -31,6 +39,14 @@ export async function cloudRunJobsRoute(request: Request, env: Env, identity: Id
   if (request.method === 'GET' && url.pathname === '/api/cloud-run-jobs') {
     const result = await gcp(env, identity, base + '/jobs?pageSize=100') as { jobs?: unknown[]; nextPageToken?: string };
     return json({ items: result.jobs || [], nextPageToken: result.nextPageToken || null });
+  }
+  const logMatch = url.pathname.match(/^\\/api\\/cloud-run-jobs\\/([a-z][a-z0-9-]{0,62})\\/executions\\/([a-z][a-z0-9-]{0,100})\\/logs$/);
+  if (request.method === 'GET' && logMatch) {
+    const project = env.GCP_PROJECT_ID || 'photointel';
+    const execution = logMatch[2];
+    const filter = 'resource.type="cloud_run_job" AND resource.labels.job_name="' + logMatch[1] + '" AND labels."run.googleapis.com/execution_name"="' + execution + '"';
+    const result = await gcpLogging(env, identity, project, filter);
+    return json({ entries: result.entries || [] });
   }
   const match = url.pathname.match(/^\/api\/cloud-run-jobs\/([a-z][a-z0-9-]{0,62})\/(run|executions)$/);
   if (!match || !NAME.test(match[1])) return null;
