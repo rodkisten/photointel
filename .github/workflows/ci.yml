@@ -273,6 +273,7 @@ jobs:
       - name: "🔐 Secrets"
         id: notify_observed_046
         uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
       - name: "📋 Resultado consolidado (sem interromper diagnósticos)"
         if: ${{ always() }}
