@@ -3,6 +3,8 @@ interface Env {
   MEDIA_SIGNING_KEY: string;
   MEDIA_ISSUER_TOKEN: string;
   MEDIA_PREFIX: string;
+  MEDIA_SOURCE_TOKEN?: string;
+  MEDIA_SOURCE_PREFIX?: string;
 }
 
 const allowedFormats = new Set(['avif', 'webp', 'jpeg', 'png', 'mp4']);
@@ -68,6 +70,43 @@ export default {
     if (!allowedMethods.has(request.method) && request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
     const url = new URL(request.url);
     if (url.pathname === '/healthz') return new Response('ok', { headers: { 'Cache-Control': 'no-store' } });
+    // Private origin for Imagor. This route is disabled unless separately configured.
+    // Use a dedicated secret, never the public signed-delivery key or issuer token.
+    if (url.pathname.startsWith('/v1/source/')) {
+      if (!allowedMethods.has(request.method)) return new Response('Method Not Allowed', { status: 405 });
+      const token = env.MEDIA_SOURCE_TOKEN;
+      const prefix = env.MEDIA_SOURCE_PREFIX;
+      if (!token || token.length < 32 || !prefix || !prefix.startsWith('originals/') ||
+          !prefix.endsWith('/') || prefix.includes('%') || prefix.includes('\\\\') ||
+          prefix.split('/').some((part, index, parts) =>
+            index < parts.length - 1 && (!part || part === '.' || part === '..'))) {
+        return new Response('Not Found', { status: 404 });
+      }
+      const authorization = request.headers.get('Authorization') || '';
+      if (!constantTimeEquals(authorization, 'Bearer ' + token)) {
+        return new Response('Unauthorized', {
+          status: 401, headers: { 'Cache-Control': 'no-store' },
+        });
+      }
+      let key: string;
+      try { key = decodeURIComponent(url.pathname.slice('/v1/source/'.length)); }
+      catch { return new Response('Not Found', { status: 404 }); }
+      if (url.search || url.pathname.length > 700 || key.startsWith('/') ||
+          key.includes('%') || key.includes('\\\\') ||
+          key.split('/').some(part => !part || part === '.' || part === '..') ||
+          !withinPrefix(key, prefix)) {
+        return new Response('Not Found', { status: 404 });
+      }
+      const object = await env.MEDIA_BUCKET.get(key);
+      if (!object) return new Response('Not Found', { status: 404 });
+      const headers = new Headers({
+        'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+        'Cache-Control': 'private, no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      if (object.httpEtag) headers.set('ETag', object.httpEtag);
+      return new Response(request.method === 'HEAD' ? null : object.body, { headers });
+    }
     if (url.pathname === '/v1/sign') {
       if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
       const authorization = request.headers.get('Authorization') || '';
