@@ -147,7 +147,7 @@ jobs:
       - name: "🧰 Node.js (${{ matrix.app }})"
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
 
@@ -274,7 +274,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
         
       - name: "▶ ️ Execute command (Web install)"
         id: notify_observed_003
@@ -402,7 +402,7 @@ jobs:
       - name: "🟢 Node.js"
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: apps/manage/package-lock.json
 

@@ -71,7 +71,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_003
         uses: actions/setup-node@v4
-        with: {node-version: '22'}
+        with: {node-version: '26'}
       - name: "🧰 Setup"
         id: notify_observed_004
         run: mkdir -p reports packages/contracts
