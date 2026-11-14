@@ -70,7 +70,8 @@ export function RepositoryVariables() {
       void client.invalidateQueries({ queryKey: ['github-variables', scope] });
     },
   });
-  const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
+  const isGcpEnvVars = name === 'GCP_ENV_VARS';
+  const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || isGcpEnvVars || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
   return (
@@ -169,12 +170,20 @@ export function RepositoryVariables() {
           />
         )}
         {triggersManage && <div className="space-y-2 rounded-lg border border-amber-700 p-3 text-xs text-amber-200">
-          <p role="alert">Atenção: mudar esta variável acionará o workflow Manage Deploy. Digite confirma.</p>
+          <p role="alert" className="font-semibold">{isGcpEnvVars
+            ? '⚠️ ALTERAÇÃO CRÍTICA: GCP_ENV_VARS pode afetar serviços em produção. Confira as alterações e os workflows abaixo antes de confirmar.'
+            : name === 'GCP_COST_ALERT_USD'
+              ? 'Atenção: mudar esta variável acionará Manage Deploy. Digite confirma.'
+              : 'Atenção: mudar esta variável acionará os gatilhos configurados. Digite confirma.'}</p>
+          {isGcpEnvVars && <p>Gatilhos: {activeRule?.mode === 'workflows'
+            ? (activeRule.workflows?.join(', ') || 'nenhum workflow selecionado')
+            : activeRule?.mode === 'webhook' ? 'Webhook Relay' : 'nenhum configurado'}. A variável será salva mesmo sem gatilhos.</p>}
           <Input aria-label="Confirmação de workflow" value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)} placeholder="confirma" />
         </div>}
         {tab === 'triggers' && <div className="space-y-3 rounded-xl border border-carbon-800 p-3 text-xs">
           <p className="font-semibold">Ações ao alterar {name || 'a variável selecionada'}</p>
+          {isGcpEnvVars && <p role="alert" className="rounded-lg border border-amber-600 bg-amber-950/40 p-3 font-semibold text-amber-200">⚠️ GCP_ENV_VARS: alterações podem modificar o ambiente de produção. Configure apenas workflows apropriados e revise antes de salvar.</p>
           <Select value={triggerMode} onChange={event => setTriggerMode(event.target.value as typeof triggerMode)}>
             <option value="none">Sem gatilho adicional</option>
             <option value="workflows">Workflows do GitHub</option>
