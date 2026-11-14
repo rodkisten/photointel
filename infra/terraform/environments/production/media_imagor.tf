@@ -68,7 +68,7 @@ resource "google_cloud_run_v2_service" "media_imagor" {
       error_message = "Enable Imagor only with a verified immutable image digest."
     }
   }
-  depends_on = [google_service_account_iam_member.terraform_media]
+  depends_on = [google_service_account_iam_member.terraform_media, google_secret_manager_secret_iam_member.media_imagor]
 }
 
 output "media_imagor_service" {
@@ -76,4 +76,14 @@ output "media_imagor_service" {
     name = google_cloud_run_v2_service.media_imagor[0].name
     uri  = google_cloud_run_v2_service.media_imagor[0].uri
   } : null
+}
+
+# Grant only the dedicated Imagor secret, and only when the service is enabled.
+# The secret itself must already exist in Secret Manager; Terraform never stores its payload.
+resource "google_secret_manager_secret_iam_member" "media_imagor" {
+  count     = var.enable_media_imagor ? 1 : 0
+  project   = var.project_id
+  secret_id = "photointel-media-imagor-secret"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.identity["media"].email}"
 }
