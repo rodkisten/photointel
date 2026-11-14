@@ -137,7 +137,7 @@ export default {
     const size = metadata.size;
     let range: { offset: number; length: number } | undefined;
     if (rangeHeader) {
-      const match = /^bytes=(\\d*)-(\\d*)$/.exec(rangeHeader);
+      const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
       if (!match || (!match[1] && !match[2])) {
         return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
       }
