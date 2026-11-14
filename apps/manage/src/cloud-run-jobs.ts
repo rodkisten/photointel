@@ -33,14 +33,14 @@ async function gcpLogging(env: Env, identity: Identity, project: string, filter:
 
 export async function cloudRunJobsRoute(request: Request, env: Env, identity: Identity): Promise<Response | null> {
   const url = new URL(request.url);
-  if (!url.pathname.startsWith('/api/cloud-run-jobs')) return null;
+  if (url.pathname !== '/api/cloud-run-jobs' && !url.pathname.startsWith('/api/cloud-run-jobs/')) return null;
   if (env.PHOTOINTEL_PREVIEW) throw new ApiError(403, 'PREVIEW', 'Execução indisponível em preview');
   const base = gcpBase(env);
   if (request.method === 'GET' && url.pathname === '/api/cloud-run-jobs') {
     const result = await gcp(env, identity, base + '/jobs?pageSize=100') as { jobs?: unknown[]; nextPageToken?: string };
     return json({ items: result.jobs || [], nextPageToken: result.nextPageToken || null });
   }
-  const logMatch = url.pathname.match(/^\\/api\\/cloud-run-jobs\\/([a-z][a-z0-9-]{0,62})\\/executions\\/([a-z][a-z0-9-]{0,100})\\/logs$/);
+  const logMatch = url.pathname.match(/^\/api\/cloud-run-jobs\/([a-z][a-z0-9-]{0,62})\/executions\/([a-z][a-z0-9-]{0,100})\/logs$/);
   if (request.method === 'GET' && logMatch) {
     const project = env.GCP_PROJECT_ID || 'photointel';
     const execution = logMatch[2];
