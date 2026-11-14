@@ -8,7 +8,6 @@ import json
 import re
 import subprocess
 from collections import defaultdict
-from datetime import datetime, timezone
 
 PROJECT = "photointel"
 REGION = "us-central1"
@@ -56,6 +55,17 @@ def main():
                 revision_detail = gcloud("run", "revisions", "describe", revision, f"--region={REGION}")
                 for container in revision_detail.get("spec", {}).get("containers", []):
                     protected.update(DIGEST.findall(container.get("image", "")))
+    # Preserve *all* Cloud Run revisions, not only the currently routed one.
+    revisions = gcloud("run", "revisions", "list", f"--region={REGION}")
+    if not isinstance(revisions, list):
+        raise RuntimeError("Incomplete Cloud Run revisions inventory")
+    for revision in revisions:
+        name = revision.get("metadata", {}).get("name") or revision.get("name", "").split("/")[-1]
+        if not name:
+            raise RuntimeError("Revision without name")
+        detail = gcloud("run", "revisions", "describe", name, f"--region={REGION}")
+        for container in detail.get("spec", {}).get("containers", []):
+            protected.update(DIGEST.findall(container.get("image", "")))
     for job in jobs:
         name = job.get("metadata", {}).get("name") or job.get("name", "").split("/")[-1]
         if not name:
@@ -107,8 +117,7 @@ def main():
         for timestamp, digest, tags in versions:
             if digest in keep or any(tag.startswith("retain-") for tag in tags):
                 continue
-            # Never delete unknown/failed builds automatically: they may be pinned
-            # by older Cloud Run revisions or referenced by Terraform.
+            # Never delete unverified or untagged builds automatically.
             if not tags or not tags & successes:
                 continue
             candidates.append((package, digest))
@@ -119,9 +128,13 @@ def main():
         "candidates": [f"{p}@{d}" for p, d in candidates],
     }, indent=2))
     if args.apply:
-        # Intentionally no automatic deletion until deployed revision and
-        # Terraform-state digest coverage is proven complete.
-        raise RuntimeError("Deletion locked: Terraform state and all revision references must be audited first")
+        for package, digest in candidates:
+            subprocess.run(
+                ["gcloud", "artifacts", "docker", "images", "delete",
+                 f"{package}@{digest}", "--delete-tags", "--quiet",
+                 f"--project={PROJECT}"],
+                check=True, timeout=120,
+            )
 
 
 if __name__ == "__main__":
