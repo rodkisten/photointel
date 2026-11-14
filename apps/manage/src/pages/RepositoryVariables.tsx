@@ -57,7 +57,7 @@ export function RepositoryVariables() {
     catch (error) { return { changes: [] as ReturnType<typeof diffNestedEnv>, error: error instanceof Error ? error.message : 'Formato inválido' }; }
   }, [name, value, variables.data, selected]);
   const activeRule = triggerRules.data?.rules[triggerKey || name];
-  useEffect(() => { setTriggerMode(activeRule?.mode || 'none'); setSelectedWorkflows(activeRule?.workflows || []); setWebhookUrl(activeRule?.webhook || ''); }, [name, activeRule?.mode, triggerRules.data?.version]);
+  useEffect(() => { setTriggerMode(activeRule?.mode || 'none'); setSelectedWorkflows(activeRule?.workflows || []); setWebhookUrl(activeRule?.webhook || ''); }, [name, triggerKey, activeRule?.mode, triggerRules.data?.version]);
   const existing = useMemo(
     () => variables.data?.items.find((item) => item.name === selected),
     [variables.data, selected],
@@ -78,6 +78,7 @@ export function RepositoryVariables() {
     },
   });
   const isGcpEnvVars = name === 'GCP_ENV_VARS';
+  useEffect(() => { setTriggerKey(''); }, [name]);
   const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || isGcpEnvVars || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
