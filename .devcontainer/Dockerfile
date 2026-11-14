@@ -1,5 +1,5 @@
 
-FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
+FROM mcr.microsoft.com/devcontainers/python:3.15-bookworm
 
 # Ferramentas essenciais de desenvolvimento
 RUN apt-get update \
