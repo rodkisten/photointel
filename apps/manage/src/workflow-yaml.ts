@@ -16,7 +16,10 @@ export function parseWorkflowInputs(source: string): { dispatchable: boolean; in
   const dispatch = events && typeof events === 'object' && !Array.isArray(events)
     ? (events as Record<string, unknown>).workflow_dispatch
     : Array.isArray(events) ? events.includes('workflow_dispatch') : events === 'workflow_dispatch';
-  if (dispatch === undefined || dispatch === false) return { dispatchable: false, inputs: {} };
+  const hasDispatch = events && typeof events === 'object' && !Array.isArray(events)
+    ? Object.prototype.hasOwnProperty.call(events, 'workflow_dispatch')
+    : Boolean(dispatch);
+  if (!hasDispatch || dispatch === false) return { dispatchable: false, inputs: {} };
   const definitions = dispatch && typeof dispatch === 'object' && !Array.isArray(dispatch)
     ? (dispatch as Record<string, unknown>).inputs : undefined;
   if (definitions === undefined) return { dispatchable: true, inputs: {} };
