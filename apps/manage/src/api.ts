@@ -146,21 +146,14 @@ export async function api(
     const data = await gh(env, '/actions/workflows?per_page=100');
     return json({
       items: safeList(data, 'workflows')
-        .filter((x) =>
-          Object.prototype.hasOwnProperty.call(
-            WORKFLOW_INPUTS,
-            String(x.path || '')
-              .split('/')
-              .pop() || '',
-          ),
-        )
+        .filter((x) => x.state === 'active' && /^\\.github\\/workflows\\/[A-Za-z0-9_.-]+\\.ya?ml$/.test(String(x.path || '')))
         .map((x) => ({
           id: x.id,
           name: x.name,
           file: String(x.path).split('/').pop(),
           state: x.state,
           html_url: x.html_url,
-          inputs: WORKFLOW_INPUTS[String(x.path).split('/').pop() || ''],
+          inputs: WORKFLOW_INPUTS[String(x.path).split('/').pop() || ''] || {},
         })),
     });
   }
@@ -552,8 +545,12 @@ export async function api(
       request,
       12_000,
     );
-    const spec = input.workflow ? WORKFLOW_INPUTS[input.workflow] : undefined;
-    if (!spec) throw new ApiError(422, 'WORKFLOW', 'Workflow não autorizado');
+    if (!input.workflow || !/^[A-Za-z0-9_.-]+\\.ya?ml$/.test(input.workflow))
+      throw new ApiError(422, 'WORKFLOW', 'Nome de workflow inválido');
+    const available = await gh(env, '/actions/workflows?per_page=100');
+    const found = safeList(available, 'workflows').some(x => x.state === 'active' && String(x.path || '').split('/').pop() === input.workflow);
+    if (!found) throw new ApiError(422, 'WORKFLOW', 'Workflow não encontrado ou inativo');
+    const spec = WORKFLOW_INPUTS[input.workflow] || {};
     if (input.confirm !== 'DEPLOY ' + input.workflow)
       throw new ApiError(409, 'CONFIRM', 'Confirmação de execução necessária');
     const inputs = input.inputs || {};
