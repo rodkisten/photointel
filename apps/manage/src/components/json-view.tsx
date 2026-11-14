@@ -135,22 +135,27 @@ function PlainHighlight({ text, pattern }: { text: string; pattern: RegExp | nul
 
 /** Lightweight highlighting for unstructured logs, without HTML injection. */
 function LogText({ text, pattern }: { text: string; pattern: RegExp | null }) {
-  const tokens = /(\\b(?:ERROR|FATAL|CRITICAL|FAILED|WARN(?:ING)?|INFO|DEBUG|TRACE|SUCCESS)\\b|\\b\\d{4}-\\d{2}-\\d{2}[T ][0-9:.+-]+Z?\\b|\\b(?:true|false|null)\\b|\\b[A-Za-z_][\\w.-]*(?==))/gi;
+  // Docker/BuildKit, CLI and GitHub Actions can emit ANSI escapes.
+  // Never render escape sequences as markup; preserve readable text and highlight tokens.
+  const clean = text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  const tokens = /(#\d+(?:\s+\[[^\]\n]+\])?|\b(?:ERROR|FATAL|CRITICAL|FAILED|FAIL|WARN(?:ING)?|INFO|DEBUG|TRACE|SUCCESS|DONE|CACHED|exporting|extracting|pulling|pushing|building)\b|\b(?:sha256:)?[a-f0-9]{32,64}\b|\b\d{4}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b|\b(?:true|false|null)\b|\b[A-Za-z_][\w.-]*(?==))/gi;
   const nodes = [];
   let cursor = 0;
-  for (const match of text.matchAll(tokens)) {
-    if (match.index > cursor) nodes.push(<PlainHighlight key={'t' + cursor} text={text.slice(cursor, match.index)} pattern={pattern} />);
+  for (const match of clean.matchAll(tokens)) {
+    if (match.index > cursor) nodes.push(<PlainHighlight key={'t' + cursor} text={clean.slice(cursor, match.index)} pattern={pattern} />);
     const token = match[0];
-    const tone = /^(ERROR|FATAL|CRITICAL|FAILED)$/i.test(token) ? 'text-red-400' :
+    const tone = /^(ERROR|FATAL|CRITICAL|FAILED|FAIL)$/i.test(token) ? 'text-red-400' :
       /^WARN/i.test(token) ? 'text-amber-400' :
-      /^(INFO|DEBUG|TRACE|SUCCESS)$/i.test(token) ? 'text-sky-400' :
-      /^\\d{4}-/.test(token) ? 'text-violet-300' :
+      /^(INFO|DEBUG|TRACE|SUCCESS|DONE|CACHED)$/i.test(token) ? 'text-sky-400' :
+      /^#\d+/.test(token) ? 'text-violet-300' :
+      /^(sha256:)?[a-f0-9]{32,64}$/i.test(token) ? 'text-purple-300' :
+      /^\d{4}-/.test(token) ? 'text-violet-300' :
       /^(true|false|null)$/i.test(token) ? 'text-orange-300' : 'text-cyan-300';
     nodes.push(<span key={'m' + match.index} className={tone}><PlainHighlight text={token} pattern={pattern} /></span>);
     cursor = match.index + token.length;
     if (nodes.length > 2000) break;
   }
-  if (cursor < text.length) nodes.push(<PlainHighlight key="tail" text={text.slice(cursor)} pattern={pattern} />);
+  if (cursor < clean.length) nodes.push(<PlainHighlight key="tail" text={clean.slice(cursor)} pattern={pattern} />);
   return <>{nodes}</>;
 }
 
