@@ -1,6 +1,6 @@
 """Regression tests for Manage's authenticated durable queue bridge."""
-from unittest.mock import AsyncMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import BackgroundTasks
