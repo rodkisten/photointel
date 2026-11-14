@@ -6,9 +6,9 @@ substitutions:
   _IMAGOR_BASE_IMAGE: REPLACE_WITH_VERIFIED_IMMUTABLE_DIGEST
 steps:
   - id: verify-imagor-base
-    name: ubuntu:24.04
+    name: gcr.io/cloud-builders/docker
     entrypoint: bash
-    args: [-c, "bash apps/media/imagor/verify-base-image.sh '${_IMAGOR_BASE_IMAGE}'"]
+    args: [-c, "bash apps/media/imagor/verify-base-image.sh '${_IMAGOR_BASE_IMAGE}' --verify-remote"]
   - id: image-image
     name: gcr.io/cloud-builders/docker
     args: [build, -f, apps/media/image/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:${_GIT_SHA}", apps/media/image]
