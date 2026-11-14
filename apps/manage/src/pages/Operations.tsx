@@ -11,6 +11,11 @@ const shortName = (name: string) => name.split('/').pop() || name;
 export function OperationsPage() {
   const client = useQueryClient();
   const schedules = useQuery({ queryKey: ['gcp-scheduler'], queryFn: () => api<{ items: Schedule[] }>('/gcp/scheduler'), retry: false });
+  const workers = useQuery({
+    queryKey: ['operations-cloudflare-workers'],
+    queryFn: () => api<{ workers: Array<{ name: string; modified_on?: string }> }>('/overview'),
+    retry: false,
+  });
   const jobs = useQuery({ queryKey: ['gcp-jobs'], queryFn: () => api<{ items: Job[] }>('/gcp/jobs'), retry: false });
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
@@ -69,6 +74,17 @@ export function OperationsPage() {
       })}
       {control.error && <IssueBanner error={control.error} />}
       {save.error && <IssueBanner error={save.error} />}
+    </Card>
+    <Card className="space-y-3 p-4">
+      <h2 className="font-semibold text-carbon-100">Cloudflare Workers</h2>
+      <p className="text-xs text-carbon-400">Inventário dos Workers implantados. Deploy não significa execução contínua. Interromper requisições exige uma política de bloqueio, não simplesmente excluir o Worker.</p>
+      {workers.isPending && <Spinner />}
+      {workers.error && <IssueBanner error={workers.error} />}
+      {workers.data?.workers.length === 0 && <p className="text-xs text-carbon-400">Nenhum Worker encontrado.</p>}
+      {workers.data?.workers.map(worker => <div key={worker.name} className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2">
+        <p className="min-w-0 break-all text-sm text-carbon-200">{worker.name}</p>
+        <span className="shrink-0 text-xs text-carbon-500">Implantado</span>
+      </div>)}
     </Card>
     <Card className="space-y-3 p-4">
       <h2 className="font-semibold text-carbon-100">Cloud Run Jobs</h2>
