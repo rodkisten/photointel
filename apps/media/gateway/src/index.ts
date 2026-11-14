@@ -40,6 +40,20 @@ function parseRequest(url: URL): { key: string; expires: number; sig: string } |
   if (!/^\d{10,13}$/.test(rawExp) || !/^[a-f0-9]{64}$/.test(sig)) return null;
   return { key, expires: Number(rawExp), sig };
 }
+function authorizedPrefix(env: Env): string | null {
+  const prefix = env.MEDIA_PREFIX;
+  // Explicit, directory-scoped R2 prefixes prevent cross-tenant key traversal.
+  if (!prefix || !prefix.startsWith('derived/') || !prefix.endsWith('/') ||
+      prefix.includes('\\\\') || prefix.includes('%') ||
+      prefix.split('/').some((segment, i, parts) =>
+        i < parts.length - 1 && (!segment || segment === '.' || segment === '..'))) {
+    return null;
+  }
+  return prefix;
+}
+function withinPrefix(key: string, prefix: string): boolean {
+  return key.startsWith(prefix) && key.length > prefix.length;
+}
 function contentType(key: string): string {
   const ext = key.split('.').pop()?.toLowerCase();
   return ({ avif: 'image/avif', webp: 'image/webp', jpeg: 'image/jpeg',
@@ -81,6 +95,9 @@ export default {
       if (!parsedKey || parsedKey.key !== key) {
         return new Response('Invalid key', { status: 400 });
       }
+      const prefix = authorizedPrefix(env);
+      if (!prefix) return new Response('Unavailable', { status: 503 });
+      if (!withinPrefix(key, prefix)) return new Response('Forbidden', { status: 403 });
       const object = await env.MEDIA_BUCKET.head(key);
       if (!object) return new Response('Not Found', { status: 404 });
       const sig = await signature(env.MEDIA_SIGNING_KEY,
@@ -93,6 +110,9 @@ export default {
     if (!allowedMethods.has(request.method)) return new Response('Method Not Allowed', { status: 405 });
     const parsed = parseRequest(url);
     if (!parsed) return new Response('Not Found', { status: 404 });
+    const prefix = authorizedPrefix(env);
+    if (!prefix) return new Response('Unavailable', { status: 503 });
+    if (!withinPrefix(parsed.key, prefix)) return new Response('Forbidden', { status: 403 });
     const now = Math.floor(Date.now() / 1000);
     if (!Number.isSafeInteger(parsed.expires) || parsed.expires < now || parsed.expires > now + 3600) {
       return new Response('Expired or invalid signature', { status: 403 });
