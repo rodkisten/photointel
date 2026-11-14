@@ -46,3 +46,18 @@ Production remains unchanged until loader compatibility, tenancy, rate limits, i
 A trusted backend can now call `POST /v1/source/sign` with the dedicated `MEDIA_SOURCE_TOKEN` bearer and JSON `{"key":"originals/tenant-a/example.jpg"}`. The gateway returns a URL scoped to that object and expiring within **60 seconds**. Imagor can fetch the resulting HTTPS URL through its standard HTTP loader without needing a custom Authorization header. The original R2 bucket stays private.
 
 The gateway validates expiry, signature, path and configured source prefix on every read. This is an **origin-access primitive**, not a finished Imagor deployment or full tenant authorization system. Signed URLs are bearer capabilities: avoid access-log/query-string leakage, use HTTPS only, enforce an Imagor outbound host allowlist and source-size limits, and never permit clients to supply arbitrary loader URLs. The Media API must authenticate the caller and authorize the tenant **before** minting a URL. Production integration and load testing remain pending.
+
+## Integration test and infrastructure release gate
+
+The `apps/media/api/test/integration.test.mjs` test exercises the independent API, gateway signature minting, Imagor HMAC URL construction and a private R2 fixture **in memory**. This verifies the integration contract, not libvips decoding or a real R2/Cloud Run deployment.
+
+Before enabling Imagor in production:
+
+1. Resolve and pin the verified upstream Imagor image digest. The Cloud Build placeholder deliberately prevents accidental release.
+2. Verify actual Imagor release configuration flags, SHA-256 signature implementation, base64 source syntax, expiry filter behavior and allowlisted HTTP loader behavior against a running container. Do not assume unverified Dockerfile environment names are enforced.
+3. Restrict loader outbound hosts to the private gateway. A public arbitrary-source loader creates SSRF risk; HTTPS-only is insufficient.
+4. Confirm GCP Terraform `plan` creates no unintended resources or destroys/replaces existing media jobs. Require explicit approval before `apply` or build/deploy.
+5. Run real R2 image fixtures across JPEG/PNG/WebP/AVIF, malformed files, oversized images, metadata stripping, tenant denial, signed URL expiry and concurrency. Record output parity and CPU/RAM costs against the existing Sharp job.
+6. Keep Sharp as the fallback and do not switch live traffic until end-to-end verification succeeds.
+
+No production GCP resources or secrets are changed by this PR.
