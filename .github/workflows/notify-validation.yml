@@ -53,7 +53,7 @@ concurrency:
 jobs:
   notify-tests:
     name: "📱 API + Actions tests"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
       APP_ENV: test

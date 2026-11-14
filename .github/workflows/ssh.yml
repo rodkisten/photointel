@@ -64,7 +64,7 @@ jobs:
   push-check:
     name: "🧪 SSH scripts (offline)"
     if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {contents: read}
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Longest interactive session is 180 min; reserve time for setup and push.
     timeout-minutes: 240
 
