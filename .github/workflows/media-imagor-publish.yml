@@ -1,0 +1,68 @@
+name: "🎞️ Media · Imagor publish (manual)"
+run-name: "Imagor image · ${{ github.ref_name }}"
+on:
+  workflow_dispatch:
+    inputs:
+      base_image:
+        description: "Reviewed upstream digest: shumc/imagor@sha256:..."
+        required: true
+        type: string
+        default: "shumc/imagor@sha256:11f57a47b07fe0ed0ddaf6e2defc070ffa61121338e6afa5935f0baa524f17ec"
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-media-imagor-publish
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: "Verify reviewed immutable upstream image"
+        env:
+          IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
+        run: bash apps/media/imagor/verify-base-image.sh "$IMAGOR_BASE_IMAGE" --verify-remote
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-builder@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "Authenticate Artifact Registry"
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+      - name: "Build and smoke test immutable Imagor image"
+        env:
+          IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
+        run: |
+          set -euo pipefail
+          IMAGE="us-central1-docker.pkg.dev/photointel/photointel/media-imagor:${GITHUB_SHA}"
+          docker build --pull --build-arg "IMAGOR_BASE_IMAGE=$IMAGOR_BASE_IMAGE" \
+            -f apps/media/imagor.Dockerfile -t "$IMAGE" apps/media
+          docker run -d --name imagor-smoke -p 127.0.0.1:18080:8000 \
+            -e IMAGOR_SECRET=temporary-smoke-secret-only-not-production-123456 \
+            "$IMAGE"
+          trap 'docker logs --tail 50 imagor-smoke || true; docker rm -f imagor-smoke || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:18080/; then ready=1; break; fi
+            docker inspect -f '{{.State.Running}}' imagor-smoke | grep -qx true || break
+            sleep 2
+          done
+          test "$ready" = 1 || { echo "::error::Imagor HTTP listener did not start"; exit 1; }
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+      - name: "Publish image and resolve immutable digest"
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE"
+          DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Could not verify published digest"; exit 1; }
+          IMMUTABLE="${IMAGE%:*}@$DIGEST"
+          echo "## Imagor published (not deployed)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$IMMUTABLE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Use this exact digest as the input to **TF · Media Imagor Plan**. No Cloud Run deployment was performed." >> "$GITHUB_STEP_SUMMARY"
