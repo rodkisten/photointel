@@ -5,6 +5,10 @@ substitutions:
   _REPOSITORY: photointel
   _IMAGOR_BASE_IMAGE: REPLACE_WITH_VERIFIED_IMMUTABLE_DIGEST
 steps:
+  - id: verify-imagor-base
+    name: ubuntu:24.04
+    entrypoint: bash
+    args: [-c, "bash apps/media/imagor/verify-base-image.sh '${_IMAGOR_BASE_IMAGE}'"]
   - id: image-image
     name: gcr.io/cloud-builders/docker
     args: [build, -f, apps/media/image/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-image:${_GIT_SHA}", apps/media/image]
@@ -12,6 +16,7 @@ steps:
     name: gcr.io/cloud-builders/docker
     args: [build, -f, apps/media/video/Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-video:${_GIT_SHA}", apps/media/video]
   - id: imagor-image
+    waitFor: [verify-imagor-base]
     name: gcr.io/cloud-builders/docker
     args: [build, --build-arg, "IMAGOR_BASE_IMAGE=${_IMAGOR_BASE_IMAGE}", -f, apps/media/imagor.Dockerfile, -t, "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/media-imagor:${_GIT_SHA}", apps/media]
 images:
