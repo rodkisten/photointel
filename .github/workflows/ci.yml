@@ -272,7 +272,7 @@ jobs:
           uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
       - name: "🔐 Secrets"
         id: notify_observed_046
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         continue-on-error: true
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
       - name: "📋 Consolidar falhas"
