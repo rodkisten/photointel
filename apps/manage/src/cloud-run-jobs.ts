@@ -46,7 +46,7 @@ export async function cloudRunJobsRoute(request: Request, env: Env, identity: Id
     const execution = logMatch[2];
     const filter = 'resource.type="cloud_run_job" AND resource.labels.job_name="' + logMatch[1] + '" AND labels."run.googleapis.com/execution_name"="' + execution + '"';
     const result = await gcpLogging(env, identity, project, filter);
-    return json({ entries: (result.entries || []).reverse().map(entry => ({ ...entry, jsonPayload: entry.jsonPayload ? JSON.parse(redact(entry.jsonPayload)) : undefined, textPayload: entry.textPayload ? redact(entry.textPayload) : undefined })) });
+    return json({ entries: (result.entries || []).reverse().map(entry => ({ ...entry, jsonPayload: entry.jsonPayload ? redact(entry.jsonPayload) : undefined, textPayload: entry.textPayload ? redact(entry.textPayload) : undefined })) });
   }
   const match = url.pathname.match(/^\/api\/cloud-run-jobs\/([a-z][a-z0-9-]{0,62})\/(run|executions)$/);
   if (!match || !NAME.test(match[1])) return null;
