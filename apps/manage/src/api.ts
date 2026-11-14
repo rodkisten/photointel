@@ -615,6 +615,26 @@ export async function api(
     });
   }
 
+  // Read-only Cloudflare cron inventory. Never expose account-wide script secrets.
+  if (method === 'GET' && path === '/api/cloudflare/worker-crons') {
+    const scripts = await cf(env, '/workers/scripts') as { result?: Array<{ id?: string }> };
+    const names = safeList(scripts, 'result')
+      .map(x => String(x.id || '')).filter(name => /^photointel(?:-[a-z0-9-]+)?$/.test(name)).slice(0, 30);
+    const items = await Promise.all(names.map(async name => {
+      try {
+        const response = await cf(env, '/workers/scripts/' + encodeURIComponent(name) + '/schedules') as {
+          result?: { schedules?: Array<{ cron?: string; created_on?: string; modified_on?: string }> } | Array<{ cron?: string }>;
+        };
+        const result = response.result;
+        const schedules = Array.isArray(result) ? result : result?.schedules || [];
+        return { name, schedules: schedules.map(x => ({ cron: x.cron || '' })) };
+      } catch {
+        return { name, schedules: [], error: 'Não foi possível consultar os crons deste Worker' };
+      }
+    }));
+    return json({ items });
+  }
+
   if (method === 'GET' && path === '/api/gcp/telegram') {
     const service = (await gcp(env, identity, gcpBase(env) + '/services/photointel-api')) as {
       template?: {
