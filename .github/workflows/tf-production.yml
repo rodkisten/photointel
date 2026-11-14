@@ -35,7 +35,7 @@ on:
         type: string
         default: ''
       plan_run_id:
-        description: "Required for apply: run ID of the reviewed plan"
+        description: "Optional: reviewed Plan run ID (blank = latest for selected scope)"
         type: string
         default: ''
       authorize_apply:
