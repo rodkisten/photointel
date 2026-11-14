@@ -75,3 +75,23 @@ test('rejects unsigned requests', async () => {
   const response = await worker.fetch(new Request('https://media.example/v1/media/derived/test.mp4'), env);
   assert.equal(response.status, 404);
 });
+
+test('HEAD returns metadata without reading a body', async () => {
+  const response = await worker.fetch(new Request(await signedUrl(), { method: 'HEAD' }), env);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Content-Length'), '10');
+  assert.equal(await response.text(), '');
+});
+test('refuses signing without a trusted issuer token', async () => {
+  const response = await worker.fetch(new Request('https://media.example/v1/sign', {
+    method: 'POST',
+    body: JSON.stringify({ key: 'derived/test.mp4', ttl: 300 }),
+  }), env);
+  assert.equal(response.status, 401);
+});
+test('refuses tampered signatures', async () => {
+  const url = new URL(await signedUrl());
+  url.searchParams.set('sig', '0'.repeat(64));
+  const response = await worker.fetch(new Request(url), env);
+  assert.equal(response.status, 403);
+});
