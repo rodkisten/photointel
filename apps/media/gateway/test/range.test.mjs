@@ -95,3 +95,23 @@ test('refuses tampered signatures', async () => {
   const response = await worker.fetch(new Request(url), env);
   assert.equal(response.status, 403);
 });
+
+test('rejects access outside a configured tenant prefix', async () => {
+  const tenantEnv = { ...env, MEDIA_PREFIX: 'derived/tenants/tenant-a/' };
+  const response = await worker.fetch(new Request('https://media.example/v1/sign', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + issuer },
+    body: JSON.stringify({ key: 'derived/test.mp4', ttl: 300 }),
+  }), tenantEnv);
+  assert.equal(response.status, 403);
+});
+test('fails closed on invalid or absent R2 prefixes', async () => {
+  for (const prefix of ['', 'originals/', 'derived/../', 'derived']) {
+    const response = await worker.fetch(new Request('https://media.example/v1/sign', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + issuer },
+      body: JSON.stringify({ key: 'derived/test.mp4', ttl: 300 }),
+    }), { ...env, MEDIA_PREFIX: prefix });
+    assert.equal(response.status, 503, prefix);
+  }
+});
