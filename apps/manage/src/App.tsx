@@ -7,6 +7,7 @@ import {
   Apple,
   CloudCog,
   ServerCog,
+  Timer,
   Wallet,
   Code2,
   Images,
@@ -30,6 +31,7 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
@@ -42,12 +44,13 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'deploy', 'infrastructure', 'triggers'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  operations: 'Cron, pausas e execuções dos serviços',
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
   infrastructure: 'Cloud Build, infraestrutura e terminal SSH',
@@ -62,6 +65,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/operations')) return 'operations';
   if (pathname.startsWith('/deploys')) return 'deploy';
   if (pathname.startsWith('/triggers')) return 'triggers';
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
