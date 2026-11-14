@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.29
 # Local BuildKit variant: cloud builds use api.Dockerfile.
 # Keep runtime/dependency pins synchronized with that file.
 FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
