@@ -328,6 +328,59 @@ function SourceDetails({ source, id }: { source: CostSource; id: string }) {
   );
 }
 
+function TopSpenders({ data }: { data: CostsResponse }) {
+  // The provider and GCP rankings are separate: never double-count GCP in the total.
+  const providers = INFO.map(({ id, label }) => ({
+    name: label,
+    amount: data.providers[id].status === 'ok' && data.providers[id].currency === 'USD'
+      ? data.providers[id].total : null,
+  })).filter((item): item is { name: string; amount: number } =>
+    item.amount !== null && Number.isFinite(item.amount) && item.amount > 0
+  ).sort((a, b) => b.amount - a.amount);
+  const gcp = data.providers.gcp;
+  const totals = new Map<string, number>();
+  if (gcp.status === 'ok') {
+    for (const item of gcp.items) {
+      if (item.cost === null || !Number.isFinite(item.cost)) continue;
+      totals.set(item.name, (totals.get(item.name) || 0) + item.cost);
+    }
+  }
+  const services = [...totals].map(([name, amount]) => ({ name, amount }))
+    .filter((item) => item.amount > 0).sort((a, b) => b.amount - a.amount).slice(0, 8);
+  const render = (entries: typeof providers, label: string) => {
+    const max = Math.max(0, ...entries.map((item) => item.amount));
+    return <div className="space-y-2">
+      <h3 className="text-xs font-semibold text-carbon-300">{label}</h3>
+      {entries.length ? entries.map((item, index) =>
+        <div key={item.name} className="space-y-1.5 rounded-lg border border-carbon-800 p-2.5">
+          <div className="flex items-start justify-between gap-3 text-xs">
+            <span className="min-w-0 break-words text-carbon-200">
+              <span className="mr-2 tabular-nums text-carbon-500">{index + 1}.</span>{item.name}
+            </span>
+            <strong className="shrink-0 tabular-nums text-carbon-100">{money(item.amount)}</strong>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-carbon-800" role="img"
+            aria-label={item.name + ': ' + money(item.amount)}>
+            <div className="h-full rounded-full bg-carbon-300"
+              style={{ width: (max > 0 ? Math.max(0, item.amount / max * 100) : 0) + '%' }} />
+          </div>
+        </div>
+      ) : <p className="text-xs text-carbon-500">Nenhum valor positivo disponível para este período.</p>}
+    </div>;
+  };
+  return <Section title="Maiores gastos" detail="Ranking por custo líquido conhecido, do maior para o menor">
+    <div className="grid gap-5 md:grid-cols-2">
+      {render(providers, 'Por provedor')}
+      {render(services, 'Serviços Google Cloud')}
+    </div>
+    <p className="mt-3 text-[11px] leading-5 text-carbon-500">
+      Valores positivos em USD, sem estimar dados ausentes. O ranking GCP detalha o próprio Google Cloud,
+      não é somado novamente ao ranking de provedores. Créditos podem tornar o custo líquido de um serviço negativo.
+      A exportação do BigQuery pode ter atraso.
+    </p>
+  </Section>;
+}
+
 export function CostsPage() {
   const choices = useMemo(months, []);
   const [month, setMonth] = useState(choices[0].value);
@@ -393,6 +446,7 @@ export function CostsPage() {
               </Badge>
               <p className="text-[11px] text-carbon-500">Aviso visual, não bloqueia serviços nem substitui orçamento do Cloud Billing.</p>
             </Card>}
+            <TopSpenders data={data} />
             <BillingAnalytics month={month} />
             <div className="grid gap-3 sm:grid-cols-2">
               {sortedProviders.map(({ id, label, icon: Icon, subtitle }) => {
