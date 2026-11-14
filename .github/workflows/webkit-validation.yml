@@ -81,7 +81,7 @@ jobs:
           mkdir -p reports
       - name: "⚙ Build"
         id: notify_observed_005
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: "🧰 Código"
         id: notify_observed_006
         uses: docker/build-push-action@v6
