@@ -64,6 +64,27 @@ resource "google_artifact_registry_repository" "docker" {
   repository_id = var.repository
   format        = "DOCKER"
   description   = "Private PhotoIntel images"
+
+  # Keep the two newest versions per image package, even if older than
+  # the deletion threshold. DELETE policies never override KEEP policies.
+  cleanup_policies {
+    id     = "keep-two-most-recent"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 2
+    }
+  }
+  # Allow seven days for diagnosing a failed build and completing a rollout.
+  cleanup_policies {
+    id     = "delete-old-images"
+    action = "DELETE"
+    condition {
+      older_than = "604800s"
+      tag_state  = "ANY"
+    }
+  }
+  cleanup_policy_dry_run = true
+
   lifecycle {
     prevent_destroy = true
   }
@@ -74,8 +95,24 @@ resource "google_storage_bucket" "build_source" {
   location                    = "US"
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+  # Source archives are disposable. Preserve the bucket, not every upload.
   versioning {
-    enabled = true
+    enabled = false
+  }
+  lifecycle_rule {
+    action { type = "Delete" }
+    condition {
+      age        = 7
+      with_state = "LIVE"
+    }
+  }
+  # Clean up noncurrent versions left behind by the previous configuration.
+  lifecycle_rule {
+    action { type = "Delete" }
+    condition {
+      age        = 2
+      with_state = "ARCHIVED"
+    }
   }
   lifecycle { prevent_destroy = true }
 }
