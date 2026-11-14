@@ -235,7 +235,7 @@ jobs:
           service_account: ${{ steps.config.outputs.service_account }}
 
       - name: "🧰 Gcloud"
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: "⚙ Env"
         id: worker_env

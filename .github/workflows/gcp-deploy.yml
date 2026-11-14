@@ -238,7 +238,7 @@ jobs:
           region: "us-central1"
       - name: "🧰 Gcloud"
         id: notify_observed_002
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       # Bootstrap creates infrastructure; its resources may not exist yet.
       - name: "📱 ! 🧰 Gcloud"

@@ -47,7 +47,7 @@ jobs:
           service_account: ${{ steps.config.outputs.service_account }}
 
       - name: "🧰 Gcloud"
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: "🩺 Cloud Run status + HTTP health"
         run: python3 -m infra.gcp.diagnose_api_connectivity --project photointel
