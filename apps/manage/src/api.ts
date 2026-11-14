@@ -615,6 +615,24 @@ export async function api(
     });
   }
 
+  // Updating Cloudflare cron triggers changes only the selected PhotoIntel Worker.
+  // The caller must confirm its exact name; no arbitrary account script paths.
+  if (method === 'POST' && path === '/api/cloudflare/worker-crons') {
+    const input = await bodyJson<{ name?: unknown; crons?: unknown; confirm?: unknown }>(request);
+    const { name, crons, confirm } = input;
+    if (typeof name !== 'string' || !/^photointel(?:-[a-z0-9-]+)?$/.test(name) ||
+        name.length > 70 || confirm !== name || !Array.isArray(crons) ||
+        crons.length > 10 || !crons.every(cron =>
+          typeof cron === 'string' && cron.length <= 100 &&
+          /^[0-9*,\/ -]+$/.test(cron) && cron.trim().split(/\s+/).length === 5)) {
+      throw new ApiError(422, 'WORKER_CRON', 'Confirme o Worker e informe crons válidos (UTC, cinco campos)');
+    }
+    const normalized = [...new Set((crons as string[]).map(cron => cron.trim().replace(/\s+/g, ' ')))];
+    // Empty array intentionally disables all cron triggers. UI requires explicit confirmation.
+    const updated = await cf(env, '/workers/scripts/' + encodeURIComponent(name) + '/schedules', 'PUT', normalized.map(cron => ({ cron })));
+    return json({ name, schedules: normalized, updated: Boolean(updated) });
+  }
+
   // Read-only Cloudflare cron inventory. Never expose account-wide script secrets.
   if (method === 'GET' && path === '/api/cloudflare/worker-crons') {
     const scripts = await cf(env, '/workers/scripts') as { result?: Array<{ id?: string }> };
