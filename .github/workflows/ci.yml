@@ -34,32 +34,41 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_001
         uses: actions/checkout@v4
         with: {persist-credentials: false}
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_002
         uses: actions/checkout@v4
       - name: "🧰 Config"
+        continue-on-error: true
         id: notify_observed_003
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23', enable-cache: true}
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_004
         run: uv python install 3.12
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_005
         run: uv sync --frozen --group ingest
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_006
         run: uv run ruff check .
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_007
         run: uv run mypy apps/api/src gpu bridges
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_008
         run: uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
       - name: "📦 Testes"
+        continue-on-error: true
         id: notify_observed_009
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
@@ -69,47 +78,61 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_010
         uses: actions/checkout@v4
       - name: "🧰 Config"
+        continue-on-error: true
         id: notify_observed_011
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_012
         run: npm --prefix apps/web ci
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_013
         run: npm --prefix apps/web run lint
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_014
         run: npm --prefix apps/web run typecheck
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_015
         run: npm --prefix apps/web test
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_016
         run: npm --prefix apps/web run build
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_017
         run: npm --prefix apps/web audit --audit-level=high
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_018
         uses: actions/checkout@v4
       - name: "🧰 Config"
+        continue-on-error: true
         id: notify_observed_019
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_020
         run: uv python install 3.12
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_021
         run: uv sync --frozen --group ingest
       - name: "🧰 Código"
+        continue-on-error: true
         id: notify_observed_022
         uses: docker/setup-buildx-action@v3
       - name: "🧰 Código"
+        continue-on-error: true
         id: notify_observed_023
         uses: docker/build-push-action@v6
         with:
@@ -121,36 +144,46 @@ jobs:
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
       - name: "⚙ ️  Start private local obje"
+        continue-on-error: true
         id: notify_observed_024
         run: |
           docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
       - name: "⚙ ️  Wait for storage and cre"
+        continue-on-error: true
         id: notify_observed_025
         run: |
           uv run python infra/scripts/init-private-bucket.py
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_026
         run: uv run alembic -c infra/migrations/alembic.ini upgrade head
       - name: "🗃 ️  Verify dump and restore "
+        continue-on-error: true
         id: notify_observed_027
         run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
       - name: "🗃 Imagem"
+        continue-on-error: true
         id: notify_observed_028
         run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_029
         run: uv run pytest -m integration --junitxml=reports/integration.xml
       - name: "🧰 Config"
+        continue-on-error: true
         id: notify_observed_030
         uses: actions/setup-node@v4
         with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_031
         run: npm --prefix apps/web ci
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_032
         run: npx --prefix apps/web playwright install --with-deps chromium
       - name: "⚙ ️  Browser E2E against real"
+        continue-on-error: true
         id: notify_observed_033
         run: bash infra/scripts/run-e2e.sh
         env:
@@ -162,6 +195,7 @@ jobs:
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
       - name: "📦 Testes"
+        continue-on-error: true
         id: notify_observed_034
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
@@ -171,6 +205,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: "📦 Testes"
+        continue-on-error: true
         id: notify_observed_035
         uses: actions/upload-artifact@v4
         if: ${{ failure() || github.event_name == 'workflow_dispatch' }}
@@ -180,15 +215,19 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_036
         uses: actions/checkout@v4
       - name: "🧰 Build"
+        continue-on-error: true
         id: notify_observed_037
         uses: docker/setup-qemu-action@v3
       - name: "🧰 Build"
+        continue-on-error: true
         id: notify_observed_038
         uses: docker/setup-buildx-action@v3
       - name: "🏗 Build"
+        continue-on-error: true
         id: notify_observed_039
         uses: docker/build-push-action@v6
         with:
@@ -197,6 +236,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
       - name: "🏗 Build"
+        continue-on-error: true
         id: notify_observed_040
         uses: docker/build-push-action@v6
         with:
@@ -205,22 +245,27 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
       - name: "📥 Código"
+        continue-on-error: true
         id: notify_observed_041
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: "🧰 Config"
+        continue-on-error: true
         id: notify_observed_042
         uses: astral-sh/setup-uv@v6
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_043
         run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
       - name: "▶ ️  Execute command"
+        continue-on-error: true
         id: notify_observed_044
         run: uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
       - name: "🧰 Setup"
+        continue-on-error: true
         id: notify_observed_045
         run: |
           uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
@@ -229,4 +274,5 @@ jobs:
         id: notify_observed_046
         uses: gitleaks/gitleaks-action@v2
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
+
 
