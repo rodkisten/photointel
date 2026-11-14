@@ -1,0 +1,77 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { webcrypto } from 'node:crypto';
+
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+globalThis.crypto ??= webcrypto;
+const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8');
+const js = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const worker = (await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))).default;
+const secret = 's'.repeat(48);
+const issuer = 'i'.repeat(48);
+const data = new TextEncoder().encode('0123456789');
+const calls = [];
+const env = {
+  MEDIA_SIGNING_KEY: secret,
+  MEDIA_ISSUER_TOKEN: issuer,
+  MEDIA_PREFIX: 'derived/',
+  MEDIA_BUCKET: {
+    async head(key) { return key === 'derived/test.mp4' ? { size: data.length } : null; },
+    async get(key, options) {
+      calls.push(options);
+      if (key !== 'derived/test.mp4') return null;
+      const range = options?.range;
+      const bytes = range ? data.slice(range.offset, range.offset + range.length) : data;
+      return { body: bytes, httpMetadata: { contentType: 'video/mp4' }, httpEtag: '"test"' };
+    },
+  },
+};
+async function signedUrl() {
+  const response = await worker.fetch(new Request('https://media.example/v1/sign', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + issuer },
+    body: JSON.stringify({ key: 'derived/test.mp4', ttl: 300 }),
+  }), env);
+  assert.equal(response.status, 200);
+  return (await response.json()).url;
+}
+test('returns full video with byte-range support advertised', async () => {
+  const response = await worker.fetch(new Request(await signedUrl()), env);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Accept-Ranges'), 'bytes');
+  assert.equal(response.headers.get('Content-Length'), '10');
+  assert.equal(await response.text(), '0123456789');
+});
+test('returns 206 for a bounded byte range', async () => {
+  const response = await worker.fetch(new Request(await signedUrl(), {
+    headers: { Range: 'bytes=2-5' },
+  }), env);
+  assert.equal(response.status, 206);
+  assert.equal(response.headers.get('Content-Range'), 'bytes 2-5/10');
+  assert.equal(response.headers.get('Content-Length'), '4');
+  assert.equal(await response.text(), '2345');
+});
+test('supports suffix byte ranges', async () => {
+  const response = await worker.fetch(new Request(await signedUrl(), {
+    headers: { Range: 'bytes=-3' },
+  }), env);
+  assert.equal(response.status, 206);
+  assert.equal(await response.text(), '789');
+});
+test('rejects unsatisfiable and multipart ranges', async () => {
+  for (const range of ['bytes=100-200', 'bytes=0-1,3-4', 'bytes=-0', 'bytes=foo']) {
+    const response = await worker.fetch(new Request(await signedUrl(), {
+      headers: { Range: range },
+    }), env);
+    assert.equal(response.status, 416, range);
+  }
+});
+test('rejects unsigned requests', async () => {
+  const response = await worker.fetch(new Request('https://media.example/v1/media/derived/test.mp4'), env);
+  assert.equal(response.status, 404);
+});
