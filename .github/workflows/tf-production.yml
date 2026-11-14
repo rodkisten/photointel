@@ -34,6 +34,10 @@ on:
         description: "Optional caller commit; refuse a concurrent main change"
         type: string
         default: ''
+      plan_run_id:
+        description: "Required for apply: run ID of the reviewed plan"
+        type: string
+        default: ''
       authorize_apply:
         description: "Authorize infrastructure changes after reviewing the plan"
         type: boolean
@@ -128,14 +132,31 @@ jobs:
           APPROVED: ${{ inputs.authorize_apply }}
         run: test "$APPROVED" = true || { echo '::error::Apply checkbox required'; exit 1; }
       - name: "TF · Plan"
-        if: inputs.action != 'import'
+        if: inputs.action == 'plan'
         working-directory: infra/terraform/environments/production
-        run: |
-          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
-        id: plan
+        run: terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+      - name: "TF · Restore reviewed plan"
+        if: inputs.action == 'apply'
+        env:
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          TF_SCOPE: gcp
+          TF_PLAN_BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+          TF_RUNTIME_TARGETS: ${{ inputs.runtime_targets || 'api,jobs' }}
+          TF_API_SHA: ${{ inputs.api_sha }}
+          TF_IMAGE_SHA: ${{ inputs.image_sha }}
+        run: python3 -m infra.terraform.saved_plan restore
       - name: "TF · Review plan and block destruction or replacement"
         if: inputs.action != 'import'
         run: python3 -m infra.terraform.media_release review
+      - name: "TF · Save reviewed plan"
+        if: inputs.action == 'plan'
+        env:
+          TF_SCOPE: gcp
+          TF_PLAN_BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+          TF_RUNTIME_TARGETS: ${{ inputs.runtime_targets || 'api,jobs' }}
+          TF_API_SHA: ${{ inputs.api_sha }}
+          TF_IMAGE_SHA: ${{ inputs.image_sha }}
+        run: python3 -m infra.terraform.saved_plan save
       - name: "TF · Apply"
         if: inputs.action == 'apply' && inputs.authorize_apply
         working-directory: infra/terraform/environments/production
@@ -202,10 +223,24 @@ jobs:
           APPROVED: ${{ inputs.authorize_apply }}
         run: test "$APPROVED" = true || { echo '::error::Apply checkbox required'; exit 1; }
       - name: "TF · Plan Cloudflare metadata only"
+        if: inputs.action == 'plan'
         working-directory: infra/terraform/environments/cloudflare
         run: terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+      - name: "TF · Restore reviewed Cloudflare plan"
+        if: inputs.action == 'apply'
+        env:
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          TF_SCOPE: cloudflare
+          TF_PLAN_BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+        run: python3 -m infra.terraform.saved_plan restore
       - name: "TF · Review and block destruction/replacement"
         run: python3 -m infra.terraform.media_release review --root infra/terraform/environments/cloudflare
+      - name: "TF · Save reviewed Cloudflare plan"
+        if: inputs.action == 'plan'
+        env:
+          TF_SCOPE: cloudflare
+          TF_PLAN_BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+        run: python3 -m infra.terraform.saved_plan save
       - name: "TF · Apply adopted Cloudflare infrastructure"
         if: inputs.action == 'apply' && inputs.authorize_apply
         working-directory: infra/terraform/environments/cloudflare
