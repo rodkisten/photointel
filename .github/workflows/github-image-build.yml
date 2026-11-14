@@ -92,9 +92,20 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
         run: |
           set -euo pipefail
-          if gcloud artifacts docker images describe "$IMAGE" --project=photointel --format=json 2>/dev/null | jq -e '.image_summary.digest // .imageSummary.digest // .digest' >/dev/null; then
+          # Query the package inventory rather than interpreting an auth/API
+          # failure as a cache miss. A failed lookup must stop the release.
+          package="${IMAGE%:*}"
+          tag="${IMAGE##*:}"
+          inventory="$(gcloud artifacts docker images list "$package" --include-tags --project=photointel --format=json)"
+          digest="$(jq -r --arg tag "$tag" '
+            [.[] | select(
+              (.tags // [] | if type == "string" then split(",") else . end)
+              | any(. == $tag or endswith(":" + $tag))
+            ) | (.version // .digest // "")] | first // ""
+          ' <<< "$inventory")"
+          if [[ -n "$digest" ]]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Image already published; skipping duplicate build." >> "$GITHUB_STEP_SUMMARY"
+            echo "Image already published: $package@$digest" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -119,5 +130,9 @@ jobs:
         run: |
           echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "Digest: \`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$DIGEST" ]]; then
+            echo "Digest: \`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Existing image reused; see the inventory step for its digest." >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "Build completed on GitHub Actions, not Cloud Build." >> "$GITHUB_STEP_SUMMARY"
