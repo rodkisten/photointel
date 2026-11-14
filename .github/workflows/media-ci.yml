@@ -1,0 +1,46 @@
+name: "🎞️ Media · CI"
+on:
+  pull_request:
+    paths:
+      - "apps/media/**"
+      - ".github/workflows/media-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/media/**"
+      - ".github/workflows/media-ci.yml"
+permissions:
+  contents: read
+concurrency:
+  group: media-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate pinned Imagor reference rules
+        run: bash apps/media/imagor/test-verify-base-image.sh
+      - name: Build and test staged media processors
+        shell: bash
+        run: |
+          set -euo pipefail
+          for component in image video; do
+            (
+              cd "apps/media/$component"
+              npm install --no-audit --no-fund
+              npm run build
+              npm test
+            )
+          done
+      - name: Typecheck staged Cloudflare gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/media/gateway
+          npm install --no-audit --no-fund
+          npm run typecheck
