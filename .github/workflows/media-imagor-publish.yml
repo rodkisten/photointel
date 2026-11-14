@@ -7,6 +7,7 @@ on:
         description: "Reviewed upstream digest: shumc/imagor@sha256:..."
         required: true
         type: string
+        default: "shumc/imagor@sha256:11f57a47b07fe0ed0ddaf6e2defc070ffa61121338e6afa5935f0baa524f17ec"
 permissions:
   contents: read
   id-token: write
