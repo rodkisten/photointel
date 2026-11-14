@@ -1,3 +1,4 @@
+import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
 import { workflowTemplateRoute } from './workflow-message';
@@ -156,6 +157,22 @@ export async function api(
           inputs: WORKFLOW_INPUTS[String(x.path).split('/').pop() || ''] || {},
         })),
     });
+  }
+
+  const workflowInputsMatch = path.match(/^\\/api\\/workflows\\/([A-Za-z0-9_.-]+\\.ya?ml)\\/inputs$/);
+  if (method === 'GET' && workflowInputsMatch) {
+    const filename = workflowInputsMatch[1];
+    const catalog = await gh(env, '/actions/workflows?per_page=100');
+    const found = safeList(catalog, 'workflows').some(x =>
+      x.state === 'active' && String(x.path || '') === '.github/workflows/' + filename);
+    if (!found) throw new ApiError(404, 'WORKFLOW_NOT_FOUND', 'Workflow ativo não encontrado');
+    const file = await gh(env, '/contents/.github/workflows/' + encodeURIComponent(filename) + '?ref=main') as { content?: string; encoding?: string; size?: number };
+    if (file.encoding !== 'base64' || !file.content || (file.size || 0) > 200_000)
+      throw new ApiError(422, 'WORKFLOW_YAML', 'Arquivo YAML indisponível ou muito grande');
+    const source = atob(file.content.replace(/\\s/g, ''));
+    const decoded = new TextDecoder().decode(Uint8Array.from(source, char => char.charCodeAt(0)));
+    try { return json(parseWorkflowInputs(decoded)); }
+    catch { throw new ApiError(422, 'WORKFLOW_YAML', 'Não foi possível interpretar workflow_dispatch.inputs'); }
   }
 
   if (method === 'GET' && path === '/api/runs') {
@@ -550,7 +567,12 @@ export async function api(
     const available = await gh(env, '/actions/workflows?per_page=100');
     const found = safeList(available, 'workflows').some(x => x.state === 'active' && String(x.path || '').split('/').pop() === input.workflow);
     if (!found) throw new ApiError(422, 'WORKFLOW', 'Workflow não encontrado ou inativo');
-    const spec = WORKFLOW_INPUTS[input.workflow] || {};
+    const file = await gh(env, '/contents/.github/workflows/' + encodeURIComponent(input.workflow) + '?ref=main') as { content?: string; encoding?: string; size?: number };
+    if (file.encoding !== 'base64' || !file.content || (file.size || 0) > 200_000) throw new ApiError(422, 'WORKFLOW_YAML', 'Workflow indisponível');
+    const raw = atob(file.content.replace(/\\s/g, ''));
+    const parsed = parseWorkflowInputs(new TextDecoder().decode(Uint8Array.from(raw, char => char.charCodeAt(0))));
+    if (!parsed.dispatchable) throw new ApiError(422, 'WORKFLOW_DISPATCH', 'Workflow não aceita execução manual');
+    const spec = parsed.inputs;
     if (input.confirm !== 'DEPLOY ' + input.workflow)
       throw new ApiError(409, 'CONFIRM', 'Confirmação de execução necessária');
     const inputs = input.inputs || {};
@@ -560,13 +582,15 @@ export async function api(
       Array.isArray(inputs) ||
       Object.entries(inputs).some(
         ([key, value]) =>
-          (!Object.keys(spec).length ? !/^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(key) : !(key in spec)) ||
+          !(key in spec) ||
           typeof value !== 'string' ||
           value.length > 1000 ||
-          ((spec[key] || []).length > 0 && !spec[key].includes(value)),
+          ((spec[key]?.type === 'choice' && !spec[key].options.includes(value))),
       )
     )
       throw new ApiError(422, 'INPUTS', 'Input inválido ou não autorizado');
+    if (Object.entries(spec).some(([key, field]) => field.required && !((inputs[key] ?? field.default).trim())))
+      throw new ApiError(422, 'INPUTS_REQUIRED', 'Preencha os parâmetros obrigatórios');
     const result = await gh(env, '/actions/workflows/' + input.workflow + '/dispatches', 'POST', {
       ref: 'main',
       inputs,
