@@ -36,25 +36,29 @@ def main():
     builds = gcloud("builds", "list", "--region=global", "--limit=1000")
     services = gcloud("run", "services", "list", f"--region={REGION}")
     jobs = gcloud("run", "jobs", "list", f"--region={REGION}")
-    if not isinstance(images, list) or not isinstance(builds, list):
+    if not all(isinstance(value, list) for value in (images, builds, services, jobs)):
         raise RuntimeError("Incomplete image/build inventory; refusing to prune")
     protected = set()
+    def protect_image(image):
+        if image.startswith(REPOSITORY + "/") and not DIGEST.search(image):
+            raise RuntimeError(f"Mutable Cloud Run image reference: {image}; refusing cleanup")
+        protected.update(DIGEST.findall(image))
     for service in services:
         name = service.get("metadata", {}).get("name") or service.get("name", "").split("/")[-1]
         if not name:
             raise RuntimeError("Service without name")
         detail = gcloud("run", "services", "describe", name, f"--region={REGION}")
         for container in detail.get("spec", {}).get("template", {}).get("spec", {}).get("containers", []):
-            protected.update(DIGEST.findall(container.get("image", "")))
+            protect_image(container.get("image", ""))
         for container in detail.get("template", {}).get("containers", []):
-            protected.update(DIGEST.findall(container.get("image", "")))
+            protect_image(container.get("image", ""))
         # The live revision may differ from the current template. Protect it too.
         for status in detail.get("status", {}).get("traffic", []):
             revision = status.get("revisionName")
             if revision:
                 revision_detail = gcloud("run", "revisions", "describe", revision, f"--region={REGION}")
                 for container in revision_detail.get("spec", {}).get("containers", []):
-                    protected.update(DIGEST.findall(container.get("image", "")))
+                    protect_image(container.get("image", ""))
     # Preserve *all* Cloud Run revisions, not only the currently routed one.
     revisions = gcloud("run", "revisions", "list", f"--region={REGION}")
     if not isinstance(revisions, list):
@@ -65,7 +69,7 @@ def main():
             raise RuntimeError("Revision without name")
         detail = gcloud("run", "revisions", "describe", name, f"--region={REGION}")
         for container in detail.get("spec", {}).get("containers", []):
-            protected.update(DIGEST.findall(container.get("image", "")))
+            protect_image(container.get("image", ""))
     for job in jobs:
         name = job.get("metadata", {}).get("name") or job.get("name", "").split("/")[-1]
         if not name:
@@ -73,9 +77,9 @@ def main():
         detail = gcloud("run", "jobs", "describe", name, f"--region={REGION}")
         template = detail.get("spec", {}).get("template", {}).get("spec", {}).get("template", {}).get("spec", {})
         for container in template.get("containers", []):
-            protected.update(DIGEST.findall(container.get("image", "")))
+            protect_image(container.get("image", ""))
         for container in detail.get("template", {}).get("template", {}).get("containers", []):
-            protected.update(DIGEST.findall(container.get("image", "")))
+            protect_image(container.get("image", ""))
 
     # Only build SHA tags whose SUCCESS status is independently established are eligible.
     successes = set()
