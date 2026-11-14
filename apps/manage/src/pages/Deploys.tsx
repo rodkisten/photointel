@@ -81,14 +81,10 @@ export function Deploys() {
   const [confirm, setConfirm] = useState(false);
   const [workflowDialog, setWorkflowDialog] = useState(false);
   const [workflowSearch, setWorkflowSearch] = useState('');
-  const [manualInputs, setManualInputs] = useState('{}');
-  const [manualInputError, setManualInputError] = useState('');
+
   const mutation = useMutation({
     mutationFn: () => {
-      const parsed: unknown = active && !Object.keys(active.inputs).length ? JSON.parse(manualInputs) : inputs;
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.values(parsed).some(value => typeof value !== 'string'))
-        throw new Error('Os parâmetros devem ser um objeto JSON com valores de texto.');
-      return send('/dispatch', { workflow: selected, inputs: parsed, confirm: 'DEPLOY ' + selected });
+      return send('/dispatch', { workflow: selected, inputs, confirm: 'DEPLOY ' + selected });
     },
     onSuccess: () => {
       setConfirm(false);
@@ -97,22 +93,24 @@ export function Deploys() {
     },
   });
   const active = workflows.data?.items.find((w) => w.file === selected);
+  const workflowFields = useQuery({
+    queryKey: ['workflow-inputs', selected],
+    queryFn: () => api<{ dispatchable: boolean; inputs: Record<string, {
+      description: string; type: 'string' | 'choice' | 'boolean' | 'environment' | 'number';
+      required: boolean; default: string; options: string[];
+    }> }>('/workflows/' + encodeURIComponent(selected) + '/inputs'),
+    enabled: workflowDialog && !!selected,
+    retry: false,
+  });
+  const fieldDefinitions = workflowFields.data?.inputs || {};
+  const missingRequired = Object.entries(fieldDefinitions).some(([key, field]) => field.required && !(inputs[key] ?? field.default).trim());
   const filteredWorkflows = (workflows.data?.items || []).filter(w => (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()));
   useEffect(() => {
     if (!selected && workflows.data?.items.length) setSelected(workflows.data.items[0].file);
   }, [selected, workflows.data]);
   function changeFile(value: string) {
     setSelected(value);
-    setManualInputs('{}');
-    setManualInputError('');
-    const fields = workflows.data?.items.find((x) => x.file === value)?.inputs || {};
-    setInputs(
-      Object.fromEntries(
-        Object.entries(fields)
-          .filter(([, v]) => v.length)
-          .map(([k, v]) => [k, v[0]]),
-      ),
-    );
+    setInputs({});
   }
   return (
     <div className="space-y-6">
@@ -172,28 +170,26 @@ export function Deploys() {
               <Dialog.Close asChild><Button size="icon" variant="ghost" aria-label="Fechar"><X size={18} /></Button></Dialog.Close>
             </div>
             <div className="space-y-3">
-              {active && !Object.keys(active.inputs).length && <label className="block space-y-2 text-xs text-carbon-300">
-                <span>Parâmetros workflow_dispatch · JSON (opcional)</span>
-                <Textarea rows={4} value={manualInputs} onChange={event => {
-                  setManualInputs(event.target.value);
-                  try { const parsed: unknown = JSON.parse(event.target.value);
-                    setManualInputError(!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.values(parsed).some(value => typeof value !== 'string') ? 'Use um objeto JSON com valores de texto.' : '');
-                  } catch { setManualInputError('JSON inválido'); }
-                }} />
-                <span className="text-carbon-500">Use as chaves definidas em workflow_dispatch.inputs. Deixe {} se não houver parâmetros.</span>
-                {manualInputError && <span role="alert" className="text-red-300">{manualInputError}</span>}
-              </label>}
-              {active && Object.entries(active.inputs).map(([key, values]) => <label key={key} className="block space-y-1 text-xs text-carbon-300">
-                <span>{key.replaceAll('_', ' ')}</span>
-                {values.length ? <Select value={inputs[key] ?? values[0]} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))}>
-                  {values.map(value => <option key={value} value={value}>{value}</option>)}
-                </Select> : <Input placeholder="Opcional" value={inputs[key] || ''} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))} />}
+              {workflowFields.isPending && <Spinner />}
+              {workflowFields.error && <IssueBanner error={workflowFields.error} />}
+              {workflowFields.data && !workflowFields.data.dispatchable && <p role="alert" className="text-amber-300">Este workflow não declara workflow_dispatch e não pode ser iniciado manualmente.</p>}
+              {workflowFields.data?.dispatchable && !Object.keys(fieldDefinitions).length && <p className="text-xs text-carbon-400">Este workflow não requer parâmetros.</p>}
+              {workflowFields.data?.dispatchable && Object.entries(fieldDefinitions).map(([key, field]) => <label key={key} className="block space-y-1 text-xs text-carbon-300">
+                <span>{key.replaceAll('_', ' ')}{field.required ? ' *' : ''}</span>
+                {field.description && <span className="block text-carbon-500">{field.description}</span>}
+                {field.type === 'choice' ? <Select value={inputs[key] ?? field.default} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))}>
+                  {!field.required && <option value="">Padrão / vazio</option>}
+                  {field.options.map(option => <option key={option} value={option}>{option}</option>)}
+                </Select> : field.type === 'boolean' ? <Select value={inputs[key] ?? (field.default || 'false')} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))}>
+                  <option value="false">Não</option><option value="true">Sim</option>
+                </Select> : <Input type={field.type === 'number' ? 'number' : 'text'} placeholder={field.default || 'Opcional'}
+                  value={inputs[key] ?? field.default} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))} />}
               </label>)}
               <p className="text-xs text-amber-300">⚠️ A execução pode modificar infraestrutura e gerar custos. Confirme antes de iniciar.</p>
               {mutation.error && <IssueBanner error={mutation.error} />}
               <div className="flex justify-end gap-2 border-t border-carbon-800 pt-3">
                 <Button size="sm" variant="ghost" onClick={() => setWorkflowDialog(false)}>Cancelar</Button>
-                <Button size="sm" disabled={!selected || mutation.isPending || !!manualInputError} onClick={() => setConfirm(true)}>
+                <Button size="sm" disabled={!selected || mutation.isPending || workflowFields.isPending || !!workflowFields.error || !workflowFields.data?.dispatchable || missingRequired} onClick={() => setConfirm(true)}>
                   <Play size={15} />{mutation.isPending ? 'Enviando…' : 'Executar'}
                 </Button>
               </div>
