@@ -615,6 +615,75 @@ export async function api(
     });
   }
 
+  // Proxy the existing durable Photos queue controller. The Photos API independently
+  // verifies the signed Manage Access JWT and admin allowlist; no bypass token.
+  if (path === '/api/photos/jobs/control' &&
+      (method === 'GET' || method === 'POST')) {
+    const origin = env.PHOTOINTEL_API_ORIGIN;
+    if (!origin || !/^https:\/\/[^/?#]+$/.test(origin))
+      throw new ApiError(503, 'PHOTOS_CONTROL_ORIGIN', 'Configure PHOTOINTEL_API_ORIGIN');
+    let upstreamPath = '/v1/manage/jobs/control';
+    if (method === 'POST') {
+      const input = await bodyJson<{ action?: unknown; confirm?: unknown }>(request);
+      if ((input.action !== 'pause' && input.action !== 'resume') ||
+          input.confirm !== input.action)
+        throw new ApiError(422, 'PHOTOS_CONTROL', 'Confirme pausa ou retomada da fila');
+      upstreamPath += '/' + input.action;
+    }
+    const response = await fetch(origin + upstreamPath, {
+      method,
+      headers: { 'Cf-Access-Jwt-Assertion': identity.jwt, 'Accept': 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(LIMITS.TIMEOUT_DEFAULT),
+    });
+    if (!response.ok)
+      throw new ApiError(502, 'PHOTOS_CONTROL_UPSTREAM', 'Photos recusou a operação (HTTP ' + response.status + ')');
+    if (Number(response.headers.get('content-length') || 0) > 30000)
+      throw new ApiError(502, 'PHOTOS_CONTROL_SIZE', 'Resposta excedeu o limite');
+    const payload = await response.text();
+    if (payload.length > 30000) throw new ApiError(502, 'PHOTOS_CONTROL_SIZE', 'Resposta excedeu o limite');
+    try { return json(JSON.parse(payload)); }
+    catch { throw new ApiError(502, 'PHOTOS_CONTROL_JSON', 'Resposta inválida do Photos'); }
+  }
+
+  // Updating Cloudflare cron triggers changes only the selected PhotoIntel Worker.
+  // The caller must confirm its exact name; no arbitrary account script paths.
+  if (method === 'POST' && path === '/api/cloudflare/worker-crons') {
+    const input = await bodyJson<{ name?: unknown; crons?: unknown; confirm?: unknown }>(request);
+    const { name, crons, confirm } = input;
+    if (typeof name !== 'string' || !/^photointel(?:-[a-z0-9-]+)?$/.test(name) ||
+        name.length > 70 || confirm !== name || !Array.isArray(crons) ||
+        crons.length > 10 || !crons.every(cron =>
+          typeof cron === 'string' && cron.length <= 100 &&
+          /^[0-9*,\/ -]+$/.test(cron) && cron.trim().split(/\s+/).length === 5)) {
+      throw new ApiError(422, 'WORKER_CRON', 'Confirme o Worker e informe crons válidos (UTC, cinco campos)');
+    }
+    const normalized = [...new Set((crons as string[]).map(cron => cron.trim().replace(/\s+/g, ' ')))];
+    // Empty array intentionally disables all cron triggers. UI requires explicit confirmation.
+    const updated = await cf(env, '/workers/scripts/' + encodeURIComponent(name) + '/schedules', 'PUT', normalized.map(cron => ({ cron })));
+    return json({ name, schedules: normalized, updated: Boolean(updated) });
+  }
+
+  // Read-only Cloudflare cron inventory. Never expose account-wide script secrets.
+  if (method === 'GET' && path === '/api/cloudflare/worker-crons') {
+    const scripts = await cf(env, '/workers/scripts') as { result?: Array<{ id?: string }> };
+    const names = safeList(scripts, 'result')
+      .map(x => String(x.id || '')).filter(name => /^photointel(?:-[a-z0-9-]+)?$/.test(name)).slice(0, 30);
+    const items = await Promise.all(names.map(async name => {
+      try {
+        const response = await cf(env, '/workers/scripts/' + encodeURIComponent(name) + '/schedules') as {
+          result?: { schedules?: Array<{ cron?: string; created_on?: string; modified_on?: string }> } | Array<{ cron?: string }>;
+        };
+        const result = response.result;
+        const schedules = Array.isArray(result) ? result : result?.schedules || [];
+        return { name, schedules: schedules.map(x => ({ cron: x.cron || '' })) };
+      } catch {
+        return { name, schedules: [], error: 'Não foi possível consultar os crons deste Worker' };
+      }
+    }));
+    return json({ items });
+  }
+
   if (method === 'GET' && path === '/api/gcp/telegram') {
     const service = (await gcp(env, identity, gcpBase(env) + '/services/photointel-api')) as {
       template?: {
@@ -704,6 +773,30 @@ export async function api(
         logUri: x.logUri,
       })),
     });
+  }
+
+  // Cancellation is scoped to an existing PhotoIntel Cloud Run execution.
+  // Never accept a caller-supplied project, region or arbitrary resource path.
+  if (method === 'POST' && path === '/api/gcp/executions/cancel') {
+    const input = await bodyJson<{ job?: unknown; execution?: unknown; confirm?: unknown }>(request);
+    const { job, execution, confirm } = input;
+    if (typeof job !== 'string' || !PATTERNS.GCP_JOB_NAME.test(job) ||
+        typeof execution !== 'string' || !/^photointel-[a-z0-9-]{1,110}$/.test(execution) ||
+        confirm !== execution) {
+      throw new ApiError(422, 'EXECUTION_CANCEL', 'Confirme a execução PhotoIntel válida');
+    }
+    const base = gcpBase(env);
+    const resource = base + '/jobs/' + encodeURIComponent(job) + '/executions/' + encodeURIComponent(execution);
+    const existing = await gcp(env, identity, resource) as {
+      name?: string; completionTime?: string; conditions?: Array<{ type?: string; state?: string }>;
+    };
+    if (existing.name?.split('/').pop() !== execution ||
+        existing.name?.split('/').slice(-3, -2)[0] !== job) {
+      throw new ApiError(409, 'EXECUTION_SCOPE', 'Execução fora do job permitido');
+    }
+    if (existing.completionTime) return json({ name: existing.name, unchanged: true, completed: true });
+    const updated = await gcp(env, identity, resource + ':cancel', {}) as { name?: string };
+    return json({ name: updated.name || existing.name, cancellationRequested: true });
   }
 
   // Only authenticated Manage operators may pause/resume scoped PhotoIntel schedules.

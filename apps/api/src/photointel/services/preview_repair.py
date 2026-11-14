@@ -233,9 +233,8 @@ async def _queue_repair(
     )
     if kind is None:
         return "blocked"
-    if kind == "media_download" and manifest:
-        if not await rearm_manifest(session, manifest):
-            return "blocked"
+    if kind == "media_download" and manifest and not await rearm_manifest(session, manifest):
+        return "blocked"
     # At most one automatic attempt per six-hour slot, and a bounded weekly
     # budget. enqueue_job's UNIQUE key also protects concurrent schedulers.
     slot = int(now.timestamp()) // (6 * 3600)
