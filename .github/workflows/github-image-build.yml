@@ -1,0 +1,138 @@
+name: "🐳 Build · GitHub → Artifact Registry"
+run-name: "🐳 Build · ${{ inputs.target }} · ${{ inputs.source_ref || 'main' }}"
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Image to build"
+        type: choice
+        options: [api, media-image, media-video]
+        default: api
+        required: true
+      source_ref:
+        description: "Full commit SHA from main (blank = latest main)"
+        type: string
+        default: ""
+        required: false
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-github-image-${{ inputs.target }}
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - name: "Checkout selected revision"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || 'main' }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: "Resolve image"
+        id: image
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          # Production images may only be built from commits reachable from main.
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo "::error::Selected revision is not contained in main"
+            exit 1
+          fi
+          case "$TARGET" in
+            api)
+              echo "context=." >> "$GITHUB_OUTPUT"
+              echo "file=infra/docker/api.Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            media-image|media-video)
+              echo "context=services/media/${TARGET#media-}" >> "$GITHUB_OUTPUT"
+              echo "file=services/media/${TARGET#media-}/Dockerfile" >> "$GITHUB_OUTPUT"
+              ;;
+            *) exit 1 ;;
+          esac
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "image=us-central1-docker.pkg.dev/photointel/photointel/$TARGET:$sha" >> "$GITHUB_OUTPUT"
+      - name: "Authenticate Google Cloud via WIF"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "Configure Docker credential helper"
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+      - name: "Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+      - name: "Verify image build context"
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET" == "api" ]]; then
+            test -f uv.lock
+            test -f infra/docker/api.Dockerfile
+          else
+            test -f "services/media/${TARGET#media-}/Dockerfile"
+            test -f "services/media/${TARGET#media-}/package.json"
+          fi
+      - name: "Verify Artifact Registry writer permissions"
+        run: |
+          set -euo pipefail
+          gcloud artifacts repositories describe photointel --location=us-central1 --project=photointel >/dev/null
+      - name: "Check for existing published image"
+        id: existing
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          # Query the package inventory rather than interpreting an auth/API
+          # failure as a cache miss. A failed lookup must stop the release.
+          package="${IMAGE%:*}"
+          tag="${IMAGE##*:}"
+          inventory="$(gcloud artifacts docker images list "$package" --include-tags --project=photointel --format=json)"
+          digest="$(jq -r --arg tag "$tag" '
+            [.[] | select(
+              (.tags // [] | if type == "string" then split(",") else . end)
+              | any(. == $tag or endswith(":" + $tag))
+            ) | (.version // .digest // "")] | first // ""
+          ' <<< "$inventory")"
+          if [[ -n "$digest" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image already published: $package@$digest" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: "Build and publish"
+        if: steps.existing.outputs.exists != 'true'
+        id: publish
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.image.outputs.context }}
+          file: ${{ steps.image.outputs.file }}
+          push: true
+          tags: ${{ steps.image.outputs.image }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.image.outputs.sha }}
+          cache-from: type=gha,scope=photointel-${{ inputs.target }}
+          cache-to: type=gha,mode=min,scope=photointel-${{ inputs.target }}
+          provenance: false
+      - name: "Summarize immutable release"
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$DIGEST" ]]; then
+            echo "Digest: \`$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Existing image reused; see the inventory step for its digest." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Build completed on GitHub Actions, not Cloud Build." >> "$GITHUB_STEP_SUMMARY"
