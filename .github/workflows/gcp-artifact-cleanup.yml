@@ -1,0 +1,60 @@
+name: "🧹 GCP · Artifact cleanup"
+run-name: "🧹 Artifact cleanup · ${{ inputs.apply && 'delete' || 'preview' }}"
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete verified old successful images (false = preview only)"
+        type: boolean
+        default: false
+        required: true
+      confirm_project:
+        description: "For deletion type photointel"
+        type: string
+        default: ""
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: photointel-artifact-cleanup
+  cancel-in-progress: false
+jobs:
+  prune:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "Authenticate GCP"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: "Verify confirmation"
+        env:
+          APPLY: ${{ inputs.apply }}
+          CONFIRM: ${{ inputs.confirm_project }}
+        run: |
+          if [[ "$APPLY" == "true" && "$CONFIRM" != "photointel" ]]; then
+            echo "::error::Type photointel to authorize deletion"
+            exit 1
+          fi
+      - name: "Inventory and prune (fail closed)"
+        env:
+          APPLY: ${{ inputs.apply }}
+          CONFIRM: ${{ inputs.confirm_project }}
+        run: |
+          args=()
+          if [[ "$APPLY" == "true" ]]; then
+            args+=(--apply --confirm-project="$CONFIRM")
+          fi
+          python3 infra/gcp/prune_artifacts.py "${args[@]}"
+      - name: "Storage cleanup note"
+        run: |
+          echo "Cloud Build source archives are expired by the Terraform-managed GCS lifecycle." >> "$GITHUB_STEP_SUMMARY"
+          echo "Cloud Build build records are retained: deleting history does not save build compute costs." >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact Registry Terraform cleanup remains in dry-run; do not activate competing policies without a review." >> "$GITHUB_STEP_SUMMARY"
