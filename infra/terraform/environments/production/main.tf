@@ -148,6 +148,15 @@ resource "google_artifact_registry_repository_iam_member" "builder_push" {
   role       = "roles/artifactregistry.writer"
   member     = local.builder
 }
+# GitHub Actions Buildx publishes directly to Artifact Registry via WIF.
+# Repository-scoped permission avoids granting project-wide write access.
+resource "google_artifact_registry_repository_iam_member" "github_buildx_push" {
+  location   = google_artifact_registry_repository.docker.location
+  repository = google_artifact_registry_repository.docker.name
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:photointel-terraform@${var.project_id}.iam.gserviceaccount.com"
+}
+
 resource "google_secret_manager_secret" "existing" {
   for_each  = var.manage_secret_names
   secret_id = each.key
