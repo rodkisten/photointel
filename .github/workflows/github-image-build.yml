@@ -63,6 +63,10 @@ jobs:
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
       - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v3
+      - name: "Verify Artifact Registry writer permissions"
+        run: |
+          set -euo pipefail
+          gcloud artifacts repositories describe photointel --location=us-central1 --project=photointel >/dev/null
       - name: "Build and publish"
         id: publish
         uses: docker/build-push-action@v6
