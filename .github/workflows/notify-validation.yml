@@ -69,7 +69,7 @@ jobs:
       - name: "🐍 UV"
         uses: astral-sh/setup-uv@v6
         with:
-          version: '0.12.23'
+          version: '0.13.8'
           enable-cache: true
       - name: "🐍 Python"
         run: uv python install 3.12
