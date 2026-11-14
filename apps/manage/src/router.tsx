@@ -24,6 +24,7 @@ import { DeployTriggers } from './pages/DeployTriggers';
 import { CostsPage } from './pages/Costs';
 import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
 import { LogViewer } from './pages/LogViewer';
+import { OperationsPage } from './pages/Operations';
 import { Overview } from './pages/Overview';
 import { SystemInfo } from './pages/SystemInfo';
 import type { Meta } from './types';
@@ -152,6 +153,8 @@ const triggersRoute = createRoute({
   component: DeployTriggers,
 });
 
+const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operations', component: OperationsPage });
+
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/costs',
@@ -197,6 +200,7 @@ const routeTree = rootRoute.addChildren([
   infrastructureRoute,
   triggersRoute,
   costsRoute,
+  operationsRoute,
   runRoute,
   logsRoute,
   environmentRoute,
