@@ -66,7 +66,7 @@ def latest_plan_id(ctx):
     )
     ids = set()
     for line in result.stdout.splitlines():
-        match = re.fullmatch(re.escape(prefix) + r"([0-9]{1,20})/manifest\\.json", line.strip())
+        match = re.fullmatch(re.escape(prefix) + r"([0-9]{1,20})/manifest[.]json", line.strip())
         if match:
             ids.add(match.group(1))
     if not ids:
