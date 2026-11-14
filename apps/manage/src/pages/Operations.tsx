@@ -12,6 +12,17 @@ export function OperationsPage() {
   const client = useQueryClient();
   const schedules = useQuery({ queryKey: ['gcp-scheduler'], queryFn: () => api<{ items: Schedule[] }>('/gcp/scheduler'), retry: false });
   const jobs = useQuery({ queryKey: ['gcp-jobs'], queryFn: () => api<{ items: Job[] }>('/gcp/jobs'), retry: false });
+  const [selectedJob, setSelectedJob] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const executions = useQuery({
+    queryKey: ['gcp-executions', selectedJob],
+    queryFn: () => api<{ items: Array<{ name: string; completionTime?: string; runningCount?: number; succeededCount?: number; failedCount?: number }> }>('/gcp/executions?job=' + encodeURIComponent(selectedJob || '')),
+    enabled: Boolean(selectedJob), retry: false,
+  });
+  const cancel = useMutation({
+    mutationFn: (execution: string) => send('/gcp/executions/cancel', { job: selectedJob, execution, confirm: execution }),
+    onSuccess: async () => { setCancelTarget(null); await client.invalidateQueries({ queryKey: ['gcp-executions', selectedJob] }); },
+  });
   const [edit, setEdit] = useState<{ name: string; schedule: string } | null>(null);
   const [confirm, setConfirm] = useState<{ name: string; action: 'pause' | 'resume' } | null>(null);
   const control = useMutation({
@@ -67,6 +78,31 @@ export function OperationsPage() {
       {jobs.data?.items.map(job => <div key={job.name} className="border-t border-carbon-800 py-2">
         <p className="break-all text-sm text-carbon-200">{shortName(job.name)}</p>
         <p className="text-xs text-carbon-500">Última atualização: {job.updateTime ? new Date(job.updateTime).toLocaleString('pt-BR') : 'Indisponível'}</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={() => setSelectedJob(selectedJob === shortName(job.name) ? null : shortName(job.name))}>
+          {selectedJob === shortName(job.name) ? 'Ocultar execuções' : 'Ver execuções'}
+        </Button>
+        {selectedJob === shortName(job.name) && <div className="mt-2 space-y-2 rounded-lg bg-carbon-900 p-2">
+          {executions.isPending && <Spinner />}
+          {executions.error && <IssueBanner error={executions.error} />}
+          {executions.data?.items.length === 0 && <p className="text-xs text-carbon-400">Sem execuções recentes.</p>}
+          {executions.data?.items.map(execution => {
+            const name = shortName(execution.name);
+            const running = !execution.completionTime && (execution.runningCount || 0) > 0;
+            return <div key={execution.name} className="space-y-2 border-b border-carbon-800 p-2">
+              <p className="break-all text-xs text-carbon-200">{name}</p>
+              <p className="text-xs text-carbon-400">{running ? 'Em execução' : execution.completionTime ? 'Concluída' : 'Estado pendente'}</p>
+              {running && <Button size="sm" variant="destructive" onClick={() => setCancelTarget(name)}>Interromper</Button>}
+              {cancelTarget === name && <div className="space-y-2">
+                <p className="text-xs text-carbon-300">Interromper {name}? A operação não pode ser desfeita.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="destructive" disabled={cancel.isPending} onClick={() => cancel.mutate(name)}>Confirmar interrupção</Button>
+                  <Button size="sm" variant="outline" onClick={() => setCancelTarget(null)}>Voltar</Button>
+                </div>
+              </div>}
+            </div>;
+          })}
+          {cancel.error && <IssueBanner error={cancel.error} />}
+        </div>}
       </div>)}
     </Card>
   </div>;
