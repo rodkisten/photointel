@@ -1,3 +1,4 @@
+import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
 import { workflowTemplateRoute } from './workflow-message';
 import { workflowFailureRoute } from './workflow-failures';
@@ -279,7 +280,7 @@ export async function api(
       const allowed = new Set((catalog.workflows || []).filter(x => x.state === 'active')
         .map(x => x.path?.split('/').pop()));
       for (const [name, rule] of Object.entries(rules)) {
-        if (!/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) || name === key || name === 'GCP_CONFIG_ENV')
+        if (!/^[A-Z_][A-Z0-9_]{0,99}$/.test(name) || name === key || name === 'GCP_CONFIG_ENV' || (name.startsWith('GCP_ENV_VARS__') && !/^GCP_ENV_VARS__[A-Za-z_][A-Za-z0-9_]*$/.test(name)))
           throw new ApiError(422, 'TRIGGER_NAME', 'Nome de variável não autorizado.');
         if (!rule || typeof rule !== 'object' || Array.isArray(rule)) throw new ApiError(422, 'TRIGGER_RULE', 'Regra inválida.');
         const entry = rule as { mode?: unknown; workflows?: unknown; webhook?: unknown };
@@ -356,8 +357,21 @@ export async function api(
       let rule: { mode?: string; workflows?: string[]; webhook?: string } = {};
       try { rule = (JSON.parse(stored?.value || '{}') as Record<string, typeof rule>)[name] || {}; }
       catch { /* invalid legacy rule is ignored */ }
+      const nestedChanges = name === 'GCP_ENV_VARS'
+        ? diffNestedEnv(String((await gh(env, base + '?per_page=100') as { variables?: Array<{ name: string; value?: string }> }).variables?.find(x => x.name === name)?.value || ''), value)
+        : [];
+      const nestedRules: Array<{ key: string; rule: typeof rule }> = [];
+      if (name === 'GCP_ENV_VARS') {
+        let allRules: Record<string, typeof rule> = {};
+        try { allRules = JSON.parse(stored?.value || '{}') as Record<string, typeof rule>; } catch { /* ignore invalid legacy rules */ }
+        for (const change of nestedChanges) {
+          const entry = allRules['GCP_ENV_VARS__' + change.key];
+          if (entry) nestedRules.push({ key: change.key, rule: entry });
+        }
+      }
       const hasRule = rule.mode === 'workflows' && !!rule.workflows?.length ||
-        rule.mode === 'webhook' && !!rule.webhook;
+        rule.mode === 'webhook' && !!rule.webhook || nestedRules.some(x =>
+          (x.rule.mode === 'workflows' && !!x.rule.workflows?.length) || (x.rule.mode === 'webhook' && !!x.rule.webhook));
       // GCP_ENV_VARS is a high-impact configuration variable. Require confirmation
       // even without trigger rules; never dispatch unconfigured workflows.
       if (name === 'GCP_ENV_VARS' && input.confirm !== 'confirma')
@@ -396,8 +410,14 @@ export async function api(
         };
         const allowed = new Set((catalog.workflows || []).filter(x => x.state === 'active')
           .map(x => x.path?.split('/').pop()));
-        if (rule.mode === 'workflows') {
-          for (const workflow of (rule.workflows || []).slice(0, 10)) {
+        const effectiveRules = [{ key: name, rule }, ...nestedRules];
+        const dispatched = new Set<string>();
+        for (const selected of effectiveRules) {
+        const selectedRule = selected.rule;
+        if (selectedRule.mode === 'workflows') {
+          for (const workflow of (selectedRule.workflows || []).slice(0, 10)) {
+            if (dispatched.has(workflow)) continue;
+            dispatched.add(workflow);
             if (!allowed.has(workflow)) continue;
             try {
               await gh(env, '/actions/workflows/' + encodeURIComponent(workflow) + '/dispatches', 'POST',
@@ -407,19 +427,20 @@ export async function api(
               triggered.push({ target: workflow, status: 'failed' });
             }
           }
-        } else if (rule.mode === 'webhook' && rule.webhook?.startsWith('https://relay.migos.club/')) {
+        } else if (selectedRule.mode === 'webhook' && selectedRule.webhook?.startsWith('https://relay.migos.club/')) {
           // Never transmit variable values, secrets or user-controlled Authorization headers.
           try {
-            const response = await fetch(rule.webhook, {
+            const response = await fetch(selectedRule.webhook, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ event: 'variable.changed', name, scope }),
+              body: JSON.stringify({ event: 'variable.changed', name, scope, key: selected.key }),
               redirect: 'error', signal: AbortSignal.timeout(8000),
             });
             triggered.push({ target: 'Relay webhook', status: response.ok ? 'queued' : 'failed' });
           } catch { triggered.push({ target: 'Relay webhook', status: 'failed' }); }
         }
+        }
       }
-      return json({ ok: true, version: await digest(value), dispatch, triggered });
+      return json({ ok: true, version: await digest(value), dispatch, triggered, changed_keys: nestedChanges.map(x => x.key) });
     }
   }
 
