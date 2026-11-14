@@ -615,6 +615,37 @@ export async function api(
     });
   }
 
+  // Proxy the existing durable Photos queue controller. The Photos API independently
+  // verifies the signed Manage Access JWT and admin allowlist; no bypass token.
+  if (path === '/api/photos/jobs/control' &&
+      (method === 'GET' || method === 'POST')) {
+    const origin = env.PHOTOINTEL_API_ORIGIN;
+    if (!origin || !/^https:\/\/[^/?#]+$/.test(origin))
+      throw new ApiError(503, 'PHOTOS_CONTROL_ORIGIN', 'Configure PHOTOINTEL_API_ORIGIN');
+    let upstreamPath = '/v1/jobs/control';
+    if (method === 'POST') {
+      const input = await bodyJson<{ action?: unknown; confirm?: unknown }>(request);
+      if ((input.action !== 'pause' && input.action !== 'resume') ||
+          input.confirm !== input.action)
+        throw new ApiError(422, 'PHOTOS_CONTROL', 'Confirme pausa ou retomada da fila');
+      upstreamPath += '/' + input.action;
+    }
+    const response = await fetch(origin + upstreamPath, {
+      method,
+      headers: { 'Cf-Access-Jwt-Assertion': identity.jwt, 'Accept': 'application/json' },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(LIMITS.TIMEOUT_DEFAULT),
+    });
+    if (!response.ok)
+      throw new ApiError(502, 'PHOTOS_CONTROL_UPSTREAM', 'Photos recusou a operação (HTTP ' + response.status + ')');
+    if (Number(response.headers.get('content-length') || 0) > 30000)
+      throw new ApiError(502, 'PHOTOS_CONTROL_SIZE', 'Resposta excedeu o limite');
+    const payload = await response.text();
+    if (payload.length > 30000) throw new ApiError(502, 'PHOTOS_CONTROL_SIZE', 'Resposta excedeu o limite');
+    try { return json(JSON.parse(payload)); }
+    catch { throw new ApiError(502, 'PHOTOS_CONTROL_JSON', 'Resposta inválida do Photos'); }
+  }
+
   // Updating Cloudflare cron triggers changes only the selected PhotoIntel Worker.
   // The caller must confirm its exact name; no arbitrary account script paths.
   if (method === 'POST' && path === '/api/cloudflare/worker-crons') {
