@@ -79,9 +79,15 @@ export default function App() {
   const [dragged, setDragged] = useState<string | null>(null);
   useEffect(() => {
     let last = window.scrollY;
+    let directionDistance = 0;
     const onScroll = () => {
-      const current = window.scrollY;
-      if (Math.abs(current - last) > 8) setTopVisible(current < 70 || current < last);
+      const current = Math.max(0, window.scrollY);
+      const delta = current - last;
+      if (Math.sign(delta) !== Math.sign(directionDistance)) directionDistance = 0;
+      directionDistance += delta;
+      if (current < 80) setTopVisible(true);
+      else if (directionDistance > 48) { setTopVisible(false); directionDistance = 0; }
+      else if (directionDistance < -32) { setTopVisible(true); directionDistance = 0; }
       last = current;
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -100,6 +106,7 @@ export default function App() {
   };
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
+  useEffect(() => { setMobileMenu(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -116,7 +123,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
-      <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full -mb-[66px]")}>
+      <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
@@ -200,9 +207,9 @@ export default function App() {
         </main>
       </div>
 
-      <nav aria-label="Navegação principal mobile"
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
-        {mobileMenu && <div className="absolute bottom-full inset-x-2 mb-2 max-h-[65vh] overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl">
+      {mobileMenu && <button type="button" aria-label="Fechar menu" onClick={() => setMobileMenu(false)}
+        className="fixed inset-0 z-[50] bg-black/60 md:hidden" />}
+      {mobileMenu && <div role="dialog" aria-label="Organizar navegação" className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[61] max-h-[65dvh] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl md:hidden">
           <p className="mb-2 text-xs text-carbon-400">Arraste para organizar os atalhos</p>
           {orderedNav.map(item => <div key={item.id} draggable
             onDragStart={() => setDragged(item.id)}
@@ -218,6 +225,8 @@ export default function App() {
               onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id); }}>↓</button>
           </div>)}
         </div>}
+      <nav aria-label="Navegação principal mobile"
+        className="fixed inset-x-0 bottom-0 z-[60] border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around gap-1">
           {orderedNav.slice(0, 4).map(item => <Link key={item.id} to={item.to} aria-current={tab === item.id ? 'page' : undefined}
             className={cn("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]", tab === item.id ? "bg-carbon-800 text-white" : "text-carbon-400")}>
