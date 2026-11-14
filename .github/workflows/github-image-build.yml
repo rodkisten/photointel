@@ -32,6 +32,7 @@ jobs:
         with:
           ref: ${{ inputs.source_ref || 'main' }}
           persist-credentials: false
+          fetch-depth: 0
       - name: "Resolve image"
         id: image
         env:
@@ -91,7 +92,7 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
         run: |
           set -euo pipefail
-          if gcloud artifacts docker images describe "$IMAGE" --project=photointel --format='value(image_summary.digest)' >/dev/null 2>&1; then
+          if gcloud artifacts docker images describe "$IMAGE" --project=photointel --format=json 2>/dev/null | jq -e '.image_summary.digest // .imageSummary.digest // .digest' >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Image already published; skipping duplicate build." >> "$GITHUB_STEP_SUMMARY"
           else
