@@ -40,3 +40,9 @@ The staged Cloudflare gateway now exposes `GET /v1/source/originals/<tenant>/<ke
 **Important integration gate:** This endpoint is a private R2 origin, not a completed Imagor loader integration. Confirm the selected Imagor release can attach the required Authorization header when fetching from the origin, or implement an internal authenticated loader adapter. Do not enable a public arbitrary-URL HTTP loader as a workaround. Limit access at Cloudflare Access/network policy in addition to the bearer token; this route is not suitable for unauthenticated public use. The current single-prefix configuration is a per-instance boundary, not dynamic multi-tenant authorization.
 
 Production remains unchanged until loader compatibility, tenancy, rate limits, image-size limits, and the complete transformation path are verified.
+
+## Signed HTTP-loader source URL (staged)
+
+A trusted backend can now call `POST /v1/source/sign` with the dedicated `MEDIA_SOURCE_TOKEN` bearer and JSON `{"key":"originals/tenant-a/example.jpg"}`. The gateway returns a URL scoped to that object and expiring within **60 seconds**. Imagor can fetch the resulting HTTPS URL through its standard HTTP loader without needing a custom Authorization header. The original R2 bucket stays private.
+
+The gateway validates expiry, signature, path and configured source prefix on every read. This is an **origin-access primitive**, not a finished Imagor deployment or full tenant authorization system. Signed URLs are bearer capabilities: avoid access-log/query-string leakage, use HTTPS only, enforce an Imagor outbound host allowlist and source-size limits, and never permit clients to supply arbitrary loader URLs. The Media API must authenticate the caller and authorize the tenant **before** minting a URL. Production integration and load testing remain pending.
