@@ -27,6 +27,15 @@ export type CostsResponse = {
   note: string;
 };
 
+// Missing amounts belong last: they are unknown, never silently treated as zero.
+export function byCostDescending<T extends { cost: number | null }>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    if (a.cost === null || !Number.isFinite(a.cost)) return b.cost === null || !Number.isFinite(b.cost) ? 0 : 1;
+    if (b.cost === null || !Number.isFinite(b.cost)) return -1;
+    return b.cost - a.cost;
+  });
+}
+
 export function money(value: number | null | undefined, currency = 'USD'): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return 'Indisponível';
   return new Intl.NumberFormat('pt-BR', {
@@ -140,7 +149,7 @@ function GcpBreakdown({ source }: { source: CostSource }) {
             <span>Créditos<br />{money(summary.credits, source.currency)}</span>
             <span>Líquido<br />{money(summary.net, source.currency)}</span>
           </div>
-          {entries.slice(0, 200).map((item, index) => <div key={index} className="border-b border-carbon-800/60 py-2 last:border-0">
+          {byCostDescending(entries).slice(0, 200).map((item, index) => <div key={index} className="border-b border-carbon-800/60 py-2 last:border-0">
             <div className="flex justify-between gap-2"><strong className="break-words text-carbon-200">{item.detail || item.name}</strong>
               <span className="shrink-0 tabular-nums">{money(item.cost, source.currency)}</span></div>
             <p className="mt-1 break-all text-[11px] text-carbon-500">{item.name} · {item.resource || 'Recurso não identificado'} · {item.day || 'Sem data'}</p>
@@ -193,7 +202,7 @@ function BillingAnalytics({ month }: { month: string }) {
     queryFn: () => api<MonitoringResponse>('/costs/monitoring'),
     retry: false, refetchInterval: 5 * 60_000,
   });
-  const rows = query.data?.items || [];
+  const rows = byCostDescending(query.data?.items || []);
   const max = Math.max(0, ...rows.map((item) => Math.abs(item.cost || 0)));
   const pages = Math.max(1, Math.ceil((query.data?.count || 0) / size));
   return <div className="space-y-4">
@@ -299,7 +308,7 @@ function SourceDetails({ source, id }: { source: CostSource; id: string }) {
       )}
       {id === 'gcp' && <GcpBreakdown source={source} />}
       {id !== 'gcp' && <div className="space-y-0.5">
-        {source.items.length ? source.items.slice(0, 100).map((item, index) => (
+        {source.items.length ? byCostDescending(source.items).slice(0, 100).map((item, index) => (
           <div key={index} className="flex min-w-0 items-center justify-between gap-4 border-b border-carbon-800/60 py-2.5 last:border-0">
             <div className="min-w-0">
               <p className="break-words text-xs font-medium text-carbon-200">{item.name}</p>
@@ -330,6 +339,17 @@ export function CostsPage() {
     retry: false,
   });
   const data = costs.data;
+  const sortedProviders = data
+    ? [...INFO].sort((a, b) => {
+        const left = data.providers[a.id];
+        const right = data.providers[b.id];
+        const leftValue = left.status === 'ok' && left.total !== null && left.currency === 'USD' ? left.total : null;
+        const rightValue = right.status === 'ok' && right.total !== null && right.currency === 'USD' ? right.total : null;
+        if (leftValue === null) return rightValue === null ? 0 : 1;
+        if (rightValue === null) return -1;
+        return rightValue - leftValue;
+      })
+    : INFO;
   const available = data ? INFO.filter(({ id }) => data.providers[id]?.status === 'ok'
     && data.providers[id]?.total !== null).length : 0;
   return (
@@ -375,7 +395,7 @@ export function CostsPage() {
             </Card>}
             <BillingAnalytics month={month} />
             <div className="grid gap-3 sm:grid-cols-2">
-              {INFO.map(({ id, label, icon: Icon, subtitle }) => {
+              {sortedProviders.map(({ id, label, icon: Icon, subtitle }) => {
                 const source = data.providers[id];
                 return (
                   <Card key={id} className="min-w-0 space-y-4 p-4 sm:p-5">
@@ -385,9 +405,12 @@ export function CostsPage() {
                         <p className="font-medium text-carbon-100">{label}</p>
                         <p className="mt-0.5 text-xs leading-5 text-carbon-500">{subtitle}</p>
                       </div>
-                      <Badge tone={source.status === 'ok' ? 'success' : 'warning'}>
-                        {source.status === 'ok' ? 'Conectado' : source.status === 'unconfigured' ? 'Configurar' : 'Indisponível'}
-                      </Badge>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        {source.total !== null && source.status === 'ok' && <strong className="text-sm tabular-nums text-carbon-100">{money(source.total, source.currency)}</strong>}
+                        <Badge tone={source.status === 'ok' ? 'success' : 'warning'}>
+                          {source.status === 'ok' ? 'Conectado' : source.status === 'unconfigured' ? 'Configurar' : 'Indisponível'}
+                        </Badge>
+                      </div>
                     </div>
                     <SourceDetails id={id} source={source} />
                   </Card>
