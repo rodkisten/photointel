@@ -110,7 +110,7 @@ services:
     logging: *logs
     networks: [backend, tunnel]
   cloudflared:
-    image: cloudflare/cloudflared:2025.11.1
+    image: cloudflare/cloudflared:2026.11.0
     command: tunnel --no-autoupdate run
     environment: {TUNNEL_TOKEN: "${CLOUDFLARE_TUNNEL_TOKEN:?required}"}
     depends_on: {gateway: {condition: service_healthy}}
