@@ -43,7 +43,8 @@
     "tailwindcss": "^4.1.14",
     "zod": "^4.1.11",
     "zustand": "^5.0.8",
-    "@rodkisten/photointel": "file:../../packages/env"
+    "@rodkisten/photointel": "file:../../packages/env",
+    "js-yaml": "^4.3.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
