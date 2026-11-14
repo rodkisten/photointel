@@ -79,14 +79,18 @@ export function Deploys() {
   const [selected, setSelected] = useState('');
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
+  const [workflowDialog, setWorkflowDialog] = useState(false);
+  const [workflowSearch, setWorkflowSearch] = useState('');
   const mutation = useMutation({
     mutationFn: () => send('/dispatch', { workflow: selected, inputs, confirm: 'DEPLOY ' + selected }),
     onSuccess: () => {
       setConfirm(false);
+      setWorkflowDialog(false);
       void qc.invalidateQueries({ queryKey: ['runs'] });
     },
   });
   const active = workflows.data?.items.find((w) => w.file === selected);
+  const filteredWorkflows = (workflows.data?.items || []).filter(w => (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()));
   useEffect(() => {
     if (!selected && workflows.data?.items.length) setSelected(workflows.data.items[0].file);
   }, [selected, workflows.data]);
@@ -128,64 +132,56 @@ export function Deploys() {
           )}
         </Card>
       </Section>
-      <Section title="Disparar workflow" detail="Todas as execuções são criadas na branch main">
-        <Card className="space-y-4 p-4 sm:p-5">
+      <Section title="Workflows · execução manual" detail="Todos os workflows ativos. Selecione um para configurar e executar.">
+        <Card className="space-y-3 p-3 sm:p-4">
+          <Input aria-label="Buscar workflow" placeholder="Buscar por nome ou arquivo…" value={workflowSearch}
+            onChange={event => setWorkflowSearch(event.target.value)} />
+          {workflows.isPending && <Spinner />}
           {workflows.error && <IssueBanner error={workflows.error} />}
-          <div>
-            <label className="field-label" htmlFor="workflow">
-              Workflow
-            </label>
-            <Select id="workflow" value={selected} onChange={(e) => changeFile(e.target.value)}>
-              {workflows.data?.items.map((w) => (
-                <option key={w.file} value={w.file}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
+          <div className="max-h-[60dvh] space-y-1 overflow-y-auto">
+            {filteredWorkflows.map(w => <button type="button" key={w.file}
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-carbon-800 px-3 py-3 text-left hover:bg-carbon-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-carbon-400"
+              onClick={() => { changeFile(w.file); setWorkflowDialog(true); }}>
+              <span className="min-w-0"><span className="block truncate text-sm font-medium text-carbon-100">{w.name}</span>
+                <span className="block truncate text-[11px] text-carbon-500">{w.file}</span></span>
+              <Play size={16} className="shrink-0 text-carbon-300" />
+            </button>)}
+            {!workflows.isPending && !filteredWorkflows.length && <p className="p-3 text-xs text-carbon-400">Nenhum workflow encontrado.</p>}
           </div>
-          {active &&
-            Object.entries(active.inputs).map(([key, values]) => (
-              <div key={key}>
-                <label className="field-label" htmlFor={'input-' + key}>
-                  {key.replaceAll('_', ' ')}
-                </label>
-                {values.length ? (
-                  <Select
-                    id={'input-' + key}
-                    value={inputs[key] ?? values[0]}
-                    onChange={(e) => setInputs((s) => ({ ...s, [key]: e.target.value }))}
-                  >
-                    {values.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input
-                    id={'input-' + key}
-                    placeholder="Opcional"
-                    value={inputs[key] || ''}
-                    onChange={(e) => setInputs((s) => ({ ...s, [key]: e.target.value }))}
-                  />
-                )}
-              </div>
-            ))}
-          <div className="flex items-center justify-between gap-3 border-t border-[#2d2f33] pt-4">
-            <span className="text-xs text-carbon-500">Uma confirmação é necessária antes de executar.</span>
-            <Button disabled={!selected || mutation.isPending} onClick={() => setConfirm(true)}>
-              <Play size={15} />
-              Executar
-            </Button>
-          </div>
-          {mutation.isSuccess && (
-            <div className="rounded-lg bg-emerald-950/40 p-3 text-sm text-emerald-300">
-              Workflow solicitado com sucesso. Consulte a lista de execuções.
-            </div>
-          )}
-          {mutation.error && <IssueBanner error={mutation.error} />}
+          {mutation.isSuccess && <p className="text-xs text-emerald-300">Workflow solicitado. Acompanhe no histórico.</p>}
         </Card>
       </Section>
+      <Dialog.Root open={workflowDialog} onOpenChange={open => { if (!mutation.isPending) setWorkflowDialog(open); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-sm" />
+          <Dialog.Content className="fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-[81] max-h-[85dvh] overflow-y-auto rounded-2xl border border-carbon-700 bg-carbon-950 p-4 shadow-2xl sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <Dialog.Title className="text-base font-semibold text-carbon-100">{active?.name || 'Executar workflow'}</Dialog.Title>
+                <Dialog.Description className="break-all text-xs text-carbon-400">{selected} · branch main</Dialog.Description>
+              </div>
+              <Dialog.Close asChild><Button size="icon" variant="ghost" aria-label="Fechar"><X size={18} /></Button></Dialog.Close>
+            </div>
+            <div className="space-y-3">
+              {active && !Object.keys(active.inputs).length && <p className="text-xs text-carbon-400">Nenhum parâmetro configurado para este workflow.</p>}
+              {active && Object.entries(active.inputs).map(([key, values]) => <label key={key} className="block space-y-1 text-xs text-carbon-300">
+                <span>{key.replaceAll('_', ' ')}</span>
+                {values.length ? <Select value={inputs[key] ?? values[0]} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))}>
+                  {values.map(value => <option key={value} value={value}>{value}</option>)}
+                </Select> : <Input placeholder="Opcional" value={inputs[key] || ''} onChange={event => setInputs(current => ({ ...current, [key]: event.target.value }))} />}
+              </label>)}
+              <p className="text-xs text-amber-300">⚠️ A execução pode modificar infraestrutura e gerar custos. Confirme antes de iniciar.</p>
+              {mutation.error && <IssueBanner error={mutation.error} />}
+              <div className="flex justify-end gap-2 border-t border-carbon-800 pt-3">
+                <Button size="sm" variant="ghost" onClick={() => setWorkflowDialog(false)}>Cancelar</Button>
+                <Button size="sm" disabled={!selected || mutation.isPending} onClick={() => setConfirm(true)}>
+                  <Play size={15} />{mutation.isPending ? 'Enviando…' : 'Executar'}
+                </Button>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <p className="text-sm font-medium text-carbon-200">Cota do GitHub Actions</p>
