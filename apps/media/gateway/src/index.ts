@@ -70,6 +70,45 @@ export default {
     if (!allowedMethods.has(request.method) && request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
     const url = new URL(request.url);
     if (url.pathname === '/healthz') return new Response('ok', { headers: { 'Cache-Control': 'no-store' } });
+    // Mint short-lived source URLs for Imagor's HTTP loader without exposing R2 credentials.
+    if (url.pathname === '/v1/source/sign') {
+      if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+      const token = env.MEDIA_SOURCE_TOKEN;
+      const prefix = env.MEDIA_SOURCE_PREFIX;
+      if (!token || token.length < 32 || !prefix || !prefix.startsWith('originals/') ||
+          !prefix.endsWith('/') || prefix.includes('%') ||
+          prefix.split('/').some((part, i, parts) =>
+            i < parts.length - 1 && (!part || part === '.' || part === '..'))) {
+        return new Response('Not Found', { status: 404 });
+      }
+      if (!constantTimeEquals(request.headers.get('Authorization') || '', 'Bearer ' + token)) {
+        return new Response('Unauthorized', { status: 401, headers: { 'Cache-Control': 'no-store' } });
+      }
+      const raw = await request.text();
+      if (raw.length > 1024) return new Response('Payload Too Large', { status: 413 });
+      let payload: unknown;
+      try { payload = JSON.parse(raw); }
+      catch { return new Response('Invalid JSON', { status: 400 }); }
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        return new Response('Invalid request', { status: 400 });
+      }
+      const { key } = payload as Record<string, unknown>;
+      if (typeof key !== 'string' || key.length > 500 || key.includes('%') ||
+          key.includes('\\\\') || key.startsWith('/') ||
+          key.split('/').some(part => !part || part === '.' || part === '..') ||
+          !withinPrefix(key, prefix)) return new Response('Forbidden', { status: 403 });
+      if (!env.MEDIA_SIGNING_KEY || env.MEDIA_SIGNING_KEY.length < 32) {
+        return new Response('Unavailable', { status: 503 });
+      }
+      const expires = Math.floor(Date.now() / 1000) + 60;
+      const sig = await signature(env.MEDIA_SIGNING_KEY, `SOURCE\n${key}\n${expires}`);
+      const target = new URL('/v1/source/' + key.split('/').map(encodeURIComponent).join('/'), url.origin);
+      target.searchParams.set('exp', String(expires));
+      target.searchParams.set('sig', sig);
+      return Response.json({ url: target.toString(), expires }, {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
     // Private origin for Imagor. This route is disabled unless separately configured.
     // Use a dedicated secret, never the public signed-delivery key or issuer token.
     if (url.pathname.startsWith('/v1/source/')) {
@@ -82,20 +121,34 @@ export default {
             index < parts.length - 1 && (!part || part === '.' || part === '..'))) {
         return new Response('Not Found', { status: 404 });
       }
-      const authorization = request.headers.get('Authorization') || '';
-      if (!constantTimeEquals(authorization, 'Bearer ' + token)) {
-        return new Response('Unauthorized', {
-          status: 401, headers: { 'Cache-Control': 'no-store' },
-        });
-      }
       let key: string;
       try { key = decodeURIComponent(url.pathname.slice('/v1/source/'.length)); }
       catch { return new Response('Not Found', { status: 404 }); }
-      if (url.search || url.pathname.length > 700 || key.startsWith('/') ||
+      if (url.pathname.length > 700 || key.startsWith('/') ||
           key.includes('%') || key.includes('\\\\') ||
           key.split('/').some(part => !part || part === '.' || part === '..') ||
           !withinPrefix(key, prefix)) {
         return new Response('Not Found', { status: 404 });
+      }
+      const bearer = constantTimeEquals(request.headers.get('Authorization') || '', 'Bearer ' + token);
+      let signed = false;
+      if (!bearer && url.searchParams.size === 2 &&
+          url.searchParams.has('exp') && url.searchParams.has('sig')) {
+        const rawExp = url.searchParams.get('exp') || '';
+        const sig = url.searchParams.get('sig') || '';
+        const expires = Number(rawExp);
+        const now = Math.floor(Date.now() / 1000);
+        if (/^\\d{10}$/.test(rawExp) && /^[a-f0-9]{64}$/.test(sig) &&
+            expires >= now && expires <= now + 60 &&
+            env.MEDIA_SIGNING_KEY && env.MEDIA_SIGNING_KEY.length >= 32) {
+          const expected = await signature(env.MEDIA_SIGNING_KEY, `SOURCE\n${key}\n${expires}`);
+          signed = constantTimeEquals(sig, expected);
+        }
+      }
+      if ((!bearer && !signed) || (bearer && url.search)) {
+        return new Response('Unauthorized', {
+          status: 401, headers: { 'Cache-Control': 'no-store' },
+        });
       }
       const object = await env.MEDIA_BUCKET.get(key);
       if (!object) return new Response('Not Found', { status: 404 });
