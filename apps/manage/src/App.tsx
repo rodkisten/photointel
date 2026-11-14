@@ -18,7 +18,6 @@ import {
   GitPullRequestArrow,
   Menu,
   GripVertical,
-  ChevronDown,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
