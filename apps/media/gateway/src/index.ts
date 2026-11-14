@@ -102,7 +102,31 @@ export default {
     }
     const expected = await signature(env.MEDIA_SIGNING_KEY, `GET\n${parsed.key}\n${parsed.expires}`);
     if (!constantTimeEquals(expected, parsed.sig)) return new Response('Forbidden', { status: 403 });
-    const object = await env.MEDIA_BUCKET.get(parsed.key);
+    // RFC 7233 single-byte ranges support Safari/iOS seeking without buffering full MP4s.
+    // Refuse multipart ranges rather than returning an incorrect partial response.
+    const rangeHeader = request.headers.get('Range');
+    if (rangeHeader && (parsed.key.toLowerCase().endsWith('.mp4') === false || rangeHeader.includes(','))) {
+      return new Response('Range Not Satisfiable', { status: 416, headers: { 'Cache-Control': 'no-store' } });
+    }
+    const metadata = await env.MEDIA_BUCKET.head(parsed.key);
+    if (!metadata) return new Response('Not Found', { status: 404 });
+    const size = metadata.size;
+    let range: { offset: number; length: number } | undefined;
+    if (rangeHeader) {
+      const match = /^bytes=(\\d*)-(\\d*)$/.exec(rangeHeader);
+      if (!match || (!match[1] && !match[2])) {
+        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+      }
+      const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+      const end = match[1] ? (match[2] ? Number(match[2]) : size - 1) : size - 1;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+          start >= size || end < start || start < 0 || size === 0 ||
+          (match[1] === '' && Number(match[2]) === 0)) {
+        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+      }
+      range = { offset: start, length: Math.min(end, size - 1) - start + 1 };
+    }
+    const object = await env.MEDIA_BUCKET.get(parsed.key, range ? { range } : undefined);
     if (!object) return new Response('Not Found', { status: 404 });
     const headers = new Headers({
       'Content-Type': object.httpMetadata?.contentType || contentType(parsed.key),
@@ -111,6 +135,9 @@ export default {
       'Content-Disposition': 'inline',
     });
     if (object.httpEtag) headers.set('ETag', object.httpEtag);
-    return new Response(request.method === 'HEAD' ? null : object.body, { status: 200, headers });
+    if (parsed.key.toLowerCase().endsWith('.mp4')) headers.set('Accept-Ranges', 'bytes');
+    headers.set('Content-Length', String(range?.length ?? size));
+    if (range) headers.set('Content-Range', `bytes ${range.offset}-${range.offset + range.length - 1}/${size}`);
+    return new Response(request.method === 'HEAD' ? null : object.body, { status: range ? 206 : 200, headers });
   },
 } satisfies ExportedHandler<Env>;
