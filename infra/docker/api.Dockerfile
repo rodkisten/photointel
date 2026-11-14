@@ -6,7 +6,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
 
-FROM python:3.12-slim-bookworm AS build
+FROM python:3.15-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
@@ -28,7 +28,7 @@ RUN uv sync --frozen --no-dev --group ingest
 # incompatible SSL/channel-binding profiles during Cloud Build, not Cloud Run startup.
 RUN /app/.venv/bin/python -c "from photointel.main import app; assert app.title == 'Photo Intelligence Cloud'; from photointel.config import Settings; from photointel.db_connection import database_connection_options; from sqlalchemy.ext.asyncio import create_async_engine; settings = Settings(_env_file=None, database_require_tls=True, database_url='postgresql://test:test@ep-test.neon.tech/db?sslmode=require&channel_binding=require'); url, args = database_connection_options(settings); assert url.drivername == 'postgresql+psycopg' and url.query['channel_binding'] == 'require' and url.query['sslmode'] == 'verify-full' and url.query['sslrootcert'] == 'system'; from psycopg import pq; assert pq.version() >= 170000; engine = create_async_engine(url, connect_args=args); assert engine.dialect.driver == 'psycopg'"
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 RUN set -eu; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates libglib2.0-0 libgomp1; \

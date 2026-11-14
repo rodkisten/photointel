@@ -2,7 +2,7 @@
 # Local BuildKit variant: cloud builds use api.Dockerfile.
 # Keep runtime/dependency pins synchronized with that file.
 FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
-FROM python:3.12-slim-bookworm AS build
+FROM python:3.15-slim-bookworm AS build
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
@@ -11,7 +11,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
     if [ -f /run/secrets/build_ca ]; then export SSL_CERT_FILE=/run/secrets/build_ca; fi; \
     uv sync --frozen --no-dev --group ingest
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.15-slim-bookworm AS runtime
 RUN --mount=type=secret,id=build_ca,required=false \
     set -eu; \
     if [ -f /run/secrets/build_ca ]; then \
