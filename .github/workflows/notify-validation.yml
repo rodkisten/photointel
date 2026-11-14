@@ -67,7 +67,7 @@ jobs:
         with:
           persist-credentials: false
       - name: "🐍 UV"
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           version: '0.12.23'
           enable-cache: true
