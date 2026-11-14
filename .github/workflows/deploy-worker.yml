@@ -78,7 +78,7 @@ jobs:
       apps: ${{ steps.set-matrix.outputs.apps }}
     steps:
       - name: "📥 Checkout completo"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -136,7 +136,7 @@ jobs:
         app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
     steps:
       - name: "📥 Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false, fetch-depth: 0}
       - name: "📌 Fonte"
         uses: ./.github/actions/frontend-source
@@ -220,7 +220,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false, fetch-depth: 0}
       - name: "📌 Fonte"
         uses: ./.github/actions/frontend-source
@@ -391,7 +391,7 @@ jobs:
       CONFIRM_PROJECT: photointel
     steps:
       - name: "📥 Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false, fetch-depth: 0}
       - name: "📌 Fonte"
         uses: ./.github/actions/frontend-source

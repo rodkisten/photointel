@@ -86,7 +86,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - name: "⚙️ Verify production config"
         id: config
@@ -139,7 +139,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - run: bash -n infra/gcp/release.sh && python3 -m infra.gcp.manage render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
@@ -163,7 +163,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 

@@ -38,7 +38,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - run: |
           bash -n infra/gcp/bootstrap.sh
@@ -63,7 +63,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
