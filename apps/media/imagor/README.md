@@ -32,3 +32,11 @@ Build with `IMAGOR_BASE_IMAGE=shumc/imagor@sha256:<verified-release-digest>`. Th
 6. Validate R2 read/write behavior, cache correctness, error handling and tenant isolation before removing the Sharp job.
 
 References: https://docs.imagor.net/configuration/ , https://docs.imagor.net/security/ , https://docs.imagor.net/vips-performance/ .
+
+## Private R2 source gateway (staged, not deployed)
+
+The staged Cloudflare gateway now exposes `GET /v1/source/originals/<tenant>/<key>` **only when both** `MEDIA_SOURCE_TOKEN` (at least 32 characters) and `MEDIA_SOURCE_PREFIX` (an explicit `originals/.../` scope) are configured. It requires `Authorization: Bearer <MEDIA_SOURCE_TOKEN>`, rejects keys outside the configured prefix and returns `Cache-Control: private, no-store`. Keep this token separate from `MEDIA_ISSUER_TOKEN` and `MEDIA_SIGNING_KEY`. Never place it in image URLs, client-side JavaScript, or logs.
+
+**Important integration gate:** This endpoint is a private R2 origin, not a completed Imagor loader integration. Confirm the selected Imagor release can attach the required Authorization header when fetching from the origin, or implement an internal authenticated loader adapter. Do not enable a public arbitrary-URL HTTP loader as a workaround. Limit access at Cloudflare Access/network policy in addition to the bearer token; this route is not suitable for unauthenticated public use. The current single-prefix configuration is a per-instance boundary, not dynamic multi-tenant authorization.
+
+Production remains unchanged until loader compatibility, tenancy, rate limits, image-size limits, and the complete transformation path are verified.
