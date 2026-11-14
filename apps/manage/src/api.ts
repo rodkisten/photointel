@@ -563,7 +563,7 @@ export async function api(
           (!Object.keys(spec).length ? !/^[A-Za-z_][A-Za-z0-9_]{0,99}$/.test(key) : !(key in spec)) ||
           typeof value !== 'string' ||
           value.length > 1000 ||
-          (spec[key]?.length > 0 && !spec[key].includes(value)),
+          ((spec[key] || []).length > 0 && !spec[key].includes(value)),
       )
     )
       throw new ApiError(422, 'INPUTS', 'Input inválido ou não autorizado');
