@@ -208,7 +208,7 @@ jobs:
         id: minio_build
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/minio.Dockerfile

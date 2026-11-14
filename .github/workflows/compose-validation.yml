@@ -72,7 +72,7 @@ jobs:
 
       - name: "🧰 Código"
         id: notify_observed_006
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/minio.Dockerfile
