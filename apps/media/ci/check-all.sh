@@ -24,7 +24,7 @@ run_component() {
     echo "::error title=Media CI failed::$component dependency installation failed"
     return
   fi
-  if [[ "$component" == "gateway" ]]; then
+  if [[ "$component" == "gateway" || "$component" == "api" ]]; then
     run_check "$component: typecheck" bash -c "cd '$path' && npm run typecheck"
     run_check "$component: tests" bash -c "cd '$path' && npm test"
   else
@@ -33,7 +33,7 @@ run_component() {
   fi
 }
 run_check "Imagor: base-image validation" bash apps/media/imagor/test-verify-base-image.sh
-for component in image video gateway; do
+for component in image video gateway api; do
   run_component "$component"
 done
 {
