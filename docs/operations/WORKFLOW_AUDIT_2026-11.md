@@ -67,3 +67,14 @@ Manter uma interface de operação simples para um único operador, reduzir disp
 - `backend-smoke.yml`: mantém validação em PR/push, com nome/run-name padronizados.
 
 **Observação:** a auditoria de todos os workflows e a análise dos consumidores ainda não estão concluídas. Não foram removidos deploys, Terraform ou migrações.
+
+## Terceira etapa: superfícies de deploy
+
+Inspecionados os YAMLs de `release.yml`, `gcp-deploy.yml`, `github-image-build.yml` e `media-deploy.yml`.
+
+- `release.yml` é um console que chama `infra.terraform.release_console`, com seleção de origem, ação e destino. Continua sendo entrada principal.
+- `gcp-deploy.yml` possui caminho de deploy de API, migration e scheduler, além de um check offline de push. Não é equivalente ao console de release, pois seus parâmetros e proteções são diferentes.
+- `github-image-build.yml` publica imagens de API e media no Artifact Registry e reutiliza imagens existentes. Ainda pode ser chamado diretamente por operadores e precisa de avaliação de consumidores antes de arquivamento.
+- `media-deploy.yml` constrói e valida os serviços media e despacha Terraform; é distinto do build isolado de imagem.
+
+Padronizados nomes e run-name dos três primeiros e `tf-production.yml`, sem alterar a lógica de deploy ou permissões. **Não remover os workflows de deploy até confirmar que `release_console.py` cobre cada ação e os contratos com o Manage.**
