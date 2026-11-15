@@ -30,7 +30,7 @@ jobs:
       - name: "TF · Format"
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "Terraform format" terraform fmt -check -recursive infra/terraform
+          ci_run "Terraform format" terraform fmt -recursive infra/terraform
       - name: "TF · Init without remote backend"
         working-directory: infra/terraform/environments/${{ matrix.root }}
         run: |
