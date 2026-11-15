@@ -16,6 +16,7 @@ test_case() {
   assert_contains "$tmp/output" "$snippet"
   assert_contains "$GITHUB_STEP_SUMMARY" "$expected"
   assert_contains "$GITHUB_STEP_SUMMARY" "$link"
+  assert_contains "$tmp/output" '::group::📄 Raw output ·'
   assert_contains "$tmp/output" '::endgroup::'
   echo "PASS: $name"
 }
@@ -27,6 +28,7 @@ test_case "State lock" "Terraform state is locked" "Error acquiring the state lo
 : > "$GITHUB_STEP_SUMMARY"
 ci_run "Success" bash -c 'echo complete' >"$tmp/success" 2>&1
 assert_contains "$tmp/success" "completed in"
+assert_contains "$tmp/success" '::group::📄 Raw output · Success'
 [[ ! -s "$GITHUB_STEP_SUMMARY" ]] || { echo 'Success generated a failure summary' >&2; exit 1; }
 echo 'PASS: success and no failure summary'
 
