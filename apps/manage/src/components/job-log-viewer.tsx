@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, ExternalLink, Search } from 'lucide-react';
+import { Check, ChevronDown, Copy, ExternalLink, Search } from 'lucide-react';
 
 type Level = 'all' | 'error' | 'warning' | 'success';
 const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -24,6 +24,7 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
   const [filter, setFilter] = useState<Level>('all');
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
   const lines = useMemo(() => text.replace(ansi, '').replace(/\r/g, '').split('\n').map((raw, i) => ({
     number: i + 1, text: raw.replace(sensitive, '$1[redacted]'), level: classify(raw),
   })), [text]);
@@ -31,12 +32,25 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
     (filter === 'all' || line.level === filter) && line.text.toLowerCase().includes(search.toLowerCase())
   ), [lines, filter, search]);
   const firstError = lines.find(line => line.level === 'error');
+  const warnings = lines.filter(line => line.level === 'warning').length;
+  const failures = lines.filter(line => line.level === 'error').length;
+  const successes = lines.filter(line => line.level === 'success').length;
   const links = useMemo(() => guidance.filter(item => lines.some(line => item.pattern.test(line.text))).slice(0, 3), [lines]);
   const [errorIndex, setErrorIndex] = useState(0);
   const errors = visible.filter(line => line.level === 'error');
   const selectedError = errors[errorIndex % Math.max(1, errors.length)];
   return <section className="min-w-0 overflow-hidden rounded-xl border border-carbon-700 bg-carbon-950" aria-label="Logs do job">
-    <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 p-2">
+    <div className="border-b border-carbon-800 px-3 py-3" aria-label="Diagnóstico estruturado">
+      <p className="text-xs font-semibold text-carbon-100">Resumo da execução</p>
+      <p className="mt-1 text-xs text-carbon-400">{failures} erros · {warnings} avisos · {successes} sucessos · {lines.length} linhas</p>
+      {firstError && <p className="mt-2 break-words text-xs text-red-300">Primeiro erro, linha {firstError.number}: {firstError.text.slice(0, 240)}</p>}
+    </div>
+    <details open={rawOpen} onToggle={event => setRawOpen(event.currentTarget.open)} className="min-w-0">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 text-xs font-medium text-carbon-200 [&::-webkit-details-marker]:hidden">
+        <span>Raw output · {lines.length} linhas</span>
+        <ChevronDown size={16} className={rawOpen ? "rotate-180 transition-transform" : "transition-transform"} />
+      </summary>
+      <div className="flex flex-wrap items-center gap-2 border-y border-carbon-800 p-2">
       <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-carbon-700 px-2">
         <Search size={14} className="shrink-0 text-carbon-400" />
         <input aria-label="Buscar nos logs" value={search} onChange={e => setSearch(e.target.value)}
@@ -82,5 +96,6 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
       {!visible.length && <p className="p-3 text-xs text-carbon-400">Nenhuma linha corresponde ao filtro.</p>}
     </div>
     <p className="border-t border-carbon-800 px-3 py-2 text-[11px] text-carbon-500">{visible.length} de {lines.length} linhas</p>
+    </details>
   </section>;
 }
