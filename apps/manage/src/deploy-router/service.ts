@@ -285,45 +285,8 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
       console.error(JSON.stringify({ event: 'workflow_notification_failed', run_id: id }))));
     return json({ accepted: true, run_id: id }, 202);
   }
-  if (event !== 'push') return json({ accepted: false, reason: 'not_push' }, 202);
-  // Push webhooks are observation-only. Deploys require an explicit authenticated request.
-  return json({ accepted: false, reason: 'manual_deploy_required' }, 202);
-  const delivery = request.headers.get('X-GitHub-Delivery') || '';
-  if (!UUID.test(delivery)) throw new ApiError(422, 'DELIVERY_ID', 'Identificador de entrega inválido');
-  let payload: Record<string, unknown>;
-  try { payload = JSON.parse(body); }
-  catch { throw new ApiError(400, 'WEBHOOK_JSON', 'Payload inválido'); }
-  const repository = payload.repository as Record<string, unknown> | undefined;
-  if (repository?.full_name !== (env.GITHUB_REPO || 'rodkisten/photointel'))
-    throw new ApiError(403, 'WEBHOOK_REPO', 'Evento de outro repositório');
-  if (payload.ref !== 'refs/heads/main' || payload.deleted === true)
-    return json({ accepted: false, reason: 'branch_filtered' }, 202);
-  const after = String(payload.after || ''), before = String(payload.before || '');
-  if (!SHA.test(after) || /^0{40}$/.test(after))
-    throw new ApiError(422, 'HEAD_SHA', 'Commit SHA inválido');
-  const database = db(env);
-  const changed = await changedFiles(env, before, after);
-  const selected = matchRules(await rules(database), changed);
-  if (selected.length > 5)
-    throw new ApiError(422, 'TOO_MANY_DEPLOYS', 'Mais de 5 regras disparariam neste push. Desative algumas para limitar custos.');
-  const stamp = now();
-  const inserted = await database.prepare('INSERT OR IGNORE INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
-    .bind(delivery, after, JSON.stringify(changed), stamp).run();
-  if (inserted.meta?.changes !== 1) return json({ accepted: true, duplicate: true });
-  const runs: Run[] = [];
-  for (const { rule } of selected) {
-    const id = crypto.randomUUID();
-    const insertedRun = await database.prepare(
-      "INSERT OR IGNORE INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
-      .bind(id, delivery, rule.id, rule.name, rule.provider, rule.target, after, stamp, stamp).run();
-    if (insertedRun.meta?.changes !== 1) continue;
-    runs.push({ id, delivery_id: delivery, rule_id: rule.id, rule_name: rule.name,
-      provider: rule.provider, target: rule.target, sha: after, state: 'queued',
-      provider_id: null, status_url: null, detail: null, created_at: stamp, updated_at: stamp });
-  }
-  context.waitUntil(Promise.all(runs.map((run) => dispatch(env, database, run))).then(() => undefined));
-  return json({ accepted: true, delivery, sha: after, changed: changed.length,
-    matched: selected.map((x) => ({ rule: x.rule.name, paths: x.files.length })) }, 202);
+  // Push events are accepted for observation only; they never dispatch deployments.
+  return json({ accepted: false, reason: event === 'push' ? 'manual_deploy_required' : 'not_push' }, 202);
 }
 export async function cloudBuildCallback(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') throw new ApiError(405, 'METHOD', 'Callback requer POST');
