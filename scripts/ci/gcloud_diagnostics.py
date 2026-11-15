@@ -12,7 +12,7 @@ from infra.gcp.cloud_cli import classify
 def main() -> int:
     if len(sys.argv) not in (3, 4) or not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", sys.argv[2]):
         return 2
-    logfile, project = sys.argv[1:]
+    logfile, project = sys.argv[1:3]
     if not Path(logfile).is_file():
         return 2
     failure = classify(Path(logfile).read_bytes())
