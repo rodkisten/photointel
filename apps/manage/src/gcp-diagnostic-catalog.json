@@ -48,5 +48,20 @@
     "title": "Recursos GCP",
     "hint": "Verifique projeto, região e existência do recurso.",
     "route": "home/dashboard"
+  },
+  "CLOUD_BUILD": {
+    "title": "Cloud Build",
+    "hint": "Verifique permissões de build, conta de serviço executora e logs da execução.",
+    "route": "cloud-build/builds"
+  },
+  "DOCKER_REGISTRY": {
+    "title": "Artifact Registry",
+    "hint": "Confira autenticação Docker, endereço da imagem e permissão de push/pull.",
+    "route": "artifacts"
+  },
+  "TERRAFORM_GCP": {
+    "title": "Terraform GCP",
+    "hint": "Confira a identidade do provider, estado remoto e permissões do recurso.",
+    "route": "logs/query"
   }
 }
