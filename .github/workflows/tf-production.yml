@@ -1,5 +1,5 @@
-name: "TF · Production"
-run-name: "TF · ${{ inputs.action }} · ${{ inputs.scope || 'gcp' }} · ${{ inputs.request_id || 'manual' }}"
+name: "🏗️ TF · Production"
+run-name: "🏗️ TF · ${{ inputs.action }} · ${{ inputs.scope || 'gcp' }} · ${{ inputs.request_id || 'manual' }}"
 on:
   workflow_dispatch:
     inputs:
