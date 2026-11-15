@@ -1,18 +1,7 @@
-name: "🧠 CPU Models"
+name: "🧠 CI · CPU models"
+run-name: "🧠 CI · CPU models · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'gpu/**'
-      - 'apps/api/src/photointel/services/inference*'
-      - 'apps/api/src/photointel/models.py'
-      - 'infra/scripts/real-cpu-smoke.py'
-      - 'infra/migrations/**'
-      - 'packages/taxonomy/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/real-cpu-smoke.yml'
   workflow_dispatch:
     inputs:
       confirm_download:
