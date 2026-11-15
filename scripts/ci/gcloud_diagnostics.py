@@ -2,6 +2,7 @@
 """Safe GCP CI diagnostics via the shared PhotoIntel classifier."""
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -15,6 +16,9 @@ def main() -> int:
     if not Path(logfile).is_file():
         return 2
     failure = classify(Path(logfile).read_bytes())
+    catalog_path = Path(__file__).resolve().parents[2] / "apps/manage/src/gcp-diagnostic-catalog.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    match = catalog.get(failure.category) or catalog.get(failure.code)
     links = {
         "QUOTA": ("GCP quotas", "iam-admin/quotas"),
         "AUTHENTICATION": ("GCP authentication", "iam-admin/iam"),
@@ -23,7 +27,9 @@ def main() -> int:
         "SERVICE_ACCOUNT_NOT_FOUND": ("Service accounts", "iam-admin/serviceaccounts"),
         "CLOUD_RUN_JOB_IAM": ("Cloud Run jobs", "run/jobs"),
     }
-    if failure.category in links:
+    if match:
+        title, route = match["title"], match["route"]
+    elif failure.category in links:
         title, route = links[failure.category]
     elif failure.code == "PERMISSION_DENIED":
         title, route = "GCP IAM", "iam-admin/iam"
@@ -43,6 +49,8 @@ def main() -> int:
     hint = messages[failure.code]
     if failure.hint:
         hint += " " + failure.hint
+    elif match:
+        hint += " " + match["hint"]
     if failure.permissions:
         hint += " Permissions: " + ", ".join(failure.permissions)
     print(hint)
