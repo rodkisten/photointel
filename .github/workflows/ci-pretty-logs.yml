@@ -4,6 +4,8 @@ on:
     paths:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/gcloud_diagnostics.py'
+      - 'apps/manage/src/gcp-diagnostic-catalog.json'
+      - 'apps/manage/src/components/job-log-viewer.tsx'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
       - 'infra/gcp/cloud_cli.py'
@@ -12,6 +14,8 @@ on:
     paths:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/gcloud_diagnostics.py'
+      - 'apps/manage/src/gcp-diagnostic-catalog.json'
+      - 'apps/manage/src/components/job-log-viewer.tsx'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
       - 'infra/gcp/cloud_cli.py'
@@ -32,6 +36,8 @@ jobs:
         run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
         run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Shared diagnostic catalog contract"
+        run: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
       - name: "Python diagnostic syntax"
         run: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
       - name: "Python cloud_cli contract tests"
