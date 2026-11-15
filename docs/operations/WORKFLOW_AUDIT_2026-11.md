@@ -87,3 +87,7 @@ Padronizados nomes e run-name dos três primeiros e `tf-production.yml`, sem alt
 - `infra/terraform/release_console.py`: atualizada a identificação de execuções disparadas do Cloudflare para acompanhar o novo run-name. **A correlação por título ainda é frágil e deve evoluir para request_id quando a API permitir.**
 
 As validações offline continuam em workflows próprios (`ci.yml`, `gcp-validation.yml`, `tf-validate.yml`), mas a cobertura exata dos checks removidos precisa ser confirmada antes do merge. Nenhum workflow de deploy foi excluído.
+
+## Quinta etapa: catálogo operacional do Manage
+
+`apps/manage/src/pages/Deploys.tsx` apresenta inicialmente dez workflows principais (Release, CI, Terraform Plan/Apply, validação Terraform, Cloudflare, Media, GPU, diagnóstico GCP, migração e limpeza de imagens GCP). O operador pode habilitar **Mostrar todos os workflows** para alcançar os demais sem perder recursos de recuperação. A API permanece capaz de listar e despachar todos os workflows ativos, inclusive aqueles configurados em triggers de ENV. Esta é uma simplificação da interface, não uma exclusão de YAMLs.
