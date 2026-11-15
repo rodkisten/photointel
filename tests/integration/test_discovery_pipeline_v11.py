@@ -997,10 +997,14 @@ async def test_contention_does_not_consume_manifest_attempts(
 
 
 
-async def test_catalog_preview_audit_finds_missing_and_invalid_variants(pipeline):
+async def test_catalog_preview_audit_finds_missing_and_invalid_variants(pipeline, monkeypatch):
+    from photointel.routers import preview_audit
     from photointel.routers.preview_audit import audit_previews
 
     factory, settings, adapter, photos, _ = pipeline
+    async def fixture_settings(_session):
+        return settings
+    monkeypatch.setattr(preview_audit, 'effective_settings', fixture_settings)
     adapter.photos = photos(3)
     await discovery.discover_icloud(settings, 3, mode="backfill")
     async with factory() as session:

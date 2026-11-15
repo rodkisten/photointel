@@ -1,19 +1,9 @@
-name: "🚀 Deploy"
-run-name: "🚀 Deploy · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
+name: "☁️ GCP · API deploy"
+run-name: "☁️ GCP · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
   # No automatic hourly wake-up: idle accounts must remain idle.
   # Run maintenance explicitly or through the deliberately enabled Cloud Scheduler.
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/**'
-      - 'infra/gcp/**'
-      - 'infra/docker/api*.Dockerfile'
-      - 'infra/migrations/**'
-      - 'cloudbuild.yaml'
-      - '.github/actions/gcp-config/**'
-      - '.github/workflows/gcp-deploy.yml'
   workflow_dispatch:
     inputs:
       action:

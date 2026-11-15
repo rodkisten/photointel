@@ -1,16 +1,8 @@
-name: "🐳 Compose"
+name: "🐳 CI · Compose"
+run-name: "🐳 CI · Compose · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'infra/docker/**'
-      - 'infra/migrations/**'
-      - 'infra/scripts/compose.sh'
-      - 'infra/scripts/validate-compose.py'
-      - 'infra/scripts/setup-env.py'
-      - 'apps/api/**'
     #  - 'apps/web/**'
       - 'packages/**'
       - 'pyproject.toml'

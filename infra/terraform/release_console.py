@@ -67,7 +67,7 @@ def last_frontend(app: str) -> str:
 
 def frontend_dispatch(app: str, sha: str, action: str) -> None:
     request = f"release-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}-{app}"
-    title = f"🌐 {action} · {app} · {request}"
+    title = f"🌐 Cloudflare · {action} · {app} · {request}"
     endpoint = "repos/rodkisten/photointel/actions/workflows/deploy-worker.yml"
     
     with auto_step(f"Disparando Deploy Frontend ({app})"):

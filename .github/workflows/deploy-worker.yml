@@ -1,7 +1,7 @@
-name: "🌐 Frontends · Cloudflare Workers"
+name: "🌐 Cloudflare · Frontends"
 
 run-name: >-
-  ${{ github.event_name == 'workflow_dispatch' && format('🌐 {0} · {1} · {2}', inputs.action, inputs.app, inputs.request_id || 'manual') || github.event_name == 'pull_request' && format('PR #{0}: {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Push to {0} ({1})', github.ref_name, github.sha) }}
+  ${{ github.event_name == 'workflow_dispatch' && format('🌐 Cloudflare · {0} · {1} · {2}', inputs.action, inputs.app, inputs.request_id || 'manual') || github.event_name == 'pull_request' && format('🌐 Cloudflare · PR #{0}', github.event.pull_request.number) || format('🌐 Cloudflare · Push · {0}', github.ref_name) }}
 
 on:
   push:

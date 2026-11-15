@@ -81,6 +81,7 @@ export function Deploys() {
   const [confirm, setConfirm] = useState(false);
   const [workflowDialog, setWorkflowDialog] = useState(false);
   const [workflowSearch, setWorkflowSearch] = useState('');
+  const [showAllWorkflows, setShowAllWorkflows] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -104,7 +105,16 @@ export function Deploys() {
   });
   const fieldDefinitions = workflowFields.data?.inputs || {};
   const missingRequired = Object.entries(fieldDefinitions).some(([key, field]) => field.required && !(inputs[key] ?? field.default).trim());
-  const filteredWorkflows = (workflows.data?.items || []).filter(w => (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()));
+  // Curated entry points reduce clutter without disabling recovery workflows.
+  const primaryWorkflows = new Set([
+    'release.yml', 'ci.yml', 'tf-production.yml', 'tf-validate.yml',
+    'deploy-worker.yml', 'media-deploy.yml', 'modal-gpu-deploy.yml',
+    'gcp-health.yml', 'gcp-migrate.yml', 'gcp-artifact-cleanup.yml',
+  ]);
+  const filteredWorkflows = (workflows.data?.items || [])
+    .filter(w => (showAllWorkflows || primaryWorkflows.has(w.file)) &&
+      (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()))
+    .sort((a, b) => Number(primaryWorkflows.has(b.file)) - Number(primaryWorkflows.has(a.file)) || a.name.localeCompare(b.name));
   useEffect(() => {
     if (!selected && workflows.data?.items.length) setSelected(workflows.data.items[0].file);
   }, [selected, workflows.data]);
@@ -139,10 +149,15 @@ export function Deploys() {
           )}
         </Card>
       </Section>
-      <Section title="Workflows · execução manual" detail="Todos os workflows ativos. Selecione um para configurar e executar.">
+      <Section title="Workflows · execução manual" detail="Operações principais primeiro. Os auxiliares continuam acessíveis.">
         <Card className="space-y-3 p-3 sm:p-4">
           <Input aria-label="Buscar workflow" placeholder="Buscar por nome ou arquivo…" value={workflowSearch}
             onChange={event => setWorkflowSearch(event.target.value)} />
+          <label className="flex items-center gap-2 text-xs text-carbon-300">
+            <input type="checkbox" checked={showAllWorkflows} onChange={event => setShowAllWorkflows(event.target.checked)}
+              className="size-4 accent-carbon-200" />
+            Mostrar todos os workflows ({workflows.data?.items.length ?? 0})
+          </label>
           {workflows.isPending && <Spinner />}
           {workflows.error && <IssueBanner error={workflows.error} />}
           <div className="max-h-[60dvh] space-y-1 overflow-y-auto">

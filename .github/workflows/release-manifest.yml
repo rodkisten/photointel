@@ -1,16 +1,6 @@
-name: "🧾 Manifest"
+name: "🧾 Release · Manifest"
+run-name: "🧾 Release · Manifest · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'infra/scripts/release-manifest.py'
-      - 'docs/evidence/**'
-      - 'apps/api/**'
-      - 'apps/web/**'
-      - 'gpu/**'
-      - 'infra/docker/**'
-      - 'infra/gcp/build_source_manifest.py'
-      - '.github/workflows/release-manifest.yml'
   workflow_dispatch:
     inputs:
       container_digest:

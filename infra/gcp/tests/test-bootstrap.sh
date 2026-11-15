@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Offline bootstrap contract tests. No actual Google Cloud access or cost.
 set -Eeuo pipefail
+trap 'status=$?; printf "Bootstrap offline assertion failed at line %s (exit %s)\\n" "$LINENO" "$status" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -45,7 +46,7 @@ FAKE
 chmod 700 "$TMP/gcloud"
 export PATH="$TMP:$PATH" GCLOUD_TRACE="$TMP/trace"
 export GCP_CONFIG_FILE="$ROOT/infra/gcp/config.example.json" CONFIRM_PROJECT=replace-project-id
-export EXPECTED_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main']"
+export EXPECTED_WIF_CONDITION="assertion.repository=='rodkisten/photointel' && assertion.ref=='refs/heads/main' && assertion.environment=='production' && assertion.workflow_ref in ['rodkisten/photointel/.github/workflows/gcp-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/gcp-terminal.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-state-bootstrap.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-production.yml@refs/heads/main','rodkisten/photointel/.github/workflows/tf-permissions.yml@refs/heads/main']"
 : > "$GCLOUD_TRACE"
 BOOTSTRAP_MODE=plan bash "$ROOT/infra/gcp/bootstrap.sh" > "$TMP/plan"
 if grep -Eq '(^| )create | add-iam-policy-binding | services enable ' "$GCLOUD_TRACE"; then

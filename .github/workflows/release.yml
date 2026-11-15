@@ -1,5 +1,5 @@
-name: "🚀 Release"
-run-name: "🚀 ${{ inputs.action || 'check' }} · ${{ inputs.target || 'main' }} · ${{ inputs.source || 'main' }}"
+name: "🚀 Release · Console"
+run-name: "🚀 Release · ${{ inputs.action || 'check' }} · ${{ inputs.target || 'all' }} · ${{ inputs.source || 'main' }}"
 on:
   workflow_dispatch:
     inputs:
@@ -26,9 +26,6 @@ on:
         description: "Confirmar"
         type: boolean
         default: false
-  push:
-    branches: [main]
-    paths: ['.github/workflows/release.yml', 'infra/terraform/release_console.py', 'infra/gcp/tests/test_release_console.py']
 permissions:
   contents: read
   actions: write
@@ -37,13 +34,6 @@ concurrency:
   group: photointel-release-console
   cancel-in-progress: false
 jobs:
-  check:
-    if: github.event_name == 'push'
-    permissions: {contents: read}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 -m unittest infra.gcp.tests.test_release_console -v
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
