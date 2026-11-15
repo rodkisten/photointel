@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Copy, Search } from 'lucide-react';
+import { Check, Copy, ExternalLink, Search } from 'lucide-react';
 
 type Level = 'all' | 'error' | 'warning' | 'success';
 const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
@@ -10,6 +10,15 @@ const classify = (line: string): Exclude<Level, 'all'> | 'normal' => {
   if (/\b(success|succeeded|completed|passed|apply complete)\b|✔|✓/i.test(line)) return 'success';
   return 'normal';
 };
+const guidance = [
+  { pattern: /permission.denied|permission denied|iam.serviceaccounts|iam policy|403 forbidden/i, title: 'Revisar permissões IAM', url: 'https://console.cloud.google.com/iam-admin/iam?project=photointel', hint: 'Confirme a identidade do workflow e os papéis exigidos pelo recurso.' },
+  { pattern: /secretmanager|secret manager|secret.*not found/i, title: 'Abrir Secret Manager', url: 'https://console.cloud.google.com/security/secret-manager?project=photointel', hint: 'Verifique se o segredo existe, possui versão habilitada e acesso autorizado.' },
+  { pattern: /cloud run|run.googleapis.com|revision.*not ready/i, title: 'Inspecionar Cloud Run', url: 'https://console.cloud.google.com/run?project=photointel', hint: 'Confira revisões, logs de inicialização e permissões de invocação.' },
+  { pattern: /artifact.registry|artifactregistry|docker push.*denied/i, title: 'Inspecionar Artifact Registry', url: 'https://console.cloud.google.com/artifacts?project=photointel', hint: 'Confira repositório, imagem e permissões de publicação.' },
+  { pattern: /terraform.*state|state lock|error acquiring the state lock/i, title: 'Consultar Terraform', url: 'https://developer.hashicorp.com/terraform/cli/commands/force-unlock', hint: 'Inspecione o lock antes de qualquer desbloqueio. Nunca force sem confirmar a execução proprietária.' },
+  { pattern: /wrangler|cloudflare.*(error|denied|unauthorized)/i, title: 'Abrir Cloudflare', url: 'https://dash.cloudflare.com/', hint: 'Confira conta, token e permissões do ambiente.' },
+  { pattern: /neon.*(error|denied|unauthorized|connection)/i, title: 'Abrir Neon', url: 'https://console.neon.tech/', hint: 'Confira conexão, branch e disponibilidade do banco.' },
+] as const;
 const tone = { error: 'text-red-300', warning: 'text-amber-300', success: 'text-emerald-300', normal: 'text-carbon-300' };
 export function JobLogViewer({ text, truncated }: { text: string; truncated?: boolean }) {
   const [filter, setFilter] = useState<Level>('all');
@@ -22,6 +31,10 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
     (filter === 'all' || line.level === filter) && line.text.toLowerCase().includes(search.toLowerCase())
   ), [lines, filter, search]);
   const firstError = lines.find(line => line.level === 'error');
+  const links = useMemo(() => guidance.filter(item => lines.some(line => item.pattern.test(line.text))).slice(0, 3), [lines]);
+  const [errorIndex, setErrorIndex] = useState(0);
+  const errors = visible.filter(line => line.level === 'error');
+  const selectedError = errors[errorIndex % Math.max(1, errors.length)];
   return <section className="min-w-0 overflow-hidden rounded-xl border border-carbon-700 bg-carbon-950" aria-label="Logs do job">
     <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 p-2">
       <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-carbon-700 px-2">
@@ -41,11 +54,28 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
         {({ all: 'Todos', error: 'Erros', warning: 'Avisos', success: 'Sucessos' })[level]}
       </button>)}
     </div>
+    {links.length > 0 && <div className="space-y-2 border-b border-carbon-800 px-3 py-3">
+      <p className="text-xs font-medium text-carbon-200">Ações externas sugeridas pelos logs</p>
+      {links.map(link => <div key={link.url} className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-[11px] text-carbon-400">{link.hint}</p>
+        <a href={link.url} target="_blank" rel="noopener noreferrer"
+          className="flex shrink-0 items-center gap-1 text-xs text-sky-300 underline underline-offset-2">
+          {link.title}<ExternalLink size={12} />
+        </a>
+      </div>)}
+    </div>}
+    {errors.length > 0 && <div className="flex items-center justify-between gap-2 border-b border-carbon-800 px-3 py-2 text-xs">
+      <span className="text-red-300">Erro {errorIndex % errors.length + 1} de {errors.length} · linha {selectedError?.number}</span>
+      <button type="button" className="rounded-md border border-carbon-700 px-2 py-1 text-carbon-200"
+        onClick={() => { const next = (errorIndex + 1) % errors.length; setErrorIndex(next); document.getElementById('job-log-line-' + errors[next].number)?.scrollIntoView({ block: 'nearest' }); }}>
+        Próximo erro
+      </button>
+    </div>}
     {truncated && <p className="px-3 py-2 text-xs text-amber-300">Log truncado pela API. Consulte o GitHub para a saída completa.</p>}
     {firstError && filter === 'all' && !search && <button type="button" className="w-full border-b border-carbon-800 px-3 py-2 text-left text-xs text-red-300"
       onClick={() => { setFilter('error'); setSearch(''); }}>Primeiro erro na linha {firstError.number}. Toque para filtrar erros.</button>}
     <div className="max-h-[65dvh] overflow-auto overscroll-contain font-mono text-[11px] leading-5 sm:text-xs" role="log" aria-label="Saída da CLI">
-      {visible.map(line => <div key={line.number} className={'flex min-w-max gap-3 px-3 hover:bg-carbon-900/70 ' + tone[line.level]}>
+      {visible.map(line => <div id={'job-log-line-' + line.number} key={line.number} className={'flex min-w-max gap-3 px-3 hover:bg-carbon-900/70 ' + tone[line.level]}>
         <span className="w-10 shrink-0 select-none text-right text-carbon-600">{line.number}</span>
         <span className="whitespace-pre">{line.text || ' '}</span>
       </div>)}
