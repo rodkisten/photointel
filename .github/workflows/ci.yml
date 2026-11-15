@@ -28,17 +28,10 @@ concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  locks:
-    name: "🧪 locks"
+  python:
+    name: "🐍 Python · lint, types, unit"
     runs-on: ubuntu-latest
-    outputs:
-      ready: ${{ steps.check.outputs.ready }}
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
-        id: notify_observed_001
-        uses: actions/checkout@v4
-        with: {persist-credentials: false}
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_002
@@ -88,6 +81,28 @@ jobs:
           path: reports/unit.xml
           if-no-files-found: ignore
           retention-days: 3
+      - name: "📋 Consolidar falhas · python"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          printf '%s' "$STEP_RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.outcome == "failure")
+            | "::error title=Etapa falhou::" + .key
+          '
+          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+  frontend:
+    name: "🌐 Frontend · lint, types, tests, build"
+    runs-on: ubuntu-latest
+    steps:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_010
@@ -133,6 +148,28 @@ jobs:
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web audit --audit-level=high" npm --prefix apps/web audit --audit-level=high
+      - name: "📋 Consolidar falhas · frontend"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          printf '%s' "$STEP_RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.outcome == "failure")
+            | "::error title=Etapa falhou::" + .key
+          '
+          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+  integration:
+    name: "🧪 Integration · database and browser"
+    runs-on: ubuntu-latest
+    steps:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_018
@@ -251,6 +288,28 @@ jobs:
           path: apps/web/playwright-report
           if-no-files-found: ignore
           retention-days: 3
+      - name: "📋 Consolidar falhas · integration"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          printf '%s' "$STEP_RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.outcome == "failure")
+            | "::error title=Etapa falhou::" + .key
+          '
+          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+  containers:
+    name: "🐳 Containers · architectures"
+    runs-on: ubuntu-latest
+    steps:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_036
@@ -281,6 +340,28 @@ jobs:
           file: infra/docker/web.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
+      - name: "📋 Consolidar falhas · containers"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          printf '%s' "$STEP_RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.outcome == "failure")
+            | "::error title=Etapa falhou::" + .key
+          '
+          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+  security:
+    name: "🔐 Security · dependency and secret audit"
+    runs-on: ubuntu-latest
+    steps:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_041
@@ -314,7 +395,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         continue-on-error: true
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
-      - name: "📋 Consolidar falhas"
+      - name: "📋 Consolidar falhas · security"
         if: ${{ always() }}
         env:
           STEP_RESULTS: ${{ toJSON(steps) }}
