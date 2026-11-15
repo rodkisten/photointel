@@ -93,6 +93,12 @@ jobs:
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv python install 3.15" uv python install 3.15
+      - name: "🔒 Verificar consistência do lockfile"
+        continue-on-error: true
+        id: python_lock_check
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv lock --check" uv lock --check
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_005
