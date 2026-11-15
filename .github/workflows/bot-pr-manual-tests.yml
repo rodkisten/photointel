@@ -38,15 +38,21 @@ jobs:
               if (path.startsWith('apps/api/') || path.startsWith('tests/')) wanted.add('backend-smoke.yml');
               if (path.startsWith('infra/gcp/')) wanted.add('gcp-validation.yml');
               if (path.startsWith('packages/env/')) wanted.add('tf-env-package.yml');
-              if (path.startsWith('apps/api/') || path.startsWith('infra/migrations/'))
-                wanted.add('gcp-migrate.yml');
-              if (path.startsWith('infra/gcp/')) wanted.add('gcp-bootstrap.yml');
-              if (path.startsWith('gpu/')) wanted.add('modal-gpu-deploy.yml');
+              // Never recommend production migrations/bootstrap/deploy for a dependency PR.
+              // CI covers Python, GPU and integration tests without production credentials.
               if (path.startsWith('scripts/ci/')) wanted.add('ci-pretty-logs.yml');
-              if (path.startsWith('.github/workflows/'))
-                wanted.add(path.split('/').pop());
+              if (path.startsWith('.github/workflows/')) {
+                const workflow = path.split('/').pop();
+                if (['ci.yml', 'ci-pretty-logs.yml', 'tf-validate.yml',
+                     'backend-smoke.yml', 'gcp-validation.yml', 'tf-env-package.yml'].includes(workflow))
+                  wanted.add(workflow);
+              }
             }
+            const safeChecks = new Set(['ci.yml', 'ci-pretty-logs.yml',
+              'tf-validate.yml', 'backend-smoke.yml', 'gcp-validation.yml',
+              'tf-env-package.yml']);
             const available = workflows.filter(w =>
+              safeChecks.has(w.path.split('/').pop()) &&
               wanted.has(w.path.split('/').pop()) && w.state === 'active'
             );
             const links = available.map(w => {
@@ -54,11 +60,15 @@ jobs:
               return `- [▶ ${w.name}](${url})`;
             });
             const branch = pr.head.ref;
+            const sha = pr.head.sha;
+            const branchExistsHere = pr.head.repo.full_name === context.repo.owner + '/' + context.repo.repo;
             const body = [
               marker,
               '### 🧪 Testes manuais de dependências',
               '',
               'Este PR do Renovate/Dependabot **não executa CI automaticamente**.',
+              `Commit a testar: \`${sha}\`.`,
+              ...(branchExistsHere ? [] : ['⚠️ Esta branch está em um fork. O seletor de branch do repositório base pode não disponibilizá-la; não execute código não confiável com credenciais de produção.']),
               '',
               '**Como testar esta branch:**',
               '1. Abra um workflow abaixo e clique em **Run workflow**.',
@@ -68,7 +78,7 @@ jobs:
               '',
               ...links,
               '',
-              '> O GitHub só permite execução manual em workflows com `workflow_dispatch` disponíveis na branch escolhida. Workflows de produção podem exigir confirmação e restringir a branch `main`.',
+              '> Links restritos a validações. Não execute deploys, migrations ou bootstrap de produção para testar atualizações de dependências.',
             ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number: pr.number, per_page: 100,
