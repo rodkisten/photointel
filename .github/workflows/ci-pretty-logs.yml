@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/highlight_output.py'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
       - 'apps/manage/src/components/job-log-viewer.tsx'
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/highlight_output.py'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
       - 'apps/manage/src/components/job-log-viewer.tsx'
