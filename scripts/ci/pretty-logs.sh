@@ -72,16 +72,24 @@ ci_run() {
   chmod 600 "$logfile"
   # Keep raw output available in a collapsed GitHub Actions group, separate from
   # the structured diagnosis. Do not duplicate unredacted output in Step Summary.
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::group::📄 Raw output · %s\n' "$label"
-  # Capture combined output with tee. PIPESTATUS[0] is the original CLI exit code.
-  # No background process substitution: the log is complete before diagnosis.
-  if PHOTOINTEL_CI_RAW_GROUP=1 "$@" 2>&1 | tee "$logfile"; then
-    status=${PIPESTATUS[0]}
-  else
-    status=${PIPESTATUS[0]}
+  # Test output stays expanded; other CLI output is grouped by default.
+  local is_test=0
+  if [[ "$label" =~ [Tt]est|[Pp]ytest|[Vv]itest|[Jj]est|[Pp]laywright|[Uu]nittest ]] || [[ " $* " =~ [[:space:]](pytest|unittest|vitest|jest|playwright)[[:space:]] ]]; then
+    is_test=1
   fi
-
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::endgroup::\n'
+  if [[ "${GITHUB_ACTIONS:-}" == true && "$is_test" == 0 ]]; then
+    printf '::group::📄 Raw output · %s\\n' "$label"
+  fi
+  # tee stores the untouched raw output for diagnosis. The renderer only
+  # changes the visible stream. PIPESTATUS[0] is always the CLI exit code.
+  local -a pipeline_status
+  set +e
+  PHOTOINTEL_CI_RAW_GROUP=1 FORCE_COLOR=1 CLICOLOR_FORCE=1 PY_COLORS=1 "$@" 2>&1 | tee "$logfile" | python3 -u scripts/ci/highlight_output.py
+  pipeline_status=("${PIPESTATUS[@]}")
+  status=${pipeline_status[0]}
+  if [[ "${GITHUB_ACTIONS:-}" == true && "$is_test" == 0 ]]; then
+    printf '::endgroup::\\n'
+  fi
   duration=$((SECONDS-start))
   if (( status == 0 )); then
     ci_ok "$label completed in ${duration}s"
