@@ -90,6 +90,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["prepare", "review", "verify"])
     parser.add_argument("--image-sha", default="")
+    parser.add_argument("--skip-source-commit-validation", action="store_true",
+                        help="Only for isolated, read-only plans preserving the existing media release")
     parser.add_argument("--bucket", default="")
     parser.add_argument("--project", default="photointel")
     parser.add_argument("--region", default="us-central1")
@@ -98,9 +100,13 @@ def main() -> None:
     if args.action == "prepare":
         settings = release_settings(terraform_json("output", "-json"), args.image_sha, args.bucket)
         # A typo or unrelated commit must not select an untraceable image release.
-        for command in (["git", "cat-file", "-e", settings["media_image_sha"] + "^{commit}"],
-                        ["git", "merge-base", "--is-ancestor", settings["media_image_sha"], "HEAD"]):
-            subprocess.run(command, check=True)
+        if args.skip_source_commit_validation:
+            if args.image_sha or settings["media_image_sha"] != terraform_json("output", "-json").get("media_release", {}).get("value", {}).get("source_sha"):
+                raise ValueError("Skipping commit validation requires preserving the current Terraform media release")
+        else:
+            for command in (["git", "cat-file", "-e", settings["media_image_sha"] + "^{commit}"],
+                            ["git", "merge-base", "--is-ancestor", settings["media_image_sha"], "HEAD"]):
+                subprocess.run(command, check=True)
         state = subprocess.run(["terraform", "state", "list"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()
         jobs = {kind: describe(kind, args.project, args.region) for kind in JOB_TYPES}
         imports = adoption_imports(state, jobs, args.project, args.region)
