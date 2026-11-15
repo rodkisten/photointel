@@ -4,6 +4,7 @@ on:
     paths:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/highlight_output.py'
+      - 'scripts/ci/test_highlight_output.py'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
       - 'apps/manage/src/components/job-log-viewer.tsx'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/highlight_output.py'
+      - 'scripts/ci/test_highlight_output.py'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
       - 'apps/manage/src/components/job-log-viewer.tsx'
@@ -40,6 +42,8 @@ jobs:
         run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
         run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Python and Node.js syntax highlighting"
+        run: python3 -m unittest scripts.ci.test_highlight_output -v
       - name: "Shared diagnostic catalog contract"
         run: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
       - name: "Python diagnostic syntax"
