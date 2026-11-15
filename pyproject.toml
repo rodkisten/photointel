@@ -2,18 +2,17 @@
 name = "photo-intelligence-cloud"
 version = "1.1.0"
 description = "Private, self-hosted photo intelligence"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.15,<3.16"
 dependencies = [
   "fastapi>=0.115,<1", "uvicorn[standard]>=0.34,<1", "pydantic>=2.10,<3",
-  "pydantic-settings>=2.7,<3", "sqlalchemy[asyncio]>=2.0.38,<2.1",
+  "pydantic-settings>=2.7,<3", "sqlalchemy[asyncio]>=2.1.8,<2.2",
   "alembic>=1.14,<2", "asyncpg>=0.30,<1", "psycopg[binary]>=3.2,<4",
-  "pgvector>=0.3.6,<1", "pillow>=13,<14", "pillow-heif>=0.21,<2",
+  "pgvector>=0.3.6,<1", "pillow>=11,<13", "pillow-heif>=0.21,<2",
   "opencv-python-headless>=4.11,<5", "imagehash>=4.3,<5", "numpy>=2,<3",
   "httpx>=0.28,<1", "boto3>=1.36,<2", "structlog>=25,<27",
   "pyjwt[crypto]>=2.10,<3", "python-multipart>=0.0.20,<1",
   "cryptography>=44,<51", "google-auth[requests]>=2.40,<3",
   "sentry-sdk[fastapi]>=2.49,<4",
-  "certifi>=2026.10.18", "opentelemetry-api>=1.45.2", "pyasn1>=0.6.5", "filelock>=4.2.1", "setuptools>=84.1.0",
 ]
 
 [project.scripts]
@@ -29,8 +28,8 @@ dev = [
   "ruff>=0.11,<1", "mypy>=1.15,<2", "types-boto3[s3]>=1.36,<2",
   "aiosqlite>=0.21,<1", "respx>=0.22,<1",
 ]
-gpu = ["modal>=1,<2", "torch>=2.6,<3", "torchvision>=0.21,<1", "transformers==5.10.2", "huggingface-hub>=1.5,<2", "safetensors>=0.5,<1", "einops>=0.8,<1", "sentencepiece>=0.2,<1"]
-ingest = ["icloudpd==1.32.3", "photointel-icloudpd-source==1.32.3"]
+gpu = ["modal>=1,<2", "torch>=2.6,<3", "torchvision>=0.21,<1", "transformers==5.23.0", "huggingface-hub>=1.5,<2", "safetensors>=0.5,<1", "einops>=0.8,<1", "sentencepiece>=0.2,<1"]
+ingest = ["icloudpd==1.33.0", "photointel-icloudpd-source==1.32.3"]
 
 [tool.uv.sources]
 photointel-icloudpd-source = {path = "packages/icloudpd-source"}
@@ -49,7 +48,7 @@ extend-exclude = ["gpu/models/joytag_upstream.py", "packages/icloudpd-source"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
-ignore = ["F401", "F841", "B008", "E701", "E402"]
+ignore = ["F401", "F841", "E701", "E402"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
