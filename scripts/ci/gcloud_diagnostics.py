@@ -14,9 +14,6 @@ def main() -> int:
     logfile, project = sys.argv[1:]
     if not Path(logfile).is_file():
         return 2
-    from pathlib import Path
-    
-    logfile, project = sys.argv[1:]
     failure = classify(Path(logfile).read_bytes())
     links = {
         "SECRET_MANAGER": ("Secret Manager", "security/secret-manager"),
