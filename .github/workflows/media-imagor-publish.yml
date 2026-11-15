@@ -53,22 +53,32 @@ jobs:
       - name: "Set up gcloud for deployment preflight"
         if: inputs.action == 'build-and-deploy'
         uses: google-github-actions/setup-gcloud@v3
-      - name: "Verify Imagor signing secret exists before building"
+      - name: "Provision Imagor signing key without exposing its value"
         if: inputs.action == 'build-and-deploy'
         shell: bash
         run: |
           set -euo pipefail
           secret="photointel-media-imagor-secret"
-          if ! gcloud secrets describe "$secret" --project=photointel --format='value(name)' >/dev/null; then
-            echo "::error::Missing or inaccessible Secret Manager secret: $secret. Provision it securely and configure the same signing key in the Media API before deployment."
-            exit 1
+          project="photointel"
+          # Do not confuse missing access with a missing secret.
+          if ! gcloud secrets describe "$secret" --project="$project" --format='value(name)' >/dev/null 2>&1; then
+            if gcloud secrets list --project="$project" --filter="name:$secret" --format='value(name)' | grep -Fq "$secret"; then
+              echo "::error::Secret exists but cannot be described by Terraform identity."
+              exit 1
+            fi
+            gcloud secrets create "$secret" --project="$project" --replication-policy=automatic --format='value(name)' >/dev/null
+            echo "Created Imagor signing secret metadata."
           fi
-          version="$(gcloud secrets versions list "$secret" --project=photointel --filter='state=ENABLED' --format='value(name)' --limit=1)"
+          version="$(gcloud secrets versions list "$secret" --project="$project" --filter='state=ENABLED' --format='value(name)' --limit=1)"
           if [[ -z "$version" ]]; then
-            echo "::error::Secret $secret has no enabled version. Add a signing key version before deployment."
-            exit 1
+            # 48 random bytes, base64 encoded. Stream directly to Secret Manager;
+            # never print, persist in repository, or pass through Terraform state.
+            umask 077
+            openssl rand -base64 48 | tr -d '\n' | gcloud secrets versions add "$secret" --project="$project" --data-file=- --format='value(name)' >/dev/null
+            echo "Created first enabled Imagor signing key version."
+          else
+            echo "Reusing existing enabled Imagor signing key version."
           fi
-          echo "Imagor signing secret metadata and enabled version verified (payload not accessed)."
       - name: "Verify reviewed immutable upstream image"
         env:
           IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
