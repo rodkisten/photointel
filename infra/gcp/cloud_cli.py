@@ -189,8 +189,8 @@ def command(
     if not isinstance(binary, str) or not binary or "\x00" in binary:
         raise ValueError("Invalid gcloud executable")
     output = [binary, *clean, "--project=" + selected]
-    if quiet:
-        output.append("--quiet")
+    #if quiet:
+     #   output.append("--quiet")
     if impersonate:
         if any(x.startswith("--impersonate-service-account") for x in clean):
             raise ValueError("Impersonation is already configured in command")
