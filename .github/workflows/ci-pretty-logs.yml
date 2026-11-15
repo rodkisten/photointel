@@ -15,7 +15,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    name: "🧪 Validate log diagnostics (offline)"
+    name: "🧪 Validate log diagnostics and gcloud CLI"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -26,3 +26,17 @@ jobs:
         run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
         run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Install Google Cloud CLI"
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: 'beta'
+      - name: "Validate real gcloud CLI output (no credentials)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ci/pretty-logs.sh
+          ci_run "gcloud CLI version" gcloud --version
+          ci_run "gcloud CLI command discovery" gcloud help run
+          ci_run "gcloud CLI diagnostics" gcloud help iam
+          echo "GCloud CLI validated without authentication or deployment."
+
