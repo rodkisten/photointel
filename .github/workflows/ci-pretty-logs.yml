@@ -5,11 +5,15 @@ on:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
+      - 'infra/gcp/cloud_cli.py'
+      - 'infra/gcp/tests/test_cloud_cli.py'
   pull_request:
     paths:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
+      - 'infra/gcp/cloud_cli.py'
+      - 'infra/gcp/tests/test_cloud_cli.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,6 +30,8 @@ jobs:
         run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
         run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Python cloud_cli contract tests"
+        run: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
       - name: "Install Google Cloud CLI"
         uses: google-github-actions/setup-gcloud@v3
         with:
@@ -38,5 +44,6 @@ jobs:
           ci_run "gcloud CLI version" gcloud --version
           ci_run "gcloud CLI command discovery" gcloud help run
           ci_run "gcloud CLI diagnostics" gcloud help iam
+          ci_run "PhotoIntel Python CLI bridge" python3 -m infra.gcp.cloud_cli --project photointel -- run services list --help
           echo "GCloud CLI validated without authentication or deployment."
 
