@@ -43,6 +43,32 @@ jobs:
           fi
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
+      - name: "Authenticate Terraform identity for deployment preflight"
+        if: inputs.action == 'build-and-deploy'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - name: "Set up gcloud for deployment preflight"
+        if: inputs.action == 'build-and-deploy'
+        uses: google-github-actions/setup-gcloud@v3
+      - name: "Verify Imagor signing secret exists before building"
+        if: inputs.action == 'build-and-deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="photointel-media-imagor-secret"
+          if ! gcloud secrets describe "$secret" --project=photointel --format='value(name)' >/dev/null; then
+            echo "::error::Missing or inaccessible Secret Manager secret: $secret. Provision it securely and configure the same signing key in the Media API before deployment."
+            exit 1
+          fi
+          version="$(gcloud secrets versions list "$secret" --project=photointel --filter='state=ENABLED' --format='value(name)' --limit=1)"
+          if [[ -z "$version" ]]; then
+            echo "::error::Secret $secret has no enabled version. Add a signing key version before deployment."
+            exit 1
+          fi
+          echo "Imagor signing secret metadata and enabled version verified (payload not accessed)."
       - name: "Verify reviewed immutable upstream image"
         env:
           IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
