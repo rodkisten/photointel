@@ -56,3 +56,14 @@ Manter uma interface de operação simples para um único operador, reduzir disp
 5. Excluir apenas após prova de ausência de consumidores e teste da substituição, preferencialmente em PR separado.
 
 **Segurança:** o plano de Imagor e a migração Neon não podem ser confundidos com Apply. Nunca liberar segredos de produção para PR.
+
+## Segunda etapa implementada
+
+- `release-manifest.yml`: somente manual; remove execução automática para cada mudança de código.
+- `webkit-validation.yml`: somente manual; mantém teste WebKit disponível sob demanda.
+- `container-architectures.yml`: somente manual; evita builds multiplataforma automáticos custosos.
+- `compose-validation.yml`: somente manual; evita subir infraestrutura Docker em pushes comuns.
+- `real-cpu-smoke.yml`: somente manual; impede downloads pesados automáticos de modelos.
+- `backend-smoke.yml`: mantém validação em PR/push, com nome/run-name padronizados.
+
+**Observação:** a auditoria de todos os workflows e a análise dos consumidores ainda não estão concluídas. Não foram removidos deploys, Terraform ou migrações.
