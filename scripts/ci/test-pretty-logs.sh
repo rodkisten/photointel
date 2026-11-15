@@ -11,7 +11,15 @@ assert_contains() {
 test_case() {
   local name="$1" expected="$2" snippet="$3" link="$4" code=0
   : > "$GITHUB_STEP_SUMMARY"
-  ci_run "$name" bash -c "printf '%s\\n' '$snippet'; exit 17" >"$tmp/output" 2>&1 || code=$?
+  # Cloud diagnostics must be tested with a cloud command, not generic bash.
+  mkdir -p "$tmp/bin"
+  cat >"$tmp/bin/gcloud" <<'SH'
+#!/usr/bin/env bash
+printf '%s\\n' "$CI_TEST_SNIPPET"
+exit 17
+SH
+  chmod +x "$tmp/bin/gcloud"
+  CI_TEST_SNIPPET="$snippet" PATH="$tmp/bin:$PATH" ci_run "$name" gcloud version >"$tmp/output" 2>&1 || code=$?
   [[ "$code" -eq 17 ]] || { echo "Wrong exit code for $name: $code" >&2; exit 1; }
   assert_contains "$tmp/output" "$snippet"
   assert_contains "$GITHUB_STEP_SUMMARY" "$expected"
