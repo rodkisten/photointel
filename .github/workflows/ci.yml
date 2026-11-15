@@ -47,7 +47,9 @@ jobs:
            github.event.head_commit.author.username != 'renovate[bot]' &&
            github.event.head_commit.author.username != 'dependabot[bot]' &&
            github.event.head_commit.committer.username != 'renovate[bot]' &&
-           github.event.head_commit.committer.username != 'dependabot[bot]') }}
+           github.event.head_commit.committer.username != 'dependabot[bot]' &&
+           !contains(github.event.head_commit.message, 'dependabot[bot]') &&
+           !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     name: "🧭 Detectar contexto"
     runs-on: ubuntu-latest
     outputs:
