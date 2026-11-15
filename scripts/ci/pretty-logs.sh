@@ -19,7 +19,15 @@ ci_run() {
   if (( status == 0 )); then
     ci_ok "$label completed in ${duration}s"
   else
-    ci_fail "$label failed (exit ${status}, ${duration}s). Inspect CLI output above; verify IAM, project, and configuration before retrying."
+    local hint="Inspect the CLI output above and verify the command's configuration."
+    case "$1" in
+      gcloud) hint="Check active project, workload identity, required IAM roles, and whether the resource exists." ;;
+      terraform) hint="Check state locking, provider permissions, drift, and the reviewed plan before retrying." ;;
+      docker) hint="Check Docker daemon, registry authentication, image reference, and build context." ;;
+      wrangler) hint="Check Cloudflare account, API token scopes, configuration, and deployment environment." ;;
+      python3|python) hint="Read the Python traceback above and verify runtime dependencies and environment variables." ;;
+    esac
+    ci_fail "$label failed (exit ${status}, ${duration}s). $hint"
   fi
   [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::endgroup::\n'
   return "$status"
