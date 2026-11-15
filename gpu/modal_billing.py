@@ -56,7 +56,7 @@ def billing():
             rows = workspace.billing.report(start=start, end=end, resolution="d")
         except Exception as exc:
             raise HTTPException(status_code=503, detail="billing API unavailable for workspace or plan") from exc
-        grouped = {}
+        grouped: dict[str, float] = {}
         for entry in rows:
             name = str(getattr(entry, "description", None) or getattr(entry, "object_id", "Modal"))
             grouped[name] = grouped.get(name, 0.0) + float(entry.cost)
