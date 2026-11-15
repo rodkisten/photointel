@@ -1,3 +1,4 @@
+import diagnosticCatalog from '../gcp-diagnostic-catalog.json';
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Copy, ExternalLink, Search } from 'lucide-react';
 
@@ -35,7 +36,27 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
   const warnings = lines.filter(line => line.level === 'warning').length;
   const failures = lines.filter(line => line.level === 'error').length;
   const successes = lines.filter(line => line.level === 'success').length;
-  const links = useMemo(() => guidance.filter(item => lines.some(line => item.pattern.test(line.text))).slice(0, 3), [lines]);
+  const links = useMemo(() => {
+    const log = lines.map(line => line.text).join('\n').toLowerCase();
+    const rules: Array<[keyof typeof diagnosticCatalog, RegExp]> = [
+      ['AUTHENTICATION', /unauthenticated|invalid_grant|no active account|login required/],
+      ['QUOTA', /resource_exhausted|quota exceeded|429 too many requests|rate limit exceeded/],
+      ['SECRET_MANAGER', /secretmanager|secret manager/],
+      ['ARTIFACT_REGISTRY', /artifactregistry|artifact registry/],
+      ['SERVICE_ACCOUNT_NOT_FOUND', /service account.*(?:not found|does not exist)/],
+      ['CLOUD_RUN_JOB_IAM', /run\.jobs\.(?:create|update)/],
+      ['IAM_DENY', /deny polic(?:y|ies)/],
+      ['IAM_CONDITION', /iam condition|condition not satisfied/],
+      ['PERMISSION_DENIED', /permission_denied|permission denied|403 forbidden/],
+      ['NOT_FOUND', /not_found|not found|404/],
+    ];
+    const selected = rules.find(([, pattern]) => pattern.test(log));
+    if (selected) {
+      const entry = diagnosticCatalog[selected[0]];
+      return [{ title: entry.title, hint: entry.hint, url: 'https://console.cloud.google.com/' + entry.route + '?project=photointel' }];
+    }
+    return guidance.filter(item => lines.some(line => item.pattern.test(line.text))).slice(0, 3);
+  }, [lines]);
   const [errorIndex, setErrorIndex] = useState(0);
   const errors = visible.filter(line => line.level === 'error');
   const selectedError = errors[errorIndex % Math.max(1, errors.length)];
