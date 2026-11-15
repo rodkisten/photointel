@@ -1,8 +1,14 @@
-name: "🎞️ Media · Imagor publish (manual)"
-run-name: "Imagor image · ${{ github.ref_name }}"
+name: "🎞️ Media · Imagor"
+run-name: "🎞️ Imagor · ${{ inputs.action }} · ${{ github.ref_name }}"
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "Build only or build and Terraform plan"
+        type: choice
+        required: true
+        default: build-and-plan
+        options: [build, build-and-plan]
       base_image:
         description: "Reviewed upstream digest: shumc/imagor@sha256:..."
         required: true
@@ -17,8 +23,9 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment: production
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
@@ -55,6 +62,7 @@ jobs:
           test "$ready" = 1 || { echo "::error::Imagor HTTP listener did not start"; exit 1; }
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: "Publish image and resolve immutable digest"
+        id: published
         run: |
           set -euo pipefail
           docker push "$IMAGE"
@@ -65,4 +73,86 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$IMMUTABLE\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Use this exact digest as the input to **TF · Media Imagor Plan**. No Cloud Run deployment was performed." >> "$GITHUB_STEP_SUMMARY"
+          echo "image=$IMMUTABLE" >> "$GITHUB_OUTPUT"
+          echo "Build completed. Terraform plan follows automatically when selected. No deployment performed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Prepare production configuration"
+        if: inputs.action == 'build-and-plan'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - uses: google-github-actions/auth@v3
+        if: inputs.action == 'build-and-plan'
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+        if: inputs.action == 'build-and-plan'
+      - uses: hashicorp/setup-terraform@v3
+        if: inputs.action == 'build-and-plan'
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+      - name: "Initialize remote state"
+        if: inputs.action == 'build-and-plan'
+        working-directory: infra/terraform/environments/production
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+          PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
+        run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "Prepare current media and API release"
+        if: inputs.action == 'build-and-plan'
+        run: |
+          set -euo pipefail
+          bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
+          python3 -m infra.terraform.media_release prepare --image-sha "" --bucket "$bucket" --skip-source-commit-validation
+          python3 -m infra.scripts.cloudflare_setup sync
+          python3 -m infra.terraform.api_release prepare --image-sha "" --targets api,jobs
+      - name: "Plan Imagor without applying"
+        if: inputs.action == 'build-and-plan'
+        working-directory: infra/terraform/environments/production
+        env:
+          TF_VAR_enable_media_imagor: "true"
+          TF_VAR_media_imagor_image: ${{ steps.published.outputs.image }}
+        run: |
+          set -euo pipefail
+          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+          terraform show -json tfplan > tfplan.json
+      - name: "Reject deletion, replacement, and unexpected mutations"
+        if: inputs.action == 'build-and-plan'
+        working-directory: infra/terraform/environments/production
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path("tfplan.json").read_text())
+          allowed = {
+              "google_cloud_run_v2_service.media_imagor[0]",
+              "google_secret_manager_secret_iam_member.media_imagor[0]",
+          }
+          changes = []
+          for resource in plan.get("resource_changes", []):
+              actions = resource["change"]["actions"]
+              if actions == ["no-op"]:
+                  continue
+              changes.append((resource["address"], actions))
+              if resource["address"] not in allowed or actions != ["create"]:
+                  raise SystemExit(f"::error::Unexpected change: {resource['address']}: {actions}")
+          if not changes:
+              raise SystemExit("::error::Imagor opt-in plan unexpectedly creates nothing")
+          summary = "## Imagor Terraform plan (no apply)\n\n" + "\n".join(
+              f"- `{address}`: {', '.join(actions)}" for address, actions in changes
+          ) + "\n\nOnly the new Imagor service and its scoped secret binding may be created.\n"
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(summary)
+          print(summary)
+          PY
+      - name: "Clean temporary configuration"
+        if: always() && inputs.action == 'build-and-plan'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup
