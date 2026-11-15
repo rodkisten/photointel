@@ -1,0 +1,28 @@
+name: "🧪 CI · Pretty logs"
+on:
+  push:
+    paths:
+      - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/test-pretty-logs.sh'
+      - '.github/workflows/ci-pretty-logs.yml'
+  pull_request:
+    paths:
+      - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/test-pretty-logs.sh'
+      - '.github/workflows/ci-pretty-logs.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: "🧪 Validate log diagnostics (offline)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "Shell syntax"
+        run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
+      - name: "Diagnostics and exit code tests"
+        run: bash scripts/ci/test-pretty-logs.sh
