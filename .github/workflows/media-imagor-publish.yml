@@ -106,6 +106,8 @@ jobs:
         run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
       - name: "Prepare current media and API release"
         if: inputs.action == 'build-and-plan'
+        env:
+          CONFIRM_PROJECT: photointel
         run: |
           set -euo pipefail
           bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
