@@ -27,7 +27,10 @@ ci_help() {
     resource="$(grep -Eo 'photointel-[a-z0-9-]+' "$logfile" | head -n 1 || true)"
     region="$(grep -Eo 'us-(central|east|west)[0-9]+' "$logfile" | head -n 1 || true)"
   fi
-  if [[ -f "$logfile" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; then
+  if [[ "$command" != "gcloud" && "$command" != "photointel-gcloud" && "$command" != "terraform" && "$command" != "docker" && "$command" != "wrangler" ]]; then
+    hint="Inspect the command output and the reported test or dependency errors."
+    title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}"
+  elif [[ -f "$logfile" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; then
     hint="Terraform state is locked. Identify the owning run; never force-unlock an active operation."
     title="Terraform state locking"; url="https://developer.hashicorp.com/terraform/language/state/locking"
   elif [[ -f "$logfile" ]] && grep -Eqi 'RESOURCE_EXHAUSTED|quota exceeded|quota.*exceeded|429 Too Many Requests' "$logfile"; then
