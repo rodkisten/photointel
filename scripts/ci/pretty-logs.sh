@@ -78,17 +78,19 @@ ci_run() {
     is_test=1
   fi
   if [[ "${GITHUB_ACTIONS:-}" == true && "$is_test" == 0 ]]; then
-    printf '::group::📄 Raw output · %s\\n' "$label"
+    printf '::group::📄 Raw output · %s\n' "$label"
   fi
   # tee stores the untouched raw output for diagnosis. The renderer only
   # changes the visible stream. PIPESTATUS[0] is always the CLI exit code.
   local -a pipeline_status
-  set +e
-  PHOTOINTEL_CI_RAW_GROUP=1 FORCE_COLOR=1 CLICOLOR_FORCE=1 PY_COLORS=1 "$@" 2>&1 | tee "$logfile" | python3 -u scripts/ci/highlight_output.py
-  pipeline_status=("${PIPESTATUS[@]}")
+  if PHOTOINTEL_CI_RAW_GROUP=1 FORCE_COLOR=1 CLICOLOR_FORCE=1 PY_COLORS=1 "$@" 2>&1 | tee "$logfile" | python3 -u scripts/ci/highlight_output.py; then
+    pipeline_status=("${PIPESTATUS[@]}")
+  else
+    pipeline_status=("${PIPESTATUS[@]}")
+  fi
   status=${pipeline_status[0]}
   if [[ "${GITHUB_ACTIONS:-}" == true && "$is_test" == 0 ]]; then
-    printf '::endgroup::\\n'
+    printf '::endgroup::\n'
   fi
   duration=$((SECONDS-start))
   if (( status == 0 )); then
