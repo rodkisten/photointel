@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Offline bootstrap contract tests. No actual Google Cloud access or cost.
 set -Eeuo pipefail
+trap 'status=$?; printf "Bootstrap offline assertion failed at line %s (exit %s)\\n" "$LINENO" "$status" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
