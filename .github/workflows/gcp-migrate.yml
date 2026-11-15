@@ -53,7 +53,8 @@ env:
 concurrency:
   # Push checks must not cancel or block manually authorized production operations.
   group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-migrate-push-check' || 'photointel-gcp-production' }}
-  cancel-in-progress: false
+  # Only cancel superseded offline checks. Never cancel manual Neon migrations.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   push-check:
