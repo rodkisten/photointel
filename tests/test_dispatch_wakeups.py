@@ -70,8 +70,8 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
         async def commit(self):
             events.append("commit")
 
-    async def enqueue(session, mode, key):
-        assert mode == "worker"
+    async def enqueue(session, dispatch_mode, key):
+        assert dispatch_mode == "worker"
         assert key.startswith("maintenance-worker-wakeup:" if mode == "maintenance" else "finite-worker-wakeup:")
         events.append("enqueue")
 
