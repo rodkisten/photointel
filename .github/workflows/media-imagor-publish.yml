@@ -122,7 +122,11 @@ jobs:
           TF_VAR_media_imagor_image: ${{ steps.published.outputs.image }}
         run: |
           set -euo pipefail
-          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+          # Scope this opt-in plan to Imagor only. Unrelated production drift
+          # must be reviewed separately, never bundled into an Imagor release.
+          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color \
+            -target='google_cloud_run_v2_service.media_imagor[0]' \
+            -target='google_secret_manager_secret_iam_member.media_imagor[0]'
           terraform show -json tfplan > tfplan.json
       - name: "Reject deletion, replacement, and unexpected mutations"
         if: inputs.action == 'build-and-plan'
