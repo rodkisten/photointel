@@ -1,11 +1,7 @@
 name: "🔐 Refresh Python security lock"
+# PR #240 is merged. Refreshes are now explicitly triggered, never tied to
+# its deleted maintenance branch or to an automatic push on main.
 on:
-  push:
-    branches:
-      - fix/python-security-dependencies-20261115
-    paths:
-      - pyproject.toml
-      - .github/workflows/python-security-lock.yml
   workflow_dispatch:
 
 permissions:
