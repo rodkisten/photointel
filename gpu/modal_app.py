@@ -14,12 +14,12 @@ image = (
     .pip_install(
         "torch==2.14.1",
         "torchvision==0.29.1",
-        "transformers==5.10.2",
+        "transformers==5.23.0",
         "huggingface-hub==1.33.0",
         "safetensors==0.8.0",
         "einops==0.8.2",
         "sentencepiece==0.2.2",
-        "pillow==12.3.0",
+        "pillow==13.0.0",
         "fastapi==0.143.2",
         "pydantic==2.14.1",
     )
