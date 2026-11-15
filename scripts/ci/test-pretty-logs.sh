@@ -85,3 +85,36 @@ for scenario in auth quota secret; do
   fi
   echo "PASS: standalone Python $scenario diagnosis"
 done
+
+# Full ci_run integration for all new GCP classifications.
+cat >"$tmp/bin/gcloud" <<'SH'
+#!/usr/bin/env bash
+case "$1" in
+  auth) echo 'UNAUTHENTICATED: no active account Bearer private-ci-token' >&2 ;;
+  quota) echo 'RESOURCE_EXHAUSTED: quota exceeded Bearer private-ci-token' >&2 ;;
+  secret) echo 'PERMISSION_DENIED: secretmanager.versions.access Secret Manager Bearer private-ci-token' >&2 ;;
+  *) exit 2 ;;
+esac
+exit 29
+SH
+chmod +x "$tmp/bin/gcloud"
+for scenario in auth quota secret; do
+  case "$scenario" in
+    auth) expected='GCP authentication required'; route='/iam-admin/iam?' ;;
+    quota) expected='GCP quota or rate limit exceeded'; route='/iam-admin/quotas?' ;;
+    secret) expected='Secret Manager'; route='/security/secret-manager?' ;;
+  esac
+  : > "$GITHUB_STEP_SUMMARY"
+  code=0
+  PATH="$tmp/bin:$PATH" ci_run "GCloud $scenario failure" gcloud "$scenario" >"$tmp/integration-output" 2>&1 || code=$?
+  [[ "$code" -eq 29 ]] || { echo "Wrong exit code for $scenario: $code" >&2; exit 1; }
+  assert_contains "$GITHUB_STEP_SUMMARY" "$expected"
+  assert_contains "$GITHUB_STEP_SUMMARY" "$route"
+  assert_contains "$GITHUB_STEP_SUMMARY" '**Exit code:** 29'
+  assert_contains "$tmp/integration-output" '::endgroup::'
+  if grep -Fq 'private-ci-token' "$GITHUB_STEP_SUMMARY"; then
+    echo "Secret leaked in $scenario summary" >&2
+    exit 1
+  fi
+  echo "PASS: ci_run $scenario integration, summary and redaction"
+done
