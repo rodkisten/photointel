@@ -38,7 +38,8 @@ jobs:
       - name: "🧪 Validate GPU deployment sources (offline)"
         run: |
           set -euo pipefail
-          uv run --no-project python -m compileall -q gpu/modal_app.py gpu/service.py gpu/pipelines
+          source scripts/ci/pretty-logs.sh
+          ci_run "GPU Python syntax" uv run --no-project python -m compileall -q gpu/modal_app.py gpu/service.py gpu/pipelines
           grep -q 'requires_proxy_auth=True' gpu/modal_app.py
           grep -q 'min_containers=0' gpu/modal_app.py
           grep -q 'max_containers=1' gpu/modal_app.py
@@ -57,5 +58,6 @@ jobs:
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
           set -euo pipefail
-          uv run --group gpu modal deploy gpu/modal_app.py
+          source scripts/ci/pretty-logs.sh
+          ci_run "Modal GPU deploy" uv run --group gpu modal deploy gpu/modal_app.py
           echo "Modal inference deployed. GPU smoke/inference was not executed." >> "$GITHUB_STEP_SUMMARY"
