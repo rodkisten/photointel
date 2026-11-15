@@ -34,7 +34,8 @@ def eligible(item, kind):
     size = item.get("size")
     if not valid_key(key, kind) or not isinstance(size, int) or not 0 < size <= MAX_BYTES[kind]:
         return False
-    mime = ((item.get("http_metadata") or {}).get("contentType") or "").lower()
+    metadata = item.get("http_metadata") or item.get("httpMetadata") or {}
+    mime = (metadata.get("contentType") or metadata.get("content_type") or "").lower()
     return not mime or mime.startswith("image/" if kind == "image" else "video/") or mime == "application/octet-stream"
 
 
@@ -43,6 +44,9 @@ def choose(kind, account, bucket, token, *, max_pages=20, opener=urlopen):
     cursor = None
     seen = 0
     selected = None
+    scanned = 0
+    rejected = {"key_or_extension": 0, "size_missing_or_invalid": 0, "too_large": 0, "mime_mismatch": 0}
+    samples = []
     for _ in range(max_pages):
         query = {"prefix": "originals/", "per_page": 1000}
         if cursor:
@@ -59,7 +63,18 @@ def choose(kind, account, bucket, token, *, max_pages=20, opener=urlopen):
         if not payload.get("success"):
             raise RuntimeError("Cloudflare R2 list failed; check account, bucket and R2 Objects Read permission")
         for item in payload.get("result") or []:
-            if eligible(item, kind):
+            scanned += 1
+            if len(samples) < 5:
+                samples.append({"key": item.get("key"), "size": item.get("size"), "http_metadata": item.get("http_metadata"), "httpMetadata": item.get("httpMetadata")})
+            if not valid_key(item.get("key"), kind):
+                rejected["key_or_extension"] += 1
+            elif not isinstance(item.get("size"), int) or item["size"] <= 0:
+                rejected["size_missing_or_invalid"] += 1
+            elif item["size"] > MAX_BYTES[kind]:
+                rejected["too_large"] += 1
+            elif not eligible(item, kind):
+                rejected["mime_mismatch"] += 1
+            else:
                 seen += 1
                 if rng.randrange(seen) == 0:
                     selected = item["key"]
@@ -71,7 +86,11 @@ def choose(kind, account, bucket, token, *, max_pages=20, opener=urlopen):
             raise RuntimeError("Cloudflare returned a truncated listing without a usable cursor")
         cursor = next_cursor
     if selected is None:
-        raise RuntimeError(f"No eligible {kind} under originals/ (checked up to {max_pages} pages)")
+        raise RuntimeError(
+            f"No eligible {kind} under originals/: scanned={scanned}, rejected={rejected}, "
+            f"sample_metadata={json.dumps(samples, ensure_ascii=True)}. "
+            "Choose image-only if no videos exist; do not use thumbnails as originals."
+        )
     return selected, seen
 
 
