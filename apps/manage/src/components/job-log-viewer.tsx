@@ -39,6 +39,9 @@ export function JobLogViewer({ text, truncated }: { text: string; truncated?: bo
   const links = useMemo(() => {
     const log = lines.map(line => line.text).join('\n').toLowerCase();
     const rules: Array<[keyof typeof diagnosticCatalog, RegExp]> = [
+      ['CLOUD_BUILD', /cloudbuild\.builds\.|cloud build.*(?:failed|denied)|gcloud builds submit/],
+      ['DOCKER_REGISTRY', /docker (?:push|pull|login).*?(?:denied|unauthorized|failed)|manifest unknown|no basic auth credentials/],
+      ['TERRAFORM_GCP', /terraform.*(?:provider|apply|plan).*?(?:failed|error)|error acquiring the state lock/],
       ['AUTHENTICATION', /unauthenticated|invalid_grant|no active account|login required/],
       ['QUOTA', /resource_exhausted|quota exceeded|429 too many requests|rate limit exceeded/],
       ['SECRET_MANAGER', /secretmanager|secret manager/],
