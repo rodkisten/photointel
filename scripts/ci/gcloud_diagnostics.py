@@ -28,7 +28,7 @@ def main() -> int:
         match = None  # Existing safe Terraform lock guidance remains in Bash.
     elif command == "terraform":
         match = catalog["TERRAFORM_GCP"]
-    elif "cloudbuild.builds." in raw_lower or "gcloud builds submit" in raw_lower:
+    elif failure.code == "PROVIDER_ERROR" and ("cloudbuild.builds." in raw_lower or "gcloud builds submit" in raw_lower):
         match = catalog["CLOUD_BUILD"]
     else:
         match = catalog.get(failure.category) or catalog.get(failure.code)
