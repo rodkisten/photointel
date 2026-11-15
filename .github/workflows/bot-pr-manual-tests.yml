@@ -66,7 +66,7 @@ jobs:
               ...links,
               '',
               '> O GitHub só permite execução manual em workflows com `workflow_dispatch` disponíveis na branch escolhida. Workflows de produção podem exigir confirmação e restringir a branch `main`.',
-            ].join('\\n');
+            ].join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner, repo, issue_number: pr.number, per_page: 100,
             });
