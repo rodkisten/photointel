@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
-          python3 -m infra.terraform.media_release prepare --image-sha "" --bucket "$bucket"
+          python3 -m infra.terraform.media_release prepare --image-sha "" --bucket "$bucket" --skip-source-commit-validation
           python3 -m infra.scripts.cloudflare_setup sync
           python3 -m infra.terraform.api_release prepare --image-sha "" --targets api,jobs
       - name: "Plan Imagor without applying"
