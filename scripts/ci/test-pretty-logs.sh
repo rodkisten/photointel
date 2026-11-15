@@ -44,3 +44,26 @@ ci_help gcloud "$tmp/gcloud.log" >"$tmp/gcloud-diagnosis"
 assert_contains "$tmp/gcloud-diagnosis" 'Resource not found (404)'
 assert_contains "$tmp/gcloud-diagnosis" 'Service accounts'
 echo 'PASS: shared Python gcloud classification and redaction'
+
+# End-to-end: ci_run invokes a fake gcloud executable, preserves exit status,
+# routes the captured stderr to the standalone Python module, and redacts hints.
+mkdir -p "$tmp/bin"
+cat >"$tmp/bin/gcloud" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'PERMISSION_DENIED: Required permission cloudbuild.builds.create Bearer private-ci-token' >&2
+exit 23
+SH
+chmod +x "$tmp/bin/gcloud"
+: > "$GITHUB_STEP_SUMMARY"
+code=0
+PATH="$tmp/bin:$PATH" ci_run "GCloud integration failure" gcloud builds submit >"$tmp/integration-output" 2>&1 || code=$?
+[[ "$code" -eq 23 ]] || { echo "Wrong gcloud integration exit: $code" >&2; exit 1; }
+assert_contains "$GITHUB_STEP_SUMMARY" 'cloudbuild.builds.create'
+assert_contains "$GITHUB_STEP_SUMMARY" '/iam-admin/iam?'
+assert_contains "$GITHUB_STEP_SUMMARY" '**Exit code:** 23'
+assert_contains "$tmp/integration-output" '::endgroup::'
+if grep -Fq 'private-ci-token' "$GITHUB_STEP_SUMMARY"; then
+  echo 'Secret leaked into workflow summary' >&2
+  exit 1
+fi
+echo 'PASS: gcloud end-to-end failure diagnosis, exit code and safe summary'
