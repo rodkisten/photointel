@@ -92,7 +92,7 @@ jobs:
         id: notify_observed_004
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv python install 3.12" uv python install 3.12
+          ci_run "uv python install 3.15" uv python install 3.15
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_005
@@ -245,7 +245,7 @@ jobs:
         id: notify_observed_020
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv python install 3.12" uv python install 3.12
+          ci_run "uv python install 3.15" uv python install 3.15
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_021
