@@ -29,3 +29,18 @@ ci_run "Success" bash -c 'echo complete' >"$tmp/success" 2>&1
 assert_contains "$tmp/success" "completed in"
 [[ ! -s "$GITHUB_STEP_SUMMARY" ]] || { echo 'Success generated a failure summary' >&2; exit 1; }
 echo 'PASS: success and no failure summary'
+
+# The gcloud path must use the existing Python classifier, not Bash regexes.
+printf '%s\n' 'PERMISSION_DENIED Required permission cloudbuild.builds.create Bearer secret-value' >"$tmp/gcloud.log"
+ci_help gcloud "$tmp/gcloud.log" >"$tmp/gcloud-diagnosis"
+assert_contains "$tmp/gcloud-diagnosis" 'cloudbuild.builds.create'
+assert_contains "$tmp/gcloud-diagnosis" 'GCP IAM'
+if grep -Fq 'secret-value' "$tmp/gcloud-diagnosis"; then
+  echo 'GCP diagnosis leaked provider output' >&2
+  exit 1
+fi
+printf '%s\n' 'NOT_FOUND: service account does not exist' >"$tmp/gcloud.log"
+ci_help gcloud "$tmp/gcloud.log" >"$tmp/gcloud-diagnosis"
+assert_contains "$tmp/gcloud-diagnosis" 'Resource not found (404)'
+assert_contains "$tmp/gcloud-diagnosis" 'Service accounts'
+echo 'PASS: shared Python gcloud classification and redaction'
