@@ -80,7 +80,7 @@ jobs:
                           ["git", "diff", "--name-only", "-z", f"{base}...{head}"],
                           capture_output=True, check=True,
                       )
-                      files = [p.decode() for p in result.stdout.split(b"\\0") if p]
+                      files = [p.decode() for p in result.stdout.split(b"\0") if p]
                   except subprocess.CalledProcessError:
                       files = ["*"]
               selected = set()
@@ -97,15 +97,15 @@ jobs:
                       selected.add("containers")
                   if path.startswith(("pyproject.toml", "uv.lock", "apps/", "gpu/", "bridges/", "packages/", "infra/docker/")):
                       selected.add("security")
-              print("Changed files:", *files, sep="\\n  ")
+              print("Changed files:", *files, sep="\n  ")
           print("Selected jobs:", ", ".join(sorted(selected)) or "(none)")
           with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
               for name in names:
-                  output.write(f"{name}={'true' if name in selected else 'false'}\\n")
+                  output.write(f"{name}={'true' if name in selected else 'false'}\n")
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write("### 🧭 Contexto da CI\\n\\n")
-              summary.write(f"Modo: \\x60{scope}\\x60\\n\\n")
-              summary.write("Jobs: " + (", ".join(sorted(selected)) or "nenhum") + "\\n")
+              summary.write("### 🧭 Contexto da CI\n\n")
+              summary.write(f"Modo: \x60{scope}\x60\n\n")
+              summary.write("Jobs: " + (", ".join(sorted(selected)) or "nenhum") + "\n")
           PY
   python:
     needs: changes
