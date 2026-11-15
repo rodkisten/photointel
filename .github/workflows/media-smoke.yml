@@ -10,11 +10,11 @@ on:
         default: all
         required: true
       image_input:
-        description: "Existing R2 image key (originals/...)"
+        description: "Optional image path; blank selects random R2 image"
         type: string
         required: false
       video_input:
-        description: "Existing R2 video key (originals/...)"
+        description: "Optional video path; blank selects random R2 video"
         type: string
         required: false
       confirm:
@@ -37,25 +37,16 @@ jobs:
     environment: production
     timeout-minutes: 45
     steps:
-      - name: "🛡️ Validate authorization and fixture paths"
+      - uses: actions/checkout@v4
+      - name: "🛡️ Require explicit paid-run authorization"
         env:
-          TARGET: ${{ inputs.target || 'all' }}
-          IMAGE_KEY: ${{ inputs.image_input }}
-          VIDEO_KEY: ${{ inputs.video_input }}
+          TARGET: ${{ inputs.target }}
           CONFIRM: ${{ inputs.confirm }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$CONFIRM" == true ]] || { echo "::error::Execution charges not authorized"; exit 1; }
           [[ "$TARGET" =~ ^(image|video|all)$ ]] || { echo "::error::Invalid target"; exit 1; }
-          validate_key() {
-            local key="$1"
-            [[ "$key" =~ ^originals/[A-Za-z0-9_./-]+$ && "$key" != *..* ]] || {
-              echo "::error::Selected fixture must be a safe key under originals/"; exit 1;
-            }
-          }
-          if [[ "$TARGET" == image || "$TARGET" == all ]]; then validate_key "$IMAGE_KEY"; fi
-          if [[ "$TARGET" == video || "$TARGET" == all ]]; then validate_key "$VIDEO_KEY"; fi
       - name: "🔐 Authenticate to GCP"
         uses: google-github-actions/auth@v3
         with:
@@ -63,6 +54,29 @@ jobs:
           service_account: photointel-deployer@photointel.iam.gserviceaccount.com
       - name: "🧰 Setup gcloud"
         uses: google-github-actions/setup-gcloud@v3
+      - name: "🎲 Pick compatible R2 fixtures"
+        id: fixture
+        env:
+          TARGET: ${{ inputs.target }}
+          IMAGE_KEY: ${{ inputs.image_input }}
+          VIDEO_KEY: ${{ inputs.video_input }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only fetch Cloudflare credentials when a fixture path was omitted.
+          if { [[ "$TARGET" == image || "$TARGET" == all ]] && [[ -z "$IMAGE_KEY" ]]; } ||
+             { [[ "$TARGET" == video || "$TARGET" == all ]] && [[ -z "$VIDEO_KEY" ]]; }; then
+            CLOUDFLARE_API_TOKEN="$(gcloud secrets versions access latest --secret=photointel-pages-token --project=photointel)"
+            CLOUDFLARE_ACCOUNT_ID="$(gcloud secrets versions access latest --secret=photointel-cloudflare-account --project=photointel)"
+            echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+            export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          fi
+          if [[ "$TARGET" == image || "$TARGET" == all ]]; then
+            python3 infra/scripts/media_smoke_fixture.py --kind image --key "$IMAGE_KEY"
+          fi
+          if [[ "$TARGET" == video || "$TARGET" == all ]]; then
+            python3 infra/scripts/media_smoke_fixture.py --kind video --key "$VIDEO_KEY"
+          fi
       - name: "🎞️ Execute and verify selected Jobs"
         env:
           TARGET: ${{ inputs.target }}
