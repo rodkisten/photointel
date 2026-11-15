@@ -43,7 +43,7 @@ packages = ["apps/api/src/photointel", "gpu", "bridges", "infra"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py315"
 extend-exclude = ["gpu/models/joytag_upstream.py", "packages/icloudpd-source"]
 
 [tool.ruff.lint]
@@ -59,7 +59,7 @@ testpaths = ["tests"]
 markers = ["integration: requires PostgreSQL and object storage", "gpu: requires real model checkpoints and GPU", "e2e: full application"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.15"
 ignore_missing_imports = true
 check_untyped_defs = true
 exclude = ["infra/migrations", "gpu/models/joytag_upstream.py"]
