@@ -46,7 +46,7 @@ class CloudCLIContractTests(unittest.TestCase):
             ])
         output = buffer.getvalue()
         self.assertIn("☁️ gcloud run services list", output)
-        self.assertIn("\\033[1;36mgcloud", output)
+        self.assertIn("\033[1;36mgcloud", output)
         self.assertNotIn("::group::", output)
         self.assertNotIn("::endgroup::", output)
         self.assertNotIn("very-private-token", output)
