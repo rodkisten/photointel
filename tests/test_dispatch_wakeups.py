@@ -72,10 +72,7 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
 
     async def enqueue(session, mode, key):
         assert mode == "worker"
-        assert key.startswith(
-            "maintenance-worker-wakeup:" if mode == "maintenance"
-            else "finite-worker-wakeup:"
-        )
+        assert key.startswith("maintenance-worker-wakeup:" if mode == "maintenance" else "finite-worker-wakeup:")
         events.append("enqueue")
 
     async def drain(**kwargs):
@@ -111,6 +108,8 @@ async def test_finite_job_does_not_wake_with_no_work_or_local_platform(
             return self
         async def __aexit__(self, *args):
             return False
+        async def get(self, model, key):
+            return None
         async def scalar(self, statement):
             return None
         async def commit(self):
@@ -154,6 +153,8 @@ async def test_worker_followup_remains_durable_when_job_deadline_is_reached(
             return self
         async def __aexit__(self, *args):
             return False
+        async def get(self, model, key):
+            return None
         async def scalar(self, statement):
             return uuid4()
         async def commit(self):
