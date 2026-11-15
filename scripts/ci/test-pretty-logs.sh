@@ -120,3 +120,24 @@ for scenario in auth quota secret; do
   fi
   echo "PASS: ci_run $scenario integration, summary and redaction"
 done
+
+# Docker and Terraform share catalog diagnostics while retaining collapsed raw output.
+for tool in docker terraform; do
+  cat >"$tmp/bin/$tool" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'ERROR: operation failed (test fixture)' >&2
+exit 31
+SH
+  chmod +x "$tmp/bin/$tool"
+  : > "$GITHUB_STEP_SUMMARY"
+  code=0
+  PATH="$tmp/bin:$PATH" ci_run "$tool integration" "$tool" version >"$tmp/integration-output" 2>&1 || code=$?
+  [[ "$code" -eq 31 ]] || { echo "Wrong $tool exit: $code" >&2; exit 1; }
+  case "$tool" in
+    docker) assert_contains "$GITHUB_STEP_SUMMARY" 'Artifact Registry' ;;
+    terraform) assert_contains "$GITHUB_STEP_SUMMARY" 'Terraform GCP' ;;
+  esac
+  assert_contains "$tmp/integration-output" '::group::📄 Raw output'
+  assert_contains "$tmp/integration-output" '::endgroup::'
+  echo "PASS: $tool structured diagnosis and raw group"
+done
