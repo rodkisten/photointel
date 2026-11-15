@@ -1,0 +1,52 @@
+{
+  "AUTHENTICATION": {
+    "title": "Autenticação GCP",
+    "hint": "Verifique a identidade WIF e as credenciais configuradas, sem login interativo na CI.",
+    "route": "iam-admin/iam"
+  },
+  "QUOTA": {
+    "title": "Quotas GCP",
+    "hint": "Inspecione a quota do serviço afetado antes de repetir a operação.",
+    "route": "iam-admin/quotas"
+  },
+  "SECRET_MANAGER": {
+    "title": "Secret Manager",
+    "hint": "Confira a versão habilitada do secret e secretmanager.versions.access para a identidade correta.",
+    "route": "security/secret-manager"
+  },
+  "ARTIFACT_REGISTRY": {
+    "title": "Artifact Registry",
+    "hint": "Confira o repositório, a imagem e as permissões de acesso.",
+    "route": "artifacts"
+  },
+  "SERVICE_ACCOUNT_NOT_FOUND": {
+    "title": "Service accounts",
+    "hint": "Verifique se a conta de serviço existe no projeto esperado.",
+    "route": "iam-admin/serviceaccounts"
+  },
+  "CLOUD_RUN_JOB_IAM": {
+    "title": "Cloud Run Jobs",
+    "hint": "Verifique run.jobs.create ou run.jobs.update no recurso de destino.",
+    "route": "run/jobs"
+  },
+  "IAM_DENY": {
+    "title": "IAM deny policies",
+    "hint": "Confira políticas deny herdadas, que prevalecem sobre permissões allow.",
+    "route": "iam-admin/iam"
+  },
+  "IAM_CONDITION": {
+    "title": "IAM conditions",
+    "hint": "Confira condições IAM e os atributos da federação WIF.",
+    "route": "iam-admin/iam"
+  },
+  "PERMISSION_DENIED": {
+    "title": "GCP IAM",
+    "hint": "Confirme a identidade ativa e a permissão exigida pelo recurso.",
+    "route": "iam-admin/iam"
+  },
+  "NOT_FOUND": {
+    "title": "Recursos GCP",
+    "hint": "Verifique projeto, região e existência do recurso.",
+    "route": "home/dashboard"
+  }
+}
