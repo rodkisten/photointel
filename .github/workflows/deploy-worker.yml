@@ -67,8 +67,9 @@ on:
 permissions: {contents: read}
 
 concurrency:
-  group: photointel-frontends-${{ github.ref }}
-  cancel-in-progress: false
+  # PR previews are disposable; production deploys must finish safely.
+  group: ${{ github.event_name == 'pull_request' && format('photointel-frontends-pr-{0}', github.event.pull_request.number) || 'photointel-frontends-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   detect-changes:
