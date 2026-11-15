@@ -67,3 +67,21 @@ if grep -Fq 'private-ci-token' "$GITHUB_STEP_SUMMARY"; then
   exit 1
 fi
 echo 'PASS: gcloud end-to-end failure diagnosis, exit code and safe summary'
+
+# Standalone Python diagnostics: authentication, quota and Secret Manager.
+for scenario in auth quota secret; do
+  case "$scenario" in
+    auth) snippet='UNAUTHENTICATED: no active account Bearer private-ci-token'; expected='GCP authentication required'; route='/iam-admin/iam?' ;;
+    quota) snippet='RESOURCE_EXHAUSTED: quota exceeded Bearer private-ci-token'; expected='GCP quota or rate limit exceeded'; route='/iam-admin/quotas?' ;;
+    secret) snippet='PERMISSION_DENIED: secretmanager.versions.access Secret Manager Bearer private-ci-token'; expected='Secret Manager'; route='/security/secret-manager?' ;;
+  esac
+  printf '%s\n' "$snippet" >"$tmp/gcloud.log"
+  python3 -m scripts.ci.gcloud_diagnostics "$tmp/gcloud.log" photointel >"$tmp/gcloud-diagnosis"
+  assert_contains "$tmp/gcloud-diagnosis" "$expected"
+  assert_contains "$tmp/gcloud-diagnosis" "$route"
+  if grep -Fq 'private-ci-token' "$tmp/gcloud-diagnosis"; then
+    echo "Secret leaked from $scenario diagnosis" >&2
+    exit 1
+  fi
+  echo "PASS: standalone Python $scenario diagnosis"
+done
