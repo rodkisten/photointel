@@ -100,7 +100,7 @@ async def test_paused_global_queue_does_not_claim_jobs(monkeypatch):
 def test_static_control_routes_precede_dynamic_job_lookup():
     from photointel.main import create_app
 
-    routes = [route.path for route in create_app().routes]
+    routes = [route.path for route in create_app().routes if hasattr(route, "path")]
     assert routes.index("/v1/jobs/control") < routes.index("/v1/jobs/{job_id}")
     assert "/v1/jobs/{job_id}/pause" in routes
     assert "/v1/jobs/{job_id}/resume" in routes
