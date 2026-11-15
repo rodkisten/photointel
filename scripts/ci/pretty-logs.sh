@@ -12,54 +12,13 @@ ci_help() {
   local project="${CI_GCP_PROJECT:-photointel}"
   # Project IDs are validated before interpolating them into console links.
   [[ "$project" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || project=photointel
-  # GCP diagnostics have one source of truth: infra.gcp.cloud_cli.classify.
-  # Pass the private log by path, never as a shell argument or printed content.
-  # Only fixed messages and allowlisted permission identifiers leave Python.
+  # Python diagnostics live in a standalone module; no embedded Python in Bash.
   if [[ "$command" == "gcloud" || "$command" == "photointel-gcloud" ]] && [[ -f "$logfile" ]] && command -v python3 >/dev/null 2>&1; then
     local -a cloud_diagnosis
-    if mapfile -t cloud_diagnosis < <(python3 - "$logfile" "$project" <<'PY'
-import sys
-from pathlib import Path
-from infra.gcp.cloud_cli import classify
-
-logfile, project = sys.argv[1:]
-failure = classify(Path(logfile).read_bytes())
-links = {
-    "SECRET_MANAGER": ("Secret Manager", "security/secret-manager"),
-    "ARTIFACT_REGISTRY": ("Artifact Registry", "artifacts"),
-    "SERVICE_ACCOUNT_NOT_FOUND": ("Service accounts", "iam-admin/serviceaccounts"),
-    "CLOUD_RUN_JOB_IAM": ("Cloud Run jobs", "run/jobs"),
-}
-if failure.category in links:
-    title, route = links[failure.category]
-elif failure.code == "PERMISSION_DENIED":
-    title, route = "GCP IAM", "iam-admin/iam"
-elif failure.code == "NOT_FOUND":
-    title, route = "GCP resources", "home/dashboard"
-elif failure.code == "UNAUTHENTICATED":
-    title, route = "GCP authentication", "iam-admin/iam"
-else:
-    title, route = "GCP logs", "logs/query"
-messages = {
-    "PERMISSION_DENIED": "Access denied (403).",
-    "NOT_FOUND": "Resource not found (404).",
-    "UNAUTHENTICATED": "GCP authentication required.",
-    "PROVIDER_ERROR": "GCP command failed.",
-}
-hint = messages[failure.code]
-if failure.hint:
-    hint += " " + failure.hint
-if failure.permissions:
-    hint += " Permissions: " + ", ".join(failure.permissions)
-print(hint)
-print(title)
-print("https://console.cloud.google.com/" + route + "?project=" + project)
-PY
-    ); then
-      if (( ${#cloud_diagnosis[@]} == 3 )); then
-        printf '%s\n' "${cloud_diagnosis[@]}"
-        return 0
-      fi
+    mapfile -t cloud_diagnosis < <(python3 -m scripts.ci.gcloud_diagnostics "$logfile" "$project")
+    if (( ${#cloud_diagnosis[@]} == 3 )); then
+      printf '%s\n' "${cloud_diagnosis[@]}"
+      return 0
     fi
   fi
   local resource region
