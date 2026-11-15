@@ -112,7 +112,7 @@ jobs:
       - name: "Build and publish"
         if: steps.existing.outputs.exists != 'true'
         id: publish
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ steps.image.outputs.context }}
           file: ${{ steps.image.outputs.file }}

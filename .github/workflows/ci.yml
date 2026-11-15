@@ -198,7 +198,7 @@ jobs:
       - name: "🧰 Código"
         continue-on-error: true
         id: notify_observed_023
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/minio.Dockerfile
@@ -325,7 +325,7 @@ jobs:
       - name: "🏗 Build"
         continue-on-error: true
         id: notify_observed_039
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/api.Dockerfile
@@ -334,7 +334,7 @@ jobs:
       - name: "🏗 Build"
         continue-on-error: true
         id: notify_observed_040
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/web.Dockerfile
