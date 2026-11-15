@@ -70,7 +70,7 @@ jobs:
         with: {version: '0.12.23'}
       - name: "🧰 Config"
         id: notify_observed_003
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with: {node-version: '22'}
       - name: "🧰 Setup"
         id: notify_observed_004
