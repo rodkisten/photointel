@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/gcloud_diagnostics.py'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
       - 'infra/gcp/cloud_cli.py'
@@ -10,6 +11,7 @@ on:
   pull_request:
     paths:
       - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/gcloud_diagnostics.py'
       - 'scripts/ci/test-pretty-logs.sh'
       - '.github/workflows/ci-pretty-logs.yml'
       - 'infra/gcp/cloud_cli.py'
@@ -30,6 +32,8 @@ jobs:
         run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
         run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Python diagnostic syntax"
+        run: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
       - name: "Python cloud_cli contract tests"
         run: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
       - name: "Install Google Cloud CLI"
