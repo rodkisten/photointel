@@ -392,8 +392,8 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
       .bind(delivery, input.sha, '[]', stamp).run();
     await database.prepare(
       "INSERT INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
-      .bind(id, delivery, 'manual', 'Manual · ' + target.script, 'cloudflare', target.id, input.sha, stamp, stamp).run();
-    const run: Run = { id, delivery_id: delivery, rule_id: 'manual',
+      .bind(id, delivery, null, 'Manual · ' + target.script, 'cloudflare', target.id, input.sha, stamp, stamp).run();
+    const run: Run = { id, delivery_id: delivery, rule_id: '',
       rule_name: 'Manual · ' + target.script, provider: 'cloudflare', target: target.id,
       sha: input.sha, state: 'queued', provider_id: null, status_url: null,
       detail: null, created_at: stamp, updated_at: stamp };
