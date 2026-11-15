@@ -10,13 +10,13 @@ import sys
 
 RESET = "\x1b[0m"
 RULES = [
-    (re.compile(r"(?i)\\b(?:traceback|exception|error|failed|failure|fatal|assertionerror|typeerror|referenceerror|syntaxerror|modulenotfounderror|npm err!|ERR_[A-Z_]+)\\b"), "1;31"),
-    (re.compile(r"(?i)\\b(?:warning|warn|deprecated|skipped|pending)\\b"), "1;33"),
-    (re.compile(r"(?i)\\b(?:passed|success|succeeded|ok|done)\\b"), "1;32"),
-    (re.compile(r"(?i)\\b(?:at [\\w.$<>]+ \\([^()]+:\\d+:\\d+\\)|File \\"[^\\"]+\\", line \\d+|[\\w./-]+\\.(?:py|tsx?|jsx?|mjs|cjs):\\d+(?::\\d+)?)"), "36"),
-    (re.compile(r"(?i)\\b(?:pytest|ruff|mypy|node|npm|vitest|jest|playwright|python)\\b"), "35"),
+    (re.compile(r"(?i)\b(?:traceback|exception|error|failed|failure|fatal|assertionerror|typeerror|referenceerror|syntaxerror|modulenotfounderror|npm err!|ERR_[A-Z_]+)\b"), "1;31"),
+    (re.compile(r"(?i)\b(?:warning|warn|deprecated|skipped|pending)\b"), "1;33"),
+    (re.compile(r"(?i)\b(?:passed|success|succeeded|ok|done)\b"), "1;32"),
+    (re.compile(r"(?i)\b(?:at [\w.$<>]+ \([^()]+:\d+:\d+\)|File \"[^\"]+\", line \d+|[\w./-]+\.(?:py|tsx?|jsx?|mjs|cjs):\d+(?::\d+)?)"), "36"),
+    (re.compile(r"(?i)\b(?:pytest|ruff|mypy|node|npm|vitest|jest|playwright|python)\b"), "35"),
 ]
-ANSI = re.compile(r"\\x1b\\[[0-9;]*m")
+ANSI = re.compile(r"\\x1b\[[0-9;]*m")
 # Avoid rewriting terminal control sequences already emitted by tools.
 def highlight(line: str) -> str:
     if "\x1b[" in line:
