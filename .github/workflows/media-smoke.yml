@@ -38,6 +38,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: "🧪 Test R2 fixture selector (offline)"
+        run: python3 -m unittest infra.scripts.test_media_smoke_fixture -v
       - name: "🛡️ Require explicit paid-run authorization"
         env:
           TARGET: ${{ inputs.target }}
@@ -86,7 +88,8 @@ jobs:
         run: |
           set -euo pipefail
           run_job() {
-            local kind="$1" input="$2" output="derived/smoke/${GITHUB_RUN_ID}/${kind}.${3}"
+            local kind="$1" input="$2"
+            local output="derived/smoke/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/${kind}.${3}"
             echo "::group::🧪 ${kind} execution"
             gcloud run jobs execute "photointel-media-${kind}" \
               --project photointel --region us-central1 \
