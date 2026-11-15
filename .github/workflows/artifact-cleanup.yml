@@ -1,9 +1,6 @@
-name: "🧹 Artifact Cleanup"
+name: "🧹 GitHub · Artifact cleanup"
+run-name: "🧹 GitHub · Artifact cleanup · ${{ github.ref_name }}"
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/artifact-cleanup.yml'
   workflow_dispatch:
 permissions:
   contents: read
