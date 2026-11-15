@@ -286,6 +286,8 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
     return json({ accepted: true, run_id: id }, 202);
   }
   if (event !== 'push') return json({ accepted: false, reason: 'not_push' }, 202);
+  // Push webhooks are observation-only. Deploys require an explicit authenticated request.
+  return json({ accepted: false, reason: 'manual_deploy_required' }, 202);
   const delivery = request.headers.get('X-GitHub-Delivery') || '';
   if (!UUID.test(delivery)) throw new ApiError(422, 'DELIVERY_ID', 'Identificador de entrega inválido');
   let payload: Record<string, unknown>;
