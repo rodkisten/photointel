@@ -165,7 +165,7 @@ jobs:
         continue-on-error: true
         id: notify_observed_011
         uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_012
@@ -308,7 +308,7 @@ jobs:
         continue-on-error: true
         id: notify_observed_030
         uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_031

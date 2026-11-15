@@ -57,7 +57,7 @@ jobs:
         if: env.SETUP_MODE == 'apply'
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: "📦 Frontend dependencies"
