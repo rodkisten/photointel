@@ -78,3 +78,12 @@ Inspecionados os YAMLs de `release.yml`, `gcp-deploy.yml`, `github-image-build.y
 - `media-deploy.yml` constrói e valida os serviços media e despacha Terraform; é distinto do build isolado de imagem.
 
 Padronizados nomes e run-name dos três primeiros e `tf-production.yml`, sem alterar a lógica de deploy ou permissões. **Não remover os workflows de deploy até confirmar que `release_console.py` cobre cada ação e os contratos com o Manage.**
+
+## Quarta etapa: gatilhos e correlação do console
+
+- `release.yml`: removido push automático de verificação e job de check redundante; console agora é entrada manual de produção.
+- `gcp-deploy.yml`: removido push automático de verificação offline, preservadas ações manuais e seus controles de produção.
+- `deploy-worker.yml`: nomes de execução padronizados para Cloudflare (PR, push e dispatch).
+- `infra/terraform/release_console.py`: atualizada a identificação de execuções disparadas do Cloudflare para acompanhar o novo run-name. **A correlação por título ainda é frágil e deve evoluir para request_id quando a API permitir.**
+
+As validações offline continuam em workflows próprios (`ci.yml`, `gcp-validation.yml`, `tf-validate.yml`), mas a cobertura exata dos checks removidos precisa ser confirmada antes do merge. Nenhum workflow de deploy foi excluído.
