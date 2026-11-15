@@ -61,7 +61,6 @@ ci_run() {
   if (( $# < 2 )); then ci_fail 'ci_run requires a safe label and a command'; return 2; fi
   local label="$1" status start duration; shift
   # Label must be a human-readable non-sensitive description, not shell arguments.
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::group::%s\n' "$label"
   ci_note "$label"
   start=$SECONDS
   # Preserve CLI output, exit status, ANSI colors, and stderr without logging credentials.
@@ -102,7 +101,6 @@ ci_run() {
       } >> "$GITHUB_STEP_SUMMARY"
     fi
   fi
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::endgroup::\n'
   rm -f "$logfile"
   return "$status"
 }
