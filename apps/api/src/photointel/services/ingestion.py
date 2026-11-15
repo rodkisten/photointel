@@ -776,7 +776,7 @@ class ICloudAdapter:
             status_code: int | None = int(status)
         except (TypeError, ValueError):
             status_code = None
-        code = self._REFUSAL_CODES.get(status_code) if status_code else None
+        code: str | ErrorCode | None = self._REFUSAL_CODES.get(status_code) if status_code else None
         if code is None:
             if detail is None:
                 return None
@@ -831,7 +831,10 @@ class ICloudAdapter:
         except PyiCloudAPIResponseException as exc:
             # PyiCloudSession raises on any non-OK, non-JSON response before the
             # response is returned, so classify Apple's refusal here.
-            raise self._download_refused(exc.code, str(exc)) from exc
+            refusal = self._download_refused(exc.code, str(exc))
+            if refusal is not None:
+                raise refusal from exc
+            raise
         try:
             error = self._download_refused(response.status_code)
             if error is not None:
