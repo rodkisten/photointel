@@ -69,7 +69,9 @@ jobs:
           SOURCE: ${{ inputs.source }}
           REQUESTED_SHA: ${{ inputs.sha }}
           CONFIRM: ${{ inputs.confirm }}
-        run: python3 -m infra.terraform.release_console
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "Release console" python3 -m infra.terraform.release_console
       - if: always()
         uses: ./.github/actions/gcp-config
         with: {mode: cleanup}
