@@ -74,7 +74,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_009
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_008.outcome == 'failure') }}
         with:
           name: unit-results
@@ -271,7 +271,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_034
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_029.outcome == 'failure') }}
         with:
           name: integration-results
@@ -281,7 +281,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_035
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_033.outcome == 'failure') }}
         with:
           name: browser-results
