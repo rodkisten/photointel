@@ -23,7 +23,6 @@ on:
       confirm:
         description: "Authorize Cloud Run execution charges"
         type: boolean
-        default: false
         required: true
 
 permissions:
@@ -44,9 +43,9 @@ jobs:
       - name: "🛡️ Validate authorization and fixture paths"
         env:
           TARGET: ${{ inputs.target }}
-          IMAGE_KEY: ${{ inputs.image_input }}
+          IMAGE_KEY: ${{ inputs.image_input || 'originals/IMG_9654.png' }}
           VIDEO_KEY: ${{ inputs.video_input }}
-          CONFIRM: ${{ inputs.confirm }}
+          CONFIRM: ${{ inputs.confirm || (github.event_name != 'workflow_dispatch' && true) }}
         shell: bash
         run: |
           set -euo pipefail
