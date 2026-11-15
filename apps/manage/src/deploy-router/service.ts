@@ -378,6 +378,29 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID && env.CIRCLECI_CONTEXT_ID),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
   }
+  if (request.method === 'POST' && path === '/api/deploy-router/manual') {
+    const input = await bodyJson<{ trigger?: string; sha?: string; confirmation?: string }>(request, 4000);
+    if (!input.trigger || !UUID.test(input.trigger) || !input.sha || !SHA.test(input.sha))
+      throw new ApiError(422, 'MANUAL_BUILD_INPUT', 'Informe um trigger válido e o SHA completo do commit');
+    if (input.confirmation !== 'DEPLOY ' + input.sha.slice(0, 8))
+      throw new ApiError(422, 'MANUAL_BUILD_CONFIRM', 'Confirme explicitamente o commit que será publicado');
+    const allowed = await cloudflareTriggers(env);
+    const target = allowed.find((item) => item.id === input.trigger);
+    if (!target) throw new ApiError(403, 'BUILD_TRIGGER_REVOKED', 'Trigger fora do repositório autorizado');
+    const stamp = now(), id = crypto.randomUUID(), delivery = crypto.randomUUID();
+    await database.prepare('INSERT INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
+      .bind(delivery, input.sha, '[]', stamp).run();
+    await database.prepare(
+      "INSERT INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
+      .bind(id, delivery, null, 'Manual · ' + target.script, 'cloudflare', target.id, input.sha, stamp, stamp).run();
+    const run: Run = { id, delivery_id: delivery, rule_id: '',
+      rule_name: 'Manual · ' + target.script, provider: 'cloudflare', target: target.id,
+      sha: input.sha, state: 'queued', provider_id: null, status_url: null,
+      detail: null, created_at: stamp, updated_at: stamp };
+    await dispatch(env, database, run);
+    const latest = await database.prepare(SQL_RUNS + ' WHERE id=?').bind(id).first<Run>();
+    return json({ item: latest }, 202);
+  }
   if (request.method === 'GET' && path === '/api/deploy-router/providers') {
     return json({ cloudflare: await cloudflareTriggers(env) });
   }
