@@ -49,10 +49,10 @@ ci_run() {
   local logfile
   logfile="$(mktemp)"
   chmod 600 "$logfile"
-  # tee preserves the original CLI output while allowing diagnostics to inspect it.
-  "$@" > >(tee "$logfile") 2> >(tee -a "$logfile" >&2) && status=0 || status=$?
-  # Process substitutions may still be flushing; wait for their writers to finish.
-  # A short-lived private file is removed before returning.
+  # Capture combined output with tee. PIPESTATUS[0] is the original CLI exit code.
+  # No background process substitution: the log is complete before diagnosis.
+  "$@" 2>&1 | tee "$logfile"
+  status=${PIPESTATUS[0]}
 
   duration=$((SECONDS-start))
   if (( status == 0 )); then
