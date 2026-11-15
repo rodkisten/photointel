@@ -33,7 +33,7 @@ async def test_manage_pause_reuses_transactional_queue_controller(monkeypatch):
 def test_manage_queue_requires_signed_manage_identity():
     from photointel.auth import require_manage_identity
     assert any(
-        dependency.call is require_manage_identity
+        dependency.dependency is require_manage_identity
         for dependency in manage_queue.router.dependencies
     )
     assert {route.path for route in manage_queue.router.routes} == {
