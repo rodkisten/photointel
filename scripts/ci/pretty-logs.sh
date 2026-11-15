@@ -70,8 +70,7 @@ ci_run() {
   chmod 600 "$logfile"
   # Keep raw output available in a collapsed GitHub Actions group, separate from
   # the structured diagnosis. Do not duplicate unredacted output in Step Summary.
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf "::group::📄 Raw output · %s\
-" "$label"
+  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::group::📄 Raw output · %s\n' "$label"
   # Capture combined output with tee. PIPESTATUS[0] is the original CLI exit code.
   # No background process substitution: the log is complete before diagnosis.
   if "$@" 2>&1 | tee "$logfile"; then
@@ -80,8 +79,7 @@ ci_run() {
     status=${PIPESTATUS[0]}
   fi
 
-  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf "::endgroup::
-"
+  [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::endgroup::\n'
   duration=$((SECONDS-start))
   if (( status == 0 )); then
     ci_ok "$label completed in ${duration}s"
