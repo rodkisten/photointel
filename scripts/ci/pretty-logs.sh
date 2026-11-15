@@ -13,9 +13,9 @@ ci_help() {
   # Project IDs are validated before interpolating them into console links.
   [[ "$project" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || project=photointel
   # Python diagnostics live in a standalone module; no embedded Python in Bash.
-  if [[ "$command" == "gcloud" || "$command" == "photointel-gcloud" ]] && [[ -f "$logfile" ]] && command -v python3 >/dev/null 2>&1; then
+  if [[ "$command" == "gcloud" || "$command" == "photointel-gcloud" || "$command" == "docker" || "$command" == "terraform" ]] && [[ -f "$logfile" ]] && command -v python3 >/dev/null 2>&1 && ! { [[ "$command" == "terraform" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; }; then
     local -a cloud_diagnosis
-    mapfile -t cloud_diagnosis < <(python3 -m scripts.ci.gcloud_diagnostics "$logfile" "$project")
+    mapfile -t cloud_diagnosis < <(python3 -m scripts.ci.gcloud_diagnostics "$logfile" "$project" "$command")
     if (( ${#cloud_diagnosis[@]} == 3 )); then
       printf '%s\n' "${cloud_diagnosis[@]}"
       return 0
