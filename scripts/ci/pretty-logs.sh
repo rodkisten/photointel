@@ -4,14 +4,20 @@
 _ci_color() { if [[ -t 1 || "${GITHUB_ACTIONS:-}" == true ]] && [[ "${NO_COLOR:-}" != 1 ]]; then printf '\033[%sm' "$1"; fi; }
 ci_note() { printf '%sℹ %s%s\n' "$(_ci_color '36')" "$*" "$(_ci_color 0)"; }
 ci_ok() { printf '%s✔ %s%s\n' "$(_ci_color '32')" "$*" "$(_ci_color 0)"; }
-ci_warn() { printf '%s⚠ %s%s\n' "$(_ci_color '33')" "$*" "$(_ci_color 0)"; [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::warning::%s\n' "$*"; }
-ci_fail() { printf '%s✖ %s%s\n' "$(_ci_color '31')" "$*" "$(_ci_color 0)" >&2; [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::error::%s\n' "$*" >&2; }
+ci_warn() { printf '%s⚠ %s%s\n' "$(_ci_color '33')" "$*" "$(_ci_color 0)"; if [[ "${GITHUB_ACTIONS:-}" == true ]]; then printf '::warning::%s\n' "$*"; fi; return 0; }
+ci_fail() { printf '%s✖ %s%s\n' "$(_ci_color '31')" "$*" "$(_ci_color 0)" >&2; if [[ "${GITHUB_ACTIONS:-}" == true ]]; then printf '::error::%s\n' "$*" >&2; fi; return 0; }
 # Links are shown only on failures. URLs are public consoles, never credential-bearing.
 ci_help() {
   local command="$1" logfile="${2:-}" hint title url
   local project="${CI_GCP_PROJECT:-photointel}"
   # Project IDs are validated before interpolating them into console links.
   [[ "$project" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || project=photointel
+  local resource region
+  # Derive links only from validated resource names and region strings.
+  if [[ -f "$logfile" ]]; then
+    resource="$(grep -Eo 'photointel-[a-z0-9-]+' "$logfile" | head -n 1 || true)"
+    region="$(grep -Eo 'us-(central|east|west)[0-9]+' "$logfile" | head -n 1 || true)"
+  fi
   if [[ -f "$logfile" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; then
     hint="Terraform state is locked. Identify the owning run; never force-unlock an active operation."
     title="Terraform state locking"; url="https://developer.hashicorp.com/terraform/language/state/locking"
@@ -36,6 +42,10 @@ ci_help() {
       *) hint="Inspect the CLI output and environment configuration."; title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}" ;;
     esac
   fi
+  if [[ -n "$resource" && "$command" == "gcloud" && "$title" == "GCP resources" ]]; then
+    title="Cloud Run resources"
+    url="https://console.cloud.google.com/run?project=$project"
+  fi
   printf '%s\n%s\n%s\n' "$hint" "$title" "$url"
 }
 ci_run() {
@@ -51,8 +61,11 @@ ci_run() {
   chmod 600 "$logfile"
   # Capture combined output with tee. PIPESTATUS[0] is the original CLI exit code.
   # No background process substitution: the log is complete before diagnosis.
-  "$@" 2>&1 | tee "$logfile"
-  status=${PIPESTATUS[0]}
+  if "$@" 2>&1 | tee "$logfile"; then
+    status=${PIPESTATUS[0]}
+  else
+    status=${PIPESTATUS[0]}
+  fi
 
   duration=$((SECONDS-start))
   if (( status == 0 )); then
