@@ -348,7 +348,8 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 if await was_sent(key, event.id):
                     continue
                 message, links = format_message(
-                    job, event, batches.get(job.batch_id), counts.get(job.batch_id) if job.batch_id else None, count,
+                    job, event, batches.get(job.batch_id) if job.batch_id else None,
+                    counts.get(job.batch_id) if job.batch_id else None, count,
                     latest_failure=latest_failures.get(job.batch_id)
                     if job.batch_id and event.status not in ERROR_STATES else None,
                 )
