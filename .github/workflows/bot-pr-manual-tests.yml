@@ -35,6 +35,9 @@ jobs:
               if (path.startsWith('infra/terraform/')) wanted.add('tf-validate.yml');
               if (path.startsWith('apps/web/') || path.startsWith('apps/manage/') ||
                   path.startsWith('infra/cloudflare/')) wanted.add('deploy-worker.yml');
+              if (path.startsWith('apps/api/') || path.startsWith('tests/')) wanted.add('backend-smoke.yml');
+              if (path.startsWith('infra/gcp/')) wanted.add('gcp-validation.yml');
+              if (path.startsWith('packages/env/')) wanted.add('tf-env-package.yml');
               if (path.startsWith('apps/api/') || path.startsWith('infra/migrations/'))
                 wanted.add('gcp-migrate.yml');
               if (path.startsWith('infra/gcp/')) wanted.add('gcp-bootstrap.yml');
