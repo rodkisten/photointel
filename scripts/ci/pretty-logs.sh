@@ -8,27 +8,34 @@ ci_warn() { printf '%s⚠ %s%s\n' "$(_ci_color '33')" "$*" "$(_ci_color 0)"; [[ 
 ci_fail() { printf '%s✖ %s%s\n' "$(_ci_color '31')" "$*" "$(_ci_color 0)" >&2; [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::error::%s\n' "$*" >&2; }
 # Links are shown only on failures. URLs are public consoles, never credential-bearing.
 ci_help() {
-  local command="$1" hint url title
-  case "$command" in
-    gcloud)
-      hint="Verify the GCP project, workload identity, IAM role, and resource status."
-      title="GCP IAM"; url="https://console.cloud.google.com/iam-admin/iam?project=photointel" ;;
-    terraform)
-      hint="Inspect the plan and state lock before retrying. Never force-unlock an active run."
-      title="Terraform state locking"; url="https://developer.hashicorp.com/terraform/language/state/locking" ;;
-    docker)
-      hint="Verify Artifact Registry authentication, repository permissions, and image digest."
-      title="Artifact Registry"; url="https://console.cloud.google.com/artifacts?project=photointel" ;;
-    wrangler)
-      hint="Verify Cloudflare account, token scopes, and deployment configuration."
-      title="Cloudflare dashboard"; url="https://dash.cloudflare.com/" ;;
-    python3|python|bash)
-      hint="Inspect the traceback or command output and verify configuration and credentials."
-      title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}" ;;
-    *)
-      hint="Inspect the original command output and the environment configuration."
-      title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}" ;;
-  esac
+  local command="$1" logfile="${2:-}" hint title url
+  local project="${CI_GCP_PROJECT:-photointel}"
+  # Project IDs are validated before interpolating them into console links.
+  [[ "$project" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]] || project=photointel
+  if [[ -f "$logfile" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; then
+    hint="Terraform state is locked. Identify the owning run; never force-unlock an active operation."
+    title="Terraform state locking"; url="https://developer.hashicorp.com/terraform/language/state/locking"
+  elif [[ -f "$logfile" ]] && grep -Eqi 'RESOURCE_EXHAUSTED|quota exceeded|quota.*exceeded|429 Too Many Requests' "$logfile"; then
+    hint="A quota or rate limit was reached. Inspect the affected service quota and retry only after capacity is available."
+    title="GCP quotas"; url="https://console.cloud.google.com/iam-admin/quotas?project=$project"
+  elif [[ -f "$logfile" ]] && grep -Eqi 'secretmanager|Secret Manager|secrets/[^ ]+' "$logfile" && grep -Eqi '404|NOT_FOUND|not found|permission.denied|403|denied' "$logfile"; then
+    hint="Secret Manager resource missing or access denied. Verify the secret, enabled version and service account IAM."
+    title="Secret Manager"; url="https://console.cloud.google.com/security/secret-manager?project=$project"
+  elif [[ -f "$logfile" ]] && grep -Eqi '403|PERMISSION_DENIED|permission denied|does not have permission|not authorized' "$logfile"; then
+    hint="Access denied (403). Verify the workflow identity and the exact IAM permission in the CLI output."
+    title="GCP IAM"; url="https://console.cloud.google.com/iam-admin/iam?project=$project"
+  elif [[ -f "$logfile" ]] && grep -Eqi '404|NOT_FOUND|not found' "$logfile"; then
+    hint="Resource not found (404). Check the resource name, project, region and whether provisioning completed."
+    title="GCP resources"; url="https://console.cloud.google.com/home/dashboard?project=$project"
+  else
+    case "$command" in
+      gcloud) hint="Verify project, workload identity, IAM roles and resource status."; title="GCP IAM"; url="https://console.cloud.google.com/iam-admin/iam?project=$project" ;;
+      terraform) hint="Inspect the plan, remote state, provider permissions and drift."; title="Terraform documentation"; url="https://developer.hashicorp.com/terraform/cli" ;;
+      docker) hint="Verify registry authentication, repository permissions and immutable digest."; title="Artifact Registry"; url="https://console.cloud.google.com/artifacts?project=$project" ;;
+      wrangler) hint="Verify Cloudflare account, token scopes and environment."; title="Cloudflare"; url="https://dash.cloudflare.com/" ;;
+      *) hint="Inspect the CLI output and environment configuration."; title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}" ;;
+    esac
+  fi
   printf '%s\n%s\n%s\n' "$hint" "$title" "$url"
 }
 ci_run() {
@@ -39,13 +46,24 @@ ci_run() {
   ci_note "$label"
   start=$SECONDS
   # Preserve CLI output, exit status, ANSI colors, and stderr without logging credentials.
-  "$@" && status=0 || status=$?
+  local logfile
+  logfile="$(mktemp)"
+  chmod 600 "$logfile"
+  # tee preserves the original CLI output while allowing diagnostics to inspect it.
+  "$@" > >(tee "$logfile") 2> >(tee -a "$logfile" >&2) && status=0 || status=$?
+  # Process substitutions may still be flushing; wait for their writers to finish.
+  # A short-lived private file is removed before returning.
+
   duration=$((SECONDS-start))
   if (( status == 0 )); then
     ci_ok "$label completed in ${duration}s"
   else
     local hint title url
-    { IFS= read -r hint; IFS= read -r title; IFS= read -r url; } < <(ci_help "$1")
+    local -a diagnosis
+    mapfile -t diagnosis < <(ci_help "$1" "$logfile")
+    hint="${diagnosis[0]}"
+    title="${diagnosis[1]}"
+    url="${diagnosis[2]}"
     ci_fail "$label failed (exit ${status}, ${duration}s). $hint"
     ci_note "Next action: $title ($url)"
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
@@ -59,5 +77,6 @@ ci_run() {
     fi
   fi
   [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::endgroup::\n'
+  rm -f "$logfile"
   return "$status"
 }
