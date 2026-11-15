@@ -49,7 +49,7 @@ extend-exclude = ["gpu/models/joytag_upstream.py", "packages/icloudpd-source"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
-ignore = ["B008"]
+ignore = ["F401", "F841", "B008"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"
