@@ -290,6 +290,9 @@ def print_running_command(invocation: Sequence[str]) -> None:
         drop_whitespace=True,
     ) or [""]
     if actions:
+        # ci_run already owns the collapsible raw-output group. Avoid nesting
+        # another GitHub group while preserving the redacted colored preview.
+        inside_raw_group = os.environ.get("PHOTOINTEL_CI_RAW_GROUP") == "1"
         # GitHub recognizes workflow commands only at the beginning of a line.
         # Group names are static: no untrusted command argument enters markup.
         # The collapsed group title must identify the actual command on mobile.
@@ -297,9 +300,12 @@ def print_running_command(invocation: Sequence[str]) -> None:
         preview = shell_command
         if len(preview) > 108:
             preview = preview[:105].rstrip() + "..."
-        lines = ["::group::☁️ " + preview]
+        lines = ([] if inside_raw_group else ["::group::☁️ " + preview])
+        if inside_raw_group:
+            lines.append("☁️ " + preview)
         lines.extend(_highlight_line(raw, enabled=colors) for raw in wrapped)
-        lines.append("::endgroup::")
+        if not inside_raw_group:
+            lines.append("::endgroup::")
     else:
         title = "> running command:"
         if colors:
