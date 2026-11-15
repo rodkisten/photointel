@@ -59,6 +59,9 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
         async def __aexit__(self, *args):
             return False
 
+        async def get(self, model, key):
+            return None
+
         async def scalar(self, statement):
             assert "job_type" in str(statement)
             events.append("check")
