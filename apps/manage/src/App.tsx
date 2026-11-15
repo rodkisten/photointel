@@ -18,6 +18,7 @@ import {
   Shield,
   Workflow,
   GitPullRequestArrow,
+  FolderGit2,
   Menu,
   GripVertical,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'projects', to: '/projects', label: 'Projetos', icon: FolderGit2 },
   { id: 'jobs', to: '/jobs', label: 'Jobs', icon: PlayCircle },
   { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
@@ -46,7 +48,7 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'projects', 'infrastructure', 'triggers'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
@@ -56,6 +58,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   operations: 'Cron, pausas e execuções dos serviços',
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
+  projects: 'Repositórios, Workers e execuções conectadas',
   infrastructure: 'Cloud Build, infraestrutura e terminal SSH',
   triggers: 'Webhooks GitHub, regras por caminho e status de deploy',
   costs: 'Faturas, consumo, cota e custos por execução',
@@ -71,6 +74,7 @@ function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
   if (pathname.startsWith('/deploys')) return 'deploy';
+  if (pathname.startsWith('/projects')) return 'projects';
   if (pathname.startsWith('/triggers')) return 'triggers';
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
