@@ -16,6 +16,8 @@ def main() -> int:
         return 2
     failure = classify(Path(logfile).read_bytes())
     links = {
+        "QUOTA": ("GCP quotas", "iam-admin/quotas"),
+        "AUTHENTICATION": ("GCP authentication", "iam-admin/iam"),
         "SECRET_MANAGER": ("Secret Manager", "security/secret-manager"),
         "ARTIFACT_REGISTRY": ("Artifact Registry", "artifacts"),
         "SERVICE_ACCOUNT_NOT_FOUND": ("Service accounts", "iam-admin/serviceaccounts"),
@@ -35,6 +37,7 @@ def main() -> int:
         "PERMISSION_DENIED": "Access denied (403).",
         "NOT_FOUND": "Resource not found (404).",
         "UNAUTHENTICATED": "GCP authentication required.",
+        "RESOURCE_EXHAUSTED": "GCP quota or rate limit exceeded.",
         "PROVIDER_ERROR": "GCP command failed.",
     }
     hint = messages[failure.code]
