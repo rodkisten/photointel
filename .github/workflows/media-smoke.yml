@@ -16,6 +16,7 @@ on:
         description: "Existing R2 image key (originals/...)"
         type: string
         required: true
+        default: 'originals/IMG_9654.png'
       video_input:
         description: "Existing R2 video key (originals/...)"
         type: string
