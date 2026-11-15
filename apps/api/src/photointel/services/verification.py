@@ -12,7 +12,7 @@ from photointel.services.release import get_release_manifest
 # Historical A-E records remain in the database for audit purposes.
 # Ordinary, bounded imports and automatic synchronization do not require gates.
 LARGE_IMPORT_THRESHOLD = 1000
-GATES = {
+GATES: dict[str, tuple[str, list[str], str]] = {
     "F": (
         "Importações acima de 1.000 fotos",
         [],
