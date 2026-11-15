@@ -63,7 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - run: bash -n infra/gcp/release.sh && bash infra/gcp/tests/test_migration_runtime.sh
+      - run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "Neon migration shell syntax" bash -n infra/gcp/release.sh
+          ci_run "Neon migration runtime tests" bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
     name: "🗃️ Neon · ${{ inputs.migration_mode }}"
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -212,7 +215,9 @@ jobs:
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
-        run: bash infra/gcp/release.sh migrate
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "Neon migration · $MIGRATION_MODE" bash infra/gcp/release.sh migrate
 
       - name: "📱 ✓ Neon"
         if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}
