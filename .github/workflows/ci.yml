@@ -85,7 +85,7 @@ jobs:
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_003
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23', enable-cache: true}
       - name: "▶ ️  Execute command"
         continue-on-error: true
@@ -238,7 +238,7 @@ jobs:
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_019
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
         continue-on-error: true
@@ -437,7 +437,7 @@ jobs:
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_042
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
         continue-on-error: true
