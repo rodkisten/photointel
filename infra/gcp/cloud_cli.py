@@ -80,9 +80,9 @@ def classify(stderr: str | bytes) -> CloudFailure:
     unauthorized = any(marker in lower for marker in (
         "unauthenticated", "invalid_grant", "no active account", "login required",
     ))
-    code = "PERMISSION_DENIED" if denied else "NOT_FOUND" if missing else (
-        "UNAUTHENTICATED" if unauthorized else "PROVIDER_ERROR"
-    )
+    quota = any(marker in lower for marker in ("resource_exhausted", "quota exceeded", "quota has been exceeded", "429 too many requests", "rate limit exceeded"))
+    code = ("RESOURCE_EXHAUSTED" if quota else "UNAUTHENTICATED" if unauthorized else
+            "PERMISSION_DENIED" if denied else "NOT_FOUND" if missing else "PROVIDER_ERROR")
     # Return only allowlisted permission identifiers and fixed guidance.
     # Provider messages may contain tokens, resource names and private URLs.
     permissions = tuple(sorted({p for p in PERMISSION.findall(value)
@@ -107,7 +107,11 @@ def classify(stderr: str | bytes) -> CloudFailure:
                 "IAM Conditions, deny policies and organization policies."
             )
     category = ""
-    if "deny policy" in lower or "deny policies" in lower or "denypolicy" in lower:
+    if quota:
+        category = "QUOTA"
+    elif unauthorized:
+        category = "AUTHENTICATION"
+    elif "deny policy" in lower or "deny policies" in lower or "denypolicy" in lower:
         category = "IAM_DENY"
     elif "condition" in lower and (denied or "not satisfied" in lower):
         category = "IAM_CONDITION"
@@ -130,6 +134,8 @@ def classify(stderr: str | bytes) -> CloudFailure:
         r"(?<![\w.-])photointel-[a-z0-9-]+@photointel\.iam\.gserviceaccount\.com\b", value
     ))))[:8]
     guidance = {
+        "QUOTA": "Inspect the affected Google Cloud quota and rate limits before retrying; do not blindly retry.",
+        "AUTHENTICATION": "Verify the configured Workload Identity Federation credentials and active identity; do not trigger interactive login in CI.",
         "IAM_DENY": "Inspect inherited IAM deny policies; an allow binding cannot override a deny.",
         "IAM_CONDITION": "Inspect IAM binding conditions and WIF attribute conditions for this identity and resource.",
         "SERVICE_ACCOUNT_NOT_FOUND": "Verify the exact runtime service account exists; bootstrap owns initial identity provisioning.",
