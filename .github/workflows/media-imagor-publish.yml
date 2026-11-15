@@ -115,7 +115,8 @@ jobs:
         id: published
         run: |
           set -euo pipefail
-          docker push "$IMAGE"
+          source scripts/ci/pretty-logs.sh
+          ci_run "Publish Imagor container to Artifact Registry" docker push "$IMAGE"
           DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')"
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Could not verify published digest"; exit 1; }
           IMMUTABLE="${IMAGE%:*}@$DIGEST"
@@ -153,7 +154,9 @@ jobs:
         env:
           BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
           PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
-        run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+        run: |
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform init: production remote state" terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
       - name: "Prepare current media and API release"
         if: inputs.action != 'build'
         env:
@@ -174,7 +177,8 @@ jobs:
           set -euo pipefail
           # Scope this opt-in plan to Imagor only. Unrelated production drift
           # must be reviewed separately, never bundled into an Imagor release.
-          terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color \
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform plan: Imagor only" terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color \
             -target='google_cloud_run_v2_service.media_imagor[0]' \
             -target='google_secret_manager_secret_iam_member.media_imagor[0]'
           terraform show -json tfplan > tfplan.json
@@ -213,7 +217,8 @@ jobs:
         run: |
           set -euo pipefail
           test -s tfplan
-          terraform apply -input=false -lock-timeout=5m -no-color tfplan
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform apply: validated Imagor-only plan" terraform apply -input=false -lock-timeout=5m -no-color tfplan
           echo "## Imagor deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Applied the previously validated Imagor-only Terraform plan." >> "$GITHUB_STEP_SUMMARY"
       - name: "Clean temporary configuration"
