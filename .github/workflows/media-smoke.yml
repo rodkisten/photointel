@@ -82,8 +82,8 @@ jobs:
       - name: "🎞️ Execute and verify selected Jobs"
         env:
           TARGET: ${{ inputs.target }}
-          IMAGE_KEY: ${{ inputs.image_input }}
-          VIDEO_KEY: ${{ inputs.video_input }}
+          IMAGE_KEY: ${{ steps.fixture.outputs.image_key }}
+          VIDEO_KEY: ${{ steps.fixture.outputs.video_key }}
         shell: bash
         run: |
           set -euo pipefail
