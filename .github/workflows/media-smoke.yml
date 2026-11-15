@@ -1,0 +1,90 @@
+name: "🎬 Media · smoke tests"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Job to test"
+        type: choice
+        options: [image, video, all]
+        default: all
+        required: true
+      image_input:
+        description: "Existing R2 image key (originals/...)"
+        type: string
+        required: true
+      video_input:
+        description: "Existing R2 video key (originals/...)"
+        type: string
+        required: true
+      confirm:
+        description: "Authorize Cloud Run execution charges"
+        type: boolean
+        default: false
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: media-smoke-production
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: "🧪 Media smoke · ${{ inputs.target }}"
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - name: "🛡️ Validate authorization and fixture paths"
+        env:
+          TARGET: ${{ inputs.target }}
+          IMAGE_KEY: ${{ inputs.image_input }}
+          VIDEO_KEY: ${{ inputs.video_input }}
+          CONFIRM: ${{ inputs.confirm }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRM" == true ]] || { echo "::error::Execution charges not authorized"; exit 1; }
+          for key in "$IMAGE_KEY" "$VIDEO_KEY"; do
+            [[ "$key" =~ ^originals/[A-Za-z0-9_./-]+$ && "$key" != *..* ]] || {
+              echo "::error::Fixture keys must be safe paths under originals/"; exit 1;
+            }
+          done
+          [[ "$TARGET" =~ ^(image|video|all)$ ]]
+      - name: "🔐 Authenticate to GCP"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence
+          service_account: photointel-deployer@photointel.iam.gserviceaccount.com
+      - name: "🧰 Setup gcloud"
+        uses: google-github-actions/setup-gcloud@v3
+      - name: "🎞️ Execute and verify selected Jobs"
+        env:
+          TARGET: ${{ inputs.target }}
+          IMAGE_KEY: ${{ inputs.image_input }}
+          VIDEO_KEY: ${{ inputs.video_input }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_job() {
+            local kind="$1" input="$2" output="derived/smoke/${GITHUB_RUN_ID}/${kind}.${3}"
+            echo "::group::🧪 ${kind} execution"
+            gcloud run jobs execute "photointel-media-${kind}" \
+              --project photointel --region us-central1 \
+              --update-env-vars "MEDIA_INPUT_KEY=${input},MEDIA_OUTPUT_KEY=${output}" \
+              --wait --quiet
+            echo "::endgroup::"
+            echo "### ${kind}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Input: \`${input}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Expected output: \`${output}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Cloud Run execution completed; R2 output existence requires separate verification." >> "$GITHUB_STEP_SUMMARY"
+          }
+          if [[ "$TARGET" == image || "$TARGET" == all ]]; then
+            run_job image "$IMAGE_KEY" webp
+          fi
+          if [[ "$TARGET" == video || "$TARGET" == all ]]; then
+            run_job video "$VIDEO_KEY" mp4
+          fi
