@@ -72,7 +72,7 @@ ci_run() {
   [[ "${GITHUB_ACTIONS:-}" == true ]] && printf '::group::📄 Raw output · %s\n' "$label"
   # Capture combined output with tee. PIPESTATUS[0] is the original CLI exit code.
   # No background process substitution: the log is complete before diagnosis.
-  if "$@" 2>&1 | tee "$logfile"; then
+  if PHOTOINTEL_CI_RAW_GROUP=1 "$@" 2>&1 | tee "$logfile"; then
     status=${PIPESTATUS[0]}
   else
     status=${PIPESTATUS[0]}
