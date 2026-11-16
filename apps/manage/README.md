@@ -569,3 +569,10 @@ presentes em `MANAGE_PROJECT_REPOSITORIES`. A seleção é refletida em
 das páginas de operações existentes, que continuam ligadas ao projeto principal.
 As rotas `GET /api/projects/workflows` e `GET /api/projects/runs` exigem
 `repository` na allowlist. Links de execuções abrem diretamente no GitHub.
+
+### Detalhes das execuções por projeto
+
+`GET /api/projects/runs/:runId/jobs?repository=owner/repo` retorna jobs e passos
+com status, conclusão e links para os logs completos no GitHub. O endpoint é
+somente leitura, valida o repositório na allowlist e nunca retorna tokens.
+O Manage não baixa nem exibe o conteúdo bruto dos arquivos ZIP de logs nesta etapa.

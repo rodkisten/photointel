@@ -156,6 +156,19 @@ export default function App() {
     next.searchParams.set('project', repository);
     window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
   };
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  useEffect(() => { setSelectedRunId(null); }, [activeProject?.repository]);
+  const projectRunJobs = useQuery({
+    queryKey: ['project-run-jobs', activeProject?.repository, selectedRunId],
+    queryFn: () => api<{ repository: string; run_id: number; items: {
+      id: number; name: string; status: string; conclusion: string | null;
+      html_url: string; started_at: string | null; completed_at: string | null;
+      steps: { name: string; status: string; conclusion: string | null; number: number }[];
+    }[] }>('/projects/runs/' + selectedRunId + '/jobs?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(selectedRunId && activeProject && !activeProject.enabled),
+    retry: false,
+    staleTime: 15_000,
+  });
   const projectRuns = useQuery({
     queryKey: ['project-runs', activeProject?.repository],
     queryFn: () => api<{ repository: string; items: { id: number; name: string; status: string; conclusion: string | null; html_url: string; created_at: string }[] }>(
@@ -268,11 +281,33 @@ export default function App() {
                 <p className="text-xs font-semibold text-carbon-300">Execuções recentes</p>
                 {projectRuns.data.items.length === 0 && <p className="text-xs text-carbon-500">Nenhuma execução recente.</p>}
                 {projectRuns.data.items.map(run => (
-                  <a key={run.id} href={run.html_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs hover:text-carbon-100">
+                  <button key={run.id} type="button" onClick={() => setSelectedRunId(id => id === run.id ? null : run.id)}
+                    aria-expanded={selectedRunId === run.id}
+                    className="flex w-full items-center justify-between gap-2 border-t border-carbon-800 py-2 text-left text-xs hover:text-carbon-100">
                     <span className="min-w-0 truncate text-carbon-200">{run.name}</span>
                     <span className="shrink-0 text-carbon-500">{run.conclusion || run.status}</span>
-                  </a>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedRunId && (
+              <div className="mt-3 rounded-lg border border-carbon-800 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-carbon-200">Jobs da execução #{selectedRunId}</p>
+                  <a className="text-xs text-carbon-400 underline" target="_blank" rel="noopener noreferrer"
+                    href={`https://github.com/${activeProject?.repository}/actions/runs/${selectedRunId}`}>Logs completos no GitHub</a>
+                </div>
+                {projectRunJobs.isPending && <p className="mt-2 text-xs text-carbon-500">Carregando jobs…</p>}
+                {projectRunJobs.isError && <p className="mt-2 text-xs text-amber-400">Não foi possível carregar os jobs.</p>}
+                {projectRunJobs.data?.items.map(job => (
+                  <div key={job.id} className="mt-2 border-t border-carbon-800 pt-2 text-xs">
+                    <a href={job.html_url} target="_blank" rel="noopener noreferrer"
+                      className="font-medium text-carbon-200 underline">{job.name}</a>
+                    <span className="ml-2 text-carbon-500">{job.conclusion || job.status}</span>
+                    <ul className="mt-1 space-y-1 pl-3 text-carbon-400">
+                      {job.steps.map(step => <li key={step.number}>{step.number}. {step.name} · {step.conclusion || step.status}</li>)}
+                    </ul>
+                  </div>
                 ))}
               </div>
             )}

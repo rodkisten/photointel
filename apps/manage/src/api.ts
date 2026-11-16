@@ -145,6 +145,30 @@ export async function api(
     })) });
   }
 
+  const scopedJobs = path.match(/^\/api\/projects\/runs\/([1-9]\d*)\/jobs$/);
+  if (method === 'GET' && scopedJobs) {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const runId = scopedJobs[1];
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/runs/' + runId + '/jobs?per_page=100',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        jobs?: Array<{ id: number; name: string; status: string; conclusion: string | null;
+          html_url: string; started_at: string | null; completed_at: string | null;
+          steps?: Array<{ name: string; status: string; conclusion: string | null; number: number }> }>;
+      };
+    return json({ repository, run_id: Number(runId), items: (result.jobs || []).map(job => ({
+      id: job.id, name: job.name, status: job.status, conclusion: job.conclusion,
+      html_url: job.html_url, started_at: job.started_at, completed_at: job.completed_at,
+      steps: (job.steps || []).map(step => ({ name: step.name, status: step.status,
+        conclusion: step.conclusion, number: step.number })),
+    })) });
+  }
+
   if (method === 'GET' && path === '/api/github/app-identity') {
     if (!env.MANAGE_GITHUB_APP_ID || !env.MANAGE_GITHUB_APP_PRIVATE_KEY)
       return json({ configured: false, verified: false, slug: null });
