@@ -20,6 +20,9 @@ import {
   GitPullRequestArrow,
   Menu,
   GripVertical,
+  ChevronDown,
+  Globe2,
+  FolderGit2,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -85,6 +88,7 @@ function sectionForPath(pathname: string): Tab {
 
 export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
@@ -134,7 +138,7 @@ export default function App() {
   };
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  useEffect(() => { setMobileMenu(false); }, [pathname]);
+  useEffect(() => { setMobileMenu(false); setProjectMenuOpen(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -179,6 +183,29 @@ export default function App() {
         </div>
       </header>
 
+      <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
+        <div className="relative inline-block">
+          <button type="button" aria-expanded={projectMenuOpen} aria-haspopup="menu"
+            onClick={() => setProjectMenuOpen(open => !open)}
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-carbon-800 bg-carbon-900 px-3 py-2 text-sm text-carbon-200">
+            <FolderGit2 size={16} /><span className="text-carbon-500">Projeto</span>
+            <span className="font-medium">PhotoIntel</span><ChevronDown size={15} />
+          </button>
+          {projectMenuOpen && (
+            <div role="menu" aria-label="Selecionar escopo" className="absolute left-0 top-full z-40 mt-2 w-72 rounded-xl border border-carbon-700 bg-carbon-950 p-2 shadow-2xl">
+              <p className="px-3 py-2 text-xs font-semibold uppercase text-carbon-500">Escopo de administração</p>
+              <div role="menuitem" aria-current="true" className="flex items-center gap-3 rounded-lg bg-carbon-800 px-3 py-3 text-sm">
+                <FolderGit2 size={17} /><span className="flex-1">PhotoIntel<span className="block text-xs text-carbon-400">Projeto conectado</span></span>
+                <span className="text-emerald-400">✓</span>
+              </div>
+              <div className="mt-1 flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-carbon-500" aria-disabled="true">
+                <Globe2 size={17} /><span>Global<span className="block text-xs">Em preparação: ENV compartilhada</span></span>
+              </div>
+              <p className="border-t border-carbon-800 px-3 pt-3 pb-1 text-xs text-carbon-500">Outros repositórios serão habilitados após configurar permissões. Nenhum secret é compartilhado automaticamente.</p>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
         <aside className="hidden w-48 shrink-0 md:block">
           <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
