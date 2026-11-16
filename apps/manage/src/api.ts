@@ -81,20 +81,20 @@ export async function api(
     if (response) return response;
   }
 
-  // Read-only allowlisted discovery. Mutation routes remain bound to GITHUB_REPO.
+  // Repository selection is read-only until every mutation route is explicitly scoped.
+  // The allowlist alone does not grant GitHub App installation access.
   if (method === 'GET' && path === '/api/projects') {
     const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
     const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
       .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
     const repos = [...new Set([primary, ...configured])].slice(0, 30);
-    const catalogToken = await githubToken(env).catch(() => undefined);
-    // An installation token only grants access to its installed repositories.
-    // A PAT can discover repositories but must never imply App authorization.
     const appConfigured = Boolean(env.MANAGE_GITHUB_APP_ID &&
       env.MANAGE_GITHUB_APP_INSTALLATION_ID && env.MANAGE_GITHUB_APP_PRIVATE_KEY);
+    const catalogToken = await githubToken(env).catch(() => undefined);
     const items = await Promise.all(repos.map(async repo => {
       const enabled = repo === primary;
-      if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
+      if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo,
+        enabled, status: 'unavailable' };
       try {
         const info = await provider('https://api.github.com/repos/' + repo, catalogToken, {
           headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' },
@@ -102,10 +102,28 @@ export async function api(
         return { id: repo, name: info.name || repo.split('/')[1], repository: repo, enabled,
           status: info.archived || info.disabled ? 'archived' : appConfigured ? 'app_accessible' : 'discovered' };
       } catch {
-        return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: 'unavailable' };
+        return { id: repo, name: repo.split('/')[1], repository: repo, enabled: false, status: 'unavailable' };
       }
     }));
     return json({ items, global: { enabled: false, reason: 'Aguardando autorização e isolamento de secrets' } });
+  }
+
+  // Scoped, read-only GitHub Actions inventory. Does not change the active project.
+  if (method === 'GET' && path === '/api/projects/workflows') {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/workflows?per_page=100',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        total_count?: number;
+        workflows?: Array<{ id: number; name: string; path: string; state: string }>;
+      };
+    return json({ repository, total: result.total_count ?? 0,
+      items: (result.workflows || []).map(w => ({ id: w.id, name: w.name, path: w.path, state: w.state })) });
   }
 
   if (method === 'GET' && path === '/api/github/app-identity') {
