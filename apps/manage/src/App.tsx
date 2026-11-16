@@ -5,7 +5,7 @@ import {
   Activity,
   Bell,
   Apple,
-  CloudCog,
+  Blocks,
   ServerCog,
   Timer,
   PlayCircle,
@@ -155,11 +155,11 @@ export default function App() {
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
-              <CloudCog size={20} />
+              <Blocks size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">PhotoIntel</p>
-              <p className="text-[11px] font-medium tracking-wider text-carbon-500">CONTROL CENTER</p>
+              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">Rod Manage</p>
+              <p className="text-[11px] font-medium tracking-wider text-carbon-500">PROJECT CONTROL CENTER</p>
             </div>
           </Link>
 
@@ -219,7 +219,7 @@ export default function App() {
           )}
 
           <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
-            PhotoIntel Manage · Operações auditáveis · Cloudflare Access
+            Rod Manage · Operações auditáveis · Cloudflare Access
           </footer>
         </main>
       </div>
