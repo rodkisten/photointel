@@ -144,6 +144,15 @@ export default function App() {
   });
   const activeProject = projectCatalog.data?.items.find(item => item.id === selectedProject)
     || projectCatalog.data?.items[0];
+  const projectWorkflows = useQuery({
+    queryKey: ['project-workflows', activeProject?.repository],
+    queryFn: () => api<{ repository: string; total: number; items: { id: number; name: string; path: string; state: string }[] }>(
+      '/projects/workflows?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
   useEffect(() => { setMobileMenu(false); setProjectMenuOpen(false); }, [pathname]);
@@ -205,9 +214,9 @@ export default function App() {
               {projectCatalog.data?.items.map(project => (
                 <button key={project.id} type="button" role="menuitem"
                   onClick={() => { setSelectedProject(project.id); setProjectMenuOpen(false); }}
-                  disabled={!project.enabled}
+                  disabled={project.status === 'unavailable'}
                   className="flex w-full items-center gap-3 rounded-lg bg-carbon-800 px-3 py-3 text-left text-sm disabled:opacity-50">
-                  <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository} · {project.status === 'discovered' ? 'Descoberto' : project.status === 'unavailable' ? 'Indisponível' : 'Conectado'}</span></span>
+                  <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository} · {project.status === 'discovered' ? 'Descoberto (leitura)' : project.status === 'app_accessible' ? 'App autorizado (leitura)' : project.status === 'unavailable' ? 'Indisponível' : 'Conectado'}</span></span>
                   {activeProject?.id === project.id && <span className="text-emerald-400">✓</span>}
                 </button>
               ))}
@@ -220,6 +229,33 @@ export default function App() {
           )}
         </div>
       </div>
+      {isReadOnlyProject && (
+        <section className="mx-auto max-w-6xl px-4 pt-4 sm:px-6" aria-label="Workflows do projeto selecionado">
+          <div className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-carbon-100">{activeProject?.repository} · Somente leitura</p>
+                <p className="mt-1 text-xs text-carbon-400">As páginas operacionais abaixo continuam vinculadas ao projeto principal. Nenhuma ação será redirecionada.</p>
+              </div>
+              <a className="text-xs text-carbon-300 underline" href={`https://github.com/${activeProject?.repository}/actions`}
+                target="_blank" rel="noopener noreferrer">Abrir GitHub Actions</a>
+            </div>
+            {projectWorkflows.isPending && <p className="mt-3 text-xs text-carbon-400">Carregando workflows…</p>}
+            {projectWorkflows.isError && <p className="mt-3 text-xs text-amber-400">Não foi possível consultar workflows com as credenciais atuais.</p>}
+            {projectWorkflows.data && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-carbon-500">{projectWorkflows.data.total} workflows encontrados</p>
+                {projectWorkflows.data.items.map(workflow => (
+                  <div key={workflow.id} className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs">
+                    <span className="min-w-0 truncate text-carbon-200">{workflow.name}</span>
+                    <span className="shrink-0 text-carbon-500">{workflow.state}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
         <aside className="hidden w-48 shrink-0 md:block">
           <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
