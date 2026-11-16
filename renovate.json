@@ -3,10 +3,29 @@
   "extends": [
     "config:recommended"
   ],
+  "prConcurrentLimit": 1,
+  "branchConcurrentLimit": 1,
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "ignoreTests": false,
   "packageRules": [
     {
-      "matchUpdateTypes": ["minor", "patch"],
-      "matchCurrentVersion": "!/^0/",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "enabled": false
+    },
+    {
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "all major dependency updates",
+      "groupSlug": "all-major-dependencies",
       "automerge": true
     }
   ]
