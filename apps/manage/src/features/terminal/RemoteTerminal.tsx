@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal, useTerminal } from '@wterm/react';
+import { GhosttyCore } from '@wterm/ghostty';
 import '@wterm/react/css';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
@@ -8,6 +9,16 @@ type Frame = { type: 'stdout'; data: string } | { type: 'error'; message: string
 /** Single-use, short-lived session. No automatic input replay or reconnect. */
 export function RemoteTerminal({ targetId }: { targetId: string }) {
   const { ref, write, focus } = useTerminal();
+  const [core, setCore] = useState<GhosttyCore | null>(null);
+  useEffect(() => {
+    let disposed = false;
+    let instance: GhosttyCore | undefined;
+    void GhosttyCore.load().then(loaded => {
+      instance = loaded;
+      if (disposed) loaded.dispose(); else setCore(loaded);
+    }).catch(() => setNotice('Não foi possível carregar o núcleo Ghostty'));
+    return () => { disposed = true; instance?.dispose(); };
+  }, []);
   const socket = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [notice, setNotice] = useState('');
@@ -57,12 +68,12 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         <button type="button" onClick={() => focus()} className="rounded-lg border border-carbon-700 px-3 py-2">Teclado</button>
       </div>
       {notice && <p role="alert" className="px-3 py-2 text-xs text-amber-400">{notice}</p>}
-      <Terminal ref={ref} className="min-h-[320px] flex-1 overflow-hidden p-2" autoResize
+      {core ? <Terminal core={core} ref={ref} className="min-h-[320px] flex-1 overflow-hidden p-2" autoResize
         onData={data => send({ type: 'stdin', data })}
         onResize={(cols, rows) => send({ type: 'resize', cols, rows })}
-        onError={() => setNotice('Falha ao inicializar WTerm')} />
+        onError={() => setNotice('Falha ao inicializar WTerm')} /> : <div className="p-4 text-sm text-carbon-400">Carregando Ghostty…</div>}
       <div className="flex flex-wrap gap-1 border-t border-carbon-800 p-2 sm:hidden">
-        {([['Esc', '\\x1b'], ['Tab', '\\t'], ['Ctrl+C', '\\x03'], ['Ctrl+D', '\\x04'], ['↑', '\\x1b[A'], ['↓', '\\x1b[B']] as const).map(([label, sequence]) =>
+        {([['Esc', '\x1b'], ['Tab', '\t'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['↑', '\x1b[A'], ['↓', '\x1b[B']] as const).map(([label, sequence]) =>
           <button type="button" key={label} className="min-h-11 rounded-lg border border-carbon-700 px-3 text-sm" onClick={() => { send({ type: 'stdin', data: sequence }); focus(); }}>{label}</button>)}
       </div>
     </div>

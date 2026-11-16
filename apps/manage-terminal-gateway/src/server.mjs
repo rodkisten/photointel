@@ -97,8 +97,7 @@ wss.on('connection', (ws, claims) => {
   ssh.connect({
     host: vm.host, port: vm.port, username: vm.username, privateKey,
     readyTimeout: 12000, keepaliveInterval: 15000,
-    hostHash: 'sha256',
-    hostVerifier: actual => actual.replace(/=+$/, '') === expected,
+    hostVerifier: key => createHash('sha256').update(key).digest('base64').replace(/=+$/, '') === expected,
   });
 });
 setInterval(() => { const now = Date.now() / 1000; for (const [jti, exp] of usedTickets) if (exp < now) usedTickets.delete(jti); }, 30000).unref();

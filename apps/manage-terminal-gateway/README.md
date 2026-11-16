@@ -13,3 +13,5 @@ Install with `npm install` and run `npm start` from this directory. Configure a 
 Security constraints: pinned SHA256 host keys, fixed SSH allowlist, 3 simultaneous connections per gateway instance, 15-minute idle timeout, 8 KiB input frames, 1 MiB output backpressure cap. The SSH key and hostnames never reach the browser. This gateway currently supports only VM targets, not Codespaces.
 
 **Do not deploy before verifying Cloudflare Tunnel restrictions, pinned SSH fingerprints, secret synchronization, dependency installation and end-to-end SSH/WebSocket behavior.**
+
+Host-key verification hashes the raw SSH host public key with SHA-256 and compares the base64 fingerprint to the pinned value. Never use `hostVerifier: () => true` or disable host key verification.
