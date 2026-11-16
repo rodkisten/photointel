@@ -1,4 +1,5 @@
 import { cloudRunJobsRoute } from './cloud-run-jobs';
+import { workflowStudioRoute } from './workflow-studio-api';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
@@ -42,6 +43,9 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  const studioResponse = await workflowStudioRoute(request, env);
+  if (studioResponse) return studioResponse;
 
   const cloudRunJobsResponse = await cloudRunJobsRoute(request, env, identity);
   if (cloudRunJobsResponse) return cloudRunJobsResponse;
