@@ -141,7 +141,7 @@ export function WorkflowStudio() {
           <Background color="#30343b" gap={18} /><Controls /><MiniMap pannable zoomable />
         </ReactFlow>
       </div>
-      <Card className="h-fit space-y-3 p-4"><h2 className="text-sm font-semibold text-carbon-100">Node settings</h2>{active ? <><Input aria-label="Node label" value={active.data.label} onChange={(event)=>setNodes((old)=>old.map((node)=>node.id===active.id?{...node,data:{...node.data,label:event.target.value}}:node));markDirty()}/><Button variant="destructive" size="sm" onClick={()=>{setNodes((old)=>old.filter((node)=>node.id!==active.id));setEdges((old)=>old.filter((edge)=>edge.source!==active.id&&edge.target!==active.id));setSelected(null);markDirty();}}>Remove node</Button></> : <p className="text-xs text-carbon-400">Select a node to edit it.</p>}</Card>
+      <Card className="h-fit space-y-3 p-4"><h2 className="text-sm font-semibold text-carbon-100">Node settings</h2>{active ? <><Input aria-label="Node label" value={active.data.label} onChange={(event)=>{setNodes((old)=>old.map((node)=>node.id===active.id?{...node,data:{...node.data,label:event.target.value}}:node));markDirty();}}/><Button variant="destructive" size="sm" onClick={()=>{setNodes((old)=>old.filter((node)=>node.id!==active.id));setEdges((old)=>old.filter((edge)=>edge.source!==active.id&&edge.target!==active.id));setSelected(null);markDirty();}}>Remove node</Button></> : <p className="text-xs text-carbon-400">Select a node to edit it.</p>}</Card>
     </div>
   </div>;
 }
