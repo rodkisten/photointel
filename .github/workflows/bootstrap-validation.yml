@@ -62,16 +62,16 @@ jobs:
     steps:
       - name: "📥 Código"
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "🧰 Config"
         id: notify_observed_002
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "🧰 Config"
         id: notify_observed_003
-        uses: actions/setup-node@v4
-        with: {node-version: '22'}
+        uses: actions/setup-node@v7
+        with: {node-version: '26'}
       - name: "🧰 Setup"
         id: notify_observed_004
         run: mkdir -p reports packages/contracts
@@ -97,7 +97,7 @@ jobs:
         id: notify_observed_006
         if: steps.python_install.outcome == 'success' && inputs.upload_artifacts == true
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validation-tools
           path: reports/tools/
@@ -203,12 +203,12 @@ jobs:
       - name: "🧰 Código"
         id: notify_observed_007
         if: steps.python_install.outcome == 'success'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: "🧰 Código"
         id: minio_build
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/minio.Dockerfile
@@ -332,7 +332,7 @@ jobs:
         id: notify_observed_008
         if: always() && inputs.upload_artifacts == true
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generated-locks-contracts
           if-no-files-found: warn
@@ -346,7 +346,7 @@ jobs:
         id: notify_observed_009
         if: always() && inputs.upload_artifacts == true
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validation-evidence
           if-no-files-found: warn

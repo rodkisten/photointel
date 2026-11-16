@@ -12,10 +12,10 @@ jobs:
     if: github.repository == 'rodkisten/photointel'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - name: Resolve patched dependencies

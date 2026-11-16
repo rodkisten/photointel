@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "🧪 Testes"
         id: notify_observed_002
@@ -38,7 +38,7 @@ jobs:
           python3 infra/scripts/release-manifest.py "${arguments[@]}"
       - name: "📦 Testes"
         id: notify_observed_003
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-provenance-${{ github.sha }}
           path: reports/release-manifest.json
