@@ -522,3 +522,41 @@ Fontes de preços e APIs:
 - https://docs.cloud.google.com/billing/docs/how-to/export-data-bigquery
 - https://developers.cloudflare.com/workers/platform/pricing/
 - https://modal.com/docs/guide/billing
+
+
+## Rod Manage: migração multiprojeto
+
+O Worker atual continua operando em `photos-manage.migos.club` até a migração
+para `manage.migos.club` com Cloudflare Access validado. Não exponha credenciais
+do GitHub App ao frontend, logs, outputs de Actions ou variáveis públicas.
+
+### Roadmap e checklist persistente
+
+- [x] Identidade Rod Manage e seletor de projetos.
+- [x] Catálogo explícito de repositórios com descoberta somente leitura.
+- [x] Geração de JWT RS256 e tokens temporários de instalação GitHub App.
+- [x] Diagnóstico protegido em `GET /api/github/auth-status`.
+- [ ] Identificar com segurança o App ID, slug e installation ID do Rod Kisten Bot.
+- [ ] Configurar no Worker `MANAGE_GITHUB_APP_ID`, `MANAGE_GITHUB_APP_INSTALLATION_ID` e o secret `MANAGE_GITHUB_APP_PRIVATE_KEY`.
+- [ ] Validar permissões reais por repositório antes de habilitar mutações.
+- [ ] Separar operações e credenciais por projeto e environment.
+- [ ] Implementar ENV global, herança, preview de diff e auditoria.
+- [ ] Integrar pipelines, deploys, jobs e observabilidade multiprojeto.
+- [ ] Criar domínio `manage.migos.club` com Cloudflare Access, preservando o domínio antigo durante transição.
+- [ ] Validar build, publicar e realizar smoke test autenticado.
+
+### Bootstrap compartilhado por GitHub Actions
+
+- [ ] Criar `rod-manage-bootstrap.yml` central com `workflow_call` e `workflow_dispatch`.
+- [ ] Aceitar `environment`, `mode=plan|apply`, `scope` e `dry_run`.
+- [ ] Criar Composite Action versionada para lógica compartilhada.
+- [ ] Criar wrappers mínimos nos repositórios `photointel`, `userscripts-cf`, `jardim` e `roteador`.
+- [ ] Exigir autorização explícita para cada repositório e environment antes de alterar recursos.
+- [ ] Produzir relatório de diferenças, itens concluídos e próximos passos no job summary e no Manage.
+- [ ] Fixar versões dos workflows compartilhados por tag imutável ou SHA, evitando `@main` em produção.
+
+O `GITHUB_TOKEN` de cada chamador pertence ao próprio repositório. O workflow
+reutilizável não ganha automaticamente acesso aos demais repositórios; alterações
+entre projetos exigem token de instalação do GitHub App com escopo verificado.
+`secrets: inherit` não substitui a declaração do `environment` no job que
+precisa acessar secrets de environment. O modo `plan` não deve alterar recursos.
