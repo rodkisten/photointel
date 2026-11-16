@@ -124,6 +124,15 @@ export async function api(
     return json({
       mode: complete ? 'github_app' : partial ? 'incomplete' : env.GITHUB_API_TOKEN ? 'legacy_pat' : 'unconfigured',
       configured, verified, legacy_fallback: Boolean(env.GITHUB_API_TOKEN),
+      required_secrets: [
+        'MANAGE_GITHUB_APP_ID',
+        'MANAGE_GITHUB_APP_INSTALLATION_ID',
+        'MANAGE_GITHUB_APP_PRIVATE_KEY',
+      ].filter(name => !({
+        MANAGE_GITHUB_APP_ID: configured.app_id,
+        MANAGE_GITHUB_APP_INSTALLATION_ID: configured.installation_id,
+        MANAGE_GITHUB_APP_PRIVATE_KEY: configured.private_key,
+      } as Record<string, boolean>)[name]),
     });
   }
 
