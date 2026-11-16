@@ -4,7 +4,7 @@ import { Background, Controls, Handle, MiniMap, Position, ReactFlow, addEdge, ap
 import '@xyflow/react/dist/style.css';
 import { Button, Card, Input, Select } from '../components/ui';
 
-type Step = { label: string; kind: 'trigger' | 'github' | 'condition' | 'deploy' | 'notify' };
+type Step = Record<string, unknown> & { label: string; kind: 'trigger' | 'github' | 'condition' | 'deploy' | 'notify' };
 type StepNode = Node<Step, 'step'>;
 const defaults: StepNode[] = [
   { id: 'start', type: 'step', position: { x: 100, y: 50 }, data: { label: 'Manual trigger', kind: 'trigger' } },
@@ -42,11 +42,12 @@ export function WorkflowStudio() {
   const [status, setStatus] = useState('Carregando diagramas...');
   const [dirty, setDirty] = useState(false);
   const [ready, setReady] = useState(false);
+  const [saveEpoch, setSaveEpoch] = useState(0);
   const saving = useRef(false);
   const latest = useRef({ name, nodes, edges });
   latest.current = { name, nodes, edges };
   const suppress = useRef(false);
-  const markDirty = () => { if (!suppress.current) setDirty(true); };
+  const markDirty = useCallback(() => { if (!suppress.current) setDirty(true); }, []);
   useEffect(() => {
     let alive = true;
     api<FlowList>('/workflow-studio/flows').then((data) => {
@@ -94,13 +95,13 @@ export function WorkflowStudio() {
       setStatus(changedDuringSave ? 'Novas alterações aguardando salvamento.' : 'Salvo no D1.');
     } catch (error) {
       setStatus('Não salvo: ' + (error instanceof Error ? error.message : String(error)));
-    } finally { saving.current = false; }
+    } finally { saving.current = false; setSaveEpoch((n) => n + 1); }
   };
   useEffect(() => {
     if (!ready || !dirty) return;
     const timer = window.setTimeout(() => { void save(); }, 1200);
     return () => window.clearTimeout(timer);
-  }, [ready, dirty, name, nodes, edges, flowId, revision]);
+  }, [ready, dirty, name, nodes, edges, flowId, revision, saveEpoch]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); };
     window.addEventListener('beforeunload', warn);
@@ -110,7 +111,7 @@ export function WorkflowStudio() {
   const onEdgesChange = useCallback((changes: EdgeChange[]) => (markDirty(), setEdges((old) => applyEdgeChanges(changes, old))), []);
   const onConnect = useCallback((connection: Connection) => {
     if (connection.source !== connection.target) { markDirty(); setEdges((old) => addEdge(connection, old)); }
-  }, []);
+  }, [markDirty]);
   const add = () => {
     const id = crypto.randomUUID();
     setNodes((old) => [...old, { id, type: 'step', position: { x: 150, y: 100 + old.length * 90 }, data: { label: kind, kind } }]);
