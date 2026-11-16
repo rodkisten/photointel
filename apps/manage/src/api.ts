@@ -79,19 +79,27 @@ export async function api(
     if (response) return response;
   }
 
-  // The catalog is intentionally limited to configured projects until per-repository
-  // authorization is implemented. Never expose the owner's full repository inventory
-  // or treat a UI selection as permission to execute against another repository.
-  if (method === 'GET' && path === '/api/projects')
-    return json({
-      items: [{
-        id: env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
-        name: 'PhotoIntel',
-        repository: env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
-        enabled: true,
-      }],
-      global: { enabled: false, reason: 'Aguardando autorização por repositório e isolamento de secrets' },
-    });
+  // Read-only allowlisted discovery. Mutation routes remain bound to GITHUB_REPO.
+  if (method === 'GET' && path === '/api/projects') {
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
+    const repos = [...new Set([primary, ...configured])].slice(0, 30);
+    const items = await Promise.all(repos.map(async repo => {
+      const enabled = repo === primary;
+      if (!env.GITHUB_API_TOKEN) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
+      try {
+        const info = await provider('https://api.github.com/repos/' + repo, env.GITHUB_API_TOKEN, {
+          headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' },
+        }) as { name?: string; archived?: boolean; disabled?: boolean };
+        return { id: repo, name: info.name || repo.split('/')[1], repository: repo, enabled,
+          status: info.archived || info.disabled ? 'archived' : 'discovered' };
+      } catch {
+        return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: 'unavailable' };
+      }
+    }));
+    return json({ items, global: { enabled: false, reason: 'Aguardando autorização e isolamento de secrets' } });
+  }
 
   // Endpoints Nativos
   if (method === 'GET' && path === '/api/meta')

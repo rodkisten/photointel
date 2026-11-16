@@ -139,7 +139,7 @@ export default function App() {
   };
   const projectCatalog = useQuery({
     queryKey: ['projects'],
-    queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
+    queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
     retry: false,
   });
   const activeProject = projectCatalog.data?.items.find(item => item.id === selectedProject)
@@ -207,7 +207,7 @@ export default function App() {
                   onClick={() => { setSelectedProject(project.id); setProjectMenuOpen(false); }}
                   disabled={!project.enabled}
                   className="flex w-full items-center gap-3 rounded-lg bg-carbon-800 px-3 py-3 text-left text-sm disabled:opacity-50">
-                  <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository}</span></span>
+                  <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository} · {project.status === 'discovered' ? 'Descoberto' : project.status === 'unavailable' ? 'Indisponível' : 'Conectado'}</span></span>
                   {activeProject?.id === project.id && <span className="text-emerald-400">✓</span>}
                 </button>
               ))}

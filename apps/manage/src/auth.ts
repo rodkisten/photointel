@@ -27,6 +27,8 @@ export interface Env {
   /** Deployed Secret Manager version only, never the secret value. */
   GITHUB_TOKEN_SECRET_VERSION?: string;
   GITHUB_REPO: string;
+  /** Explicit catalog allowlist; does not grant cross-project mutations. */
+  MANAGE_PROJECT_REPOSITORIES?: string;
   /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
   PHOTOINTEL_PREVIEW?: string;
   GITHUB_ENVIRONMENT: string;
