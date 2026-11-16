@@ -27,3 +27,7 @@ GitHub Codespaces discovery is read-only and optional. Configure `MANAGE_CODESPA
 `POST /api/terminal/ticket` issues a 30-second HMAC-SHA256 signed, target-bound ticket only after Cloudflare Access authentication and allowlist checks. The browser upgrades `GET /api/terminal/ws?ticket=...` on the same origin. The Worker forwards to the private HTTPS gateway via WebSocket Upgrade; the gateway must validate the ticket and consume its JTI exactly once. No SSH private key is sent to the browser. Set `MANAGE_TERMINAL_GATEWAY_URL` and `MANAGE_TERMINAL_GATEWAY_SECRET` as Worker secrets, and configure the same secret on the gateway. The gateway should be restricted to requests from the Worker, not publicly reachable without service authentication.
 
 The UI uses WTerm's React DOM renderer and the Ghostty WASM core loaded asynchronously. The UI blocks terminal rendering until Ghostty initializes. No automatic replay of shell input after disconnect.
+
+## Security hardening
+
+The gateway compares the shared secret in constant time, validates ticket signatures and one-time IDs, and limits session concurrency and idle time. It times out SSH handshakes after 12 seconds. The Worker verifies Cloudflare Access and same-origin WebSocket requests. Never expose the gateway listener publicly or use the example SSH fingerprint as a real pin.

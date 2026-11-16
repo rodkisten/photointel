@@ -47,7 +47,10 @@ function decodeTicket(ticket) {
 const server = createServer((req, res) => { res.writeHead(404); res.end(); });
 const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES + 256, perMessageDeflate: false });
 server.on('upgrade', (request, socket, head) => {
-  if (request.url !== '/ws' || request.headers['x-terminal-gateway-secret'] !== secret) {
+  const receivedSecret = request.headers['x-terminal-gateway-secret'];
+  const provided = typeof receivedSecret === 'string' ? Buffer.from(receivedSecret) : Buffer.alloc(0);
+  const trusted = Buffer.from(secret);
+  if (request.url !== '/ws' || provided.length !== trusted.length || !timingSafeEqual(provided, trusted)) {
     socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
   }
   const claims = decodeTicket(request.headers['x-terminal-ticket']);
@@ -64,8 +67,10 @@ wss.on('connection', (ws, claims) => {
   let lastActivity = Date.now();
   const send = frame => { if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(frame)); else if (ws.bufferedAmount >= 1024 * 1024) ws.close(1009, 'Backpressure'); };
   const close = () => { active.delete(claims.jti); stream?.close(); ssh.end(); };
+  const sshTimeout = setTimeout(() => { send({ type: 'error', code: 'TIMEOUT', message: 'Tempo limite da sessão excedido' }); ws.close(); }, 12_000);
+  sshTimeout.unref();
   const idle = setInterval(() => { if (Date.now() - lastActivity > IDLE_MS) ws.close(1000, 'Idle timeout'); }, 15000);
-  ws.on('close', () => { clearInterval(idle); close(); });
+  ws.on('close', () => { clearInterval(idle); clearTimeout(sshTimeout); close(); });
   ws.on('error', () => ws.close());
   ws.on('message', bytes => {
     lastActivity = Date.now();
@@ -84,6 +89,7 @@ wss.on('connection', (ws, claims) => {
     else ws.close(1002, 'Invalid frame');
   });
   ssh.on('ready', () => {
+    clearTimeout(sshTimeout);
     ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (error, channel) => {
       if (error) { send({ type: 'error', code: 'SHELL', message: 'Falha ao abrir shell' }); ws.close(); return; }
       stream = channel;
@@ -92,7 +98,7 @@ wss.on('connection', (ws, claims) => {
       channel.on('close', code => { send({ type: 'exit', code: typeof code === 'number' ? code : null }); ws.close(); });
     });
   });
-  ssh.on('error', () => { send({ type: 'error', code: 'SSH', message: 'Falha na conexão SSH' }); ws.close(); });
+  ssh.on('error', () => { clearTimeout(sshTimeout); send({ type: 'error', code: 'SSH', message: 'Falha na conexão SSH' }); ws.close(); });
   const expected = vm.hostKeySha256.replace(/^SHA256:/, '').replace(/=+$/, '');
   ssh.connect({
     host: vm.host, port: vm.port, username: vm.username, privateKey,

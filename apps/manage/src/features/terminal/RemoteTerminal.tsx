@@ -10,6 +10,7 @@ type Frame = { type: 'stdout'; data: string } | { type: 'error'; message: string
 export function RemoteTerminal({ targetId }: { targetId: string }) {
   const { ref, write, focus } = useTerminal();
   const [core, setCore] = useState<GhosttyCore | null>(null);
+  const pending = useRef(false);
   useEffect(() => {
     let disposed = false;
     let instance: GhosttyCore | undefined;
@@ -27,7 +28,8 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
     if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536) ws.send(JSON.stringify(frame));
   }, []);
   const connect = useCallback(async () => {
-    if (socket.current) return;
+    if (socket.current || pending.current) return;
+    pending.current = true;
     setStatus('connecting');
     setNotice('');
     try {
@@ -42,6 +44,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       url.searchParams.set('ticket', result.ticket);
       const ws = new WebSocket(url);
       socket.current = ws;
+      pending.current = false;
       ws.onopen = () => { setStatus('connected'); focus(); };
       ws.onmessage = event => {
         if (typeof event.data !== 'string' || event.data.length > 131072) { ws.close(1009); return; }
@@ -54,11 +57,12 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       ws.onerror = () => { setStatus('error'); setNotice('Falha na conexão WebSocket'); };
       ws.onclose = () => { socket.current = null; setStatus(current => current === 'error' ? current : 'closed'); };
     } catch (error) {
+      pending.current = false;
       setStatus('error');
       setNotice(error instanceof Error ? error.message : 'Falha ao iniciar sessão');
     }
   }, [targetId, focus, write]);
-  useEffect(() => () => { socket.current?.close(1000, 'Unmount'); socket.current = null; }, [targetId]);
+  useEffect(() => () => { pending.current = false; socket.current?.close(1000, 'Unmount'); socket.current = null; }, [targetId]);
   return (
     <div className="flex h-full min-h-[380px] flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 px-3 py-2 text-xs text-carbon-400">
