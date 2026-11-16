@@ -2,6 +2,7 @@ import { githubToken } from './github-app';
 import { terminalCatalogRoute } from './features/terminal/catalog';
 import { terminalSessionRoute } from './features/terminal/protocol';
 import { terminalPreflightRoute } from './features/terminal/preflight';
+import { terminalTicketRoute } from './features/terminal/ticket';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
@@ -46,6 +47,9 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  const terminalTicketResponse = await terminalTicketRoute(request, env, identity);
+  if (terminalTicketResponse) return terminalTicketResponse;
 
   const terminalPreflightResponse = await terminalPreflightRoute(request, env, identity);
   if (terminalPreflightResponse) return terminalPreflightResponse;

@@ -36,6 +36,10 @@ export interface Env {
   MANAGE_TERMINAL_VMS?: string;
   /** User-scoped GitHub token with Codespaces read; never sent to clients. */
   MANAGE_CODESPACES_USER_TOKEN?: string;
+  /** Shared HMAC key between Manage Worker and private SSH gateway. */
+  MANAGE_TERMINAL_GATEWAY_SECRET?: string;
+  /** HTTPS gateway URL behind a private Cloudflare Tunnel. */
+  MANAGE_TERMINAL_GATEWAY_URL?: string;
   /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
   PHOTOINTEL_PREVIEW?: string;
   GITHUB_ENVIRONMENT: string;
