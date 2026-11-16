@@ -1,3 +1,4 @@
+import { githubToken } from './github-app';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
@@ -85,11 +86,12 @@ export async function api(
     const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
       .split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
     const repos = [...new Set([primary, ...configured])].slice(0, 30);
+    const catalogToken = env.MANAGE_GITHUB_APP_ID ? await githubToken(env) : env.GITHUB_API_TOKEN;
     const items = await Promise.all(repos.map(async repo => {
       const enabled = repo === primary;
-      if (!env.GITHUB_API_TOKEN) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
+      if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
       try {
-        const info = await provider('https://api.github.com/repos/' + repo, env.GITHUB_API_TOKEN, {
+        const info = await provider('https://api.github.com/repos/' + repo, catalogToken, {
           headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' },
         }) as { name?: string; archived?: boolean; disabled?: boolean };
         return { id: repo, name: info.name || repo.split('/')[1], repository: repo, enabled,

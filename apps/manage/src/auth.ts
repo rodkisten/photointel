@@ -24,6 +24,9 @@ export interface Env {
   ACCESS_AUDIENCE: string;
   ACCESS_ALLOWED_EMAILS: string;
   GITHUB_API_TOKEN?: string;
+  MANAGE_GITHUB_APP_ID?: string;
+  MANAGE_GITHUB_APP_INSTALLATION_ID?: string;
+  MANAGE_GITHUB_APP_PRIVATE_KEY?: string;
   /** Deployed Secret Manager version only, never the secret value. */
   GITHUB_TOKEN_SECRET_VERSION?: string;
   GITHUB_REPO: string;
