@@ -1,6 +1,6 @@
 import { githubToken } from './github-app';
-import { terminalCatalogRoute } from './terminal/catalog';
-import { terminalSessionRoute } from './terminal/protocol';
+import { terminalCatalogRoute } from './features/terminal/catalog';
+import { terminalSessionRoute } from './features/terminal/protocol';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';

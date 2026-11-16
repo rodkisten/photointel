@@ -1,5 +1,5 @@
-import { ApiError, json, requireOrigin } from '../auth';
-import type { Env, Identity } from '../auth';
+import { ApiError, json, requireOrigin } from '../../auth';
+import type { Env, Identity } from '../../auth';
 
 export type VmTarget = { id: string; label: string; host: string; port: number; username: string; hostKeySha256: string };
 const idPattern = /^[a-z0-9][a-z0-9-]{0,39}$/;

@@ -1,5 +1,5 @@
-import { ApiError, json } from '../auth';
-import type { Env } from '../auth';
+import { ApiError, json } from '../../auth';
+import type { Env } from '../../auth';
 import { vmTargets } from './protocol';
 
 /** Server-controlled allowlist. Never accept target addresses from browser requests. */
