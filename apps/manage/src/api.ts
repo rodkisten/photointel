@@ -79,6 +79,20 @@ export async function api(
     if (response) return response;
   }
 
+  // The catalog is intentionally limited to configured projects until per-repository
+  // authorization is implemented. Never expose the owner's full repository inventory
+  // or treat a UI selection as permission to execute against another repository.
+  if (method === 'GET' && path === '/api/projects')
+    return json({
+      items: [{
+        id: env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
+        name: 'PhotoIntel',
+        repository: env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
+        enabled: true,
+      }],
+      global: { enabled: false, reason: 'Aguardando autorização por repositório e isolamento de secrets' },
+    });
+
   // Endpoints Nativos
   if (method === 'GET' && path === '/api/meta')
     return json({
