@@ -29,17 +29,19 @@ async function appJwt(appId: string, pem: string): Promise<string> {
 export async function githubToken(env: Env): Promise<string> {
   const appId = env.MANAGE_GITHUB_APP_ID?.trim();
   const installation = env.MANAGE_GITHUB_APP_INSTALLATION_ID?.trim();
-  const key = env.MANAGE_GITHUB_APP_PRIVATE_KEY?.replace(/\n/g, '\n');
-  if (!appId || !installation || !key) {
+  const key = env.MANAGE_GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const configured = [appId, installation, key].filter(Boolean).length;
+  if (configured !== 3) {
+    if (configured > 0) throw new ApiError(503, 'GITHUB_APP_INCOMPLETE', 'Credenciais do GitHub App incompletas');
     if (env.GITHUB_API_TOKEN) return env.GITHUB_API_TOKEN;
     throw new ApiError(503, 'GITHUB_AUTH', 'Configure GitHub App ou token legado');
   }
-  if (!/^\\d+$/.test(appId) || !/^\\d+$/.test(installation))
+  if (!/^\d+$/.test(appId!) || !/^\d+$/.test(installation!))
     throw new ApiError(503, 'GITHUB_APP_CONFIG', 'GitHub App ID ou instalação inválida');
   const cacheKey = appId + ':' + installation;
   const cached = cache.get(cacheKey);
   if (cached && cached.until > Date.now() + 60_000) return cached.token;
-  const jwt = await appJwt(appId, key);
+  const jwt = await appJwt(appId!, key!);
   const response = await provider('https://api.github.com/app/installations/' + installation + '/access_tokens', jwt, {
     method: 'POST',
     headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },

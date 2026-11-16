@@ -86,7 +86,7 @@ export async function api(
     const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
       .split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
     const repos = [...new Set([primary, ...configured])].slice(0, 30);
-    const catalogToken = env.MANAGE_GITHUB_APP_ID ? await githubToken(env) : env.GITHUB_API_TOKEN;
+    const catalogToken = await githubToken(env).catch(() => undefined);
     const items = await Promise.all(repos.map(async repo => {
       const enabled = repo === primary;
       if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
@@ -101,6 +101,30 @@ export async function api(
       }
     }));
     return json({ items, global: { enabled: false, reason: 'Aguardando autorização e isolamento de secrets' } });
+  }
+
+  if (method === 'GET' && path === '/api/github/auth-status') {
+    const configured = {
+      app_id: Boolean(env.MANAGE_GITHUB_APP_ID),
+      installation_id: Boolean(env.MANAGE_GITHUB_APP_INSTALLATION_ID),
+      private_key: Boolean(env.MANAGE_GITHUB_APP_PRIVATE_KEY),
+    };
+    const complete = Object.values(configured).every(Boolean);
+    const partial = Object.values(configured).some(Boolean) && !complete;
+    let verified = false;
+    if (complete) {
+      try {
+        const token = await githubToken(env);
+        const installation = await provider('https://api.github.com/installation/repositories?per_page=1', token, {
+          headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+        }) as { total_count?: number };
+        verified = typeof installation.total_count === 'number';
+      } catch { /* Keep provider errors and credentials server-side. */ }
+    }
+    return json({
+      mode: complete ? 'github_app' : partial ? 'incomplete' : env.GITHUB_API_TOKEN ? 'legacy_pat' : 'unconfigured',
+      configured, verified, legacy_fallback: Boolean(env.GITHUB_API_TOKEN),
+    });
   }
 
   // Endpoints Nativos
