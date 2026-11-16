@@ -8,11 +8,11 @@ const cache = new Map<string, { token: string; until: number }>();
 function base64url(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function appJwt(appId: string, pem: string): Promise<string> {
-  const body = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g, '');
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
   let binary: string;
   try { binary = atob(body); } catch { throw new ApiError(503, 'GITHUB_APP_KEY', 'Chave PKCS#8 inválida'); }
   const key = await crypto.subtle.importKey('pkcs8', Uint8Array.from(binary, char => char.charCodeAt(0)),
@@ -29,7 +29,7 @@ async function appJwt(appId: string, pem: string): Promise<string> {
 export async function githubToken(env: Env): Promise<string> {
   const appId = env.MANAGE_GITHUB_APP_ID?.trim();
   const installation = env.MANAGE_GITHUB_APP_INSTALLATION_ID?.trim();
-  const key = env.MANAGE_GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const key = env.MANAGE_GITHUB_APP_PRIVATE_KEY?.replace(/\n/g, '\n');
   if (!appId || !installation || !key) {
     if (env.GITHUB_API_TOKEN) return env.GITHUB_API_TOKEN;
     throw new ApiError(503, 'GITHUB_AUTH', 'Configure GitHub App ou token legado');
