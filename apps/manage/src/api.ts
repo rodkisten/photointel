@@ -1,3 +1,4 @@
+import { githubAppIdentity } from './github-app';
 import { githubToken } from './github-app';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
@@ -84,9 +85,13 @@ export async function api(
   if (method === 'GET' && path === '/api/projects') {
     const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
     const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
-      .split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
     const repos = [...new Set([primary, ...configured])].slice(0, 30);
     const catalogToken = await githubToken(env).catch(() => undefined);
+    // An installation token only grants access to its installed repositories.
+    // A PAT can discover repositories but must never imply App authorization.
+    const appConfigured = Boolean(env.MANAGE_GITHUB_APP_ID &&
+      env.MANAGE_GITHUB_APP_INSTALLATION_ID && env.MANAGE_GITHUB_APP_PRIVATE_KEY);
     const items = await Promise.all(repos.map(async repo => {
       const enabled = repo === primary;
       if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: enabled ? 'connected' : 'unavailable' };
@@ -95,12 +100,24 @@ export async function api(
           headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' },
         }) as { name?: string; archived?: boolean; disabled?: boolean };
         return { id: repo, name: info.name || repo.split('/')[1], repository: repo, enabled,
-          status: info.archived || info.disabled ? 'archived' : 'discovered' };
+          status: info.archived || info.disabled ? 'archived' : appConfigured ? 'app_accessible' : 'discovered' };
       } catch {
         return { id: repo, name: repo.split('/')[1], repository: repo, enabled, status: 'unavailable' };
       }
     }));
     return json({ items, global: { enabled: false, reason: 'Aguardando autorização e isolamento de secrets' } });
+  }
+
+  if (method === 'GET' && path === '/api/github/app-identity') {
+    if (!env.MANAGE_GITHUB_APP_ID || !env.MANAGE_GITHUB_APP_PRIVATE_KEY)
+      return json({ configured: false, verified: false, slug: null });
+    try {
+      const info = await githubAppIdentity(env);
+      return json({ configured: true, verified: true, slug: info.slug,
+        app_id: info.id, name: info.name });
+    } catch {
+      return json({ configured: true, verified: false, slug: null });
+    }
   }
 
   if (method === 'GET' && path === '/api/github/auth-status') {

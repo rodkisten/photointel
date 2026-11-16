@@ -11,7 +11,7 @@ function base64url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function appJwt(appId: string, pem: string): Promise<string> {
+export async function appJwt(appId: string, pem: string): Promise<string> {
   const body = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
   let binary: string;
   try { binary = atob(body); } catch { throw new ApiError(503, 'GITHUB_APP_KEY', 'Chave PKCS#8 inválida'); }
@@ -50,4 +50,18 @@ export async function githubToken(env: Env): Promise<string> {
   if (!response.token || !response.expires_at) throw new ApiError(503, 'GITHUB_APP_TOKEN', 'GitHub App não retornou token');
   cache.set(cacheKey, { token: response.token, until: Date.parse(response.expires_at) });
   return response.token;
+}
+
+/** Verify the configured App identity using an App JWT, never an installation PAT. */
+export async function githubAppIdentity(env: Env): Promise<{ id: number; slug: string; name: string }> {
+  if (!env.MANAGE_GITHUB_APP_ID || !env.MANAGE_GITHUB_APP_PRIVATE_KEY)
+    throw new ApiError(503, 'GITHUB_APP_CONFIG', 'GitHub App não configurado');
+  const jwt = await appJwt(env.MANAGE_GITHUB_APP_ID, env.MANAGE_GITHUB_APP_PRIVATE_KEY.replace(/\\n/g, '\n'));
+  const app = await provider('https://api.github.com/app', jwt, {
+    headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+  }) as { id: number; slug: string; name: string };
+  if (!app.id || !app.slug) throw new ApiError(502, 'GITHUB_APP_IDENTITY', 'Identidade do App inválida');
+  if (String(app.id) !== env.MANAGE_GITHUB_APP_ID)
+    throw new ApiError(403, 'GITHUB_APP_MISMATCH', 'A chave não pertence ao App configurado');
+  return { id: app.id, slug: app.slug, name: app.name };
 }
