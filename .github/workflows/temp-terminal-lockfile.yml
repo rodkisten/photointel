@@ -1,0 +1,34 @@
+name: "🧰 Temporary · Sync Terminal lockfile"
+on:
+  push:
+    branches: [feat/manage-terminal-isolated]
+    paths:
+      - apps/manage/package.json
+      - .github/workflows/temp-terminal-lockfile.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Update lockfile only
+        working-directory: apps/manage
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify lockfile
+        working-directory: apps/manage
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Commit generated lockfile
+        run: |
+          if git diff --quiet -- apps/manage/package-lock.json; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/manage/package-lock.json
+          git commit -m "chore(manage-terminal): sync WTerm Ghostty lockfile [skip ci]"
+          git push
