@@ -34,6 +34,8 @@ export interface Env {
   MANAGE_PROJECT_REPOSITORIES?: string;
   /** JSON allowlist of private VMs. Only id and label are exposed to clients. */
   MANAGE_TERMINAL_VMS?: string;
+  /** User-scoped GitHub token with Codespaces read; never sent to clients. */
+  MANAGE_CODESPACES_USER_TOKEN?: string;
   /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
   PHOTOINTEL_PREVIEW?: string;
   GITHUB_ENVIRONMENT: string;

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api as requestApi } from '../../lib/client';
 import { Github, HardDrive, LockKeyhole, MonitorSmartphone, Plus, TerminalSquare } from 'lucide-react';
 
-type Target = { id: string; label: string; kind: 'vm' | 'codespace'; status: 'configured' | 'unavailable' };
+type Target = { id: string; label: string; kind: 'vm' | 'codespace'; status: 'configured' | 'unavailable'; state?: string };
 type Catalog = { items: Target[]; codespaces: { available: boolean; reason: string } };
 
 export function TerminalPage() {
@@ -28,7 +28,7 @@ export function TerminalPage() {
             <button type="button" key={target.id} onClick={() => setSelected(target.id)}
               className="flex w-full items-center gap-3 rounded-xl border border-carbon-800 p-3 text-left text-sm hover:bg-carbon-800">
               {target.kind === 'vm' ? <HardDrive size={18}/> : <Github size={18}/>}
-              <span className="min-w-0 flex-1 truncate">{target.label}</span>
+              <span className="min-w-0 flex-1 truncate">{target.label}<span className="block text-xs text-carbon-500">{target.kind === 'codespace' ? target.state : 'VM cadastrada'}</span></span>
             </button>
           ))}
           {isPending && <p className="px-2 py-4 text-sm text-carbon-500">Carregando máquinas autorizadas…</p>}
