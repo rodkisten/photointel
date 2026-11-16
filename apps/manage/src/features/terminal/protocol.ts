@@ -58,10 +58,10 @@ export type TerminalServerFrame =
 export function validateTerminalFrame(value: unknown): TerminalClientFrame {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ApiError(400, 'TERMINAL_FRAME', 'Frame inválido');
   const frame = value as Record<string, unknown>;
-  if (frame.type === 'ping') return { type: 'ping' };
-  if (frame.type === 'stdin' && typeof frame.data === 'string' && new TextEncoder().encode(frame.data).length <= 8192)
+  if (frame.type === 'ping' && Object.keys(frame).length === 1) return { type: 'ping' };
+  if (frame.type === 'stdin' && Object.keys(frame).length === 2 && typeof frame.data === 'string' && new TextEncoder().encode(frame.data).length <= 8192)
     return { type: 'stdin', data: frame.data };
-  if (frame.type === 'resize' && Number.isInteger(frame.cols) && Number.isInteger(frame.rows) &&
+  if (frame.type === 'resize' && Object.keys(frame).length === 3 && Number.isInteger(frame.cols) && Number.isInteger(frame.rows) &&
       (frame.cols as number) >= 20 && (frame.cols as number) <= 500 &&
       (frame.rows as number) >= 5 && (frame.rows as number) <= 200)
     return { type: 'resize', cols: frame.cols as number, rows: frame.rows as number };

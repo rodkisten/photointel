@@ -17,6 +17,7 @@ GitHub Codespaces discovery is read-only and optional. Configure `MANAGE_CODESPA
 - [x] Strict VM config validation and pinned-host-key requirement
 - [x] Session-intent endpoint that fails closed until gateway is deployed
 - [x] Typed terminal frame protocol with input and resize bounds
+- [x] Strict VM-only preflight with authenticated origin, payload bounds and no credential issuance
 - [ ] Secure gateway, WebSocket session lifecycle and replay protection
 - [ ] WTerm/Ghostty rendering, mobile keyboard and reconnect
 - [ ] Build validation and deployment
