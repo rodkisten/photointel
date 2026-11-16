@@ -45,7 +45,7 @@ export async function api(
     path = url.pathname,
     method = request.method;
 
-  const terminalCatalogResponse = terminalCatalogRoute(request, env);
+  const terminalCatalogResponse = await terminalCatalogRoute(request, env);
   if (terminalCatalogResponse) return terminalCatalogResponse;
 
   const cloudRunJobsResponse = await cloudRunJobsRoute(request, env, identity);
