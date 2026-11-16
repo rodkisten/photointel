@@ -541,7 +541,7 @@ do GitHub App ao frontend, logs, outputs de Actions ou variáveis públicas.
 - [ ] Validar permissões reais por repositório antes de habilitar mutações.
 - [ ] Separar operações e credenciais por projeto e environment.
 - [ ] Implementar ENV global, herança, preview de diff e auditoria.
-- [ ] Integrar pipelines, deploys, jobs e observabilidade multiprojeto.
+- [ ] Integrar pipelines, deploys, jobs e observabilidade multiprojeto (consultas de workflows e execuções recentes implementadas; escrita pendente).
 - [ ] Criar domínio `manage.migos.club` com Cloudflare Access, preservando o domínio antigo durante transição.
 - [ ] Validar build, publicar e realizar smoke test autenticado.
 
@@ -560,3 +560,12 @@ reutilizável não ganha automaticamente acesso aos demais repositórios; altera
 entre projetos exigem token de instalação do GitHub App com escopo verificado.
 `secrets: inherit` não substitui a declaração do `environment` no job que
 precisa acessar secrets de environment. O modo `plan` não deve alterar recursos.
+
+### Consultas multiprojeto (somente leitura)
+
+O seletor permite consultar workflows e dez execuções recentes dos repositórios
+presentes em `MANAGE_PROJECT_REPOSITORIES`. A seleção é refletida em
+`?project=owner/repo` para compartilhar o contexto, mas **não** muda o escopo
+das páginas de operações existentes, que continuam ligadas ao projeto principal.
+As rotas `GET /api/projects/workflows` e `GET /api/projects/runs` exigem
+`repository` na allowlist. Links de execuções abrem diretamente no GitHub.

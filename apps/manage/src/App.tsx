@@ -89,7 +89,7 @@ function sectionForPath(pathname: string): Tab {
 export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
   const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
@@ -144,6 +144,26 @@ export default function App() {
   });
   const activeProject = projectCatalog.data?.items.find(item => item.id === selectedProject)
     || projectCatalog.data?.items[0];
+  useEffect(() => {
+    const onLocation = () => setSelectedProject(new URLSearchParams(window.location.search).get('project'));
+    window.addEventListener('popstate', onLocation);
+    return () => window.removeEventListener('popstate', onLocation);
+  }, []);
+  const chooseProject = (repository: string) => {
+    setSelectedProject(repository);
+    setProjectMenuOpen(false);
+    const next = new URL(window.location.href);
+    next.searchParams.set('project', repository);
+    window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
+  };
+  const projectRuns = useQuery({
+    queryKey: ['project-runs', activeProject?.repository],
+    queryFn: () => api<{ repository: string; items: { id: number; name: string; status: string; conclusion: string | null; html_url: string; created_at: string }[] }>(
+      '/projects/runs?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
+    retry: false,
+    staleTime: 30_000,
+  });
   const projectWorkflows = useQuery({
     queryKey: ['project-workflows', activeProject?.repository],
     queryFn: () => api<{ repository: string; total: number; items: { id: number; name: string; path: string; state: string }[] }>(
@@ -213,7 +233,7 @@ export default function App() {
               <p className="px-3 py-2 text-xs font-semibold uppercase text-carbon-500">Escopo de administração</p>
               {projectCatalog.data?.items.map(project => (
                 <button key={project.id} type="button" role="menuitem"
-                  onClick={() => { setSelectedProject(project.id); setProjectMenuOpen(false); }}
+                  onClick={() => chooseProject(project.id)}
                   disabled={project.status === 'unavailable'}
                   className="flex w-full items-center gap-3 rounded-lg bg-carbon-800 px-3 py-3 text-left text-sm disabled:opacity-50">
                   <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository} · {project.status === 'discovered' ? 'Descoberto (leitura)' : project.status === 'app_accessible' ? 'App autorizado (leitura)' : project.status === 'unavailable' ? 'Indisponível' : 'Conectado'}</span></span>
@@ -242,6 +262,20 @@ export default function App() {
             </div>
             {projectWorkflows.isPending && <p className="mt-3 text-xs text-carbon-400">Carregando workflows…</p>}
             {projectWorkflows.isError && <p className="mt-3 text-xs text-amber-400">Não foi possível consultar workflows com as credenciais atuais.</p>}
+            {projectRuns.isError && <p className="mt-3 text-xs text-amber-400">Execuções indisponíveis para este repositório.</p>}
+            {projectRuns.data && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs font-semibold text-carbon-300">Execuções recentes</p>
+                {projectRuns.data.items.length === 0 && <p className="text-xs text-carbon-500">Nenhuma execução recente.</p>}
+                {projectRuns.data.items.map(run => (
+                  <a key={run.id} href={run.html_url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs hover:text-carbon-100">
+                    <span className="min-w-0 truncate text-carbon-200">{run.name}</span>
+                    <span className="shrink-0 text-carbon-500">{run.conclusion || run.status}</span>
+                  </a>
+                ))}
+              </div>
+            )}
             {projectWorkflows.data && (
               <div className="mt-3 space-y-1">
                 <p className="text-xs text-carbon-500">{projectWorkflows.data.total} workflows encontrados</p>

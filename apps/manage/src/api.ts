@@ -126,6 +126,25 @@ export async function api(
       items: (result.workflows || []).map(w => ({ id: w.id, name: w.name, path: w.path, state: w.state })) });
   }
 
+  if (method === 'GET' && path === '/api/projects/runs') {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/runs?per_page=10',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        workflow_runs?: Array<{ id: number; name: string; status: string; conclusion: string | null;
+          html_url: string; created_at: string }>;
+      };
+    return json({ repository, items: (result.workflow_runs || []).map(run => ({
+      id: run.id, name: run.name, status: run.status, conclusion: run.conclusion,
+      html_url: run.html_url, created_at: run.created_at,
+    })) });
+  }
+
   if (method === 'GET' && path === '/api/github/app-identity') {
     if (!env.MANAGE_GITHUB_APP_ID || !env.MANAGE_GITHUB_APP_PRIVATE_KEY)
       return json({ configured: false, verified: false, slug: null });
