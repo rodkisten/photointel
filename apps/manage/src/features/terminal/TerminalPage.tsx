@@ -1,11 +1,14 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api as requestApi } from '../../lib/client';
 import { Github, HardDrive, LockKeyhole, MonitorSmartphone, Plus, TerminalSquare } from 'lucide-react';
 
-type Target = { id: string; label: string; kind: 'vm' | 'codespace'; status: 'unconfigured' };
-const initialTargets: Target[] = [];
+type Target = { id: string; label: string; kind: 'vm' | 'codespace'; status: 'configured' | 'unavailable' };
+type Catalog = { items: Target[]; codespaces: { available: boolean; reason: string } };
 
 export function TerminalPage() {
-  const [targets] = useState(initialTargets);
+  const { data, isPending, error, refetch } = useQuery({ queryKey: ['terminal', 'catalog'], queryFn: () => requestApi<Catalog>('/terminal/catalog'), retry: false });
+  const targets = data?.items || [];
   const [selected, setSelected] = useState<string | null>(null);
   const active = targets.find(target => target.id === selected);
   return (
@@ -28,7 +31,10 @@ export function TerminalPage() {
               <span className="min-w-0 flex-1 truncate">{target.label}</span>
             </button>
           ))}
-          {!targets.length && <p className="px-2 py-4 text-sm text-carbon-500">Nenhuma VM ou Codespace carregado. O catálogo seguro ainda precisa ser conectado ao backend.</p>}
+          {isPending && <p className="px-2 py-4 text-sm text-carbon-500">Carregando máquinas autorizadas…</p>}
+          {error && <div className="space-y-2 px-2 py-4 text-sm text-amber-400">Não foi possível carregar as máquinas.<button type="button" onClick={() => void refetch()} className="block underline">Tentar novamente</button></div>}
+          {!isPending && !error && !targets.length && <p className="px-2 py-4 text-sm text-carbon-500">Nenhuma VM autorizada configurada.</p>}
+          {data?.codespaces && <p className="px-2 py-2 text-xs text-carbon-500">Codespaces: {data.codespaces.reason}</p>}
           <div className="flex items-center gap-2 rounded-xl border border-dashed border-carbon-700 px-3 py-3 text-xs text-carbon-500">
             <Plus size={16}/> Máquinas são cadastradas no servidor, nunca por host arbitrário.
           </div>

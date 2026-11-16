@@ -1,4 +1,5 @@
 import { githubToken } from './github-app';
+import { terminalCatalogRoute } from './terminal/catalog';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
@@ -43,6 +44,9 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  const terminalCatalogResponse = terminalCatalogRoute(request, env);
+  if (terminalCatalogResponse) return terminalCatalogResponse;
 
   const cloudRunJobsResponse = await cloudRunJobsRoute(request, env, identity);
   if (cloudRunJobsResponse) return cloudRunJobsResponse;
