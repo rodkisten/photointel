@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Globe2,
   FolderGit2,
+  TerminalSquare,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -41,6 +42,7 @@ const NAV = [
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
+  { id: 'terminal', to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'notifications', to: '/notifications', label: 'Notificações', icon: Bell },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
@@ -49,13 +51,14 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'terminal'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
   jobs: 'Dispare jobs e acompanhe logs de execução',
+  terminal: 'Acesse suas VMs e GitHub Codespaces',
   operations: 'Cron, pausas e execuções dos serviços',
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
@@ -71,6 +74,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
   if (pathname.startsWith('/deploys')) return 'deploy';
