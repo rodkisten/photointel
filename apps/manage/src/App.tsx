@@ -23,7 +23,6 @@ import {
   GripVertical,
   ChevronDown,
   Globe2,
-  FolderGit2,
   TerminalSquare,
 } from 'lucide-react';
 
