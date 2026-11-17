@@ -70,8 +70,9 @@ jobs:
           {
             "name": "photointel-manage-pr-${PR_NUMBER}",
             "compatibility_date": "2026-11-01",
-            "workers_dev": true,
+            "workers_dev": false,
             "preview_urls": false,
+            "routes": [{ "pattern": "pr${PR_NUMBER}.preview.manage.migos.club/*", "zone_name": "migos.club" }],
             "assets": {
               "directory": "./dist",
               "not_found_handling": "single-page-application"
@@ -81,7 +82,7 @@ jobs:
           npx --yes wrangler@4.135.0 deploy --config wrangler.pr-preview.jsonc
           echo "### Manage PR #${PR_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: https://pr${PR_NUMBER}.preview.manage.migos.club" >> "$GITHUB_STEP_SUMMARY"
-          echo "Static preview deployed to the isolated Worker photointel-manage-pr-${PR_NUMBER}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Static preview deployed directly to a dedicated custom-domain route; workers.dev disabled for access safety." >> "$GITHUB_STEP_SUMMARY"
           echo "Admin API and production credentials are intentionally unavailable." >> "$GITHUB_STEP_SUMMARY"
       - name: "📝 Preview configuration"
         if: steps.credentials.outputs.ready != 'true'
@@ -109,6 +110,6 @@ jobs:
             exit 1
           fi
           cat > wrangler.pr-preview.jsonc <<EOF
-          {"name":"photointel-manage-pr-${{ github.event.pull_request.number }}","compatibility_date":"2026-11-01","workers_dev":true}
+          {"name":"photointel-manage-pr-${{ github.event.pull_request.number }}","compatibility_date":"2026-11-01","workers_dev":false}
           EOF
           npx --yes wrangler@4.135.0 delete --config wrangler.pr-preview.jsonc --force
