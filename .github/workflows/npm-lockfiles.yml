@@ -14,6 +14,11 @@ on:
       - "**/package.json"
   workflow_dispatch:
     inputs:
+      package_path:
+        description: "Package directory for manual run (default: apps/manage)"
+        required: false
+        default: "apps/manage"
+        type: string
       target_branch:
         description: "Branch to synchronize (leave empty for selected branch)"
         required: false
@@ -38,6 +43,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}
           persist-credentials: true
+          fetch-depth: 0
       - name: "🧰 Node.js 22"
         uses: actions/setup-node@v4
         with:
@@ -46,19 +52,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' manifests < <(git ls-files -z -- 'package.json' '**/package.json')
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            target="${{ inputs.package_path }}"
+            [[ -n "$target" ]] || target="apps/manage"
+            manifests=("$target/package.json")
+          else
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              base="${{ github.event.pull_request.base.sha }}"
+            else
+              base="${{ github.event.before }}"
+            fi
+            mapfile -d '' manifests < <(git diff --name-only -z "$base" HEAD -- 'package.json' '**/package.json')
+          fi
           if (( ${#manifests[@]} == 0 )); then
-            echo "::notice::No tracked package.json found"
+            echo "### 📦 No package manifests changed" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           for manifest in "${manifests[@]}"; do
+            [[ -f "$manifest" ]] || continue
             dir="$(dirname "$manifest")"
-            if [[ "$dir" == "." ]]; then dir="$GITHUB_WORKSPACE"; fi
             echo "::group::📦 $manifest"
             (
               cd "$dir"
               npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-              npm ci --dry-run --ignore-scripts --no-audit --no-fund
+              npm ci --dry-run --ignore-scripts --no-audit --no-fund --loglevel=error
             )
             echo "::endgroup::"
           done
@@ -67,13 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' locks < <(git ls-files -z -- 'package-lock.json' '**/package-lock.json')
-          if (( ${#locks[@]} )); then git add -- "${locks[@]}"; fi
-          # Include newly generated lockfiles only for tracked package manifests.
-          while IFS= read -r -d '' manifest; do
-            lock="$(dirname "$manifest")/package-lock.json"
-            if [[ -f "$lock" ]]; then git add -- "$lock"; fi
-          done < <(git ls-files -z -- 'package.json' '**/package.json')
+          git add -- 'package-lock.json' '**/package-lock.json'
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "### 📦 Lockfiles already synchronized" >> "$GITHUB_STEP_SUMMARY"
