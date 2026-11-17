@@ -32,7 +32,6 @@ export function initManageSentry(): void {
     dsn,
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_MANAGE_RELEASE || undefined,
-    sendDefaultPii: false,
     defaultIntegrations: false,
     integrations: [Sentry.linkedErrorsIntegration()],
     attachStacktrace: true,
