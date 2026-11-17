@@ -1,4 +1,5 @@
 import { githubAppIdentity } from './github-app';
+import { projectCatalogRoute } from './project-catalog';
 import { githubToken } from './github-app';
 import { terminalCatalogRoute } from './features/terminal/catalog';
 import { terminalSessionRoute } from './features/terminal/protocol';
@@ -48,6 +49,9 @@ export async function api(
   const url = new URL(request.url),
     path = url.pathname,
     method = request.method;
+
+  const projectCatalogResponse = await projectCatalogRoute(request, env, identity);
+  if (projectCatalogResponse) return projectCatalogResponse;
 
   const terminalTicketResponse = await terminalTicketRoute(request, env, identity);
   if (terminalTicketResponse) return terminalTicketResponse;
