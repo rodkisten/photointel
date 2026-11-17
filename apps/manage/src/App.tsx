@@ -266,9 +266,11 @@ export default function App() {
           )}
         </div>
       </div>
-      {isReadOnlyProject && (
+      {isReadOnlyProject && tab === 'overview' && (
         <section className="mx-auto max-w-6xl px-4 pt-4 sm:px-6" aria-label="Workflows do projeto selecionado">
-          <div className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4">
+          <details className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4" aria-label="Atividade do repositório selecionado">
+            <summary className="cursor-pointer text-sm font-medium text-carbon-200">{activeProject?.repository} · Atividade GitHub (somente leitura) · Expandir</summary>
+            <div className="mt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-carbon-100">{activeProject?.repository} · Somente leitura</p>
@@ -326,7 +328,8 @@ export default function App() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          </details>
         </section>
       )}
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
