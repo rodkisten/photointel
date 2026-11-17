@@ -23,7 +23,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.confirm_download == true)
       || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     services:
       postgres:
@@ -64,11 +64,11 @@ jobs:
     steps:
       - name: "📥 Código"
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "🧰 Config"
         id: notify_observed_002
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "🧰 Setup"
         id: notify_observed_003
@@ -89,7 +89,7 @@ jobs:
           uv pip check
       - name: "🧰 Setup"
         id: notify_observed_006
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/photointel-real-cpu-models
           key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
@@ -107,7 +107,7 @@ jobs:
       - name: "📦 Artefatos"
         id: notify_observed_010
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: real-cpu-model-validation
           path: reports/real-cpu/

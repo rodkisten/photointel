@@ -59,7 +59,7 @@ jobs:
       containers: ${{ steps.scope.outputs.containers }}
       security: ${{ steps.scope.outputs.security }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -81,11 +81,11 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_002
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_003
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23', enable-cache: true}
       - name: "▶ ️  Execute command"
         continue-on-error: true
@@ -126,7 +126,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_009
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_008.outcome == 'failure') }}
         with:
           name: unit-results
@@ -160,12 +160,12 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_010
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_011
-        uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+        uses: actions/setup-node@v7
+        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_012
@@ -240,11 +240,11 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_018
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_019
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
         continue-on-error: true
@@ -261,11 +261,11 @@ jobs:
       - name: "🧰 Código"
         continue-on-error: true
         id: notify_observed_022
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: "🧰 Código"
         continue-on-error: true
         id: notify_observed_023
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/minio.Dockerfile
@@ -307,8 +307,8 @@ jobs:
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_030
-        uses: actions/setup-node@v4
-        with: {node-version: '22', cache: npm, cache-dependency-path: apps/web/package-lock.json}
+        uses: actions/setup-node@v7
+        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
       - name: "▶ ️  Execute command"
         continue-on-error: true
         id: notify_observed_031
@@ -338,7 +338,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_034
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_029.outcome == 'failure') }}
         with:
           name: integration-results
@@ -348,7 +348,7 @@ jobs:
       - name: "📦 Testes"
         continue-on-error: true
         id: notify_observed_035
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_033.outcome == 'failure') }}
         with:
           name: browser-results
@@ -382,19 +382,19 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_036
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: "🧰 Build"
         continue-on-error: true
         id: notify_observed_037
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: "🧰 Build"
         continue-on-error: true
         id: notify_observed_038
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: "🏗 Build"
         continue-on-error: true
         id: notify_observed_039
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/api.Dockerfile
@@ -403,7 +403,7 @@ jobs:
       - name: "🏗 Build"
         continue-on-error: true
         id: notify_observed_040
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/web.Dockerfile
@@ -436,14 +436,14 @@ jobs:
       - name: "📥 Código"
         continue-on-error: true
         id: notify_observed_041
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: "🧰 Config"
         continue-on-error: true
         id: notify_observed_042
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v10.3.3
         with: {version: '0.12.23'}
       - name: "▶ ️  Execute command"
         continue-on-error: true
@@ -463,7 +463,7 @@ jobs:
           uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
       - name: "🔐 Secrets"
         id: notify_observed_046
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         continue-on-error: true
         env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
       - name: "📋 Consolidar falhas · security"

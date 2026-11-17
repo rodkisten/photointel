@@ -37,7 +37,7 @@ jobs:
     environment: production
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: "🧪 Test R2 fixture selector (offline)"
         run: python3 -m unittest infra.scripts.test_media_smoke_fixture -v
       - name: "🛡️ Require explicit paid-run authorization"

@@ -62,11 +62,11 @@ jobs:
     steps:
       - name: "📥 Código"
         id: notify_observed_001
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "🧰 Config"
         id: notify_observed_002
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with: {python-version: '3.15'}
       - name: "🔐 Código"
         id: notify_observed_003
@@ -114,7 +114,7 @@ jobs:
       # Only keep the generated plans when useful for manual review or failures.
       - name: "📦 Testes"
         id: notify_observed_008
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_evidence == true }}
         with:
           name: gcp-offline-definitions

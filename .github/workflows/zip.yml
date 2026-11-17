@@ -44,18 +44,18 @@ jobs:
   push-check:
     name: "🧪 ZIP patch policy"
     if: github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions: {contents: read}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
-      - uses: actions/setup-node@v4
-        with: {node-version: '22'}
+      - uses: actions/setup-node@v7
+        with: {node-version: '26'}
       - run: node --test infra/scripts/zip-patch-policy.test.cjs
   apply-zip:
     if: github.event_name == 'workflow_dispatch'
     name: "📦 Apply"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
 
     steps:
@@ -80,9 +80,9 @@ jobs:
           job: ${{ github.job }}
       - name: "🧰 Setup"
         id: notify_observed_002
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           package-manager-cache: false
 
       - name: "🧪 Validação"

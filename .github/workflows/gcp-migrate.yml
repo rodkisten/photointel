@@ -63,7 +63,7 @@ jobs:
       ${{ github.event_name == 'push' && (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - run: |
           source scripts/ci/pretty-logs.sh
@@ -88,7 +88,7 @@ jobs:
     steps:
       - name: "📥 Código"
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -138,7 +138,7 @@ jobs:
 
       - name: "🔐 Login"
         id: cloud_auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
@@ -166,7 +166,7 @@ jobs:
 
       - name: "🧰 Gcloud"
         id: setup_gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: "📱 ! 🧰 Gcloud"
         if: ${{ always() && (steps.setup_gcloud.outcome == 'failure' || steps.setup_gcloud.outcome == 'cancelled') }}

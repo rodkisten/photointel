@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: "🔐 Authenticate administrative bootstrap identity"
@@ -35,7 +35,7 @@ jobs:
           project_id: photointel
           workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
           service_account: photointel-bootstrap@photointel.iam.gserviceaccount.com
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.2"
       - name: "🔎 Initialize isolated permissions state"

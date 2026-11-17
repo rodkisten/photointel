@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 60
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -74,9 +74,9 @@ jobs:
           ci_run "Media: validation" python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
       - name: "🧰 Node.js 22 for media validation"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '26'
       - name: "🧪 Validate media image and video once before publishing"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         run: |
