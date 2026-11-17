@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
+import { ProjectPicker } from './components/ProjectPicker';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
 import { cn } from './lib/utils';
@@ -146,8 +147,8 @@ export default function App() {
     queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
     retry: false,
   });
-  const activeProject = projectCatalog.data?.items.find(item => item.id === selectedProject)
-    || projectCatalog.data?.items[0];
+  const activeProject = (selectedProject && projectCatalog.data?.items.find(item => item.id === selectedProject))
+    || (selectedProject ? { id: selectedProject, repository: selectedProject, name: selectedProject.split('/').pop() || selectedProject, enabled: selectedProject === 'rodkisten/photointel', status: 'discovered' } : projectCatalog.data?.items[0]);
   useEffect(() => {
     const onLocation = () => setSelectedProject(new URLSearchParams(window.location.search).get('project'));
     window.addEventListener('popstate', onLocation);
@@ -238,33 +239,7 @@ export default function App() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
-        <div className="relative inline-block">
-          <button type="button" aria-expanded={projectMenuOpen} aria-haspopup="menu"
-            onClick={() => setProjectMenuOpen(open => !open)}
-            className="flex min-h-11 items-center gap-2 rounded-xl border border-carbon-800 bg-carbon-900 px-3 py-2 text-sm text-carbon-200">
-            <FolderGit2 size={16} /><span className="text-carbon-500">Projeto</span>
-            <span className="font-medium">{activeProject?.name || "PhotoIntel"}</span><ChevronDown size={15} />
-          </button>
-          {projectMenuOpen && (
-            <div role="menu" aria-label="Selecionar escopo" className="absolute left-0 top-full z-40 mt-2 w-72 rounded-xl border border-carbon-700 bg-carbon-950 p-2 shadow-2xl">
-              <p className="px-3 py-2 text-xs font-semibold uppercase text-carbon-500">Escopo de administração</p>
-              {projectCatalog.data?.items.map(project => (
-                <button key={project.id} type="button" role="menuitem"
-                  onClick={() => chooseProject(project.id)}
-                  disabled={project.status === 'unavailable'}
-                  className="flex w-full items-center gap-3 rounded-lg bg-carbon-800 px-3 py-3 text-left text-sm disabled:opacity-50">
-                  <FolderGit2 size={17} /><span className="flex-1">{project.name}<span className="block text-xs text-carbon-400">{project.repository} · {project.status === 'discovered' ? 'Descoberto (leitura)' : project.status === 'app_accessible' ? 'App autorizado (leitura)' : project.status === 'unavailable' ? 'Indisponível' : 'Conectado'}</span></span>
-                  {activeProject?.id === project.id && <span className="text-emerald-400">✓</span>}
-                </button>
-              ))}
-              {projectCatalog.isError && <p className="px-3 py-2 text-xs text-amber-400">Catálogo indisponível. Operações permanecem no projeto padrão.</p>}
-              <div className="mt-1 flex items-center gap-3 rounded-lg px-3 py-3 text-sm text-carbon-500" aria-disabled={!projectCatalog.data?.global.enabled}>
-                <Globe2 size={17} /><span>Global<span className="block text-xs">Em preparação: ENV compartilhada</span></span>
-              </div>
-              <p className="border-t border-carbon-800 px-3 pt-3 pb-1 text-xs text-carbon-500">Outros repositórios serão habilitados após configurar permissões. Nenhum secret é compartilhado automaticamente.</p>
-            </div>
-          )}
-        </div>
+        <ProjectPicker selected={selectedProject || 'rodkisten/photointel'} onSelect={chooseProject} />
       </div>
       {isReadOnlyProject && tab === 'overview' && (
         <section className="mx-auto max-w-6xl px-4 pt-4 sm:px-6" aria-label="Workflows do projeto selecionado">
