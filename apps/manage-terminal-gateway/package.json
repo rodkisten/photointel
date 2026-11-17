@@ -1,0 +1,12 @@
+{
+  "name": "@photointel/terminal-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0",
+    "ws": "^8.18.0"
+  }
+}

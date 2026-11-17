@@ -29,6 +29,7 @@ import { CloudRunJobsPage } from './pages/CloudRunJobs';
 import { OperationsPage } from './pages/Operations';
 import { Overview } from './pages/Overview';
 import { SystemInfo } from './pages/SystemInfo';
+import { TerminalPage } from './features/terminal/TerminalPage';
 import type { Meta } from './types';
 
 function NotFound() {
@@ -161,6 +162,8 @@ const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/o
 
 const cloudRunJobsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/jobs', component: CloudRunJobsPage });
 
+const terminalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/terminal', component: TerminalPage });
+
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/costs',
@@ -207,6 +210,7 @@ const routeTree = rootRoute.addChildren([
   triggersRoute,
   workflowStudioRoute,
   costsRoute,
+  terminalRoute,
   operationsRoute,
   cloudRunJobsRoute,
   runRoute,

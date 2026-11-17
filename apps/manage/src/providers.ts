@@ -1,3 +1,4 @@
+import { githubToken } from './github-app';
 import { parseConfiguration } from './config-reconcile';
 import { ApiError, redact } from './auth';
 import type { Env, Identity } from './auth';
@@ -265,17 +266,14 @@ export async function provider(url: string, token: string, init: RequestInit = {
 
 // --- GITHUB & CLOUDFLARE WRAPPERS ---
 
-export function gh(env: Env, path: string, method = 'GET', payload?: unknown): Promise<unknown> {
-  if (!env.GITHUB_API_TOKEN) {
-    throw new ApiError(503, 'GITHUB_TOKEN', 'Configure GITHUB_API_TOKEN');
-  }
-  
+export async function gh(env: Env, path: string, method = 'GET', payload?: unknown): Promise<unknown> {
+  const token = await githubToken(env);
   const repo = env.GITHUB_REPO || PROVIDER_CONFIG.DEFAULT_REPO;
   if (!PATTERNS.REPOSITORY.test(repo)) {
     throw new ApiError(503, 'GITHUB_REPO', 'Repositório inválido');
   }
 
-  return provider('https://api.github.com/repos/' + repo + path, env.GITHUB_API_TOKEN, {
+  return provider('https://api.github.com/repos/' + repo + path, token, {
     method,
     headers: { 'X-GitHub-Api-Version': PROVIDER_CONFIG.GITHUB_API_VERSION, Accept: 'application/vnd.github+json' },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),

@@ -1,3 +1,10 @@
+import { githubAppIdentity } from './github-app';
+import { projectCatalogRoute } from './project-catalog';
+import { githubToken } from './github-app';
+import { terminalCatalogRoute } from './features/terminal/catalog';
+import { terminalSessionRoute } from './features/terminal/protocol';
+import { terminalPreflightRoute } from './features/terminal/preflight';
+import { terminalTicketRoute } from './features/terminal/ticket';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { workflowStudioRoute } from './workflow-studio-api';
 import { parseWorkflowInputs } from './workflow-yaml';
@@ -46,6 +53,20 @@ export async function api(
 
   const studioResponse = await workflowStudioRoute(request, env);
   if (studioResponse) return studioResponse;
+  const projectCatalogResponse = await projectCatalogRoute(request, env, identity);
+  if (projectCatalogResponse) return projectCatalogResponse;
+
+  const terminalTicketResponse = await terminalTicketRoute(request, env, identity);
+  if (terminalTicketResponse) return terminalTicketResponse;
+
+  const terminalPreflightResponse = await terminalPreflightRoute(request, env, identity);
+  if (terminalPreflightResponse) return terminalPreflightResponse;
+
+  const terminalSessionResponse = terminalSessionRoute(request, env, identity);
+  if (terminalSessionResponse) return terminalSessionResponse;
+
+  const terminalCatalogResponse = await terminalCatalogRoute(request, env);
+  if (terminalCatalogResponse) return terminalCatalogResponse;
 
   const cloudRunJobsResponse = await cloudRunJobsRoute(request, env, identity);
   if (cloudRunJobsResponse) return cloudRunJobsResponse;
@@ -81,6 +102,139 @@ export async function api(
   if (path.startsWith('/api/icloud/auth/')) {
     const response = await icloudAuthRoute(request, env, identity);
     if (response) return response;
+  }
+
+  // Repository selection is read-only until every mutation route is explicitly scoped.
+  // The allowlist alone does not grant GitHub App installation access.
+  if (method === 'GET' && path === '/api/projects') {
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const configured = (env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo));
+    const repos = [...new Set([primary, ...configured])].slice(0, 30);
+    const appConfigured = Boolean(env.MANAGE_GITHUB_APP_ID &&
+      env.MANAGE_GITHUB_APP_INSTALLATION_ID && env.MANAGE_GITHUB_APP_PRIVATE_KEY);
+    const catalogToken = await githubToken(env).catch(() => undefined);
+    const items = await Promise.all(repos.map(async repo => {
+      const enabled = repo === primary;
+      if (!catalogToken) return { id: repo, name: repo.split('/')[1], repository: repo,
+        enabled, status: 'unavailable' };
+      try {
+        const info = await provider('https://api.github.com/repos/' + repo, catalogToken, {
+          headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' },
+        }) as { name?: string; archived?: boolean; disabled?: boolean };
+        return { id: repo, name: info.name || repo.split('/')[1], repository: repo, enabled,
+          status: info.archived || info.disabled ? 'archived' : appConfigured ? 'app_accessible' : 'discovered' };
+      } catch {
+        return { id: repo, name: repo.split('/')[1], repository: repo, enabled: false, status: 'unavailable' };
+      }
+    }));
+    return json({ items, global: { enabled: false, reason: 'Aguardando autorização e isolamento de secrets' } });
+  }
+
+  // Scoped, read-only GitHub Actions inventory. Does not change the active project.
+  if (method === 'GET' && path === '/api/projects/workflows') {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/workflows?per_page=100',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        total_count?: number;
+        workflows?: Array<{ id: number; name: string; path: string; state: string }>;
+      };
+    return json({ repository, total: result.total_count ?? 0,
+      items: (result.workflows || []).map(w => ({ id: w.id, name: w.name, path: w.path, state: w.state })) });
+  }
+
+  if (method === 'GET' && path === '/api/projects/runs') {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/runs?per_page=10',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        workflow_runs?: Array<{ id: number; name: string; status: string; conclusion: string | null;
+          html_url: string; created_at: string }>;
+      };
+    return json({ repository, items: (result.workflow_runs || []).map(run => ({
+      id: run.id, name: run.name, status: run.status, conclusion: run.conclusion,
+      html_url: run.html_url, created_at: run.created_at,
+    })) });
+  }
+
+  const scopedJobs = path.match(/^\/api\/projects\/runs\/([1-9]\d*)\/jobs$/);
+  if (method === 'GET' && scopedJobs) {
+    const repository = url.searchParams.get('repository') || '';
+    const primary = env.GITHUB_REPO || DEFAULTS.GITHUB_REPO;
+    const allowed = new Set([primary, ...(env.MANAGE_PROJECT_REPOSITORIES || '')
+      .split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado no catálogo');
+    const runId = scopedJobs[1];
+    const token = await githubToken(env);
+    const result = await provider('https://api.github.com/repos/' + repository + '/actions/runs/' + runId + '/jobs?per_page=100',
+      token, { headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json' } }) as {
+        jobs?: Array<{ id: number; name: string; status: string; conclusion: string | null;
+          html_url: string; started_at: string | null; completed_at: string | null;
+          steps?: Array<{ name: string; status: string; conclusion: string | null; number: number }> }>;
+      };
+    return json({ repository, run_id: Number(runId), items: (result.jobs || []).map(job => ({
+      id: job.id, name: job.name, status: job.status, conclusion: job.conclusion,
+      html_url: job.html_url, started_at: job.started_at, completed_at: job.completed_at,
+      steps: (job.steps || []).map(step => ({ name: step.name, status: step.status,
+        conclusion: step.conclusion, number: step.number })),
+    })) });
+  }
+
+  if (method === 'GET' && path === '/api/github/app-identity') {
+    if (!env.MANAGE_GITHUB_APP_ID || !env.MANAGE_GITHUB_APP_PRIVATE_KEY)
+      return json({ configured: false, verified: false, slug: null });
+    try {
+      const info = await githubAppIdentity(env);
+      return json({ configured: true, verified: true, slug: info.slug,
+        app_id: info.id, name: info.name });
+    } catch {
+      return json({ configured: true, verified: false, slug: null });
+    }
+  }
+
+  if (method === 'GET' && path === '/api/github/auth-status') {
+    const configured = {
+      app_id: Boolean(env.MANAGE_GITHUB_APP_ID),
+      installation_id: Boolean(env.MANAGE_GITHUB_APP_INSTALLATION_ID),
+      private_key: Boolean(env.MANAGE_GITHUB_APP_PRIVATE_KEY),
+    };
+    const complete = Object.values(configured).every(Boolean);
+    const partial = Object.values(configured).some(Boolean) && !complete;
+    let verified = false;
+    if (complete) {
+      try {
+        const token = await githubToken(env);
+        const installation = await provider('https://api.github.com/installation/repositories?per_page=1', token, {
+          headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+        }) as { total_count?: number };
+        verified = typeof installation.total_count === 'number';
+      } catch { /* Keep provider errors and credentials server-side. */ }
+    }
+    return json({
+      mode: complete ? 'github_app' : partial ? 'incomplete' : env.GITHUB_API_TOKEN ? 'legacy_pat' : 'unconfigured',
+      configured, verified, legacy_fallback: Boolean(env.GITHUB_API_TOKEN),
+      required_secrets: [
+        'MANAGE_GITHUB_APP_ID',
+        'MANAGE_GITHUB_APP_INSTALLATION_ID',
+        'MANAGE_GITHUB_APP_PRIVATE_KEY',
+      ].filter(name => !({
+        MANAGE_GITHUB_APP_ID: configured.app_id,
+        MANAGE_GITHUB_APP_INSTALLATION_ID: configured.installation_id,
+        MANAGE_GITHUB_APP_PRIVATE_KEY: configured.private_key,
+      } as Record<string, boolean>)[name]),
+    });
   }
 
   // Endpoints Nativos
@@ -155,7 +309,7 @@ export async function api(
     const data = await gh(env, '/actions/workflows?per_page=100');
     return json({
       items: safeList(data, 'workflows')
-        .filter((x) => x.state === 'active' && /^\\.github\\/workflows\\/[A-Za-z0-9_.-]+\\.ya?ml$/.test(String(x.path || '')))
+        .filter((x) => x.state === 'active' && /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/.test(String(x.path || '')))
         .map((x) => ({
           id: x.id,
           name: x.name,
@@ -167,7 +321,7 @@ export async function api(
     });
   }
 
-  const workflowInputsMatch = path.match(/^\\/api\\/workflows\\/([A-Za-z0-9_.-]+\\.ya?ml)\\/inputs$/);
+  const workflowInputsMatch = path.match(/^\/api\/workflows\/([A-Za-z0-9_.-]+\.ya?ml)\/inputs$/);
   if (method === 'GET' && workflowInputsMatch) {
     const filename = workflowInputsMatch[1];
     const catalog = await gh(env, '/actions/workflows?per_page=100');
