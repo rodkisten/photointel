@@ -1,14 +1,6 @@
 name: "🧱 Setup GCP"
 run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · photointel"
 on:
-  #push:
-  #  branches: [main]
-  #  paths:
-     # - 'infra/gcp/bootstrap.sh'
-      # - 'infra/gcp/**'
-     # - 'infra/docker/**'
-   #   - '.github/actions/gcp-config/**'
- #     - '.github/workflows/gcp-bootstrap.yml'
   pull_request:
     branches: [main]
     paths:
@@ -28,15 +20,14 @@ permissions:
   contents: read
 
 concurrency:
-  # Push checks must not cancel or block manually authorized production operations.
+  # PR checks must not cancel or block manually authorized production operations.
   group: ${{ github.event_name == 'workflow_dispatch' && 'photointel-gcp-production' || format('photointel-gcp-bootstrap-check-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
   push-check:
     name: "🧪 GCP bootstrap and permissions (offline)"
-    if: >-
-      ${{ (github.event_name == 'push' || github.event_name == 'pull_request') && (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]') }}
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
