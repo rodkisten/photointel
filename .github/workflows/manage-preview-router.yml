@@ -1,0 +1,38 @@
+name: "🌐 Manage · Preview Router"
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/cloudflare/manage-preview-router/**"
+      - ".github/workflows/manage-preview-router.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: manage-preview-router
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "🔑 Verify preview token"
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" && test -n "$CLOUDFLARE_ACCOUNT_ID" || {
+            echo "::error::Configure Cloudflare credentials in GitHub environment preview"
+            exit 1
+          }
+      - name: "🌐 Deploy wildcard router"
+        working-directory: infra/cloudflare/manage-preview-router
+        run: npx --yes wrangler@4.135.0 deploy --config wrangler.jsonc
+      - name: "📍 Preview domains"
+        run: |
+          echo "### Manage preview router" >> "$GITHUB_STEP_SUMMARY"
+          echo "- https://pr123.preview.manage.migos.club" >> "$GITHUB_STEP_SUMMARY"
+          echo "- https://preview.manage.migos.club" >> "$GITHUB_STEP_SUMMARY"
+          echo "- https://preview-manage.migos.club" >> "$GITHUB_STEP_SUMMARY"
