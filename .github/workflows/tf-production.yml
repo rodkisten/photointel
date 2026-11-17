@@ -58,7 +58,7 @@ jobs:
       # Shared confirmation guard for scripts that read config.local.json.
       CONFIRM_PROJECT: photointel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -85,7 +85,7 @@ jobs:
           service_account: photointel-terraform@photointel.iam.gserviceaccount.com
           project_id: photointel
       - uses: google-github-actions/setup-gcloud@v3
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.2"
           terraform_wrapper: false
@@ -185,7 +185,7 @@ jobs:
       # Shared confirmation guard for scripts that read config.local.json.
       CONFIRM_PROJECT: photointel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: {persist-credentials: false}
       - name: "TF · Check caller revision"
         env:
@@ -209,7 +209,7 @@ jobs:
           service_account: photointel-terraform@photointel.iam.gserviceaccount.com
           project_id: photointel
       - uses: google-github-actions/setup-gcloud@v3
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.2"
           terraform_wrapper: false

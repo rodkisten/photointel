@@ -74,8 +74,8 @@ jobs:
             echo "::group::📦 $manifest"
             (
               cd "$dir"
-              npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-              npm ci --dry-run --ignore-scripts --no-audit --no-fund --loglevel=error
+              npm install --force --package-lock-only --ignore-scripts --no-audit --no-fund
+              npm ci --force --dry-run --ignore-scripts --no-audit --no-fund --loglevel=error
             )
             echo "::endgroup::"
           done
@@ -103,7 +103,7 @@ jobs:
           git commit -m "chore(deps): sync npm lockfiles"
           branch="${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}"
           git fetch origin "$branch"
-          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]]; then
+          if [[ "$(git rev-parse HEAD^)" != "$(git rev-parse "origin/$branch")" ]]; then
             echo "::error::Branch advanced during lockfile generation; rerun on latest commit."
             exit 1
           fi

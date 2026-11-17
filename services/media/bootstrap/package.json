@@ -10,11 +10,11 @@
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
-    "chalk": "^5.4.1",
-    "ora": "^8.2.0"
+    "chalk": "^6.0.0",
+    "ora": "^10.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^26.0.0",
+    "typescript": "^7.0.0"
   }
 }
