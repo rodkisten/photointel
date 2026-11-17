@@ -50,8 +50,6 @@ export function TerminalPage() {
             <h3 className="text-base font-semibold text-carbon-200">Terminal pronto para integração</h3>
             <p className="max-w-md text-sm leading-6 text-carbon-400">A interface está isolada. A conexão SSH ficará desativada até existir um gateway autenticado, um catálogo de destinos autorizados e validação das chaves dos hosts.</p>
             {active && <p className="max-w-md text-xs text-carbon-500">{active.label} selecionado. A conexão permanece bloqueada até o gateway estar configurado.</p>}
-            {connectionNotice && <p role="status" className="text-xs text-amber-400">{connectionNotice}</p>}
-            <button type="button" disabled={!active || active.kind !== 'vm' || active.status !== 'configured' || checking} onClick={() => void checkConnection()} className="rounded-lg border border-carbon-700 px-4 py-2 text-sm text-carbon-300 disabled:cursor-not-allowed disabled:opacity-40">{checking ? 'Verificando…' : 'Verificar conexão'}</button>
             <p className="text-xs text-carbon-500">Próxima etapa: gateway SSH, WebSocket e WTerm/Ghostty.</p>
           </div>}
         </div>
