@@ -10,5 +10,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src/worker.ts", "src/auth.ts", "src/providers.ts", "src/api.ts"]
+  "include": ["src/worker.ts", "src/auth.ts", "src/providers.ts", "src/api.ts", "src/js-yaml.d.ts"]
 }
