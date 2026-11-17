@@ -22,10 +22,10 @@
     },
     {
       "matchUpdateTypes": [
-        "major"
+        "minor"
       ],
-      "groupName": "all major dependency updates",
-      "groupSlug": "all-major-dependencies",
+      "groupName": "all minor dependency updates",
+      "groupSlug": "all-minor-dependencies",
       "automerge": true
     }
   ]
