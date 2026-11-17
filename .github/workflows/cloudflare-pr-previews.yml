@@ -57,10 +57,30 @@ jobs:
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
         run: npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ github.event.pull_request.number }}"
-      - name: "🛡 Manage preview · dedicated Access required"
+      - name: "🛡 Manage preview · isolated static assets"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
-        run: npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ github.event.pull_request.number }}"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Static-only preview: never deploy the privileged Manage Worker or its production bindings.
+          cat > wrangler.pr-preview.jsonc <<EOF
+          {
+            "name": "photointel-manage-pr-${PR_NUMBER}",
+            "compatibility_date": "2026-11-01",
+            "workers_dev": true,
+            "preview_urls": false,
+            "assets": {
+              "directory": "./dist",
+              "not_found_handling": "single-page-application"
+            }
+          }
+          EOF
+          npx --yes wrangler@4.135.0 deploy --config wrangler.pr-preview.jsonc
+          echo "### Manage PR #${PR_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Static preview deployed to the isolated Worker photointel-manage-pr-${PR_NUMBER}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Admin API and production credentials are intentionally unavailable." >> "$GITHUB_STEP_SUMMARY"
       - name: "📝 Preview configuration"
         if: steps.credentials.outputs.ready != 'true'
         run: |
