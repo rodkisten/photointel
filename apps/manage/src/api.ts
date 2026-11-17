@@ -302,7 +302,7 @@ export async function api(
     const data = await gh(env, '/actions/workflows?per_page=100');
     return json({
       items: safeList(data, 'workflows')
-        .filter((x) => x.state === 'active' && /^\\.github\\/workflows\\/[A-Za-z0-9_.-]+\\.ya?ml$/.test(String(x.path || '')))
+        .filter((x) => x.state === 'active' && /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/.test(String(x.path || '')))
         .map((x) => ({
           id: x.id,
           name: x.name,
@@ -314,7 +314,7 @@ export async function api(
     });
   }
 
-  const workflowInputsMatch = path.match(/^\\/api\\/workflows\\/([A-Za-z0-9_.-]+\\.ya?ml)\\/inputs$/);
+  const workflowInputsMatch = path.match(/^\/api\/workflows\/([A-Za-z0-9_.-]+\.ya?ml)\/inputs$/);
   if (method === 'GET' && workflowInputsMatch) {
     const filename = workflowInputsMatch[1];
     const catalog = await gh(env, '/actions/workflows?per_page=100');
