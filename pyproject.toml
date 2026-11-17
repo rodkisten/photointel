@@ -67,3 +67,7 @@ exclude = ["infra/migrations", "gpu/models/joytag_upstream.py"]
 [[tool.mypy.overrides]]
 module = "gpu.models.joytag_upstream"
 ignore_errors = true
+
+# Security minimums from pip-audit, 2026-11-16.
+[tool.uv]
+constraint-dependencies = ["certifi>=2026.10.18", "filelock>=4.2.1", "opentelemetry-api>=1.45.2", "pyasn1>=0.6.5", "setuptools>=84.1.0"]

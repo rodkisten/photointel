@@ -27,6 +27,7 @@
   "routes": [{ "pattern": "photos-manage.migos.club", "custom_domain": true }],
   "vars": {
     "GITHUB_REPO": "rodkisten/photointel",
+    "MANAGE_PROJECT_REPOSITORIES": "rodkisten/userscripts-cf,rodkisten/jardim,rodkisten/roteador",
     "GITHUB_ENVIRONMENT": "production",
     "GCP_PROJECT_ID": "photointel",
     "GCP_REGION": "us-central1",

@@ -1,34 +1,49 @@
 name: "🧪 Cloudflare · PR Previews"
-run-name: "🧪 Previews · PR #${{ github.event.pull_request.number }} · ${{ github.head_ref }}"
+run-name: "Cloudflare PR preview"
 on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Número do PR aberto para publicar o preview"
+        required: true
+        type: number
   pull_request:
-    types: [opened, reopened, synchronize]
-    paths:
-      - "apps/web/**"
-      - "apps/manage/**"
-      - "infra/cloudflare/cloud-run-proxy/**"
-      - ".github/workflows/cloudflare-pr-previews.yml"
+    types: [opened, reopened, synchronize, closed]
 permissions:
   contents: read
 concurrency:
-  group: photointel-preview-${{ github.event.pull_request.number }}
+  group: photointel-preview-${{ inputs.pr_number || github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
   previews:
-    name: "🌐 Manage + Fotos · isolated preview"
-    if: >-
-      ${{ github.event.pull_request.head.repo.full_name == github.repository && (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]') }}
+    name: "Manage and Photos Wrangler previews"
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
-    environment: preview
+    environment: production
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v7
+      - name: "🔎 Validate manually selected PR"
+        if: github.event_name == 'workflow_dispatch'
+        id: selected_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" '(.state == "open") and (.head.repo.full_name == $repo)' <<< "$pr" >/dev/null || { echo "::error::PR must be open and from this repository"; exit 1; }
+          echo "sha=$(jq -r '.head.sha' <<< "$pr")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+          ref: ${{ steps.selected_pr.outputs.sha || github.sha }}
+      - uses: actions/setup-node@v4
         with:
           node-version: "26"
           cache: npm
@@ -42,9 +57,28 @@ jobs:
           if [[ -n "$CLOUDFLARE_API_TOKEN" && -n "$CLOUDFLARE_ACCOUNT_ID" ]]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub preview Environment. Production secrets are intentionally not reused."
+            echo "::warning::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub production Environment. Preview Workers remain isolated from production routes."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: "⚙ Load production configuration (same as frontend deploy)"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - name: "🔐 Authenticate to GCP"
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - name: "🧰 Set up gcloud"
+        uses: google-github-actions/setup-gcloud@v2
+      - name: "⚙ Prepare Manage browser environment from production"
+        env:
+          CONFIRM_PROJECT: photointel
+        run: python3 -m infra.scripts.deploy_manage browser-env
       - name: "📦 Install both apps"
         run: |
           npm --prefix apps/web ci
@@ -56,13 +90,39 @@ jobs:
       - name: "🖼 Photos static preview, no production API"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
-        run: npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ github.event.pull_request.number }}"
-      - name: "🛡 Manage preview · dedicated Access required"
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/photos-preview.json"
+          echo "### Photos Preview" >> "$GITHUB_STEP_SUMMARY"
+          jq -er '.preview.urls[0]' "$RUNNER_TEMP/photos-preview.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: "🛡 Manage · Wrangler native preview"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
-        run: npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ github.event.pull_request.number }}"
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/manage-preview.json"
+          url="$(jq -er '.preview.urls[0]' "$RUNNER_TEMP/manage-preview.json")"
+          echo "### Manage native Wrangler preview · PR #${{ inputs.pr_number || github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
       - name: "📝 Preview configuration"
         if: steps.credentials.outputs.ready != 'true'
         run: |
           echo "### Previews not deployed" >> "$GITHUB_STEP_SUMMARY"
-          echo "Create GitHub Environment preview and set CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID scoped for Preview Workers." >> "$GITHUB_STEP_SUMMARY"
+          echo "Configure CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in GitHub Environment production. Preview Workers remain isolated." >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    name: "Closed PR preview cleanup"
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: "🧹 Delete native Wrangler previews"
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.135.0 preview delete --config apps/manage/wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation
+          npx --yes wrangler@4.135.0 preview delete --config apps/web/wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation

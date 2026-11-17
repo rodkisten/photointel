@@ -61,8 +61,8 @@ env:
   CLICOLOR_FORCE: "1"    # Works for many C/C++ tools and Unix utilities
 
 concurrency:
-  # Push checks must not cancel or block manually authorized production operations.
-  group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-deploy-push-check' || 'photointel-gcp-production' }}
+  # Explicit production operations are serialized and never auto-cancelled.
+  group: photointel-gcp-production
   cancel-in-progress: false
 
 jobs:
@@ -134,8 +134,7 @@ jobs:
       - run: bash -n infra/gcp/release.sh && python3 -m infra.gcp.manage render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
-    # Push performs only the offline check. Production releases require
-    # an explicit workflow_dispatch (the Manage config sync has its own path).
+    # Production releases require an explicit workflow_dispatch.
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' 
     runs-on: ubuntu-latest
     environment: production

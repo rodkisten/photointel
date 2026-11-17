@@ -1,0 +1,23 @@
+{
+  "name": "photointel-manage-preview-router",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "vars": {
+    "WORKERS_SUBDOMAIN": "kisten"
+  },
+  "routes": [
+    {
+      "pattern": "*.preview.manage.migos.club/*",
+      "zone_name": "migos.club"
+    },
+    {
+      "pattern": "preview.manage.migos.club/*",
+      "zone_name": "migos.club"
+    },
+    {
+      "pattern": "preview-manage.migos.club/*",
+      "zone_name": "migos.club"
+    }
+  ]
+}

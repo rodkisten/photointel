@@ -1,6 +1,7 @@
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env, Identity } from './auth';
 import { api } from './api';
+import { terminalWebsocketRoute } from './features/terminal/ticket';
 import { captureManageError } from './sentry';
 import { manageAssetCachePolicy } from './asset-cache';
 import { githubHook, cloudBuildCallback, tick } from './deploy-router/service';
@@ -145,6 +146,10 @@ async function handleApp(
     requireOrigin(request);
   }
 
+  // Upgrade responses must retain their WebSocket handle, never wrap a 101 Response.
+  const terminalSocket = await terminalWebsocketRoute(request, env);
+  if (terminalSocket) return terminalSocket;
+
   // Dispatch live API operations
   if (path.startsWith('/api/')) {
     return api(request, env, identity, report, correlationId);
@@ -223,6 +228,7 @@ export default {
       }, status);
     }
 
+    if (response.status === 101) return response;
     return withIncidentHeaders(response, correlationId, eventId);
   },
 
