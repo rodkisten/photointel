@@ -1,0 +1,88 @@
+name: "📦 npm · Sync lockfiles"
+run-name: "📦 Lockfiles · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "package.json"
+      - "**/package.json"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "**/package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npm-lockfiles-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "📦 Regenerate and verify npm lockfiles"
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: "📥 Checkout writable branch"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          persist-credentials: true
+      - name: "🧰 Node.js 22"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: "📦 Synchronize tracked npm manifests"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' manifests < <(git ls-files -z -- 'package.json' '**/package.json')
+          if (( ${#manifests[@]} == 0 )); then
+            echo "::notice::No tracked package.json found"
+            exit 0
+          fi
+          for manifest in "${manifests[@]}"; do
+            dir="$(dirname "$manifest")"
+            if [[ "$dir" == "." ]]; then dir="$GITHUB_WORKSPACE"; fi
+            echo "::group::📦 $manifest"
+            (
+              cd "$dir"
+              npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+              npm ci --dry-run --ignore-scripts --no-audit --no-fund
+            )
+            echo "::endgroup::"
+          done
+      - name: "🔎 Stage only lockfiles"
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' locks < <(git ls-files -z -- 'package-lock.json' '**/package-lock.json')
+          if (( ${#locks[@]} )); then git add -- "${locks[@]}"; fi
+          # Include newly generated lockfiles only for tracked package manifests.
+          while IFS= read -r -d '' manifest; do
+            lock="$(dirname "$manifest")/package-lock.json"
+            if [[ -f "$lock" ]]; then git add -- "$lock"; fi
+          done < <(git ls-files -z -- 'package.json' '**/package.json')
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### 📦 Lockfiles already synchronized" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "### 📦 Lockfiles updated" >> "$GITHUB_STEP_SUMMARY"
+            git diff --cached --name-only | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: "💾 Commit lockfile changes"
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(deps): sync npm lockfiles [skip ci]"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
