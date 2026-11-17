@@ -9,6 +9,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: tf-env-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   test:
     if: >-

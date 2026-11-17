@@ -32,7 +32,13 @@ test_case "IAM failure" "Access denied (403)" "PERMISSION_DENIED: 403" "/iam-adm
 test_case "Missing resource" "Resource not found (404)" "NOT_FOUND: 404" "/home/dashboard?"
 test_case "Quota" "quota or rate limit" "RESOURCE_EXHAUSTED: quota exceeded" "/iam-admin/quotas?"
 test_case "Secret" "Secret Manager resource" "Secret Manager: secrets/photointel-demo NOT_FOUND" "/security/secret-manager?"
-test_case "State lock" "Terraform state is locked" "Error acquiring the state lock" "/terraform/language/state/locking"
+# Terraform locking belongs to the Terraform command family, not gcloud.
+# Verify its classifier directly, preserving the original regression coverage.
+printf '%s\n' 'Error acquiring the state lock' >"$tmp/terraform-lock.log"
+ci_help terraform "$tmp/terraform-lock.log" >"$tmp/terraform-lock-diagnosis"
+assert_contains "$tmp/terraform-lock-diagnosis" 'Terraform state is locked'
+assert_contains "$tmp/terraform-lock-diagnosis" '/terraform/language/state/locking'
+echo 'PASS: Terraform state lock diagnosis'
 : > "$GITHUB_STEP_SUMMARY"
 ci_run "Success" bash -c 'echo complete' >"$tmp/success" 2>&1
 assert_contains "$tmp/success" "completed in"

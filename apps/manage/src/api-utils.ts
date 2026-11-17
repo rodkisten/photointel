@@ -3,6 +3,7 @@ import { ApiError, json, redact } from './auth';
 // Constantes centralizadas (Eliminando variáveis mágicas)
 export const PATTERNS = {
   ID: /^[1-9][0-9]{0,15}$/,
+  REPOSITORY: /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
   UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   GCP_JOB_NAME: /^photointel-[a-z0-9-]{1,48}$/,
   VARIABLE_NAME: /^[A-Z_][A-Z0-9_]{0,99}$/,

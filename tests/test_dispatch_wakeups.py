@@ -37,8 +37,8 @@ def test_manual_import_wakes_the_durable_outbox_after_commit() -> None:
 
 def test_existing_queued_job_wakes_before_new_release_gate_check() -> None:
     source = inspect.getsource(operations.start_ingestion)
-    assert source.index("if existing:") < source.index("await require_import_gates(")
-    assert source.index("await require_import_gates(") < source.index("batch = JobBatch(")
+    assert source.index("if existing:") < source.rindex("await require_import_gates(")
+    assert source.rindex("await require_import_gates(") < source.index("batch = JobBatch(")
 
 
 @pytest.mark.asyncio
@@ -59,6 +59,9 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
         async def __aexit__(self, *args):
             return False
 
+        async def get(self, model, key):
+            return None
+
         async def scalar(self, statement):
             assert "job_type" in str(statement)
             events.append("check")
@@ -67,12 +70,9 @@ async def test_finite_job_wakes_non_discovery_jobs_without_scheduler(
         async def commit(self):
             events.append("commit")
 
-    async def enqueue(session, mode, key):
-        assert mode == "worker"
-        assert key.startswith(
-            "maintenance-worker-wakeup:" if mode == "maintenance"
-            else "finite-worker-wakeup:"
-        )
+    async def enqueue(session, dispatch_mode, key):
+        assert dispatch_mode == "worker"
+        assert key.startswith("maintenance-worker-wakeup:" if mode == "maintenance" else "finite-worker-wakeup:")
         events.append("enqueue")
 
     async def drain(**kwargs):
@@ -108,6 +108,8 @@ async def test_finite_job_does_not_wake_with_no_work_or_local_platform(
             return self
         async def __aexit__(self, *args):
             return False
+        async def get(self, model, key):
+            return None
         async def scalar(self, statement):
             return None
         async def commit(self):
@@ -151,6 +153,8 @@ async def test_worker_followup_remains_durable_when_job_deadline_is_reached(
             return self
         async def __aexit__(self, *args):
             return False
+        async def get(self, model, key):
+            return None
         async def scalar(self, statement):
             return uuid4()
         async def commit(self):

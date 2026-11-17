@@ -1,0 +1,42 @@
+name: "🔐 Refresh Python security lock"
+# PR #240 is merged. Refreshes are now explicitly triggered, never tied to
+# its deleted maintenance branch or to an automatic push on main.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    if: github.repository == 'rodkisten/photointel'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Resolve patched dependencies
+        run: uv lock --upgrade-package pillow --upgrade-package certifi --upgrade-package opentelemetry-api --upgrade-package pyasn1 --upgrade-package filelock --upgrade-package setuptools
+      - name: Verify lock and audit runtime
+        run: |
+          uv lock --check
+          uv export --no-dev --no-emit-project > /tmp/runtime-requirements.txt
+          uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
+      - name: Verify GPU dependency audit
+        run: |
+          uv export --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
+          uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
+      - name: Commit resolved lockfile
+        run: |
+          if git diff --quiet -- uv.lock; then
+            echo 'Lockfile unchanged'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add uv.lock
+          git commit -m 'chore(security): refresh patched Python uv lock [skip ci]'
+          git push

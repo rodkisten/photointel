@@ -103,12 +103,20 @@ ci_run() {
     title="${diagnosis[1]}"
     url="${diagnosis[2]}"
     ci_fail "$label failed (exit ${status}, ${duration}s). $hint"
+    if [[ -f "$logfile" ]]; then
+      printf '::group::🔎 Failure highlights · %s\\n' "$label"
+      grep -E '(^|[[:space:]])(FAILED |[[:alnum:]_./-]+\.py:[0-9]+: error:|[EF][0-9]{3} |[0-9]+ failed,|Found [0-9]+ errors)' "$logfile" | tail -n 24 || true
+      printf '::endgroup::\\n'
+    fi
     ci_note "Next action: $title ($url)"
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
       {
         printf '\n### ❌ %s\n\n' "$label"
         printf -- '- **Exit code:** %s · **Duration:** %ss\n' "$status" "$duration"
         printf -- '- **Diagnosis:** %s\n' "$hint"
+        printf '\\n<details><summary>Failure highlights (last 24)</summary>\\n\\n```text\\n'
+        grep -E '(^|[[:space:]])(FAILED |[[:alnum:]_./-]+\\.py:[0-9]+: error:|[EF][0-9]{3} |[0-9]+ failed,|Found [0-9]+ errors)' "$logfile" | tail -n 24 || true
+        printf '```\\n</details>\\n\\n'
         printf -- '- **External action:** [%s](%s)\n' "$title" "$url"
         printf -- '- **Logs:** [Open this run](%s/%s/actions/runs/%s)\n' "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-rodkisten/photointel}" "${GITHUB_RUN_ID:-0}"
       } >> "$GITHUB_STEP_SUMMARY"

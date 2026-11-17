@@ -48,6 +48,11 @@ on:
         default: false
 permissions:
   contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: gcp-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   offline:
     if: >-
@@ -62,7 +67,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+        with: {python-version: '3.15'}
       - name: "🔐 Código"
         id: notify_observed_003
         run: |

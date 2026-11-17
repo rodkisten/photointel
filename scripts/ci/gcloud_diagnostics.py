@@ -22,7 +22,9 @@ def main() -> int:
     catalog_path = Path(__file__).resolve().parents[2] / "apps/manage/src/gcp-diagnostic-catalog.json"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     raw_lower = Path(logfile).read_text(encoding="utf-8", errors="replace").lower()
-    if command == "docker":
+    if command in {"gcloud", "photointel-gcloud"} and ("secretmanager" in raw_lower or "secret manager" in raw_lower or "secrets/" in raw_lower):
+        match = catalog["SECRET_MANAGER"]
+    elif command == "docker":
         match = catalog["DOCKER_REGISTRY"]
     elif command == "terraform" and ("state lock" in raw_lower or "error acquiring the state lock" in raw_lower):
         match = None  # Existing safe Terraform lock guidance remains in Bash.
@@ -60,6 +62,8 @@ def main() -> int:
         "PROVIDER_ERROR": "GCP command failed.",
     }
     hint = messages[failure.code]
+    if match and match is catalog.get("SECRET_MANAGER"):
+        hint = "Secret Manager resource or permission error."
     if failure.hint:
         hint += " " + failure.hint
     elif match:

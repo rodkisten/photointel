@@ -299,6 +299,9 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             "ACCESS_AUDIENCE": app["aud"],
             "ACCESS_ALLOWED_EMAILS": json.dumps(emails),
             "GITHUB_REPO": "rodkisten/photointel",
+            # Explicit allowlist for the read-only multiproject catalog.
+            # Never infer authorization to mutate a repository from this list.
+            "MANAGE_PROJECT_REPOSITORIES": "rodkisten/userscripts-cf,rodkisten/jardim,rodkisten/roteador",
             "GITHUB_ENVIRONMENT": "production",
             **({"XRELAY_CHAT_ID": str(extra["MANAGE_XRELAY_CHAT_ID"])}
                if extra.get("MANAGE_XRELAY_CHAT_ID") else {}),

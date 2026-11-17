@@ -159,10 +159,10 @@ async def snapshot(job: Job) -> tuple[str, int, int, int, str]:
             "PhotoIntel · " + job.job_type.replace("_", " ")[:42]
         )
     async with SessionLocal() as session:
-        counts = dict((await session.execute(
+        counts: dict[str, int] = {status: count for status, count in (await session.execute(
             select(Job.status, func.count()).where(Job.batch_id == job.batch_id)
             .group_by(Job.status)
-        )).all())
+        )).all()}
     total = max(1, sum(counts.values()))
     done = sum(counts.get(item, 0) for item in TERMINAL)
     failures = counts.get("failed", 0)

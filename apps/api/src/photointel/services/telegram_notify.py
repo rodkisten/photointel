@@ -323,10 +323,10 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
             ids = {job.batch_id for _, job, _ in grouped.values() if job.batch_id}
             batches = {id_: await session.get(JobBatch, id_) for id_ in ids}
             counts = {
-                id_: dict((await session.execute(
+                id_: {status: count for status, count in (await session.execute(
                     select(Job.status, func.count()).where(Job.batch_id == id_)
                     .group_by(Job.status)
-                )).all()) for id_ in ids
+                )).all()} for id_ in ids
             }
             latest_failures: dict[object, tuple[Job, JobEvent]] = {}
             for batch_id, progress in counts.items():
@@ -348,7 +348,8 @@ async def drain(*, limit: int = 90) -> dict[str, object]:
                 if await was_sent(key, event.id):
                     continue
                 message, links = format_message(
-                    job, event, batches.get(job.batch_id), counts.get(job.batch_id), count,
+                    job, event, batches.get(job.batch_id) if job.batch_id else None,
+                    counts.get(job.batch_id) if job.batch_id else None, count,
                     latest_failure=latest_failures.get(job.batch_id)
                     if job.batch_id and event.status not in ERROR_STATES else None,
                 )

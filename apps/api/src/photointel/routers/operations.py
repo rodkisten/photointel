@@ -857,7 +857,7 @@ async def change_batch(
     if not pause and platform == "cloud_run" and affected:
         from photointel.services.outbox import enqueue_dispatch
 
-        modes = {
+        modes: set[Literal['discover', 'backfill', 'worker', 'maintenance']] = {
             "backfill" if job.job_type == "icloud_discovery" and
             job.payload.get("mode") == "backfill"
             else "discover" if job.job_type == "icloud_discovery"
