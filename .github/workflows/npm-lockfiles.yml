@@ -13,12 +13,17 @@ on:
       - "package.json"
       - "**/package.json"
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to synchronize (leave empty for selected branch)"
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: npm-lockfiles-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: npm-lockfiles-${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +36,7 @@ jobs:
       - name: "📥 Checkout writable branch"
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}
           persist-credentials: true
       - name: "🧰 Node.js 22"
         uses: actions/setup-node@v4
@@ -84,5 +89,11 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore(deps): sync npm lockfiles [skip ci]"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+          git commit -m "chore(deps): sync npm lockfiles"
+          branch="${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}"
+          git fetch origin "$branch"
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]]; then
+            echo "::error::Branch advanced during lockfile generation; rerun on latest commit."
+            exit 1
+          fi
+          git push origin "HEAD:$branch"
