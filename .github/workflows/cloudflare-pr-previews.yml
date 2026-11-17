@@ -22,6 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -46,6 +49,25 @@ jobs:
             echo "::warning::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub production Environment. Preview Workers remain isolated from production routes."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: "⚙ Load production configuration (same as frontend deploy)"
+        id: config
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - name: "🔐 Authenticate to GCP"
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
+          service_account: ${{ steps.config.outputs.service_account }}
+      - name: "🧰 Set up gcloud"
+        uses: google-github-actions/setup-gcloud@v2
+      - name: "⚙ Prepare Manage browser environment from production"
+        env:
+          CONFIRM_PROJECT: photointel
+        run: python3 -m infra.scripts.deploy_manage browser-env
       - name: "📦 Install both apps"
         run: |
           npm --prefix apps/web ci
@@ -58,32 +80,14 @@ jobs:
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
         run: npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ github.event.pull_request.number }}"
-      - name: "🛡 Manage preview · isolated static assets"
+      - name: "🛡 Manage · Wrangler native preview"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          # Static-only preview: never deploy the privileged Manage Worker or its production bindings.
-          cat > wrangler.pr-preview.jsonc <<EOF
-          {
-            "name": "photointel-manage-pr-${PR_NUMBER}",
-            "compatibility_date": "2026-11-01",
-            "workers_dev": false,
-            "preview_urls": false,
-            "routes": [{ "pattern": "pr${PR_NUMBER}.preview.manage.migos.club/*", "zone_name": "migos.club" }],
-            "assets": {
-              "directory": "./dist",
-              "not_found_handling": "single-page-application"
-            }
-          }
-          EOF
-          npx --yes wrangler@4.135.0 deploy --config wrangler.pr-preview.jsonc
-          echo "### Manage PR #${PR_NUMBER}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Preview: https://pr${PR_NUMBER}.preview.manage.migos.club" >> "$GITHUB_STEP_SUMMARY"
-          echo "Static preview deployed directly to a dedicated custom-domain route; workers.dev disabled for access safety." >> "$GITHUB_STEP_SUMMARY"
-          echo "Admin API and production credentials are intentionally unavailable." >> "$GITHUB_STEP_SUMMARY"
+          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "photointel-manage-pr-${{ github.event.pull_request.number }}"
+          echo "### Manage native Wrangler preview · PR #${{ github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Uses the Manage Worker configuration and production-derived browser environment." >> "$GITHUB_STEP_SUMMARY"
       - name: "📝 Preview configuration"
         if: steps.credentials.outputs.ready != 'true'
         run: |
@@ -91,7 +95,7 @@ jobs:
           echo "Configure CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in GitHub Environment production. Preview Workers remain isolated." >> "$GITHUB_STEP_SUMMARY"
 
   cleanup:
-    name: "🧹 Delete closed PR preview"
+    name: "🧹 Closed PR preview"
     if: ${{ github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     environment: production
@@ -101,15 +105,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - name: "🧹 Remove isolated preview"
-        working-directory: apps/manage
-        run: |
-          set -euo pipefail
-          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
-            echo "::error::Missing preview credentials"
-            exit 1
-          fi
-          cat > wrangler.pr-preview.jsonc <<EOF
-          {"name":"photointel-manage-pr-${{ github.event.pull_request.number }}","compatibility_date":"2026-11-01","workers_dev":false}
-          EOF
-          npx --yes wrangler@4.135.0 delete --config wrangler.pr-preview.jsonc --force
+      - name: "ℹ Native Wrangler previews expire automatically"
+        run: echo "No persistent PR Worker to delete."
