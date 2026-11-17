@@ -43,6 +43,7 @@ const NAV = [
   { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
+  { id: 'workflows', to: '/workflows', label: 'Workflow Studio', icon: Workflow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
   { id: 'terminal', to: '/terminal', label: 'Terminal', icon: TerminalSquare },
@@ -54,7 +55,7 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'projects', 'infrastructure', 'triggers', 'terminal'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
@@ -68,6 +69,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   projects: 'Repositórios, Workers e execuções conectadas',
   infrastructure: 'Cloud Build, infraestrutura e terminal SSH',
   triggers: 'Webhooks GitHub, regras por caminho e status de deploy',
+  workflows: 'Editor visual de automações e pipelines',
   costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
   notifications: 'Templates, agrupamento e limpeza automática do Telegram',
@@ -84,6 +86,7 @@ function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/deploys')) return 'deploy';
   if (pathname.startsWith('/projects')) return 'projects';
   if (pathname.startsWith('/triggers')) return 'triggers';
+  if (pathname.startsWith('/workflows')) return 'workflows';
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';

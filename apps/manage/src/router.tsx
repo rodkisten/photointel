@@ -21,6 +21,7 @@ import { ConfigEditor } from './pages/ConfigEditor';
 import { Deploys } from './pages/Deploys';
 import { Infrastructure } from './pages/Infrastructure';
 import { DeployTriggers } from './pages/DeployTriggers';
+import { WorkflowStudio } from './pages/WorkflowStudio';
 import { ProjectsPage } from './pages/Projects';
 import { CostsPage } from './pages/Costs';
 import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
@@ -156,6 +157,8 @@ const triggersRoute = createRoute({
   component: DeployTriggers,
 });
 
+const workflowStudioRoute = createRoute({ getParentRoute: () => rootRoute, path: '/workflows', component: WorkflowStudio });
+
 const projectsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/projects', component: ProjectsPage });
 
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operations', component: OperationsPage });
@@ -208,6 +211,7 @@ const routeTree = rootRoute.addChildren([
   deploysRoute,
   infrastructureRoute,
   triggersRoute,
+  workflowStudioRoute,
   projectsRoute,
   costsRoute,
   terminalRoute,
