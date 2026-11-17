@@ -12,9 +12,9 @@ cache = modal.Volume.from_name("photo-intelligence-models-v1", create_if_missing
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
-        "torch==2.14.1",
-        "torchvision==0.29.1",
-        "transformers==5.10.2",
+        "torch==2.15.0",
+        "torchvision==0.29.2",
+        "transformers==5.23.0",
         "huggingface-hub==1.33.0",
         "safetensors==0.8.0",
         "einops==0.8.2",

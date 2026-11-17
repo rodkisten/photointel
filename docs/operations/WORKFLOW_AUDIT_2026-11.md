@@ -91,3 +91,10 @@ As validações offline continuam em workflows próprios (`ci.yml`, `gcp-validat
 ## Quinta etapa: catálogo operacional do Manage
 
 `apps/manage/src/pages/Deploys.tsx` apresenta inicialmente dez workflows principais (Release, CI, Terraform Plan/Apply, validação Terraform, Cloudflare, Media, GPU, diagnóstico GCP, migração e limpeza de imagens GCP). O operador pode habilitar **Mostrar todos os workflows** para alcançar os demais sem perder recursos de recuperação. A API permanece capaz de listar e despachar todos os workflows ativos, inclusive aqueles configurados em triggers de ENV. Esta é uma simplificação da interface, não uma exclusão de YAMLs.
+
+## Sexta etapa: consolidação do Imagor (15/11/2026)
+
+- O workflow `media-imagor-publish.yml` agora concentra `build`, `build-and-plan` e `build-and-deploy`, incluindo smoke test, digest imutável, plano restrito, confirmação de deploy e bootstrap do segredo de assinatura.
+- O run 43702441865 concluiu o Terraform Apply: 2 recursos criados, 0 alterados, 0 destruídos. Isto comprova provisionamento, **não** a integração funcional Media API ↔ Imagor ↔ R2.
+- Removidos `media-imagor-smoke.yml` e `tf-media-imagor-plan.yml`, substituídos pelo fluxo único. A busca de referências no código encontrou apenas esta auditoria; confirmar consumidores externos/Manage antes de remover outras entradas.
+- Próximas consolidações (`release`, `gcp-deploy`, `github-image-build`, Terraform e limpezas) exigem verificar consumidores, gatilhos e identidades. Não excluir automaticamente workflows de recuperação ou produção.

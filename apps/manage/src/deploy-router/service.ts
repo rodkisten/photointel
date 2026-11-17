@@ -285,43 +285,8 @@ export async function githubHook(request: Request, env: Env, context: { waitUnti
       console.error(JSON.stringify({ event: 'workflow_notification_failed', run_id: id }))));
     return json({ accepted: true, run_id: id }, 202);
   }
-  if (event !== 'push') return json({ accepted: false, reason: 'not_push' }, 202);
-  const delivery = request.headers.get('X-GitHub-Delivery') || '';
-  if (!UUID.test(delivery)) throw new ApiError(422, 'DELIVERY_ID', 'Identificador de entrega inválido');
-  let payload: Record<string, unknown>;
-  try { payload = JSON.parse(body); }
-  catch { throw new ApiError(400, 'WEBHOOK_JSON', 'Payload inválido'); }
-  const repository = payload.repository as Record<string, unknown> | undefined;
-  if (repository?.full_name !== (env.GITHUB_REPO || 'rodkisten/photointel'))
-    throw new ApiError(403, 'WEBHOOK_REPO', 'Evento de outro repositório');
-  if (payload.ref !== 'refs/heads/main' || payload.deleted === true)
-    return json({ accepted: false, reason: 'branch_filtered' }, 202);
-  const after = String(payload.after || ''), before = String(payload.before || '');
-  if (!SHA.test(after) || /^0{40}$/.test(after))
-    throw new ApiError(422, 'HEAD_SHA', 'Commit SHA inválido');
-  const database = db(env);
-  const changed = await changedFiles(env, before, after);
-  const selected = matchRules(await rules(database), changed);
-  if (selected.length > 5)
-    throw new ApiError(422, 'TOO_MANY_DEPLOYS', 'Mais de 5 regras disparariam neste push. Desative algumas para limitar custos.');
-  const stamp = now();
-  const inserted = await database.prepare('INSERT OR IGNORE INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
-    .bind(delivery, after, JSON.stringify(changed), stamp).run();
-  if (inserted.meta?.changes !== 1) return json({ accepted: true, duplicate: true });
-  const runs: Run[] = [];
-  for (const { rule } of selected) {
-    const id = crypto.randomUUID();
-    const insertedRun = await database.prepare(
-      "INSERT OR IGNORE INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
-      .bind(id, delivery, rule.id, rule.name, rule.provider, rule.target, after, stamp, stamp).run();
-    if (insertedRun.meta?.changes !== 1) continue;
-    runs.push({ id, delivery_id: delivery, rule_id: rule.id, rule_name: rule.name,
-      provider: rule.provider, target: rule.target, sha: after, state: 'queued',
-      provider_id: null, status_url: null, detail: null, created_at: stamp, updated_at: stamp });
-  }
-  context.waitUntil(Promise.all(runs.map((run) => dispatch(env, database, run))).then(() => undefined));
-  return json({ accepted: true, delivery, sha: after, changed: changed.length,
-    matched: selected.map((x) => ({ rule: x.rule.name, paths: x.files.length })) }, 202);
+  // Push events are accepted for observation only; they never dispatch deployments.
+  return json({ accepted: false, reason: event === 'push' ? 'manual_deploy_required' : 'not_push' }, 202);
 }
 export async function cloudBuildCallback(request: Request, env: Env): Promise<Response> {
   if (request.method !== 'POST') throw new ApiError(405, 'METHOD', 'Callback requer POST');
@@ -377,6 +342,29 @@ export async function routerApi(request: Request, env: Env, identity: Identity):
         cloudflare: Boolean(env.CLOUDFLARE_API_TOKEN),
         circleci: Boolean(env.CIRCLECI_API_TOKEN && env.CIRCLECI_PROJECT_SLUG && env.CIRCLECI_DEFINITION_ID && env.CIRCLECI_CONTEXT_ID),
         xrelay: Boolean(env.XRELAY_NOTIFICATION_URL) } });
+  }
+  if (request.method === 'POST' && path === '/api/deploy-router/manual') {
+    const input = await bodyJson<{ trigger?: string; sha?: string; confirmation?: string }>(request, 4000);
+    if (!input.trigger || !UUID.test(input.trigger) || !input.sha || !SHA.test(input.sha))
+      throw new ApiError(422, 'MANUAL_BUILD_INPUT', 'Informe um trigger válido e o SHA completo do commit');
+    if (input.confirmation !== 'DEPLOY ' + input.sha.slice(0, 8))
+      throw new ApiError(422, 'MANUAL_BUILD_CONFIRM', 'Confirme explicitamente o commit que será publicado');
+    const allowed = await cloudflareTriggers(env);
+    const target = allowed.find((item) => item.id === input.trigger);
+    if (!target) throw new ApiError(403, 'BUILD_TRIGGER_REVOKED', 'Trigger fora do repositório autorizado');
+    const stamp = now(), id = crypto.randomUUID(), delivery = crypto.randomUUID();
+    await database.prepare('INSERT INTO deploy_deliveries (id,sha,changed_files,created_at) VALUES (?,?,?,?)')
+      .bind(delivery, input.sha, '[]', stamp).run();
+    await database.prepare(
+      "INSERT INTO deploy_runs (id,delivery_id,rule_id,rule_name,provider,target,sha,state,created_at,updated_at) VALUES (?,?,?,?,?,?,?,'queued',?,?)")
+      .bind(id, delivery, null, 'Manual · ' + target.script, 'cloudflare', target.id, input.sha, stamp, stamp).run();
+    const run: Run = { id, delivery_id: delivery, rule_id: '',
+      rule_name: 'Manual · ' + target.script, provider: 'cloudflare', target: target.id,
+      sha: input.sha, state: 'queued', provider_id: null, status_url: null,
+      detail: null, created_at: stamp, updated_at: stamp };
+    await dispatch(env, database, run);
+    const latest = await database.prepare(SQL_RUNS + ' WHERE id=?').bind(id).first<Run>();
+    return json({ item: latest }, 202);
   }
   if (request.method === 'GET' && path === '/api/deploy-router/providers') {
     return json({ cloudflare: await cloudflareTriggers(env) });

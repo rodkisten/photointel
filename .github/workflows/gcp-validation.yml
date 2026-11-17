@@ -48,8 +48,15 @@ on:
         default: false
 permissions:
   contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: gcp-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   offline:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     name: "☁️ Check"
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +67,7 @@ jobs:
       - name: "🧰 Config"
         id: notify_observed_002
         uses: actions/setup-python@v5
-        with: {python-version: '3.12'}
+        with: {python-version: '3.15'}
       - name: "🔐 Código"
         id: notify_observed_003
         run: |

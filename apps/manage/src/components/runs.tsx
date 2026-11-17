@@ -10,7 +10,7 @@ import type { Run, Job } from '../types';
 
 import { External, Spinner, IssueBanner } from './shared';
 import { ConfirmDialog } from './confirm-dialog';
-import { JsonView } from './json-view';
+import { JobLogViewer } from './job-log-viewer';
 import { RunCostInline, costEntry, secondsLabel } from './run-cost';
 import type { RunEstimate, RunCostsResponse } from './run-cost';
 import { money } from '../pages/Costs';
@@ -111,12 +111,7 @@ function JobItem({ runId, item, estimate, isActive, onToggleLog }: JobItemProps)
           ) : logsQuery.error ? (
             <IssueBanner error={logsQuery.error} />
           ) : (
-            <JsonView
-              data={logsQuery.data?.text || 'Nenhum log disponível'}
-              title="Logs do job"
-              defaultExpandDepth={1}
-              maxHeight={430}
-            />
+            <JobLogViewer text={logsQuery.data?.text || 'Nenhum log disponível'} truncated={logsQuery.data?.truncated} />
           )}
         </div>
       )}

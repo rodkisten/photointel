@@ -37,6 +37,21 @@ export function DeployTriggers() {
   const providerTargets = useQuery({ queryKey: ['deploy-router-providers'],
     queryFn: () => api<{ cloudflare: Array<{ id: string; name: string; script: string }> }>('/deploy-router/providers'),
     retry: false });
+  const [manualTrigger, setManualTrigger] = useState('');
+  const [manualSha, setManualSha] = useState('');
+  const [manualConfirmation, setManualConfirmation] = useState('');
+  const manual = useMutation({
+    mutationFn: () => send<{ item: Run }>('/deploy-router/manual', {
+      trigger: manualTrigger, sha: manualSha.trim(), confirmation: manualConfirmation.trim(),
+    }),
+    onSuccess: () => {
+      setManualConfirmation('');
+      void qc.invalidateQueries({ queryKey: ['deploy-router'] });
+    },
+  });
+  const manualReady = /^[a-f0-9]{40}$/i.test(manualSha.trim()) &&
+    manualConfirmation.trim() === 'DEPLOY ' + manualSha.trim().slice(0, 8) &&
+    Boolean(manualTrigger) && !manual.isPending;
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState(empty);
   const [inspect, setInspect] = useState<Inspect | null>(null);
@@ -104,6 +119,49 @@ export function DeployTriggers() {
         <p className="text-xs text-carbon-500">GitHub → Settings → Webhooks → Add webhook. Content type: application/json, evento: Just the push event. Use o mesmo secret da variável GITHUB_WEBHOOK_SECRET do Worker.</p>
       </Card>
       {snapshot.error && <IssueBanner error={snapshot.error} />}
+      <Section title="Deploy manual · Cloudflare" detail="Escolha um Worker conectado ao PhotoIntel e confirme o SHA exato. Nenhum deploy é iniciado ao abrir esta tela.">
+        <Card className="space-y-4 p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs text-carbon-300">
+              <span>Worker / trigger</span>
+              <Select value={manualTrigger} onChange={(event) => {
+                setManualTrigger(event.target.value);
+                setManualConfirmation('');
+                manual.reset();
+              }}>
+                <option value="">Selecione o Worker</option>
+                {providerTargets.data?.cloudflare.map((item) =>
+                  <option key={item.id} value={item.id}>{item.script} · {item.name}</option>)}
+              </Select>
+            </label>
+            <label className="space-y-1 text-xs text-carbon-300">
+              <span>SHA do commit (40 caracteres)</span>
+              <Input autoComplete="off" spellCheck={false} className="font-mono" value={manualSha}
+                placeholder="Cole o SHA completo" onChange={(event) => {
+                  setManualSha(event.target.value);
+                  setManualConfirmation('');
+                  manual.reset();
+                }} />
+            </label>
+          </div>
+          <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-3 text-xs text-amber-200">
+            O deploy executará o código do commit informado. Confirme o Worker e o SHA antes de prosseguir.
+          </div>
+          <label className="block space-y-1 text-xs text-carbon-300">
+            <span>Digite <code className="font-mono text-carbon-100">DEPLOY {manualSha.trim().slice(0, 8) || 'xxxxxxxx'}</code> para confirmar</span>
+            <Input autoComplete="off" value={manualConfirmation} placeholder="Confirmação obrigatória"
+              onChange={(event) => setManualConfirmation(event.target.value)} />
+          </label>
+          <Button disabled={!manualReady} onClick={() => manual.mutate()}>
+            {manual.isPending ? 'Solicitando build…' : 'Executar deploy manual'}
+          </Button>
+          {manual.error && <IssueBanner error={manual.error} />}
+          {manual.isSuccess && <p role="status" className="text-sm text-emerald-300">
+            Solicitação registrada. Acompanhe o status no histórico de execuções abaixo.
+          </p>}
+          {providerTargets.error && <IssueBanner error={providerTargets.error} />}
+        </Card>
+      </Section>
       <Section title="Regras por arquivo ou pasta" detail="Cada regra vincula um conjunto de caminhos a um build. Caminhos são validados contra a árvore real do GitHub.">
         <div className="flex flex-wrap gap-2">
           {templates.map((item, i) => <Button key={item.name} variant="ghost" size="sm" onClick={() => template(i)}>

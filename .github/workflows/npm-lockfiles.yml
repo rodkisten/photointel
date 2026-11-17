@@ -1,0 +1,110 @@
+name: "📦 npm · Sync lockfiles"
+run-name: "📦 Lockfiles · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "package.json"
+      - "**/package.json"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "**/package.json"
+  workflow_dispatch:
+    inputs:
+      package_path:
+        description: "Package directory for manual run (default: apps/manage)"
+        required: false
+        default: "apps/manage"
+        type: string
+      target_branch:
+        description: "Branch to synchronize (leave empty for selected branch)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npm-lockfiles-${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "📦 Regenerate and verify npm lockfiles"
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: "📥 Checkout writable branch"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}
+          persist-credentials: true
+          fetch-depth: 0
+      - name: "🧰 Node.js 22"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: "📦 Synchronize tracked npm manifests"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            target="${{ inputs.package_path }}"
+            [[ -n "$target" ]] || target="apps/manage"
+            manifests=("$target/package.json")
+          else
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              base="${{ github.event.pull_request.base.sha }}"
+            else
+              base="${{ github.event.before }}"
+            fi
+            mapfile -d '' manifests < <(git diff --name-only -z "$base" HEAD -- 'package.json' '**/package.json')
+          fi
+          if (( ${#manifests[@]} == 0 )); then
+            echo "### 📦 No package manifests changed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for manifest in "${manifests[@]}"; do
+            [[ -f "$manifest" ]] || continue
+            dir="$(dirname "$manifest")"
+            echo "::group::📦 $manifest"
+            (
+              cd "$dir"
+              npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+              npm ci --dry-run --ignore-scripts --no-audit --no-fund --loglevel=error
+            )
+            echo "::endgroup::"
+          done
+      - name: "🔎 Stage only lockfiles"
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -- 'package-lock.json' '**/package-lock.json'
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### 📦 Lockfiles already synchronized" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "### 📦 Lockfiles updated" >> "$GITHUB_STEP_SUMMARY"
+            git diff --cached --name-only | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: "💾 Commit lockfile changes"
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(deps): sync npm lockfiles"
+          branch="${{ github.event.pull_request.head.ref || inputs.target_branch || github.ref_name }}"
+          git fetch origin "$branch"
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse "origin/$branch")" ]]; then
+            echo "::error::Branch advanced during lockfile generation; rerun on latest commit."
+            exit 1
+          fi
+          git push origin "HEAD:$branch"

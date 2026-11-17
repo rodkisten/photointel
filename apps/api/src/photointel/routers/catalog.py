@@ -283,7 +283,7 @@ async def asset_media(
     # when available, otherwise return existing WebP/JPEG without a 404.
     # This also works for albums created before AVIF support was added.
     wants_avif = "image/avif" in request.headers.get("accept", "").lower()
-    requested_types = [variant]
+    requested_types: list[str] = [variant]
     if wants_avif:
         requested_types.insert(0, f"{variant}_avif")
     resource = await session.scalar(

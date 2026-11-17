@@ -5,7 +5,7 @@ import {
   Activity,
   Bell,
   Apple,
-  CloudCog,
+  Blocks,
   ServerCog,
   Timer,
   PlayCircle,
@@ -18,11 +18,17 @@ import {
   Shield,
   Workflow,
   GitPullRequestArrow,
+  FolderGit2,
   Menu,
   GripVertical,
+  ChevronDown,
+  Globe2,
+  FolderGit2,
+  TerminalSquare,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
+import { ProjectPicker } from './components/ProjectPicker';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
 import { cn } from './lib/utils';
@@ -32,12 +38,14 @@ import './style.css';
 const NAV = [
   { id: 'overview', to: '/', label: 'Visão geral', icon: Activity },
   { id: 'deploy', to: '/deploys', label: 'Deploys', icon: Workflow },
+  { id: 'projects', to: '/projects', label: 'Projetos', icon: FolderGit2 },
   { id: 'jobs', to: '/jobs', label: 'Jobs', icon: PlayCircle },
   { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
+  { id: 'terminal', to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'notifications', to: '/notifications', label: 'Notificações', icon: Bell },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
@@ -46,16 +54,18 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'projects', 'infrastructure', 'triggers', 'terminal'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
   jobs: 'Dispare jobs e acompanhe logs de execução',
+  terminal: 'Acesse suas VMs e GitHub Codespaces',
   operations: 'Cron, pausas e execuções dos serviços',
   overview: 'Saúde, atividade e infraestrutura em um só lugar',
   deploy: 'Dispare e acompanhe pipelines com segurança',
+  projects: 'Repositórios, Workers e execuções conectadas',
   infrastructure: 'Cloud Build, infraestrutura e terminal SSH',
   triggers: 'Webhooks GitHub, regras por caminho e status de deploy',
   costs: 'Faturas, consumo, cota e custos por execução',
@@ -68,9 +78,11 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
   if (pathname.startsWith('/deploys')) return 'deploy';
+  if (pathname.startsWith('/projects')) return 'projects';
   if (pathname.startsWith('/triggers')) return 'triggers';
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
@@ -85,6 +97,8 @@ function sectionForPath(pathname: string): Tab {
 
 export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
   const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
@@ -132,9 +146,58 @@ export default function App() {
     setPinnedIds(next);
     localStorage.setItem('photointel-manage-pinned-v1', JSON.stringify(next));
   };
+  const projectCatalog = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
+    retry: false,
+  });
+  const activeProject = (selectedProject && projectCatalog.data?.items.find(item => item.id === selectedProject))
+    || (selectedProject ? { id: selectedProject, repository: selectedProject, name: selectedProject.split('/').pop() || selectedProject, enabled: selectedProject === 'rodkisten/photointel', status: 'discovered' } : projectCatalog.data?.items[0]);
+  useEffect(() => {
+    const onLocation = () => setSelectedProject(new URLSearchParams(window.location.search).get('project'));
+    window.addEventListener('popstate', onLocation);
+    return () => window.removeEventListener('popstate', onLocation);
+  }, []);
+  const chooseProject = (repository: string) => {
+    setSelectedProject(repository);
+    setProjectMenuOpen(false);
+    const next = new URL(window.location.href);
+    next.searchParams.set('project', repository);
+    window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
+  };
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  useEffect(() => { setSelectedRunId(null); }, [activeProject?.repository]);
+  const projectRunJobs = useQuery({
+    queryKey: ['project-run-jobs', activeProject?.repository, selectedRunId],
+    queryFn: () => api<{ repository: string; run_id: number; items: {
+      id: number; name: string; status: string; conclusion: string | null;
+      html_url: string; started_at: string | null; completed_at: string | null;
+      steps: { name: string; status: string; conclusion: string | null; number: number }[];
+    }[] }>('/projects/runs/' + selectedRunId + '/jobs?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(selectedRunId && activeProject && !activeProject.enabled),
+    retry: false,
+    staleTime: 15_000,
+  });
+  const projectRuns = useQuery({
+    queryKey: ['project-runs', activeProject?.repository],
+    queryFn: () => api<{ repository: string; items: { id: number; name: string; status: string; conclusion: string | null; html_url: string; created_at: string }[] }>(
+      '/projects/runs?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const projectWorkflows = useQuery({
+    queryKey: ['project-workflows', activeProject?.repository],
+    queryFn: () => api<{ repository: string; total: number; items: { id: number; name: string; path: string; state: string }[] }>(
+      '/projects/workflows?repository=' + encodeURIComponent(activeProject!.repository)),
+    enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  useEffect(() => { setMobileMenu(false); }, [pathname]);
+  useEffect(() => { setMobileMenu(false); setProjectMenuOpen(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -155,11 +218,11 @@ export default function App() {
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
-              <CloudCog size={20} />
+              <Blocks size={20} />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">PhotoIntel</p>
-              <p className="text-[11px] font-medium tracking-wider text-carbon-500">CONTROL CENTER</p>
+              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">Rod Manage</p>
+              <p className="text-[11px] font-medium tracking-wider text-carbon-500">PROJECT CONTROL CENTER</p>
             </div>
           </Link>
 
@@ -179,6 +242,75 @@ export default function App() {
         </div>
       </header>
 
+      <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
+        <ProjectPicker selected={selectedProject || 'rodkisten/photointel'} onSelect={chooseProject} />
+      </div>
+      {isReadOnlyProject && tab === 'overview' && (
+        <section className="mx-auto max-w-6xl px-4 pt-4 sm:px-6" aria-label="Workflows do projeto selecionado">
+          <details className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4" aria-label="Atividade do repositório selecionado">
+            <summary className="cursor-pointer text-sm font-medium text-carbon-200">{activeProject?.repository} · Atividade GitHub (somente leitura) · Expandir</summary>
+            <div className="mt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-carbon-100">{activeProject?.repository} · Somente leitura</p>
+                <p className="mt-1 text-xs text-carbon-400">As páginas operacionais abaixo continuam vinculadas ao projeto principal. Nenhuma ação será redirecionada.</p>
+              </div>
+              <a className="text-xs text-carbon-300 underline" href={`https://github.com/${activeProject?.repository}/actions`}
+                target="_blank" rel="noopener noreferrer">Abrir GitHub Actions</a>
+            </div>
+            {projectWorkflows.isPending && <p className="mt-3 text-xs text-carbon-400">Carregando workflows…</p>}
+            {projectWorkflows.isError && <p className="mt-3 text-xs text-amber-400">Não foi possível consultar workflows com as credenciais atuais.</p>}
+            {projectRuns.isError && <p className="mt-3 text-xs text-amber-400">Execuções indisponíveis para este repositório.</p>}
+            {projectRuns.data && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs font-semibold text-carbon-300">Execuções recentes</p>
+                {projectRuns.data.items.length === 0 && <p className="text-xs text-carbon-500">Nenhuma execução recente.</p>}
+                {projectRuns.data.items.map(run => (
+                  <button key={run.id} type="button" onClick={() => setSelectedRunId(id => id === run.id ? null : run.id)}
+                    aria-expanded={selectedRunId === run.id}
+                    className="flex w-full items-center justify-between gap-2 border-t border-carbon-800 py-2 text-left text-xs hover:text-carbon-100">
+                    <span className="min-w-0 truncate text-carbon-200">{run.name}</span>
+                    <span className="shrink-0 text-carbon-500">{run.conclusion || run.status}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedRunId && (
+              <div className="mt-3 rounded-lg border border-carbon-800 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-carbon-200">Jobs da execução #{selectedRunId}</p>
+                  <a className="text-xs text-carbon-400 underline" target="_blank" rel="noopener noreferrer"
+                    href={`https://github.com/${activeProject?.repository}/actions/runs/${selectedRunId}`}>Logs completos no GitHub</a>
+                </div>
+                {projectRunJobs.isPending && <p className="mt-2 text-xs text-carbon-500">Carregando jobs…</p>}
+                {projectRunJobs.isError && <p className="mt-2 text-xs text-amber-400">Não foi possível carregar os jobs.</p>}
+                {projectRunJobs.data?.items.map(job => (
+                  <div key={job.id} className="mt-2 border-t border-carbon-800 pt-2 text-xs">
+                    <a href={job.html_url} target="_blank" rel="noopener noreferrer"
+                      className="font-medium text-carbon-200 underline">{job.name}</a>
+                    <span className="ml-2 text-carbon-500">{job.conclusion || job.status}</span>
+                    <ul className="mt-1 space-y-1 pl-3 text-carbon-400">
+                      {job.steps.map(step => <li key={step.number}>{step.number}. {step.name} · {step.conclusion || step.status}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+            {projectWorkflows.data && (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-carbon-500">{projectWorkflows.data.total} workflows encontrados</p>
+                {projectWorkflows.data.items.map(workflow => (
+                  <div key={workflow.id} className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs">
+                    <span className="min-w-0 truncate text-carbon-200">{workflow.name}</span>
+                    <span className="shrink-0 text-carbon-500">{workflow.state}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            </div>
+          </details>
+        </section>
+      )}
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
         <aside className="hidden w-48 shrink-0 md:block">
           <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
@@ -219,7 +351,7 @@ export default function App() {
           )}
 
           <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
-            PhotoIntel Manage · Operações auditáveis · Cloudflare Access
+            Rod Manage · Operações auditáveis · Cloudflare Access
           </footer>
         </main>
       </div>

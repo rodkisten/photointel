@@ -30,6 +30,27 @@ class CloudCLIContractTests(unittest.TestCase):
         self.assertNotIn("very-private-token", output)
         self.assertNotIn("┌", output)
 
+    def test_nested_ci_raw_group_uses_plain_preview_without_extra_group(self):
+        buffer = io.StringIO()
+        with (
+            patch.dict("os.environ", {
+                "GITHUB_ACTIONS": "true",
+                "PHOTOINTEL_CI_RAW_GROUP": "1",
+                "TERM": "xterm",
+            }, clear=True),
+            patch.object(cloud_cli.sys, "stderr", buffer),
+        ):
+            cloud_cli.print_running_command([
+                "gcloud", "run", "services", "list", "--project=photointel",
+                "--token=very-private-token",
+            ])
+        output = buffer.getvalue()
+        self.assertIn("☁️ gcloud run services list", output)
+        self.assertIn("\033[1;36mgcloud", output)
+        self.assertNotIn("::group::", output)
+        self.assertNotIn("::endgroup::", output)
+        self.assertNotIn("very-private-token", output)
+
     def test_project_is_explicit_and_normalized_once(self):
         command = cloud_cli.command(
             ["run", "jobs", "describe", "photointel-worker", "--project", "photointel", "--quiet"],

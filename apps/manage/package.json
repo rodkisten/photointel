@@ -44,7 +44,10 @@
     "zod": "^4.1.11",
     "zustand": "^5.0.8",
     "@rodkisten/photointel": "file:../../packages/env",
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "@wterm/react": "0.5.10",
+    "@wterm/dom": "0.5.10",
+    "@wterm/ghostty": "0.5.10"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

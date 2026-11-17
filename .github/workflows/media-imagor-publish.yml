@@ -1,8 +1,19 @@
-name: "🎞️ Media · Imagor publish (manual)"
-run-name: "Imagor image · ${{ github.ref_name }}"
+name: "🎞️ Media · Imagor"
+run-name: "🎞️ Imagor · ${{ inputs.action }} · ${{ github.ref_name }}"
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "Build, build and plan, or build and deploy Imagor"
+        type: choice
+        required: true
+        default: build-and-plan
+        options: [build, build-and-plan, build-and-deploy]
+      confirm_deploy:
+        description: "I authorize production Imagor creation and associated GCP charges"
+        type: boolean
+        required: true
+        default: false
       base_image:
         description: "Reviewed upstream digest: shumc/imagor@sha256:..."
         required: true
@@ -17,11 +28,57 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     environment: production
+    if: github.ref == 'refs/heads/main'
     steps:
+      - name: "Require explicit deploy confirmation"
+        env:
+          ACTION: ${{ inputs.action }}
+          CONFIRMED: ${{ inputs.confirm_deploy }}
+        run: |
+          if [[ "$ACTION" == "build-and-deploy" && "$CONFIRMED" != "true" ]]; then
+            echo "::error::Select confirm_deploy to authorize production Imagor creation and charges."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with: { persist-credentials: false }
+      - name: "Authenticate Terraform identity for deployment preflight"
+        if: inputs.action == 'build-and-deploy'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - name: "Set up gcloud for deployment preflight"
+        if: inputs.action == 'build-and-deploy'
+        uses: google-github-actions/setup-gcloud@v3
+      - name: "Provision Imagor signing key without exposing its value"
+        if: inputs.action == 'build-and-deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="photointel-media-imagor-secret"
+          project="photointel"
+          # Do not confuse missing access with a missing secret.
+          if ! gcloud secrets describe "$secret" --project="$project" --format='value(name)' >/dev/null 2>&1; then
+            if gcloud secrets list --project="$project" --filter="name:$secret" --format='value(name)' | grep -Fq "$secret"; then
+              echo "::error::Secret exists but cannot be described by Terraform identity."
+              exit 1
+            fi
+            gcloud secrets create "$secret" --project="$project" --replication-policy=automatic --format='value(name)' >/dev/null
+            echo "Created Imagor signing secret metadata."
+          fi
+          version="$(gcloud secrets versions list "$secret" --project="$project" --filter='state=ENABLED' --format='value(name)' --limit=1)"
+          if [[ -z "$version" ]]; then
+            # 48 random bytes, base64 encoded. Stream directly to Secret Manager;
+            # never print, persist in repository, or pass through Terraform state.
+            umask 077
+            openssl rand -base64 48 | tr -d '\n' | gcloud secrets versions add "$secret" --project="$project" --data-file=- --format='value(name)' >/dev/null
+            echo "Created first enabled Imagor signing key version."
+          else
+            echo "Reusing existing enabled Imagor signing key version."
+          fi
       - name: "Verify reviewed immutable upstream image"
         env:
           IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
@@ -55,14 +112,117 @@ jobs:
           test "$ready" = 1 || { echo "::error::Imagor HTTP listener did not start"; exit 1; }
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
       - name: "Publish image and resolve immutable digest"
+        id: published
         run: |
           set -euo pipefail
-          docker push "$IMAGE"
+          source scripts/ci/pretty-logs.sh
+          ci_run "Publish Imagor container to Artifact Registry" docker push "$IMAGE"
           DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')"
           [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::Could not verify published digest"; exit 1; }
           IMMUTABLE="${IMAGE%:*}@$DIGEST"
-          echo "## Imagor published (not deployed)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Imagor published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "\`$IMMUTABLE\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Use this exact digest as the input to **TF · Media Imagor Plan**. No Cloud Run deployment was performed." >> "$GITHUB_STEP_SUMMARY"
+          echo "image=$IMMUTABLE" >> "$GITHUB_OUTPUT"
+          echo "Image published. Selected action: ${{ inputs.action }}." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Prepare production configuration"
+        if: inputs.action != 'build'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: prepare
+          config-env: ${{ vars.GCP_CONFIG_ENV }}
+          confirm-project: photointel
+          release-sha: ${{ github.sha }}
+      - uses: google-github-actions/auth@v3
+        if: inputs.action != 'build'
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap
+          service_account: photointel-terraform@photointel.iam.gserviceaccount.com
+          project_id: photointel
+      - uses: google-github-actions/setup-gcloud@v3
+        if: inputs.action != 'build'
+      - uses: hashicorp/setup-terraform@v3
+        if: inputs.action != 'build'
+        with:
+          terraform_version: "1.17.2"
+          terraform_wrapper: false
+      - name: "Initialize remote state"
+        if: inputs.action != 'build'
+        working-directory: infra/terraform/environments/production
+        env:
+          BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
+          PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
+        run: |
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform init: production remote state" terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+      - name: "Prepare current media and API release"
+        if: inputs.action != 'build'
+        env:
+          CONFIRM_PROJECT: photointel
+        run: |
+          set -euo pipefail
+          bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
+          python3 -m infra.terraform.media_release prepare --image-sha "" --bucket "$bucket" --skip-source-commit-validation
+          python3 -m infra.scripts.cloudflare_setup sync
+          python3 -m infra.terraform.api_release prepare --image-sha "" --targets api,jobs
+      - name: "Plan Imagor without applying"
+        if: inputs.action != 'build'
+        working-directory: infra/terraform/environments/production
+        env:
+          TF_VAR_enable_media_imagor: "true"
+          TF_VAR_media_imagor_image: ${{ steps.published.outputs.image }}
+        run: |
+          set -euo pipefail
+          # Scope this opt-in plan to Imagor only. Unrelated production drift
+          # must be reviewed separately, never bundled into an Imagor release.
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform plan: Imagor only" terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color \
+            -target='google_cloud_run_v2_service.media_imagor[0]' \
+            -target='google_secret_manager_secret_iam_member.media_imagor[0]'
+          terraform show -json tfplan > tfplan.json
+      - name: "Reject deletion, replacement, and unexpected mutations"
+        if: inputs.action != 'build'
+        working-directory: infra/terraform/environments/production
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          plan = json.loads(Path("tfplan.json").read_text())
+          allowed = {
+              "google_cloud_run_v2_service.media_imagor[0]",
+              "google_secret_manager_secret_iam_member.media_imagor[0]",
+          }
+          changes = []
+          for resource in plan.get("resource_changes", []):
+              actions = resource["change"]["actions"]
+              if actions == ["no-op"]:
+                  continue
+              changes.append((resource["address"], actions))
+              if resource["address"] not in allowed or actions != ["create"]:
+                  raise SystemExit(f"::error::Unexpected change: {resource['address']}: {actions}")
+          if not changes:
+              raise SystemExit("::error::Imagor opt-in plan unexpectedly creates nothing")
+          summary = "## Imagor Terraform plan (no apply)\n\n" + "\n".join(
+              f"- `{address}`: {', '.join(actions)}" for address, actions in changes
+          ) + "\n\nOnly the new Imagor service and its scoped secret binding may be created.\n"
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(summary)
+          print(summary)
+          PY
+      - name: "Apply the reviewed Imagor-only plan"
+        if: inputs.action == 'build-and-deploy' && inputs.confirm_deploy
+        working-directory: infra/terraform/environments/production
+        run: |
+          set -euo pipefail
+          test -s tfplan
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform apply: validated Imagor-only plan" terraform apply -input=false -lock-timeout=5m -no-color tfplan
+          echo "## Imagor deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Applied the previously validated Imagor-only Terraform plan." >> "$GITHUB_STEP_SUMMARY"
+      - name: "Clean temporary configuration"
+        if: always() && inputs.action != 'build'
+        uses: ./.github/actions/gcp-config
+        with:
+          mode: cleanup

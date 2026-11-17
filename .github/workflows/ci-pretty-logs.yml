@@ -1,0 +1,82 @@
+name: "🧪 CI · Pretty logs"
+on:
+  push:
+    paths:
+      - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/highlight_output.py'
+      - 'scripts/ci/test_highlight_output.py'
+      - 'scripts/ci/select_context.py'
+      - 'scripts/ci/test_select_context.py'
+      - '.github/workflows/ci.yml'
+      - 'scripts/ci/gcloud_diagnostics.py'
+      - 'apps/manage/src/gcp-diagnostic-catalog.json'
+      - 'apps/manage/src/components/job-log-viewer.tsx'
+      - 'scripts/ci/test-pretty-logs.sh'
+      - 'scripts/ci/test_diagnostic_catalog.py'
+      - '.github/workflows/ci-pretty-logs.yml'
+      - 'infra/gcp/cloud_cli.py'
+      - 'infra/gcp/tests/test_cloud_cli.py'
+  pull_request:
+    paths:
+      - 'scripts/ci/pretty-logs.sh'
+      - 'scripts/ci/highlight_output.py'
+      - 'scripts/ci/test_highlight_output.py'
+      - 'scripts/ci/select_context.py'
+      - 'scripts/ci/test_select_context.py'
+      - '.github/workflows/ci.yml'
+      - 'scripts/ci/gcloud_diagnostics.py'
+      - 'apps/manage/src/gcp-diagnostic-catalog.json'
+      - 'apps/manage/src/components/job-log-viewer.tsx'
+      - 'scripts/ci/test-pretty-logs.sh'
+      - 'scripts/ci/test_diagnostic_catalog.py'
+      - '.github/workflows/ci-pretty-logs.yml'
+      - 'infra/gcp/cloud_cli.py'
+      - 'infra/gcp/tests/test_cloud_cli.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: ci-pretty-logs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  verify:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]')) }}
+    name: "🧪 Validate log diagnostics and gcloud CLI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: "Shell syntax"
+        run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
+      - name: "Diagnostics and exit code tests"
+        run: bash scripts/ci/test-pretty-logs.sh
+      - name: "Python and Node.js syntax highlighting"
+        run: python3 -m unittest scripts.ci.test_highlight_output -v
+      - name: "Context selection regression tests"
+        run: python3 -m unittest scripts.ci.test_select_context -v
+      - name: "Shared diagnostic catalog contract"
+        run: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
+      - name: "Python diagnostic syntax"
+        run: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
+      - name: "Python cloud_cli contract tests"
+        run: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
+      - name: "Install Google Cloud CLI"
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: 'beta'
+      - name: "Validate real gcloud CLI output (no credentials)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ci/pretty-logs.sh
+          ci_run "gcloud CLI version" gcloud --version
+          ci_run "gcloud CLI command discovery" gcloud help run
+          ci_run "gcloud CLI diagnostics" gcloud help iam
+          ci_run "PhotoIntel Python CLI bridge" python3 -m infra.gcp.cloud_cli --project photointel -- run services list --help
+          echo "GCloud CLI validated without authentication or deployment."
+

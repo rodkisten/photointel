@@ -9,8 +9,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: tf-env-package-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   test:
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

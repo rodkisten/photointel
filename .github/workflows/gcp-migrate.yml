@@ -53,17 +53,22 @@ env:
 concurrency:
   # Push checks must not cancel or block manually authorized production operations.
   group: ${{ github.event_name == 'push' && 'photointel-gcp-gcp-migrate-push-check' || 'photointel-gcp-production' }}
-  cancel-in-progress: false
+  # Only cancel superseded offline checks. Never cancel manual Neon migrations.
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   push-check:
     name: "🧪 Neon migration scripts (offline)"
-    if: github.event_name == 'push'
+    if: >-
+      ${{ github.event_name == 'push' && (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - run: bash -n infra/gcp/release.sh && bash infra/gcp/tests/test_migration_runtime.sh
+      - run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "Neon migration shell syntax" bash -n infra/gcp/release.sh
+          ci_run "Neon migration runtime tests" bash infra/gcp/tests/test_migration_runtime.sh
   migrate:
     name: "🗃️ Neon · ${{ inputs.migration_mode }}"
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
@@ -212,7 +217,9 @@ jobs:
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
-        run: bash infra/gcp/release.sh migrate
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "Neon migration · $MIGRATION_MODE" bash infra/gcp/release.sh migrate
 
       - name: "📱 ✓ Neon"
         if: ${{ always() && (steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled') }}

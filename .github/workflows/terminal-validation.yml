@@ -8,6 +8,11 @@ on:
     paths: ['infra/terminal/**', '.github/workflows/gcp-terminal.yml', '.github/workflows/terminal-validation.yml', '.github/actions/gcp-config/**']
 permissions:
   contents: read
+concurrency:
+  # Cancel obsolete checks for the same PR/branch; manual dispatches are independent.
+  group: terminal-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
 jobs:
   validate:
     runs-on: ubuntu-24.04

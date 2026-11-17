@@ -51,7 +51,7 @@ async def _wake(session: AsyncSession, jobs: list[Job]) -> bool:
         return False
     from photointel.services.outbox import enqueue_dispatch
 
-    modes: set[str] = set()
+    modes: set[Literal['discover', 'backfill', 'worker', 'maintenance']] = set()
     for job in jobs:
         if job.job_type == "icloud_discovery":
             modes.add("backfill" if job.payload.get("mode") == "backfill" else "discover")
@@ -72,9 +72,9 @@ async def _after_commit(background_tasks: BackgroundTasks, dispatch: bool) -> No
 
 @router.get("/jobs/control")
 async def read_control(session: Session) -> dict[str, Any]:
-    status_counts = dict((await session.execute(
+    status_counts: dict[str, int] = {status: count for status, count in (await session.execute(
         select(Job.status, func.count(Job.id)).group_by(Job.status)
-    )).all())
+    )).all()}
     stats = queue_counts(status_counts)
     setting = await session.get(Setting, "jobs_paused")
     # Track genuine completed assets only in existing open batches. Jobs

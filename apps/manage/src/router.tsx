@@ -21,6 +21,7 @@ import { ConfigEditor } from './pages/ConfigEditor';
 import { Deploys } from './pages/Deploys';
 import { Infrastructure } from './pages/Infrastructure';
 import { DeployTriggers } from './pages/DeployTriggers';
+import { ProjectsPage } from './pages/Projects';
 import { CostsPage } from './pages/Costs';
 import { ICloudDiagnostics } from './pages/ICloudDiagnostics';
 import { LogViewer } from './pages/LogViewer';
@@ -28,6 +29,7 @@ import { CloudRunJobsPage } from './pages/CloudRunJobs';
 import { OperationsPage } from './pages/Operations';
 import { Overview } from './pages/Overview';
 import { SystemInfo } from './pages/SystemInfo';
+import { TerminalPage } from './features/terminal/TerminalPage';
 import type { Meta } from './types';
 
 function NotFound() {
@@ -154,9 +156,13 @@ const triggersRoute = createRoute({
   component: DeployTriggers,
 });
 
+const projectsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/projects', component: ProjectsPage });
+
 const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operations', component: OperationsPage });
 
 const cloudRunJobsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/jobs', component: CloudRunJobsPage });
+
+const terminalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/terminal', component: TerminalPage });
 
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -202,7 +208,9 @@ const routeTree = rootRoute.addChildren([
   deploysRoute,
   infrastructureRoute,
   triggersRoute,
+  projectsRoute,
   costsRoute,
+  terminalRoute,
   operationsRoute,
   cloudRunJobsRoute,
   runRoute,

@@ -189,7 +189,9 @@ jobs:
         if: inputs.action == 'release' || inputs.action == 'deploy'
         env:
           CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh gate
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: gate" bash infra/gcp/release.sh gate
 
       - name: "📱 ! 🛡 Validação DB"
         if: ${{ always() && (steps.database_gate.outcome == 'failure' || steps.database_gate.outcome == 'cancelled') }}
@@ -236,7 +238,9 @@ jobs:
         if: inputs.action == 'build' || inputs.action == 'release'
         env:
           CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh preflight
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: preflight" bash infra/gcp/release.sh preflight
 
       - name: "📱 ! Build"
         if: ${{ always() && (steps.preflight.outcome == 'failure' || steps.preflight.outcome == 'cancelled') }}
@@ -284,7 +288,9 @@ jobs:
         env:
           CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ github.sha }}
-        run: bash infra/gcp/release.sh cache
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: cache" bash infra/gcp/release.sh cache
 
       - name: "📱 ! Build"
         if: ${{ always() && (steps.image_cache.outcome == 'failure' || steps.image_cache.outcome == 'cancelled') }}
@@ -331,7 +337,9 @@ jobs:
         if: (inputs.action == 'build' || inputs.action == 'release') && steps.image_cache.outputs.skip != 'true'
         env:
           CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh build
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: build" bash infra/gcp/release.sh build
 
       - name: "📱 ! Build"
         if: ${{ always() && (steps.build_image.outcome == 'failure' || steps.build_image.outcome == 'cancelled') }}
@@ -379,7 +387,9 @@ jobs:
         env:
           CONFIRM_PROJECT: photointel
           RELEASE_SHA: ${{ (inputs.action == 'build' || inputs.action == 'release') && github.sha || inputs.api_sha }}
-        run: bash infra/gcp/release.sh verify
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: verify" bash infra/gcp/release.sh verify
 
       - name: "📱 ✓ Build"
         if: ${{ always() && ((inputs.action == 'release' || inputs.action == 'build') && (steps.verify_image.outcome == 'success' || steps.verify_image.outcome == 'failure' || steps.verify_image.outcome == 'cancelled')) }}
@@ -449,7 +459,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.api_sha }}
           TF_TARGETS: jobs
-        run: bash infra/gcp/release.sh jobs-deploy
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: jobs-deploy" bash infra/gcp/release.sh jobs-deploy
 
       - name: "📱 ✓ Jobs"
         if: ${{ always() && ((steps.deploy_jobs.outcome == 'success' || steps.deploy_jobs.outcome == 'failure' || steps.deploy_jobs.outcome == 'cancelled')) }}
@@ -500,7 +512,9 @@ jobs:
           MIGRATION_MODE: ${{ inputs.migration_mode }}
           MIGRATION_DATABASE: ${{ inputs.migration_database }}
           MIGRATION_BACKUP_PREFIX: ${{ inputs.migration_backup_prefix }}
-        run: bash infra/gcp/release.sh migrate
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: migrate" bash infra/gcp/release.sh migrate
 
       - name: "📱 ✓ Neon"
         if: ${{ always() && ((steps.migrate_database.outcome == 'success' || steps.migrate_database.outcome == 'failure' || steps.migrate_database.outcome == 'cancelled')) }}
@@ -550,7 +564,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ inputs.action == 'release' && github.sha || inputs.api_sha }}
           TF_TARGETS: ${{ inputs.action == 'release' && 'api,jobs' || 'api' }}
-        run: bash infra/gcp/release.sh deploy
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: deploy" bash infra/gcp/release.sh deploy
 
       - name: "📱 ✓ API"
         if: ${{ always() && ((steps.deploy_api.outcome == 'success' || steps.deploy_api.outcome == 'failure' || steps.deploy_api.outcome == 'cancelled')) }}
@@ -597,7 +613,9 @@ jobs:
         if: inputs.action == 'scheduler'
         env:
           CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh scheduler
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: scheduler" bash infra/gcp/release.sh scheduler
 
       - name: "📱 ✓ Agenda"
         if: ${{ always() && ((steps.deploy_scheduler.outcome == 'success' || steps.deploy_scheduler.outcome == 'failure' || steps.deploy_scheduler.outcome == 'cancelled')) }}
@@ -644,7 +662,9 @@ jobs:
         if: inputs.action == 'cleanup'
         env:
           CONFIRM_PROJECT: photointel
-        run: bash infra/gcp/release.sh cleanup
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "GCP release: cleanup" bash infra/gcp/release.sh cleanup
 
       - name: "📱 ✓ Limpeza"
         if: ${{ always() && ((steps.pause_scheduler.outcome == 'success' || steps.pause_scheduler.outcome == 'failure' || steps.pause_scheduler.outcome == 'cancelled')) }}

@@ -94,7 +94,9 @@ jobs:
         env:
           BUCKET: ${{ vars.TF_STATE_BUCKET || 'photointel-terraform-state' }}
           PREFIX: ${{ vars.TF_STATE_PREFIX || 'photointel/production' }}
-        run: terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
+        run: |
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform production init" terraform init -input=false -backend-config="bucket=$BUCKET" -backend-config="prefix=$PREFIX"
       - name: "TF · Inventory and prepare media adoption"
         env:
           IMAGE_SHA: ${{ inputs.image_sha }}
@@ -134,7 +136,9 @@ jobs:
       - name: "TF · Plan"
         if: inputs.action == 'plan'
         working-directory: infra/terraform/environments/production
-        run: terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
+        run: |
+          source ../../../../scripts/ci/pretty-logs.sh
+          ci_run "Terraform production plan" terraform plan -input=false -lock-timeout=5m -out=tfplan -no-color
       - name: "TF · Restore reviewed plan"
         if: inputs.action == 'apply'
         env:

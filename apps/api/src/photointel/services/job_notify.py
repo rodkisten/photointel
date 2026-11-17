@@ -122,9 +122,9 @@ async def snapshot(scope: str) -> tuple[str, int, int, str]:
             job = await session.get(Job, identifier)
             label = job.job_type.replace("_", " ") if job else "Job"
             filter_ = Job.id == identifier
-        counts = dict((await session.execute(
+        counts: dict[str, int] = {status: count for status, count in (await session.execute(
             select(Job.status, func.count()).where(filter_).group_by(Job.status)
-        )).all())
+        )).all()}
     total = max(1, sum(counts.values()))
     done = sum(counts.get(value, 0) for value in TERMINAL)
     if done == total:
