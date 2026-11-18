@@ -20,12 +20,13 @@ export function ProjectsPage() {
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [version, setVersion] = useState<string | null>(null);
+  const [originalName, setOriginalName] = useState('');
   const [confirm, setConfirm] = useState('');
   const client = useQueryClient();
   const queryKey = ['project-variables', repository, scope, environment];
   const vars = useQuery({ queryKey, queryFn: () => api<{ items: Array<{ name: string; value: string; version: string }> }>(
     '/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment)), retry: false });
-  useEffect(() => { setName(''); setValue(''); setVersion(null); setConfirm(''); }, [repository, scope, environment]);
+  useEffect(() => { setName(''); setValue(''); setVersion(null); setOriginalName(''); setConfirm(''); }, [repository, scope, environment]);
   const save = useMutation({ mutationFn: () => send('/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment),
     { name, value, version, confirm }, 'PUT'), onSuccess: () => { setConfirm(''); void client.invalidateQueries({ queryKey }); } });
   const isPrimary = repository === 'rodkisten/photointel';
@@ -40,16 +41,16 @@ export function ProjectsPage() {
         <div className="flex flex-wrap gap-2"><label className="text-sm">Escopo <select className="ml-2 rounded-lg border border-carbon-700 bg-carbon-900 p-2" value={scope} onChange={e => setScope(e.target.value as 'repository' | 'environment')}><option value="repository">Repositório</option><option value="environment">Environment</option></select></label>
           {scope === 'environment' && <input aria-label="Environment" className="rounded-lg border border-carbon-700 bg-carbon-900 p-2 text-base" value={environment} onChange={e => setEnvironment(e.target.value)} />}</div>
         {vars.isPending && <Spinner />}{vars.error && <IssueBanner error={vars.error} />}
-        <select aria-label="Selecionar variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base" value={name} onChange={e => { const item = vars.data?.items.find(v => v.name === e.target.value); setName(e.target.value); setValue(item?.value || ''); setVersion(item?.version || null); setConfirm(''); }}>
+        <select aria-label="Selecionar variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base" value={name} onChange={e => { const item = vars.data?.items.find(v => v.name === e.target.value); setName(e.target.value); setValue(item?.value || ''); setVersion(item?.version || null); setOriginalName(item?.name || ''); setConfirm(''); }}>
           <option value="">Nova variável ou selecione uma existente</option>{vars.data?.items.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
         </select>
-        <input aria-label="Nome da variável" placeholder="NOME_DA_VARIAVEL" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base" value={name} onChange={e => { setName(e.target.value); setVersion(null); }} />
+        <input aria-label="Nome da variável" placeholder="NOME_DA_VARIAVEL" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base" value={name} onChange={e => { setName(e.target.value); if (e.target.value !== originalName) setVersion(null); }} />
         <textarea aria-label="Valor da variável" rows={5} className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base" value={value} onChange={e => setValue(e.target.value)} />
         <p className="text-xs text-carbon-400">Para salvar, digite o repositório completo: {repository}</p>
         <input aria-label="Confirmar repositório" placeholder={repository} className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base" value={confirm} onChange={e => setConfirm(e.target.value)} />
         {save.error && <IssueBanner error={save.error} />}
         {save.isSuccess && <p role="status" className="text-sm text-emerald-400">Variável salva no GitHub.</p>}
-        <Button disabled={!name || confirm !== repository || save.isPending} onClick={() => save.mutate()}>Salvar variável</Button>
+        <Button disabled={!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || confirm !== repository || save.isPending || vars.isPending || vars.isError} onClick={() => save.mutate()}>Salvar variável</Button>
       </Card>
     </Section>
     {isPrimary && <Section title="Projetos conectados" detail="Workers autorizados do PhotoIntel. Esta tela não inicia builds."
