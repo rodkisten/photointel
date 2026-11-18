@@ -29,7 +29,11 @@ import { DetailList, ErrorState, PrivateImage, Skeleton, Status } from './common
 import { Button } from './ui/button';
 import { Dialog } from './ui/dialog';
 
-export function PhotoViewer({
+export function PhotoViewer(props: { id: string; assets: Asset[]; onNavigate: (id: string) => void; onClose: () => void }) {
+  return <PhotoViewerContent key={props.id} {...props} />;
+}
+
+function PhotoViewerContent({
   id,
   assets,
   onNavigate,
@@ -60,13 +64,6 @@ export function PhotoViewer({
   const previous = index > 0 ? assets[index - 1] : undefined;
   const next = index >= 0 ? assets[index + 1] : undefined;
   const asset = query.data;
-  useEffect(() => {
-    setZoom(false);
-    setScale(1);
-    setSimilar(null);
-    setSimilarError(null);
-    setKeyword('');
-  }, [id]);
   useEffect(() => {
     function keyboard(event: KeyboardEvent) {
       const target = event.target as HTMLElement;
