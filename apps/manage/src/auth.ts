@@ -42,6 +42,7 @@ export interface Env {
   MANAGE_TERMINAL_GATEWAY_URL?: string;
   /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
   PHOTOINTEL_PREVIEW?: string;
+  MANAGE_PREVIEW_PR?: string;
   GITHUB_ENVIRONMENT: string;
   CLOUDFLARE_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
