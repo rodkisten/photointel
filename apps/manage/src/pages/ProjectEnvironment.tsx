@@ -78,6 +78,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [copyConfirm, setCopyConfirm] = useState('');
   const [copyMessage, setCopyMessage] = useState('');
   const [copyRepositorySearch, setCopyRepositorySearch] = useState('');
+  const [copyCatalogPage, setCopyCatalogPage] = useState(1);
   const key = ['project-variables', repository, scope, environment];
   const endpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
     '&scope=' + scope + '&environment=' + encodeURIComponent(environment);
@@ -102,13 +103,15 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     },
   });
   const projectCatalog = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api<{ items: { id: string; repository: string; enabled: boolean }[] }>('/projects'),
+    queryKey: ['github-copy-catalog', copyCatalogPage],
+    queryFn: () => api<{ items: { id: string; repository: string; archived: boolean }[]; has_more: boolean; page: number }>(
+      '/projects/catalog?page=' + copyCatalogPage),
     retry: false,
     enabled: copyOpen,
   });
   const destinationOptions = (projectCatalog.data?.items ?? [])
-    .filter(item => item.repository !== repository && item.repository.toLowerCase().includes(copyRepositorySearch.toLowerCase()))
+    .filter(item => !item.archived && item.repository !== repository &&
+      item.repository.toLowerCase().includes(copyRepositorySearch.toLowerCase()))
     .map(item => ({ value: item.repository, label: item.repository }));
   const copyEndpoint = '/projects/variables?repository=' + encodeURIComponent(copyTarget) +
     '&scope=' + copyScope + '&environment=' + encodeURIComponent(copyEnvironment);
@@ -259,7 +262,14 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           onChange={next => { setCopyTarget(next); setCopyConfirm(''); }} />
         {projectCatalog.isPending && <p role="status" className="text-xs text-carbon-400">Carregando projetos…</p>}
         {!projectCatalog.isPending && !destinationOptions.length &&
-          <p className="text-xs text-amber-300">Nenhum projeto encontrado nesta lista. Confira o catálogo de projetos.</p>}
+          <p className="text-xs text-amber-300">Nenhum projeto nesta página. Navegue pelas páginas do catálogo.</p>}
+        <div className="flex items-center justify-between gap-2 text-xs text-carbon-400">
+          <Button size="sm" variant="outline" disabled={copyCatalogPage === 1 || projectCatalog.isFetching}
+            onClick={() => setCopyCatalogPage(page => Math.max(1, page - 1))}>Anterior</Button>
+          <span>Página {copyCatalogPage}</span>
+          <Button size="sm" variant="outline" disabled={!projectCatalog.data?.has_more || projectCatalog.isFetching}
+            onClick={() => setCopyCatalogPage(page => page + 1)}>Próxima</Button>
+        </div>
         {projectCatalog.isError && <IssueBanner error={projectCatalog.error} />}
         <ChoiceMenu label="Escopo de destino" value={copyScope}
           options={[{ value: 'repository', label: 'Repositório' }, { value: 'environment', label: 'Environment' }]}
