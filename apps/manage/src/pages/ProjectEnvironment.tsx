@@ -77,6 +77,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [copyEnvironment, setCopyEnvironment] = useState('production');
   const [copyConfirm, setCopyConfirm] = useState('');
   const [copyMessage, setCopyMessage] = useState('');
+  const [copyRepositorySearch, setCopyRepositorySearch] = useState('');
   const key = ['project-variables', repository, scope, environment];
   const endpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
     '&scope=' + scope + '&environment=' + encodeURIComponent(environment);
@@ -106,6 +107,9 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     retry: false,
     enabled: copyOpen,
   });
+  const destinationOptions = (projectCatalog.data?.items ?? [])
+    .filter(item => item.repository !== repository && item.repository.toLowerCase().includes(copyRepositorySearch.toLowerCase()))
+    .map(item => ({ value: item.repository, label: item.repository }));
   const copyEndpoint = '/projects/variables?repository=' + encodeURIComponent(copyTarget) +
     '&scope=' + copyScope + '&environment=' + encodeURIComponent(copyEnvironment);
   const destinationVariables = useQuery({
@@ -244,11 +248,18 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       <Dialog.Root open={copyOpen && Boolean(original)} onOpenChange={setCopyOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-black/70" /><Dialog.Content className="fixed inset-x-3 top-1/2 z-[81] mx-auto max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg -translate-y-1/2 overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between gap-2"><Dialog.Title className="text-sm font-semibold">Copiar {original?.name}</Dialog.Title><Dialog.Close aria-label="Fechar" className="rounded-lg px-3 py-2 text-carbon-400">✕</Dialog.Close></div><Dialog.Description className="text-xs text-carbon-400">Copiar variável entre repositórios sem alterar a origem.</Dialog.Description>
         <p className="text-xs text-carbon-400">O servidor lê o valor diretamente no GitHub e verifica se a origem não mudou. Nada é sobrescrito.</p>
+        <label className="block space-y-1 text-xs text-carbon-400">Buscar projeto de destino
+          <Input aria-label="Buscar projeto de destino" value={copyRepositorySearch}
+            placeholder="Filtrar projetos…" onChange={event => setCopyRepositorySearch(event.target.value)} />
+        </label>
         <ChoiceMenu label="Projeto de destino" value={copyTarget}
           options={[{ value: '', label: 'Selecione um projeto' },
-            ...(projectCatalog.data?.items ?? []).filter(item => item.repository !== repository)
-              .map(item => ({ value: item.repository, label: item.repository }))]}
+            ...destinationOptions, ...(copyTarget && !destinationOptions.some(item => item.value === copyTarget)
+              ? [{ value: copyTarget, label: copyTarget }] : [])]}
           onChange={next => { setCopyTarget(next); setCopyConfirm(''); }} />
+        {projectCatalog.isPending && <p role="status" className="text-xs text-carbon-400">Carregando projetos…</p>}
+        {!projectCatalog.isPending && !destinationOptions.length &&
+          <p className="text-xs text-amber-300">Nenhum projeto encontrado nesta lista. Confira o catálogo de projetos.</p>}
         {projectCatalog.isError && <IssueBanner error={projectCatalog.error} />}
         <ChoiceMenu label="Escopo de destino" value={copyScope}
           options={[{ value: 'repository', label: 'Repositório' }, { value: 'environment', label: 'Environment' }]}
@@ -265,7 +276,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
             value={copyConfirm} placeholder={copyTarget} onChange={event => setCopyConfirm(event.target.value)} />
         </label>
         {copy.error && <IssueBanner error={copy.error} />}
-        <Button disabled={!copyTarget || copyTarget === repository || !destinationVariables.isSuccess ||
+        <Button disabled={!original || !inventoryReady || dirty || staleVersion || !copyTarget || copyTarget === repository || !destinationVariables.isSuccess ||
           destinationVariables.isFetching || Boolean(destinationExisting) || copyConfirm !== copyTarget || copy.isPending}
           onClick={() => copy.mutate()}>{copy.isPending ? 'Copiando…' : 'Confirmar cópia'}</Button>
       </Dialog.Content></Dialog.Portal></Dialog.Root>
