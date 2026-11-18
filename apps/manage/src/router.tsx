@@ -10,6 +10,7 @@ import {
 } from '@tanstack/react-router';
 
 import App from './App';
+import { manageBasePath } from './preview-path';
 import { Card } from './components/ui';
 import { IssueBanner, Spinner } from './components/shared';
 import { RunDetail } from './components/runs';
@@ -220,6 +221,7 @@ const routeTree = rootRoute.addChildren([
 
 export const router = createRouter({
   routeTree,
+  basepath: manageBasePath || '/',
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultNotFoundComponent: NotFound,
