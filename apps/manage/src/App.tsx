@@ -103,7 +103,6 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
-  const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
     catch { return []; }
@@ -116,22 +115,6 @@ export default function App() {
       return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string').slice(0, 4) : ['overview', 'deploy', 'costs', 'settings'];
     } catch { return ['overview', 'deploy', 'costs', 'settings']; }
   });
-  useEffect(() => {
-    let last = window.scrollY;
-    let directionDistance = 0;
-    const onScroll = () => {
-      const current = Math.max(0, window.scrollY);
-      const delta = current - last;
-      if (Math.sign(delta) !== Math.sign(directionDistance)) directionDistance = 0;
-      directionDistance += delta;
-      if (current < 80) setTopVisible(true);
-      else if (directionDistance > 48) { setTopVisible(false); directionDistance = 0; }
-      else if (directionDistance < -32) { setTopVisible(true); directionDistance = 0; }
-      last = current;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
   const orderedNav = [...NAV].sort((a, b) => {
     const rank = (id: string) => { const index = navOrder.indexOf(id); return index < 0 ? NAV.findIndex(x => x.id === id) + NAV.length : index; };
     return rank(a.id) - rank(b.id);
