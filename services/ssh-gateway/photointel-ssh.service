@@ -1,0 +1,25 @@
+[Unit]
+Description=PhotoIntel private SSH and SFTP gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=photointel-ssh
+Group=photointel-ssh
+WorkingDirectory=/opt/photointel-ssh
+EnvironmentFile=/etc/photointel-ssh.env
+ExecStart=/opt/photointel-ssh/.venv/bin/python /opt/photointel-ssh/server.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/photointel-ssh
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LimitNOFILE=4096
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
