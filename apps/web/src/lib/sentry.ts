@@ -73,7 +73,6 @@ export function initSentry() {
     dsn,
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_RELEASE_ID || undefined,
-    sendDefaultPii: false,
     attachStacktrace: true,
     defaultIntegrations: false,
     integrations: [Sentry.browserTracingIntegration(), Sentry.linkedErrorsIntegration()],
