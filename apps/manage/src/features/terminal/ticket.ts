@@ -49,6 +49,8 @@ export async function terminalWebsocketRoute(request: Request, env: Env): Promis
     throw new ApiError(400, 'TERMINAL_TICKET', 'Ticket inválido');
   if (!env.MANAGE_TERMINAL_GATEWAY_URL || !env.MANAGE_TERMINAL_GATEWAY_SECRET)
     throw new ApiError(503, 'TERMINAL_GATEWAY', 'Gateway não configurado');
+  if (!env.MANAGE_TERMINAL_ACCESS_CLIENT_ID || !env.MANAGE_TERMINAL_ACCESS_CLIENT_SECRET)
+    throw new ApiError(503, 'TERMINAL_ACCESS', 'Credenciais Cloudflare Access não configuradas');
   const destination = new URL('/ws', env.MANAGE_TERMINAL_GATEWAY_URL);
   if (destination.protocol !== 'https:') throw new ApiError(503, 'TERMINAL_GATEWAY', 'Gateway deve usar HTTPS');
   // Ticket is passed via a header to avoid leaking credentials in upstream URL logs.
@@ -57,6 +59,8 @@ export async function terminalWebsocketRoute(request: Request, env: Env): Promis
       Upgrade: 'websocket',
       'X-Terminal-Ticket': ticket,
       'X-Terminal-Gateway-Secret': env.MANAGE_TERMINAL_GATEWAY_SECRET,
+      'CF-Access-Client-Id': env.MANAGE_TERMINAL_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': env.MANAGE_TERMINAL_ACCESS_CLIENT_SECRET,
     },
   });
 }
