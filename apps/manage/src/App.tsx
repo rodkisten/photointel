@@ -166,6 +166,7 @@ export default function App() {
     const next = new URL(window.location.href);
     next.searchParams.set('project', repository);
     window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
+    window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   useEffect(() => { setSelectedRunId(null); }, [activeProject?.repository]);
