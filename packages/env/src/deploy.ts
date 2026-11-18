@@ -11,8 +11,8 @@ export type WorkloadIdentity = {
   bootstrapServiceAccount?: string;
 };
 
-const WIF_PROVIDER = /^projects\\/[0-9]+\\/locations\\/global\\/workloadIdentityPools\\/[A-Za-z0-9_-]+\\/providers\\/[A-Za-z0-9_-]+$/;
-const SERVICE_ACCOUNT = /^[a-z][a-z0-9-]*@[a-z][a-z0-9.-]*\\.iam\\.gserviceaccount\\.com$/;
+const WIF_PROVIDER = /^projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[A-Za-z0-9_-]+\/providers\/[A-Za-z0-9_-]+$/;
+const SERVICE_ACCOUNT = /^[a-z][a-z0-9-]*@[a-z][a-z0-9.-]*\.iam\.gserviceaccount\.com$/;
 
 /** Validate metadata only. Authentication and secret retrieval stay in trusted deployment adapters. */
 export function validateWorkloadIdentity(entries: Record<string, string>): WorkloadIdentity {
@@ -37,6 +37,73 @@ export function validateWorkloadIdentity(entries: Record<string, string>): Workl
 }
 
 
+
+
+export const REQUIRED_RUNTIME_SECRETS = [
+  'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY',
+  'STORAGE_SECRET_KEY', 'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET',
+  'ICLOUD_SESSION_KEY',
+] as const;
+
+const RUNTIME_SECRET_FIELDS = new Set([
+  ...REQUIRED_RUNTIME_SECRETS, 'MODAL_TOKEN', 'MODAL_PROXY_KEY', 'MODAL_PROXY_SECRET',
+  'NOTIFY_DEVICE_ID', 'NOTIFY_TOKEN', 'SENTRY_DSN', 'SENTRY_API_TOKEN',
+  'TELEGRAM_NOTIFICATION_API_TOKEN',
+]);
+const WORKFLOW_SECRET_FIELDS = new Set([
+  'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TS_OAUTH_CLIENT_ID',
+  'TS_OAUTH_SECRET', 'SENTRY_AUTH_TOKEN', 'MANAGE_GITHUB_API_TOKEN',
+  'MANAGE_CLOUDFLARE_API_TOKEN', 'MANAGE_SENTRY_API_TOKEN',
+  'MANAGE_MODAL_BILLING_TOKEN', 'MANAGE_GITHUB_WEBHOOK_SECRET',
+  'MANAGE_GCP_BUILD_RELEASE_URL', 'MANAGE_GCP_BUILD_PROVISION_URL',
+  'MANAGE_GCP_BUILD_CALLBACK_SECRET', 'MANAGE_XRELAY_NOTIFICATION_URL',
+  'MANAGE_XRELAY_NOTIFICATION_TOKEN',
+]);
+
+export type SecretBinding = {name: string; version: string};
+export type SecretInventory = {
+  secrets: Record<string, SecretBinding>;
+  workflowSecrets: Record<string, SecretBinding>;
+};
+
+/** Convert R2 legacy aliases to canonical storage bindings and validate the full inventory. */
+export function normalizeSecretInventory(
+  input: SecretInventory,
+  options: {requireAll?: boolean; storageEndpoint?: string} = {},
+): SecretInventory {
+  const secrets = {...input.secrets};
+  const workflowSecrets = {...input.workflowSecrets};
+  for (const [legacy, canonical] of [
+    ['R2_ACCESS_KEY_ID', 'STORAGE_ACCESS_KEY'],
+    ['R2_SECRET_ACCESS_KEY', 'STORAGE_SECRET_KEY'],
+  ]) {
+    if (legacy in secrets) {
+      if (!(canonical in secrets)) secrets[canonical] = secrets[legacy];
+      delete secrets[legacy];
+    }
+  }
+  if ('R2_ENDPOINT' in secrets) {
+    if (!options.storageEndpoint) throw new Error('R2_ENDPOINT is not a secret: set STORAGE_ENDPOINT');
+    delete secrets.R2_ENDPOINT;
+  }
+  if (options.requireAll) {
+    const missing = REQUIRED_RUNTIME_SECRETS.filter(key => !(key in secrets));
+    if (missing.length) throw new Error('Missing required Secret Manager references: ' + missing.join(', '));
+  }
+  for (const [scope, refs, allowed] of [
+    ['runtime', secrets, RUNTIME_SECRET_FIELDS],
+    ['workflow', workflowSecrets, WORKFLOW_SECRET_FIELDS],
+  ] as const) {
+    for (const [key, ref] of Object.entries(refs)) {
+      if (!allowed.has(key)) throw new Error('Unknown ' + scope + ' Secret Manager reference: ' + key);
+      if (!ref || !/^[a-z][a-z0-9-]{0,254}$/.test(ref.name) ||
+          !/^(?:latest|[1-9][0-9]{0,9})$/.test(ref.version)) {
+        throw new Error('Invalid Secret Manager reference for ' + key);
+      }
+    }
+  }
+  return {secrets, workflowSecrets};
+}
 
 export function normalizeDeployConfig(raw: string) {
   const source = raw.trim();
