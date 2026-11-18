@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const pr = process.argv[2];
 if (!/^[1-9][0-9]{0,8}$/.test(pr || '')) throw new Error('PR number must be a positive integer');
-const config = JSON.parse(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+const config = JSON.parse(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8').replace(/,\s*([}\]])/g, '$1'));
 config.name = 'photointel-manage-pr-' + pr;
 config.workers_dev = false;
 config.preview_urls = false;
