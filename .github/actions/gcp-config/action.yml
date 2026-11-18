@@ -73,6 +73,26 @@ runs:
         set -euo pipefail
         python3 -m infra.gcp.gcp_env
         python3 -m infra.gcp.manage render
+    - name: "🔬 [CONFIG] Compare TypeScript and legacy rendered bindings"
+      if: inputs.mode == 'prepare'
+      continue-on-error: true
+      shell: bash
+      env:
+        GCP_CONFIG_ENV: ${{ inputs.config-env }}
+      run: |
+        set -euo pipefail
+        if [[ ! -f infra/gcp/config.local.json ]]; then
+          echo "::warning::Rendered configuration unavailable for contract comparison"
+          exit 0
+        fi
+        node --experimental-strip-types packages/env/src/deploy.ts compare infra/gcp/config.local.json > "$RUNNER_TEMP/photointel-env-compare.json"
+        {
+          echo "### 🔬 TypeScript ↔ legacy runtime parity"
+          echo "- Matching: $(jq -r '.matching' "$RUNNER_TEMP/photointel-env-compare.json")"
+          echo "- Missing keys: $(jq -r '.missing | length' "$RUNNER_TEMP/photointel-env-compare.json")"
+          echo "- Extra keys: $(jq -r '.extra | length' "$RUNNER_TEMP/photointel-env-compare.json")"
+          echo "- Differing values: $(jq -r '.mismatched | length' "$RUNNER_TEMP/photointel-env-compare.json")"
+        } >> "$GITHUB_STEP_SUMMARY"
     - name: "🧹 [CLEANUP] Remove config and generated"
       if: inputs.mode == 'cleanup'
       shell: bash
