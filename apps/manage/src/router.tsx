@@ -38,7 +38,7 @@ function NotFound() {
     <Card className="space-y-3 p-6">
       <h2 className="text-lg font-semibold text-carbon-100">Página não encontrada</h2>
       <p className="text-sm text-carbon-400">Esta rota não existe no Manage.</p>
-      <Link to="/" className="text-sm text-carbon-200 underline underline-offset-4">
+      <Link to="/" search={{ project: new URLSearchParams(window.location.search).get("project") || undefined }} className="text-sm text-carbon-200 underline underline-offset-4">
         Voltar à visão geral
       </Link>
     </Card>
@@ -46,6 +46,7 @@ function NotFound() {
 }
 
 const rootRoute = createRootRoute({
+  validateSearch: z.object({ project: z.string().optional() }).passthrough(),
   component: App,
   notFoundComponent: NotFound,
 });
