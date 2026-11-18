@@ -5,6 +5,7 @@ import { terminalCatalogRoute } from './features/terminal/catalog';
 import { terminalSessionRoute } from './features/terminal/protocol';
 import { terminalPreflightRoute } from './features/terminal/preflight';
 import { terminalTicketRoute } from './features/terminal/ticket';
+import { terminalFilesRoute } from './features/terminal/files';
 import { cloudRunJobsRoute } from './cloud-run-jobs';
 import { workflowStudioRoute } from './workflow-studio-api';
 import { parseWorkflowInputs } from './workflow-yaml';
@@ -55,6 +56,9 @@ export async function api(
   if (studioResponse) return studioResponse;
   const projectCatalogResponse = await projectCatalogRoute(request, env, identity);
   if (projectCatalogResponse) return projectCatalogResponse;
+
+  const terminalFilesResponse = await terminalFilesRoute(request, env, identity);
+  if (terminalFilesResponse) return terminalFilesResponse;
 
   const terminalTicketResponse = await terminalTicketRoute(request, env, identity);
   if (terminalTicketResponse) return terminalTicketResponse;
