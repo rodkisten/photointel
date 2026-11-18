@@ -124,25 +124,11 @@ jobs:
             echo "- Terminal catalog valid: $(jq -r '.terminalValid' "$RUNNER_TEMP/manage-env-diagnostic.json")"
             echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/manage-env-diagnostic.json")"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: "⚙ Load production configuration (same as frontend deploy)"
-        id: config
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: prepare
-          config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: photointel
-          release-sha: ${{ github.sha }}
-      - name: "🔐 Authenticate to GCP"
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ steps.config.outputs.service_account }}
-      - name: "🧰 Set up gcloud"
-        uses: google-github-actions/setup-gcloud@v2
-      - name: "⚙ Prepare Manage browser environment from production"
-        env:
-          CONFIRM_PROJECT: photointel
-        run: python3 -m infra.scripts.deploy_manage browser-env
+      - name: "🛡 Preview isolation · no GCP production identity"
+        run: |
+          echo "### 🛡 Isolated PR preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "No GCP Workload Identity Federation or Secret Manager access is used by this preview." >> "$GITHUB_STEP_SUMMARY"
+          echo "Production deployment configuration is not rendered into preview builds." >> "$GITHUB_STEP_SUMMARY"
       - name: "📦 Install both apps"
         run: |
           npm --prefix apps/web ci
