@@ -11,13 +11,14 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const { ref, write, focus } = useTerminal();
   const [core, setCore] = useState<GhosttyCore | null>(null);
   const pending = useRef(false);
+  const mounted = useRef(true);
   useEffect(() => {
     let disposed = false;
     let instance: GhosttyCore | undefined;
     void GhosttyCore.load().then(loaded => {
       instance = loaded;
       if (disposed) loaded.dispose(); else setCore(loaded);
-    }).catch(() => setNotice('Não foi possível carregar o núcleo Ghostty'));
+    }).catch(() => { if (!disposed) setNotice('Não foi possível carregar o núcleo Ghostty'); });
     return () => { disposed = true; instance?.dispose(); };
   }, []);
   const socket = useRef<WebSocket | null>(null);
@@ -38,6 +39,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }),
       });
       const result = await response.json() as { ticket?: string; message?: string };
+      if (!mounted.current) return;
       if (!response.ok || !result.ticket) throw new Error(result.message || 'Sessão não autorizada');
       const url = new URL('/api/terminal/ws', window.location.href);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -58,11 +60,15 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       ws.onclose = () => { socket.current = null; setStatus(current => current === 'error' ? current : 'closed'); };
     } catch (error) {
       pending.current = false;
+      if (!mounted.current) return;
       setStatus('error');
       setNotice(error instanceof Error ? error.message : 'Falha ao iniciar sessão');
     }
   }, [targetId, focus, write]);
-  useEffect(() => () => { pending.current = false; socket.current?.close(1000, 'Unmount'); socket.current = null; }, [targetId]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; pending.current = false; socket.current?.close(1000, 'Unmount'); socket.current = null; };
+  }, [targetId]);
   return (
     <div className="flex h-full min-h-[380px] flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 px-3 py-2 text-xs text-carbon-400">
