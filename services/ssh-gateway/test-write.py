@@ -4,6 +4,8 @@ import hashlib
 import json
 import pathlib
 import secrets
+import pwd
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -49,6 +51,8 @@ def main():
         with path.open("x", encoding="utf-8") as handle:
             handle.write(original)
         path.chmod(0o600)
+        account = pwd.getpwnam('rod')
+        os.chown(path, account.pw_uid, account.pw_gid)
         status, result = api("read", str(path))
         assert status == 200 and result["content"] == original, f"Initial read failed: {status}"
         old_version = result["version"]
