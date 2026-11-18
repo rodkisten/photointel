@@ -48,7 +48,9 @@
     "@xyflow/react": "^12.10.0",
     "@wterm/react": "0.5.10",
     "@wterm/dom": "0.5.10",
-    "@wterm/ghostty": "0.5.10"
+    "@wterm/ghostty": "0.5.10",
+    "dexie": "^4.2.0",
+    "@codemirror/language-data": "^6.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
