@@ -6,7 +6,7 @@ const SESSION_MAX_AGE_SECONDS = 60;
 const SESSION_LIMIT = 3;
 
 /**
- * Preflight checks only. The gateway does not exist yet, so no token is minted.
+ * Preflight checks only. Session tickets are issued separately after gateway configuration.
  * This endpoint must never leak SSH addresses, usernames, keys or fingerprints.
  */
 export async function terminalPreflightRoute(request: Request, env: Env, identity: Identity): Promise<Response | null> {
@@ -31,10 +31,21 @@ export async function terminalPreflightRoute(request: Request, env: Env, identit
     throw new ApiError(400, 'TERMINAL_TARGET', 'Informe apenas targetId');
   if (!vmTargets(env).some(vm => vm.id === value.targetId))
     throw new ApiError(404, 'TERMINAL_TARGET', 'VM não autorizada');
-  return json({
-    ready: false,
-    code: 'TERMINAL_GATEWAY_NOT_CONFIGURED',
-    message: 'Destino autorizado, mas gateway SSH ainda não provisionado.',
+  const gateway = env.MANAGE_TERMINAL_GATEWAY_URL;
+  const secret = env.MANAGE_TERMINAL_GATEWAY_SECRET;
+  if (!gateway || !secret || secret.length < 32) return json({
+    ready: false, code: 'TERMINAL_GATEWAY_NOT_CONFIGURED',
+    message: 'Destino autorizado, mas o gateway SSH ainda não está configurado.',
     requirements: { maxSessionAgeSeconds: SESSION_MAX_AGE_SECONDS, maxConcurrentSessions: SESSION_LIMIT },
   }, 503);
+  let gatewayUrl: URL;
+  try { gatewayUrl = new URL(gateway); }
+  catch { throw new ApiError(503, 'TERMINAL_GATEWAY', 'URL do gateway inválida'); }
+  if (gatewayUrl.protocol !== 'https:' || gatewayUrl.username || gatewayUrl.password || gatewayUrl.search || gatewayUrl.hash)
+    throw new ApiError(503, 'TERMINAL_GATEWAY', 'URL do gateway inválida');
+  return json({
+    ready: true,
+    message: 'Destino autorizado e gateway configurado. A conexão será validada ao abrir a sessão.',
+    requirements: { maxSessionAgeSeconds: SESSION_MAX_AGE_SECONDS, maxConcurrentSessions: SESSION_LIMIT },
+  });
 }
