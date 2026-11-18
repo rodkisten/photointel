@@ -40,6 +40,9 @@ export interface Env {
   MANAGE_TERMINAL_GATEWAY_SECRET?: string;
   /** HTTPS gateway URL behind a private Cloudflare Tunnel. */
   MANAGE_TERMINAL_GATEWAY_URL?: string;
+  /** Cloudflare Access service identity for the private gateway. */
+  MANAGE_TERMINAL_ACCESS_CLIENT_ID?: string;
+  MANAGE_TERMINAL_ACCESS_CLIENT_SECRET?: string;
   /** Isolated Cloudflare Worker Preview: never call live admin APIs. */
   PHOTOINTEL_PREVIEW?: string;
   GITHUB_ENVIRONMENT: string;
