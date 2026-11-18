@@ -35,3 +35,21 @@ test('production preserves approved terminal catalog', () => {
   const result = deployBindings(JSON.stringify({ extra_environment: runtime }), 'production');
   assert.deepEqual(JSON.parse(result.runtime.MANAGE_TERMINAL_VMS), [vm]);
 });
+
+test('preview ignores malformed production-only terminal catalog', () => {
+  const result = deployBindings(JSON.stringify({ extra_environment: { MANAGE_TERMINAL_VMS: 'invalid', PUBLIC_FEATURE: 'yes' } }), 'preview');
+  assert.equal(result.runtime.MANAGE_TERMINAL_VMS, undefined);
+  assert.equal(result.runtime.PUBLIC_FEATURE, 'yes');
+});
+
+test('preview strips private tokens and Cloudflare production bindings', () => {
+  const result = deployBindings(JSON.stringify({ extra_environment: {
+    API_TOKEN: 'private', MANAGE_CODESPACES_USER_TOKEN: 'private',
+    PUBLIC_FEATURE: 'enabled'
+  }, cloudflare_environment: { SECRET_BINDING: 'private' }, workflows: { deploy: true } }), 'preview');
+  assert.equal(result.runtime.API_TOKEN, undefined);
+  assert.equal(result.runtime.MANAGE_CODESPACES_USER_TOKEN, undefined);
+  assert.equal(result.runtime.PUBLIC_FEATURE, 'enabled');
+  assert.deepEqual(result.cloudflare, {});
+  assert.deepEqual(result.workflows, {});
+});
