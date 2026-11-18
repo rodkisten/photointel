@@ -267,6 +267,27 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         ):
             raise SetupError("MANAGE_CLOUDBUILD_ALLOWED_TRIGGERS must contain location:trigger-UUID values")
         build_triggers = ",".join(dict.fromkeys(allowed))
+    gateway_url = str(extra.get("MANAGE_TERMINAL_GATEWAY_URL") or "").strip()
+    gateway_vms = str(extra.get("MANAGE_TERMINAL_VMS") or "").strip()
+    terminal_enabled = bool(gateway_url or gateway_vms or
+        "MANAGE_TERMINAL_GATEWAY_SECRET" in config.get("workflow_secrets", {}))
+    if terminal_enabled:
+        if gateway_url != "https://photointel-ssh.migos.club":
+            raise SetupError("Terminal gateway URL must be the Access-protected hostname")
+        try:
+            targets = json.loads(gateway_vms)
+        except (ValueError, TypeError):
+            raise SetupError("MANAGE_TERMINAL_VMS must be valid JSON") from None
+        if not isinstance(targets, list) or not targets or len(targets) > 30:
+            raise SetupError("MANAGE_TERMINAL_VMS must contain approved targets")
+        for target in targets:
+            if (not isinstance(target, dict) or
+                not all(k in target for k in ("id", "label", "host", "port", "username", "hostKeySha256")) or
+                not isinstance(target["hostKeySha256"], str) or
+                not re.fullmatch(r"SHA256:[A-Za-z0-9+/]{43}=?", target["hostKeySha256"])):
+                raise SetupError("Invalid terminal target")
+        if "MANAGE_TERMINAL_GATEWAY_SECRET" not in config.get("workflow_secrets", {}):
+            raise SetupError("Gateway secret must be pinned in GCP Secret Manager")
     d1_id = ensure_manage_d1(api)
     # Only used by this management Worker, never the public PhotoIntel Worker
     # or the Cloud Run API/Jobs. No JSON service-account keys are created.
@@ -303,6 +324,9 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             # Never infer authorization to mutate a repository from this list.
             "MANAGE_PROJECT_REPOSITORIES": "rodkisten/userscripts-cf,rodkisten/jardim,rodkisten/roteador",
             "GITHUB_ENVIRONMENT": "production",
+            **({"MANAGE_TERMINAL_GATEWAY_URL": gateway_url,
+                "MANAGE_TERMINAL_VMS": json.dumps(targets, separators=(",", ":"))}
+               if terminal_enabled else {}),
             **({"XRELAY_CHAT_ID": str(extra["MANAGE_XRELAY_CHAT_ID"])}
                if extra.get("MANAGE_XRELAY_CHAT_ID") else {}),
             # Non-secret evidence of which pinned version last populated the
@@ -356,6 +380,11 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
         for reference, binding in secret_map.items():
             if reference in config.get("workflow_secrets", {}):
                 secrets[binding] = secret_value(config, reference)
+        if terminal_enabled:
+            gateway_secret = secret_value(config, "MANAGE_TERMINAL_GATEWAY_SECRET")
+            if len(gateway_secret) < 32:
+                raise SetupError("Gateway secret missing or too short")
+            secrets["MANAGE_TERMINAL_GATEWAY_SECRET"] = gateway_secret
         if "MANAGE_MODAL_BILLING_TOKEN" in config.get("workflow_secrets", {}):
             secrets["MODAL_BILLING_TOKEN"] = secret_value(config, "MANAGE_MODAL_BILLING_TOKEN")
         if "MANAGE_SENTRY_API_TOKEN" in config.get("workflow_secrets", {}):
