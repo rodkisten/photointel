@@ -4,9 +4,6 @@ run-name: "📦 Lockfiles · ${{ github.event_name == 'pull_request' && format('
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-    paths:
-      - "package.json"
-      - "**/package.json"
   push:
     branches: [main]
     paths:
@@ -21,7 +18,7 @@ on:
         options:
           - "apps/web"
           - "apps/manage"
-        default: "apps/manage"
+        default: "apps/web"
       target_branch:
         description: "Branch to synchronize (leave empty for selected branch)"
         required: false
@@ -93,6 +90,9 @@ jobs:
               base="${{ github.event.before }}"
             fi
             mapfile -d '' manifests < <(git diff --name-only -z "$base" HEAD -- 'package.json' '**/package.json')
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              manifests+=("apps/web/package.json" "apps/manage/package.json")
+            fi
           fi
           if (( ${#manifests[@]} == 0 )); then
             echo "### 📦 No package manifests changed" >> "$GITHUB_STEP_SUMMARY"
