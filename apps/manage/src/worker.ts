@@ -94,22 +94,26 @@ function applySecurityHeaders(response: Response, isPreview: boolean): Response 
 
 // Handle isolated preview environments without exposing live backend APIs
 async function handlePreview(request: Request, env: Env, location: URL): Promise<Response> {
-  const path = location.pathname;
+  const pr = env.MANAGE_PREVIEW_PR;
+  if (!pr || !/^[1-9][0-9]{0,8}$/.test(pr)) return failure(503, 'PREVIEW_CONFIG', 'Preview PR not configured');
+  const prefix = '/' + pr;
+  if (location.hostname !== 'manage.migos.club' ||
+      !(location.pathname === prefix || location.pathname.startsWith(prefix + '/')))
+    return failure(403, 'PREVIEW_HOST', 'Preview hostname or path invalid');
+
+  // Preview Workers must still authenticate at the application boundary.
+  await verifyAccess(request, env);
   const method = request.method.toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return failure(405, 'PREVIEW_READONLY', 'Preview is read-only');
+  const pathname = location.pathname.slice(prefix.length) || '/';
+  if (pathname.startsWith('/api/') || pathname.startsWith('/hooks/') || pathname.startsWith('/__'))
+    return failure(404, 'PREVIEW_DISABLED', 'Preview API unavailable');
 
-  if (!location.hostname.endsWith(CONFIG.PREVIEW_DOMAIN)) {
-    return failure(403, 'PREVIEW_HOST', 'Preview hostname required');
-  }
-  if (path.startsWith('/api/') || path.startsWith('/hooks/') || path.startsWith('/__')) {
-    return failure(404, 'PREVIEW_DISABLED', 'Preview route unavailable');
-  }
-  if (method !== 'GET' && method !== 'HEAD') {
-    return failure(405, 'PREVIEW_READONLY', 'Preview is read-only');
-  }
-
-  const response = await env.ASSETS.fetch(request);
+  const target = new URL(request.url);
+  target.pathname = pathname;
+  const response = await env.ASSETS.fetch(new Request(target, request));
   const secured = applySecurityHeaders(response, true);
-  secured.headers.set(HEADERS.CACHE_CONTROL, manageAssetCachePolicy(path, response));
+  secured.headers.set(HEADERS.CACHE_CONTROL, manageAssetCachePolicy(pathname, response));
   return secured;
 }
 
