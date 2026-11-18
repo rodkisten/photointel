@@ -38,6 +38,25 @@ runs:
           prepare|cleanup) ;;
           *) echo "::error::Unsupported gcp-config action mode: $MODE" >&2; exit 2 ;;
         esac
+    - name: "🟣 [CONFIG] Node.js TypeScript runtime"
+      if: inputs.mode == 'prepare'
+      uses: actions/setup-node@v4
+      with:
+        node-version: "24"
+    - name: "🧩 [CONFIG] Validate shared TypeScript contract"
+      if: inputs.mode == 'prepare'
+      shell: bash
+      env:
+        GCP_CONFIG_ENV: ${{ inputs.config-env }}
+      run: |
+        set -euo pipefail
+        node --experimental-strip-types packages/env/src/deploy.ts diagnose > "$RUNNER_TEMP/photointel-env-diagnostic.json"
+        {
+          echo "### 🧩 TypeScript configuration contract"
+          echo "- VM catalog present: $(jq -r '.terminalPresent' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
+          echo "- VM catalog valid: $(jq -r '.terminalValid' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
+          echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
+        } >> "$GITHUB_STEP_SUMMARY"
     - name: "📦 [CONFIG] Install dotenv parser"
       if: inputs.mode == 'prepare'
       shell: bash
