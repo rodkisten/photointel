@@ -73,8 +73,8 @@ Referências `${KEY}`, `${KEY:-fallback}` e `$` são resolvidas com proteção c
 - [x] Aliases R2 e validação inicial do inventário
 - [x] Validação TypeScript de metadados WIF
 - [x] Testes unitários das regras de precedência
-- [ ] Integrar o resolvedor à action efetivamente usada nos deploys
-- [ ] Permitir valores diretos GitHub sem exigir referências GCP obrigatórias
+- [ ] Integrar o resolvedor à action efetivamente usada nos deploys (a action atual ainda usa Python)
+- [x] Permitir valores diretos GitHub sem exigir referências GCP obrigatórias no renderizador TypeScript (a action ainda não os fornece)
 - [ ] Disponibilizar configuração normalizada a todos os workflows consumidores sem expor secrets
 - [ ] Evitar execução do parser Python quando o caminho TypeScript estiver habilitado
 - [ ] Comparar renderizações Python/TypeScript e validar CI de ponta a ponta
