@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: process.env.MANAGE_PREVIEW_PR ? '/' + process.env.MANAGE_PREVIEW_PR + '/' : '/',
   build: { outDir: 'dist', emptyOutDir: true, assetsInlineLimit: 4096 },
   server: {
     port: 5174,
