@@ -38,6 +38,12 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [category, setCategory] = useState<'environment' | 'simple'>('environment');
   const [editing, setEditing] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyTarget, setCopyTarget] = useState('');
+  const [copyScope, setCopyScope] = useState<Scope>('repository');
+  const [copyEnvironment, setCopyEnvironment] = useState('production');
+  const [copyConfirm, setCopyConfirm] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
   const key = ['project-variables', repository, scope, environment];
   const endpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
     '&scope=' + scope + '&environment=' + encodeURIComponent(environment);
@@ -59,6 +65,34 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       setSavedMessage('Variável salva no GitHub. Atualizando inventário…');
       setSelected(''); setName(''); setValue(''); setVersion(null);
       void client.invalidateQueries({ queryKey: key });
+    },
+  });
+  const projectCatalog = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api<{ items: { id: string; repository: string; enabled: boolean }[] }>('/projects'),
+    retry: false,
+    enabled: copyOpen,
+  });
+  const copyEndpoint = '/projects/variables?repository=' + encodeURIComponent(copyTarget) +
+    '&scope=' + copyScope + '&environment=' + encodeURIComponent(copyEnvironment);
+  const destinationVariables = useQuery({
+    queryKey: ['project-variables', copyTarget, copyScope, copyEnvironment],
+    queryFn: () => api<{ items: Variable[] }>(copyEndpoint),
+    enabled: copyOpen && Boolean(copyTarget) && (copyScope === 'repository' || Boolean(copyEnvironment.trim())),
+    retry: false,
+  });
+  const destinationExisting = destinationVariables.data?.items.find(item => item.name === originalNameForCopy());
+  function originalNameForCopy() { return selected || name; }
+  const copy = useMutation({
+    mutationFn: () => send(copyEndpoint, {
+      name: originalNameForCopy(), value: variables.data?.items.find(item => item.name === selected)?.value ?? '',
+      version: null, confirm: copyTarget,
+    }, 'PUT'),
+    onSuccess: () => {
+      setCopyMessage('Variável copiada para ' + copyTarget + '.');
+      setCopyOpen(false);
+      setCopyConfirm('');
+      void client.invalidateQueries({ queryKey: ['project-variables', copyTarget] });
     },
   });
   const otherScope = scope === 'repository' ? 'environment' : 'repository';
@@ -171,7 +205,48 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       {variables.isFetching && !variables.isPending && <p role="status" className="text-xs text-carbon-400">Atualizando variáveis do GitHub…</p>}
       {save.error && <IssueBanner error={save.error} />}
       {savedMessage && <p role="status" className="text-sm text-emerald-400">{savedMessage}</p>}
-      <Button disabled={!valid} onClick={() => save.mutate({ name, value, version, confirm: confirmation })}>Salvar variável</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={!valid} onClick={() => save.mutate({ name, value, version, confirm: confirmation })}>Salvar variável</Button>
+        <Button variant="secondary" disabled={!selected || !original || !inventoryReady || dirty}
+          onClick={() => { setCopyOpen(open => !open); setCopyMessage(''); setCopyConfirm(''); }}>
+          Copiar para outro projeto
+        </Button>
+      </div>
+      {copyMessage && <p role="status" className="text-sm text-emerald-400">{copyMessage}</p>}
+      {copyOpen && original && <div className="space-y-3 rounded-xl border border-carbon-700 bg-carbon-900/60 p-4">
+        <h3 className="text-sm font-semibold">Copiar {original.name}</h3>
+        <p className="text-xs text-carbon-400">A origem permanece intacta. A cópia usa o valor salvo no GitHub, não alterações locais.</p>
+        <label className="block space-y-1 text-xs">Projeto de destino
+          <select aria-label="Projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+            value={copyTarget} onChange={event => { setCopyTarget(event.target.value); setCopyConfirm(''); }}>
+            <option value="">Selecione um projeto</option>
+            {(projectCatalog.data?.items ?? []).filter(item => item.repository !== repository).map(item =>
+              <option key={item.repository} value={item.repository}>{item.repository}</option>)}
+          </select>
+        </label>
+        {projectCatalog.isError && <IssueBanner error={projectCatalog.error} />}
+        <label className="block space-y-1 text-xs">Escopo de destino
+          <select className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+            value={copyScope} onChange={event => { setCopyScope(event.target.value as Scope); setCopyConfirm(''); }}>
+            <option value="repository">Repositório</option><option value="environment">Environment</option>
+          </select>
+        </label>
+        {copyScope === 'environment' && <label className="block space-y-1 text-xs">Environment de destino
+          <input className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+            value={copyEnvironment} onChange={event => setCopyEnvironment(event.target.value)} />
+        </label>}
+        {destinationVariables.isFetching && <p className="text-xs text-carbon-400">Verificando destino…</p>}
+        {destinationVariables.isError && <IssueBanner error={destinationVariables.error} />}
+        {destinationExisting && <p role="alert" className="text-sm text-amber-300">Já existe {original.name} no destino. A cópia foi bloqueada para evitar sobrescrita.</p>}
+        <label className="block space-y-1 text-xs">Confirme digitando o repositório de destino
+          <input aria-label="Confirmar projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+            value={copyConfirm} placeholder={copyTarget} onChange={event => setCopyConfirm(event.target.value)} />
+        </label>
+        {copy.error && <IssueBanner error={copy.error} />}
+        <Button disabled={!copyTarget || copyTarget === repository || !destinationVariables.isSuccess ||
+          destinationVariables.isFetching || Boolean(destinationExisting) || copyConfirm !== copyTarget || copy.isPending}
+          onClick={() => copy.mutate()}>{copy.isPending ? 'Copiando…' : 'Confirmar cópia'}</Button>
+      </div>}
     </Card>
   </Section>;
 }
