@@ -375,7 +375,17 @@ export default function App() {
           )}
 
           <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
-            Rod Manage · Operações auditáveis · Cloudflare Access
+            <span>Rod Manage · Operações auditáveis · Cloudflare Access</span>
+            <span className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              <span>Publicado:</span>
+              {import.meta.env.VITE_MANAGE_RELEASE
+                ? <a className="text-emerald-400 underline underline-offset-2"
+                    href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
+                    target="_blank" rel="noreferrer" title={import.meta.env.VITE_MANAGE_RELEASE}>
+                    {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 12)}
+                  </a>
+                : <span className="text-amber-400">SHA indisponível</span>}
+            </span>
           </footer>
         </main>
       </div>
