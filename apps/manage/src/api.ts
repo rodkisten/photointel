@@ -12,7 +12,7 @@ import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
 import { workflowTemplateRoute } from './workflow-message';
 import { workflowFailureRoute } from './workflow-failures';
-import { ApiError, bodyJson, json, redact } from './auth';
+import { ApiError, bodyJson, json, redact, requireOrigin } from './auth';
 import { cloudflareRoute } from './cloudflare-management';
 import { routerApi } from './deploy-router/service';
 import { costRoute } from './costs';
@@ -440,6 +440,7 @@ export async function api(
       return json({ rules, version: await digest(raw) });
     }
     if (method === 'PUT') {
+      requireOrigin(request);
       const input = await bodyJson<{ rules?: unknown; version?: unknown; confirm?: unknown }>(request, 12000);
       if (input.confirm !== 'confirma') throw new ApiError(409, 'TRIGGER_CONFIRM', 'Digite confirma para salvar gatilhos.');
       if (!input.rules || typeof input.rules !== 'object' || Array.isArray(input.rules))
@@ -479,13 +480,20 @@ export async function api(
     const repository = url.searchParams.get('repository') || '';
     const scope = url.searchParams.get('scope') || 'repository';
     const environment = url.searchParams.get('environment') || 'production';
-    const allowed = new Set([env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
-      ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
-    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
-      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado');
+    if (!PATTERNS.REPOSITORY.test(repository))
+      throw new ApiError(422, 'PROJECT_SCOPE', 'Repositório inválido');
+    // GitHub App installation tokens are repository-scoped. Verify actual access,
+    // rather than relying on a stale local allowlist that excludes discovered projects.
+    const token = await githubToken(env);
+    const repoInfo = await provider('https://api.github.com/repos/' + repository, token, {
+      headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    }) as { full_name?: string; archived?: boolean; disabled?: boolean };
+    if (repoInfo.full_name?.toLowerCase() !== repository.toLowerCase())
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório inacessível pela integração GitHub');
+    if (repoInfo.archived || repoInfo.disabled)
+      throw new ApiError(409, 'PROJECT_READ_ONLY', 'Repositório arquivado ou desativado');
     if (!['repository', 'environment'].includes(scope) || !/^[a-zA-Z0-9_-]{1,64}$/.test(environment))
       throw new ApiError(422, 'VARIABLE_SCOPE', 'Escopo ou environment inválido');
-    const token = await githubToken(env);
     const base = 'https://api.github.com/repos/' + repository + (scope === 'repository'
       ? '/actions/variables' : '/environments/' + encodeURIComponent(environment) + '/variables');
     const call = (endpoint: string, verb = 'GET', payload?: object) => provider(endpoint, token, {
