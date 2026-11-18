@@ -17,8 +17,11 @@ on:
       package_path:
         description: "Package directory for manual run (default: apps/web)"
         required: false
-        default: "apps/web"
-        type: string
+        type: choice
+        options:
+          - "apps/web"
+          - "apps/manage"
+        default: "apps/manage"
       target_branch:
         description: "Branch to synchronize (leave empty for selected branch)"
         required: false
