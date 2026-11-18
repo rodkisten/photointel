@@ -130,9 +130,19 @@ jobs:
           echo "No GCP Workload Identity Federation or Secret Manager access is used by this preview." >> "$GITHUB_STEP_SUMMARY"
           echo "Production deployment configuration is not rendered into preview builds." >> "$GITHUB_STEP_SUMMARY"
       - name: "📦 Install both apps"
+        id: install
         run: |
-          npm --prefix apps/web ci
-          npm --prefix apps/manage ci
+          set -euo pipefail
+          for app in web manage; do
+            if npm --prefix "apps/$app" ci > "$RUNNER_TEMP/npm-$app.log" 2>&1; then
+              echo "✅ apps/$app installed"
+            else
+              echo "failed_app=$app" >> "$GITHUB_OUTPUT"
+              echo "::error title=Dependency install failed::npm ci failed for apps/$app"
+              tail -n 50 "$RUNNER_TEMP/npm-$app.log"
+              exit 1
+            fi
+          done
       - name: "🏗 Build static Photos and Manage"
         run: |
           npm --prefix apps/web run build
@@ -159,6 +169,39 @@ jobs:
         run: |
           echo "### Previews not deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Configure CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in GitHub Environment production. Preview Workers remain isolated." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "📋 Preview diagnostic summary"
+        if: always()
+        env:
+          INSTALL: ${{ steps.install.outcome }}
+          FAILED_APP: ${{ steps.install.outputs.failed_app }}
+          PREVIEW_READY: ${{ steps.credentials.outputs.ready }}
+          HEAD_SHA: ${{ steps.selected_pr.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          {
+            echo "## 🧪 Cloudflare preview · diagnostic"
+            echo
+            echo "| Field | Value |"
+            echo "|:--|:--|"
+            echo "| PR | #$PR_NUMBER |"
+            echo "| SHA | [${HEAD_SHA:0:12}](https://github.com/$GITHUB_REPOSITORY/commit/$HEAD_SHA) |"
+            echo "| Dependencies | $INSTALL |"
+            echo "| Preview credentials | ${PREVIEW_READY:-not-checked} |"
+            echo "| Run | [Open logs](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) |"
+            echo
+            if [[ "$INSTALL" == failure ]]; then
+              echo "### ❌ Dependency installation failed"
+              echo "Affected application: apps/${FAILED_APP:-unknown}"
+              echo "Check package.json / package-lock.json consistency."
+              echo "Run: npm --prefix apps/${FAILED_APP:-web} install --package-lock-only"
+              echo "Then: npm --prefix apps/${FAILED_APP:-web} ci"
+            elif [[ "$PREVIEW_READY" != true ]]; then
+              echo "### ⚠️ Preview credentials unavailable or not checked"
+            else
+              echo "### 🔎 Inspect build and publication steps for preview URLs"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   cleanup:
     name: "Closed PR preview cleanup"
