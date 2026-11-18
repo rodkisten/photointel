@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useProject } from '../context/ProjectContext';
 import { send } from '../lib/client';
 import { Cloud, ExternalLink, RefreshCcw } from 'lucide-react';
 import { Badge, Button, Card, Section } from '../components/ui';
@@ -8,13 +9,8 @@ import { api } from '../lib/client';
 
 type Target = { id: string; name: string; script: string };
 export function ProjectsPage() {
-  const [repository, setRepository] = useState(() => new URLSearchParams(window.location.search).get('project') || 'rodkisten/photointel');
-  useEffect(() => {
-    const sync = () => setRepository(new URLSearchParams(window.location.search).get('project') || 'rodkisten/photointel');
-    window.addEventListener('manage:project-changed', sync);
-    window.addEventListener('popstate', sync);
-    return () => { window.removeEventListener('manage:project-changed', sync); window.removeEventListener('popstate', sync); };
-  }, []);
+  const { project, isLoading } = useProject();
+  const repository = project?.repository ?? '';
   const [scope, setScope] = useState<'repository' | 'environment'>('repository');
   const [environment, setEnvironment] = useState('production');
   const [name, setName] = useState('');
@@ -24,7 +20,7 @@ export function ProjectsPage() {
   const [confirm, setConfirm] = useState('');
   const client = useQueryClient();
   const queryKey = ['project-variables', repository, scope, environment];
-  const vars = useQuery({ queryKey, queryFn: () => api<{ items: Array<{ name: string; value: string; version: string }> }>(
+  const vars = useQuery({ enabled: Boolean(repository), queryKey, queryFn: () => api<{ items: Array<{ name: string; value: string; version: string }> }>(
     '/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment)), retry: false });
   useEffect(() => { setName(''); setValue(''); setVersion(null); setOriginalName(''); setConfirm(''); }, [repository, scope, environment]);
   const save = useMutation({ mutationFn: () => send('/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment),
@@ -35,6 +31,8 @@ export function ProjectsPage() {
   const runs = useQuery({ enabled: isPrimary, queryKey: ['deploy-router'],
     queryFn: () => api<{ runs: Array<{ target: string; state: string; sha: string }> }>('/deploy-router'),
     retry: false, refetchInterval: 30000 });
+  if (isLoading) return <Spinner />;
+  if (!project) return <Card className="p-4" role="alert">Selecione um projeto autorizado para visualizar as variáveis.</Card>;
   return <div className="space-y-5">
     <Section title={'Variáveis GitHub Actions · ' + repository} detail="Alterações são aplicadas ao repositório selecionado. Secrets não podem ser lidos aqui.">
       <Card className="space-y-3 p-4">
@@ -50,7 +48,7 @@ export function ProjectsPage() {
         <input aria-label="Confirmar repositório" placeholder={repository} className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base" value={confirm} onChange={e => setConfirm(e.target.value)} />
         {save.error && <IssueBanner error={save.error} />}
         {save.isSuccess && <p role="status" className="text-sm text-emerald-400">Variável salva no GitHub.</p>}
-        <Button disabled={!name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || confirm !== repository || save.isPending || vars.isPending || vars.isError} onClick={() => save.mutate()}>Salvar variável</Button>
+        <Button disabled={!repository || !name || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || confirm !== repository || save.isPending || vars.isPending || vars.isError} onClick={() => save.mutate()}>Salvar variável</Button>
       </Card>
     </Section>
     {isPrimary && <Section title="Projetos conectados" detail="Workers autorizados do PhotoIntel. Esta tela não inicia builds."
