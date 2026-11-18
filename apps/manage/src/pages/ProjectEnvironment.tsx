@@ -109,6 +109,16 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     retry: false,
     enabled: copyOpen,
   });
+  const exactRepositorySearch = /^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(copyRepositorySearch.trim())
+    ? copyRepositorySearch.trim() : '';
+  const resolvedDestination = useQuery({
+    queryKey: ['github-copy-resolve', exactRepositorySearch],
+    queryFn: () => api<{ repository: string; status: string }>(
+      '/projects/resolve?repository=' + encodeURIComponent(exactRepositorySearch)),
+    enabled: copyOpen && Boolean(exactRepositorySearch) &&
+      exactRepositorySearch.toLowerCase() !== repository.toLowerCase(),
+    retry: false,
+  });
   const destinationOptions = (projectCatalog.data?.items ?? [])
     .filter(item => !item.archived && item.repository !== repository &&
       item.repository.toLowerCase().includes(copyRepositorySearch.toLowerCase()))
@@ -253,8 +263,17 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         <p className="text-xs text-carbon-400">O servidor lê o valor diretamente no GitHub e verifica se a origem não mudou. Nada é sobrescrito.</p>
         <label className="block space-y-1 text-xs text-carbon-400">Buscar projeto de destino
           <Input aria-label="Buscar projeto de destino" value={copyRepositorySearch}
-            placeholder="Filtrar projetos…" onChange={event => setCopyRepositorySearch(event.target.value)} />
+            placeholder="Filtrar ou digitar owner/repo…" onChange={event => setCopyRepositorySearch(event.target.value)} />
         </label>
+        {resolvedDestination.isSuccess && resolvedDestination.data.status !== 'archived' && (
+          <Button type="button" size="sm" variant="secondary"
+            onClick={() => { setCopyTarget(resolvedDestination.data.repository); setCopyConfirm(''); }}>
+            Selecionar {resolvedDestination.data.repository}
+          </Button>
+        )}
+        {resolvedDestination.isError && <p role="alert" className="text-xs text-amber-300">
+          Não foi possível acessar esse repositório pela integração GitHub.
+        </p>}
         <ChoiceMenu label="Projeto de destino" value={copyTarget}
           options={[{ value: '', label: 'Selecione um projeto' },
             ...destinationOptions, ...(copyTarget && !destinationOptions.some(item => item.value === copyTarget)
