@@ -272,3 +272,20 @@ O operador executou `sudo /opt/photointel-ssh/.venv/bin/python test-websocket.py
 ```
 
 **Conclusão:** a conexão WebSocket local aceita tickets HMAC, abre PTY SSH e transmite comandos e saída. Ainda faltam Cloudflare Tunnel, configuração de segredos no Manage Worker, forwarding de WebSocket e teste do navegador.
+
+## 12. Cloudflare Access, Tunnel e DNS (18/11/2026)
+
+Configuração aplicada via API Cloudflare:
+
+- Tunnel dedicado `photointel-ssh-gateway` conectado, com quatro conexões saudáveis no momento da verificação.
+- Ingress do hostname `photointel-ssh.migos.club` para `http://127.0.0.1:8789`, seguido de fallback `http_status:404`.
+- Aplicação Access `photointel-ssh-gateway` para esse hostname.
+- Service Token exclusivo `photointel-manage-to-ssh-gateway`, com validade de um ano.
+- Política Access `Allow PhotoIntel Manage service only`, decisão `non_identity`, incluindo **somente o token dedicado**.
+- Credenciais guardadas como secrets no Worker `photointel-manage`: `MANAGE_TERMINAL_ACCESS_CLIENT_ID` e `MANAGE_TERMINAL_ACCESS_CLIENT_SECRET`.
+- Registro DNS CNAME proxied `photointel-ssh.migos.club` apontando para o Tunnel dedicado.
+- Código do Manage alterado para enviar `CF-Access-Client-Id` e `CF-Access-Client-Secret` nas requisições `/files` e `/ws`.
+
+**Ainda pendente:** confirmar o deploy do Worker atualizado; configurar `MANAGE_TERMINAL_GATEWAY_URL=https://photointel-ssh.migos.club`, `MANAGE_TERMINAL_GATEWAY_SECRET` (mesmo valor do arquivo privado da VM) e `MANAGE_TERMINAL_VMS` (catálogo com fingerprint validada) no Worker; testar respostas Access 403 sem token e integração ponta a ponta. **Nunca copiar o segredo da VM para o GitHub.**
+
+> Segurança: uma rota DNS proxied não equivale a um endpoint aberto. O Access exige o token de serviço autorizado, e o gateway exige ainda o segredo compartilhado. Não criar políticas de bypass ou allow everyone.
