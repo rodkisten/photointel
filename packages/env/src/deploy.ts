@@ -110,6 +110,20 @@ export type SecretInventory = {
 };
 
 /** Convert R2 legacy aliases to canonical storage bindings and validate the full inventory. */
+/**
+ * Enforce mandatory deployment credentials after applying GitHub-first precedence.
+ * A direct GitHub value satisfies the requirement without any GCP reference.
+ */
+export function validateRequiredConfigValues(
+  sources: Parameters<typeof resolveConfigValue>[1],
+  required: readonly string[] = REQUIRED_RUNTIME_SECRETS,
+): Record<string, ResolvedConfigValue> {
+  const resolved = resolveConfigInventory(required, sources);
+  const missing = required.filter(key => resolved[key].source === 'missing');
+  if (missing.length) throw new Error('Missing required configuration: ' + missing.join(', '));
+  return resolved;
+}
+
 export function normalizeSecretInventory(
   input: SecretInventory,
   options: {requireAll?: boolean; storageEndpoint?: string} = {},
