@@ -1,3 +1,4 @@
+import { managePath } from '../preview-path';
 export class ApiError extends Error {
   readonly correlationId?: string;
   readonly sentryEventId?: string;
@@ -17,7 +18,7 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch('/api' + path, {
+  const response = await fetch(managePath('/api' + path), {
     ...init,
     credentials: 'same-origin',
     cache: 'no-store',
