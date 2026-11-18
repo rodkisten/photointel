@@ -39,8 +39,27 @@ jobs:
     environment: production
     timeout-minutes: 20
     steps:
+      - name: "🛡 Validate GitHub App credentials"
+        id: credentials
+        shell: bash
+        env:
+          APP_ID: ${{ secrets.BOT_APP_ID || vars.BOT_APP_ID }}
+          APP_KEY: ${{ secrets.BOT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          echo "## 📦 npm lockfile sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -z "$APP_ID" || -z "$APP_KEY" ]]; then
+            echo "::error title=GitHub App credentials missing::Configure BOT_APP_ID and BOT_PRIVATE_KEY in the production Environment"
+            echo "### ❌ Missing GitHub App credentials" >> "$GITHUB_STEP_SUMMARY"
+            echo "Configure BOT_APP_ID (variable or secret) and BOT_PRIVATE_KEY (secret) in production, then rerun." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "### ✅ GitHub App credentials available (values hidden)" >> "$GITHUB_STEP_SUMMARY"
       - name: "🔐 Authenticate Ploocky GitHub App"
-        if: ${{ (secrets.BOT_APP_ID != '' || vars.BOT_APP_ID != '') && secrets.BOT_PRIVATE_KEY != '' }}
+        if: steps.credentials.outputs.ready == 'true'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
