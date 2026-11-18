@@ -102,7 +102,6 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
-  const [catalogSelection, setCatalogSelection] = useState<ManageProject | null>(null);
   const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
@@ -156,16 +155,21 @@ export default function App() {
     retry: false,
   });
   const availableProjects = projectCatalog.data?.items ?? [];
-  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? (catalogSelection?.repository === selectedProject ? catalogSelection : undefined) : availableProjects[0]);
-  const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && !activeProject);
+  const resolvedProject = useQuery({
+    queryKey: ['project-resolve', selectedProject],
+    queryFn: () => api<ManageProject>('/projects/resolve?repository=' + encodeURIComponent(selectedProject!)),
+    enabled: Boolean(selectedProject && !availableProjects.some(item => item.id === selectedProject || item.repository === selectedProject)),
+    retry: false,
+  });
+  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
+  const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
   useEffect(() => {
-    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); setCatalogSelection(null); };
+    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); };
     window.addEventListener('popstate', onLocation);
     return () => window.removeEventListener('popstate', onLocation);
   }, []);
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
-    setCatalogSelection(catalogProject ?? null);
     setSelectedProject(repository);
     setProjectMenuOpen(false);
     const next = new URL(window.location.href);
@@ -221,7 +225,7 @@ export default function App() {
   });
 
   return (
-    <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects as ManageProject[], isLoading: projectCatalog.isPending, isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
+    <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects, isLoading: projectCatalog.isPending || (Boolean(selectedProject) && resolvedProject.isPending && !activeProject), isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
       <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
