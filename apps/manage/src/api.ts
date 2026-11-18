@@ -474,6 +474,50 @@ export async function api(
     }
   }
 
+  // Project-scoped GitHub Actions variables. Never use the PhotoIntel-default gh() helper here.
+  if (path === '/api/projects/variables') {
+    const repository = url.searchParams.get('repository') || '';
+    const scope = url.searchParams.get('scope') || 'repository';
+    const environment = url.searchParams.get('environment') || 'production';
+    const allowed = new Set([env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
+      ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+    if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
+      throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado');
+    if (!['repository', 'environment'].includes(scope) || !/^[a-zA-Z0-9_-]{1,64}$/.test(environment))
+      throw new ApiError(422, 'VARIABLE_SCOPE', 'Escopo ou environment inválido');
+    const token = await githubToken(env);
+    const base = 'https://api.github.com/repos/' + repository + (scope === 'repository'
+      ? '/actions/variables' : '/environments/' + encodeURIComponent(environment) + '/variables');
+    const call = (endpoint: string, verb = 'GET', payload?: object) => provider(endpoint, token, {
+      method: verb, headers: { 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/vnd.github+json',
+        ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    });
+    if (method === 'GET') {
+      const data = await call(base + '?per_page=100');
+      return json({ repository, scope, environment, items: await Promise.all(safeList(data, 'variables').map(async entry => ({
+        name: entry.name, value: entry.value, version: await digest(String(entry.value || '')), updated_at: entry.updated_at,
+      }))) });
+    }
+    if (method === 'PUT') {
+      const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown; confirm?: unknown }>(request, 130_000);
+      if (input.confirm !== repository) throw new ApiError(409, 'PROJECT_CONFIRM', 'Confirme o nome completo do repositório');
+      if (typeof input.name !== 'string' || !PATTERNS.VARIABLE_NAME.test(input.name) ||
+        typeof input.value !== 'string' || input.value.length > LIMITS.CONFIG_MAX_LENGTH ||
+        input.value.includes('\\0') || PATTERNS.SECRET_SENSITIVE.test(input.value))
+        throw new ApiError(422, 'VARIABLE_VALUE', 'Nome ou valor inválido; não armazene secrets em variáveis');
+      const data = await call(base + '?per_page=100');
+      const current = safeList(data, 'variables').find(entry => entry.name === input.name);
+      if (current && input.version !== await digest(String(current.value || '')))
+        throw new ApiError(409, 'VARIABLE_CONFLICT', 'Valor alterado; recarregue');
+      if (!current && input.version !== null) throw new ApiError(409, 'VARIABLE_CONFLICT', 'Variável nova exige versão vazia');
+      await call(current ? base + '/' + encodeURIComponent(input.name) : base, current ? 'PATCH' : 'POST',
+        { name: input.name, value: input.value });
+      console.log(JSON.stringify({ event: 'project_variable_updated', repository, scope, environment, name: input.name, operator: identity.email }));
+      return json({ ok: true });
+    }
+  }
+
   if (path === '/api/github/variables') {
     const scope = url.searchParams.get('scope') || 'environment';
     if (scope !== 'environment' && scope !== 'repository')
