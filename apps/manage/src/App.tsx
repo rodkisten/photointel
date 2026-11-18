@@ -348,6 +348,12 @@ export default function App() {
             </Card>
           ) : error ? (
             <IssueBanner error={error} />
+          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' ? (
+            <Card className="space-y-3 border-amber-500/30 p-5" role="status">
+              <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
+              <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>
+              <p className="text-xs text-carbon-500">A conexão de variáveis, deploys, logs e terminal precisa ser implementada por projeto no servidor antes de habilitar operações aqui.</p>
+            </Card>
           ) : (
             <Outlet />
           )}
