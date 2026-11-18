@@ -45,12 +45,12 @@ export const REQUIRED_RUNTIME_SECRETS = [
   'ICLOUD_SESSION_KEY',
 ] as const;
 
-const RUNTIME_SECRET_FIELDS = new Set([
+const RUNTIME_SECRET_FIELDS: Set<string> = new Set([
   ...REQUIRED_RUNTIME_SECRETS, 'MODAL_TOKEN', 'MODAL_PROXY_KEY', 'MODAL_PROXY_SECRET',
   'NOTIFY_DEVICE_ID', 'NOTIFY_TOKEN', 'SENTRY_DSN', 'SENTRY_API_TOKEN',
   'TELEGRAM_NOTIFICATION_API_TOKEN',
 ]);
-const WORKFLOW_SECRET_FIELDS = new Set([
+const WORKFLOW_SECRET_FIELDS: Set<string> = new Set([
   'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TS_OAUTH_CLIENT_ID',
   'TS_OAUTH_SECRET', 'SENTRY_AUTH_TOKEN', 'MANAGE_GITHUB_API_TOKEN',
   'MANAGE_CLOUDFLARE_API_TOKEN', 'MANAGE_SENTRY_API_TOKEN',
@@ -155,7 +155,7 @@ export function renderDeployConfiguration(
   const entries = parsed?.entries ?? Object.fromEntries(
     Object.entries(structured).filter(([, value]) => typeof value === 'string'),
   ) as Record<string, string>;
-  const identity = validateWorkloadIdentity(entries);
+  validateWorkloadIdentity(entries);
   const project = String(structured.project_id ?? entries.PROJECT_ID ?? entries.project_id ?? '');
   const region = String(structured.region ?? entries.REGION ?? entries.region ?? '');
   const repository = String(structured.repository ?? entries.REPOSITORY ?? entries.repository ?? '');
@@ -182,8 +182,7 @@ export function renderDeployConfiguration(
     workflow_secrets: inventory.workflowSecrets,
     release_git_sha: options.releaseSha,
     image: region + '-docker.pkg.dev/' + project + '/' + repository + '/api:' + options.releaseSha,
-    // WIF metadata is returned separately, never embedded in application configuration.
-    ...(identity ? {} : {}),
+    // WIF metadata is validated but never embedded in application configuration.
   };
 }
 
