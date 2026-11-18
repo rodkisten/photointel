@@ -21,6 +21,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [confirmation, setConfirmation] = useState('');
   const [mode, setMode] = useState<'code' | 'fields'>('code');
   const [editing, setEditing] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
   const key = ['project-variables', repository, scope, environment];
   const endpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
     '&scope=' + scope + '&environment=' + encodeURIComponent(environment);
@@ -31,13 +32,16 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     retry: false,
   });
   useEffect(() => {
-    setSelected(''); setName(''); setValue(''); setVersion(null); setConfirmation(''); setEditing(false);
+    setSelected(''); setName(''); setValue(''); setVersion(null); setConfirmation(''); setEditing(false); setSavedMessage('');
   }, [repository, scope, environment]);
   const save = useMutation({
-    mutationFn: () => send(endpoint, { name, value, version, confirm: confirmation }, 'PUT'),
+    mutationFn: (input: { name: string; value: string; version: string | null; confirm: string }) =>
+      send(endpoint, input, 'PUT'),
     onSuccess: () => {
       setConfirmation('');
       setEditing(false);
+      setSavedMessage('Variável salva no GitHub. Atualizando inventário…');
+      setSelected(''); setName(''); setValue(''); setVersion(null);
       void client.invalidateQueries({ queryKey: key });
     },
   });
@@ -45,7 +49,10 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const dirty = editing && (name !== (original?.name ?? '') || value !== (original?.value ?? ''));
   const staleSelection = Boolean(selected && !original);
   const staleVersion = Boolean(original && version !== original.version);
-  const valid = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && confirmation === repository &&
+  const renameAttempt = Boolean(selected && name !== selected);
+  const existingName = variables.data?.items.some(item => item.name === name && item.name !== selected);
+  const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && value.length <= 120_000 &&
+    !renameAttempt && !existingName && confirmation === repository &&
     !variables.isPending && !variables.isError && !staleSelection && !staleVersion && dirty && !save.isPending;
   return <Section title={'Ambiente GitHub · ' + repository}
     detail="Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados">
@@ -73,7 +80,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           value={selected} onChange={event => {
             const item = variables.data?.items.find(entry => entry.name === event.target.value);
             setSelected(item?.name ?? ''); setName(item?.name ?? '');
-            setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation(''); setEditing(false);
+            setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation(''); setEditing(false); setSavedMessage('');
           }}>
           <option value="">Criar nova variável</option>
           {variables.data?.items.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
@@ -82,7 +89,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       <label className="block space-y-1 text-xs text-carbon-400">Nome
         <input aria-label="Nome da variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base"
           placeholder="NOME_DA_VARIAVEL" value={name}
-          onChange={event => { setEditing(true); setName(event.target.value); if (event.target.value !== selected) setVersion(null); }} />
+          onChange={event => { setEditing(true); setSavedMessage(''); setName(event.target.value.toUpperCase()); }} />
       </label>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-carbon-400">CodeMirror 6 · {detectEnvironmentFormat(value)} · {value.split(/\r?\n/).length} linhas</span>
@@ -101,11 +108,13 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         <input aria-label="Confirmar repositório" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
           value={confirmation} placeholder={repository} onChange={event => setConfirmation(event.target.value)} />
       </label>
+      {renameAttempt && <p role="alert" className="text-sm text-amber-300">Para criar outra variável, selecione “Criar nova variável”. Renomear uma variável existente não é suportado.</p>}
+      {existingName && <p role="alert" className="text-sm text-amber-300">Já existe uma variável com esse nome. Selecione-a na lista para editar.</p>}
       {staleSelection && <p role="alert" className="text-sm text-amber-300">A variável selecionada não está mais disponível. Atualize a lista antes de salvar.</p>}
       {staleVersion && <p role="alert" className="text-sm text-amber-300">A variável foi atualizada no servidor. Selecione-a novamente antes de salvar.</p>}
       {save.error && <IssueBanner error={save.error} />}
-      {save.isSuccess && <p role="status" className="text-sm text-emerald-400">Variável salva no GitHub.</p>}
-      <Button disabled={!valid} onClick={() => save.mutate()}>Salvar variável</Button>
+      {savedMessage && <p role="status" className="text-sm text-emerald-400">{savedMessage}</p>}
+      <Button disabled={!valid} onClick={() => save.mutate({ name, value, version, confirm: confirmation })}>Salvar variável</Button>
     </Card>
   </Section>;
 }
