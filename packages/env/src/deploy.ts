@@ -202,7 +202,7 @@ function normalizeRecord(input: unknown): Record<string, string> {
 /** Render the canonical deploy configuration without reading or retrieving secret values. */
 export function renderDeployConfiguration(
   raw: string,
-  options: {project: string; releaseSha: string},
+  options: {project: string; releaseSha: string; githubSecrets?: Record<string, string | undefined>; githubVariables?: Record<string, string | undefined>},
 ): Record<string, unknown> {
   if (!/^[a-f0-9]{40}$/.test(options.releaseSha)) throw new Error('Invalid release SHA');
   const source = raw.trim();
@@ -225,18 +225,36 @@ export function renderDeployConfiguration(
     if (!value || typeof value !== 'object') return {};
     return value as Record<string, SecretBinding>;
   };
-  const inventory = normalizeSecretInventory({
+  const references = normalizeSecretInventory({
     secrets: asReferences(config.secrets),
     workflowSecrets: asReferences(config.workflowSecrets),
-  }, {requireAll: true, storageEndpoint: String(structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
+  }, {storageEndpoint: String(structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
+  const githubSources = {
+    secrets: options.githubSecrets,
+    variables: options.githubVariables,
+    gcpReferences: references.secrets,
+  };
+  const resolved = validateRequiredConfigValues(githubSources);
+  // Only references that actually need GCP remain in the legacy secret inventory.
+  const secrets = Object.fromEntries(Object.entries(references.secrets).filter(([key]) =>
+    resolveConfigValue(key, githubSources).source === 'gcp-secret-manager'));
+  const workflowSecrets = Object.fromEntries(Object.entries(references.workflowSecrets).filter(([key]) =>
+    resolveConfigValue(key, {
+      secrets: options.githubSecrets,
+      variables: options.githubVariables,
+      gcpReferences: references.workflowSecrets,
+    }).source === 'gcp-secret-manager'));
+  const directRuntime = Object.fromEntries(Object.entries(resolved)
+    .filter(([, item]) => item.source === 'github-secret' || item.source === 'github-variable')
+    .map(([key, item]) => [key, item.value]));
   return {
     ...structured,
     project_id: project, region, repository,
-    extra_environment: config.runtime,
+    extra_environment: {...config.runtime, ...directRuntime},
     cloudflare_environment: config.cloudflare,
     workflows: config.workflows,
-    secrets: inventory.secrets,
-    workflow_secrets: inventory.workflowSecrets,
+    secrets,
+    workflow_secrets: workflowSecrets,
     release_git_sha: options.releaseSha,
     image: region + '-docker.pkg.dev/' + project + '/' + repository + '/api:' + options.releaseSha,
     // WIF metadata is validated but never embedded in application configuration.
