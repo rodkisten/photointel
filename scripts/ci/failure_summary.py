@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ANSI = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
-HIGHLIGHT = re.compile(r"error|failed|fatal|traceback|exception|permission.denied|not found|cannot find|✖|✗", re.I)
+HIGHLIGHT = re.compile(r"error|failed|fatal|traceback|exception|permission.denied|not found|cannot find|TS\\d{4,5}|✖|✗", re.I)
 SECRET = re.compile(r"(?i)(bearer\s+|(?:token|password|secret|api[_-]?key)\s*[:=]\s*)\S+")
 CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 def render(path: str) -> None:
