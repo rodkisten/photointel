@@ -289,3 +289,24 @@ Configuração aplicada via API Cloudflare:
 **Ainda pendente:** confirmar o deploy do Worker atualizado; configurar `MANAGE_TERMINAL_GATEWAY_URL=https://photointel-ssh.migos.club`, `MANAGE_TERMINAL_GATEWAY_SECRET` (mesmo valor do arquivo privado da VM) e `MANAGE_TERMINAL_VMS` (catálogo com fingerprint validada) no Worker; testar respostas Access 403 sem token e integração ponta a ponta. **Nunca copiar o segredo da VM para o GitHub.**
 
 > Segurança: uma rota DNS proxied não equivale a um endpoint aberto. O Access exige o token de serviço autorizado, e o gateway exige ainda o segredo compartilhado. Não criar políticas de bypass ou allow everyone.
+
+## 13. Deploy via GCP Config ENV (18/11/2026)
+
+O publicador oficial `infra/scripts/deploy_manage.py` passou a aceitar a configuração do gateway SSH pela mesma origem GCP usada no deploy do Manage. **Código enviado à main; deploy não executado nesta etapa.**
+
+Configure em `GCP_CONFIG_ENV`:
+
+```dotenv
+EXTRA_ENVIRONMENT__MANAGE_TERMINAL_GATEWAY_URL=https://photointel-ssh.migos.club
+EXTRA_ENVIRONMENT__MANAGE_TERMINAL_VMS=[{"id":"debian","label":"Debian VM","host":"127.0.0.1","port":22,"username":"rod","hostKeySha256":"SHA256:SUBSTITUIR_PELA_FINGERPRINT_VERIFICADA"}]
+WORKFLOW_SECRETS__MANAGE_TERMINAL_GATEWAY_SECRET__NAME=photointel-terminal-gateway-secret
+WORKFLOW_SECRETS__MANAGE_TERMINAL_GATEWAY_SECRET__VERSION=1
+```
+
+Crie `photointel-terminal-gateway-secret` no GCP Secret Manager com **o valor já existente** em `/etc/photointel-ssh.env`, sem alterar a chave do gateway nem copiá-la ao GitHub. Substitua a fingerprint de exemplo pela fingerprint real obtida na VM.
+
+As credenciais `MANAGE_TERMINAL_ACCESS_CLIENT_ID` e `MANAGE_TERMINAL_ACCESS_CLIENT_SECRET` já foram gravadas diretamente como secrets no Worker pela Cloudflare; preservá-las no deploy é obrigatório. O publicador usa `keep_vars`, mas deve-se verificar a preservação após a publicação.
+
+O publicador falha explicitamente se uma configuração parcial de gateway estiver presente, se a URL não corresponder ao hostname protegido, se o catálogo JSON for inválido ou se o segredo versionado estiver ausente/curto.
+
+**Bloqueios antes do deploy:** confirmar criação e acesso do Secret Manager, atualizar o lockfile do Manage para Dexie e language-data, executar build TypeScript/Vite e verificar que o pipeline real chama o publicador especializado.
