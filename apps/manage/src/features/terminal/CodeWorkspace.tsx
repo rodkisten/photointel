@@ -58,7 +58,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
     const name = window.prompt('Nome do rascunho (não é um caminho remoto):', 'untitled.txt');
     if (!name) return;
     const safeName = name.trim().slice(0, 100);
-    if (!safeName || /[\\/\x00-\x1f]/.test(safeName)) { setMessage('Nome de arquivo inválido'); return; }
+    if (!safeName || safeName.includes('/') || safeName.includes('\\\\') || [...safeName].some(char => char.charCodeAt(0) < 32)) { setMessage('Nome de arquivo inválido'); return; }
     const doc = { id: crypto.randomUUID(), name: safeName, content: '', saved: '' };
     setDocuments(items => [...items, doc]);
     setActiveId(doc.id);
