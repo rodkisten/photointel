@@ -228,7 +228,7 @@ export default function App() {
   return (
     <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects, isLoading: projectCatalog.isPending || (Boolean(selectedProject) && resolvedProject.isPending && !activeProject), isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
-      <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
+      <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" search={{ project: activeProject?.repository }} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
