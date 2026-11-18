@@ -28,7 +28,7 @@ import {
 
 import { Badge, Card } from './components/ui';
 import { ProjectPicker } from './components/ProjectPicker';
-import { ProjectsPage } from './pages/Projects';
+import { ProjectEnvironment } from './pages/ProjectEnvironment';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
 import { cn } from './lib/utils';
@@ -351,13 +351,7 @@ export default function App() {
           ) : error ? (
             <IssueBanner error={error} />
           ) : isReadOnlyProject && tab === 'config' ? (
-            <section aria-label="Variáveis GitHub do projeto selecionado" className="space-y-4">
-              <Card className="space-y-2 border-emerald-500/30 p-4">
-                <h2 className="font-semibold text-carbon-100">🌿 Ambiente GitHub · {activeProject?.repository}</h2>
-                <p className="text-sm text-carbon-400">Gerencie variáveis GitHub Actions deste repositório. Secrets são protegidos e não podem ser lidos nesta tela. Configurações Cloudflare e GCP do PhotoIntel permanecem isoladas.</p>
-              </Card>
-              <ProjectsPage />
-            </section>
+            <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
           ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
