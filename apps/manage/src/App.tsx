@@ -29,6 +29,7 @@ import {
 import { Badge, Card } from './components/ui';
 import { ProjectPicker } from './components/ProjectPicker';
 import { ProjectProvider, type ManageProject } from './context/ProjectContext';
+import { ProjectEnvironment } from './pages/ProjectEnvironment';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
 import { cn } from './lib/utils';
@@ -343,7 +344,7 @@ export default function App() {
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <p className="text-[11px] font-medium tracking-wider text-carbon-500 uppercase">
-                PRODUCTION / {meta?.project || 'photointel'}
+                {activeProject?.enabled ? 'PRODUCTION' : 'GITHUB PROJECT'} / {activeProject?.repository || meta?.project || 'photointel'}
               </p>
               <h1 className="text-2xl font-semibold tracking-tight text-carbon-100 sm:text-3xl">
                 {pageTitle}
@@ -361,6 +362,8 @@ export default function App() {
             <IssueBanner error={error} />
           ) : invalidProject ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
+          ) : isReadOnlyProject && tab === 'config' ? (
+            <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
           ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
