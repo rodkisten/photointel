@@ -24,3 +24,32 @@ test('redacts secret values but keeps non-secret values', () => {
   assert.equal(parsed.entries.REGION, 'us-central1');
   assert.ok(!JSON.stringify(parsed).includes('verysecretcredential'));
 });
+
+test('accepts legacy GCP Secret Manager NAME/VERSION syntax', () => {
+  const parsed = parseEnvironment([
+    'SECRETS__STORAGE_ACCESS_KEY__NAME=photointel-storage-key',
+    'SECRETS__STORAGE_ACCESS_KEY__VERSION=7',
+    'WORKFLOW_SECRETS__DEPLOY_TOKEN__NAME=photointel-deploy-token',
+    'WORKFLOW_SECRETS__DEPLOY_TOKEN__VERSION=latest',
+  ].join('\n'));
+  assert.deepEqual(parsed.secrets, [
+    {scope: 'runtime', key: 'STORAGE_ACCESS_KEY', name: 'photointel-storage-key', version: '7'},
+    {scope: 'workflow', key: 'DEPLOY_TOKEN', name: 'photointel-deploy-token', version: 'latest'},
+  ]);
+});
+
+test('supports secret:// references and JSON runtime bindings without exposing secret values', () => {
+  const parsed = parseEnvironment([
+    'ENV__MANAGE_TERMINAL_VMS=json:[{"id":"debian"}]',
+    'SECRET__STORAGE_SECRET_KEY=secret://photointel-storage-secret@3',
+  ].join('\n'));
+  assert.deepEqual(JSON.parse(parsed.runtime.MANAGE_TERMINAL_VMS), [{id: 'debian'}]);
+  assert.deepEqual(parsed.secrets[0], {
+    scope: 'runtime', key: 'STORAGE_SECRET_KEY', name: 'photointel-storage-secret', version: '3',
+  });
+});
+
+test('rejects malformed Secret Manager identifiers', () => {
+  assert.throws(() => parseEnvironment('SECRET__KEY=Invalid/Resource@latest'), /Invalid Secret Manager/);
+  assert.throws(() => parseEnvironment('SECRET__KEY=valid-name@zero'), /Invalid Secret Manager/);
+});
