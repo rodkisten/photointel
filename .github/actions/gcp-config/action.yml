@@ -67,10 +67,26 @@ runs:
         set -euo pipefail
         node --experimental-strip-types packages/env/src/deploy.ts diagnose > "$RUNNER_TEMP/photointel-env-diagnostic.json"
         {
-          echo "### 🧩 TypeScript configuration contract"
-          echo "- VM catalog present: $(jq -r '.terminalPresent' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
-          echo "- VM catalog valid: $(jq -r '.terminalValid' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
-          echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
+          echo "### 🧩 ENV · Contract diagnostics"
+          echo
+          echo "| Check | Result |"
+          echo "|:--|:--|"
+          echo "| Engine | \`\${{ inputs.engine }}\` |"
+          echo "| VM catalog | $(jq -r 'if .terminalPresent then "Present" else "Not configured" end' "$RUNNER_TEMP/photointel-env-diagnostic.json") |"
+          echo "| VM validation | $(jq -r 'if .terminalValid then "✅ Valid" elif .terminalPresent then "❌ Invalid" else "➖ Not configured" end' "$RUNNER_TEMP/photointel-env-diagnostic.json") |"
+          echo "| Terminal gateway | $(jq -r 'if .gatewayPresent then "Configured" else "Not configured" end' "$RUNNER_TEMP/photointel-env-diagnostic.json") |"
+          echo "| Runtime keys | $(jq -r '.runtimeKeys | length' "$RUNNER_TEMP/photointel-env-diagnostic.json") |"
+          echo
+          echo "<details><summary>🔎 Runtime key names (no values)</summary>"
+          echo
+          jq -r '.runtimeKeys[] | "- \`" + . + "\`"' "$RUNNER_TEMP/photointel-env-diagnostic.json"
+          echo
+          echo "</details>"
+          if jq -e '.terminalError != ""' "$RUNNER_TEMP/photointel-env-diagnostic.json" >/dev/null; then
+            echo
+            echo "#### ❌ Terminal validation error"
+            jq -r '.terminalError' "$RUNNER_TEMP/photointel-env-diagnostic.json"
+          fi
         } >> "$GITHUB_STEP_SUMMARY"
     - name: "📦 [CONFIG] Install dotenv parser"
       if: inputs.mode == 'prepare' && inputs.engine == 'python'
