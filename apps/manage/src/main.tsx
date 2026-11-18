@@ -1,3 +1,4 @@
+import { managePath } from './preview-path';
 import React, { Component } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -111,7 +112,7 @@ updateOfflineNotice();
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     void navigator.serviceWorker
-      .register('/sw.js', { updateViaCache: 'none' })
+      .register(managePath('/sw.js'), { updateViaCache: 'none', scope: managePath('/') })
       .catch((error) => captureManageBrowserError(error, 'service-worker'));
   });
 }
