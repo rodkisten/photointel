@@ -85,7 +85,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
       }),
     });
     view.current = editor;
-    const description = languages.find(item => item.matchFilename(current.path || current.name));
+    const description = LanguageDescription.matchFilename(languages, current.path || current.name);
     if (description) {
       void description.load().then(support => {
         if (!disposed) editor.dispatch({ effects: language.reconfigure(support) });
