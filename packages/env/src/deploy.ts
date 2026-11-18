@@ -234,7 +234,9 @@ export function renderDeployConfiguration(
     variables: options.githubVariables,
     gcpReferences: references.secrets,
   };
-  const resolved = validateRequiredConfigValues(githubSources);
+  validateRequiredConfigValues(githubSources);
+  const runtimeKeys = [...new Set([...Object.keys(config.runtime), ...REQUIRED_RUNTIME_SECRETS])];
+  const resolvedRuntime = resolveConfigInventory(runtimeKeys, githubSources);
   // Only references that actually need GCP remain in the legacy secret inventory.
   const secrets = Object.fromEntries(Object.entries(references.secrets).filter(([key]) =>
     resolveConfigValue(key, githubSources).source === 'gcp-secret-manager'));
@@ -244,7 +246,7 @@ export function renderDeployConfiguration(
       variables: options.githubVariables,
       gcpReferences: references.workflowSecrets,
     }).source === 'gcp-secret-manager'));
-  const directRuntime = Object.fromEntries(Object.entries(resolved)
+  const directRuntime = Object.fromEntries(Object.entries(resolvedRuntime)
     .filter(([, item]) => item.source === 'github-secret' || item.source === 'github-variable')
     .map(([key, item]) => [key, item.value]));
   return {
