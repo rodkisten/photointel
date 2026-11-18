@@ -1,5 +1,7 @@
 # 🔐 PhotoIntel SSH Gateway
 
+> 📒 **Registro da implantação real:** [SETUP-DEBIAN-VM.md](./SETUP-DEBIAN-VM.md) documenta os comandos executados na VM Debian, resultados confirmados e pendências.
+
 Private SSH/SFTP bridge for the Manage CodeMirror workspace.
 
 ## Security model
