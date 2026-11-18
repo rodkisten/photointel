@@ -14,7 +14,7 @@ export function normalizeDeployConfig(raw: string) {
     if (Object.values(config).some(value => value !== null && typeof value === 'object') ||
       'extra_environment' in config || 'workflow_secrets' in config || 'cloudflare_environment' in config) {
       return {
-        runtime: normalizeRecord(config.extra_environment),
+        runtime: normalizeRecord(config.extra_environment ?? config.extra),
         cloudflare: normalizeRecord(config.cloudflare_environment),
         workflows: config.workflows ?? {},
         secrets: config.secrets ?? {},
@@ -83,11 +83,21 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [,, target, output] = process.argv;
-  if (target !== 'production' && target !== 'preview' && target !== 'diagnose') throw new Error('Usage: node deploy.ts production|preview|diagnose [output.json]');
+  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'compare') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
   if (target !== 'diagnose' && !output) throw new Error('Output path required');
   const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
   const config = normalizeDeployConfig(raw);
-  if (target === 'diagnose') {
+  if (target === 'compare') {
+    const actual = JSON.parse(readFileSync(output, 'utf8')) as Record<string, unknown>;
+    const legacy = normalizeRecord(actual.extra_environment);
+    const expected = config.runtime;
+    const keys = [...new Set([...Object.keys(legacy), ...Object.keys(expected)])].sort();
+    const missing = keys.filter(key => !(key in legacy));
+    const extra = keys.filter(key => !(key in expected));
+    const mismatched = keys.filter(key => key in legacy && key in expected && legacy[key] !== expected[key]);
+    console.log(JSON.stringify({ contract: 'typescript-vs-legacy', matching: !missing.length && !extra.length && !mismatched.length, missing, extra, mismatched }));
+    if (missing.length || extra.length || mismatched.length) process.exitCode = 1;
+  } else if (target === 'diagnose') {
     let terminalValid = false;
     let terminalError = '';
     try { validateTerminal(config.runtime); terminalValid = Boolean(config.runtime.MANAGE_TERMINAL_VMS); }
