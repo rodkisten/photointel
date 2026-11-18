@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useRouterState } from '@tanstack/react-router';
 import { send } from '../lib/client';
 import { Cloud, ExternalLink, RefreshCcw } from 'lucide-react';
 import { Badge, Button, Card, Section } from '../components/ui';
@@ -9,8 +8,13 @@ import { api } from '../lib/client';
 
 type Target = { id: string; name: string; script: string };
 export function ProjectsPage() {
-  const search = useRouterState({ select: state => state.location.searchStr });
-  const repository = new URLSearchParams(search).get('project') || 'rodkisten/photointel';
+  const [repository, setRepository] = useState(() => new URLSearchParams(window.location.search).get('project') || 'rodkisten/photointel');
+  useEffect(() => {
+    const sync = () => setRepository(new URLSearchParams(window.location.search).get('project') || 'rodkisten/photointel');
+    window.addEventListener('manage:project-changed', sync);
+    window.addEventListener('popstate', sync);
+    return () => { window.removeEventListener('manage:project-changed', sync); window.removeEventListener('popstate', sync); };
+  }, []);
   const [scope, setScope] = useState<'repository' | 'environment'>('repository');
   const [environment, setEnvironment] = useState('production');
   const [name, setName] = useState('');
