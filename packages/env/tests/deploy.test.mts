@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory, resolveConfigValue, resolveConfigInventory, validateRequiredConfigValues } from '../src/deploy.ts';
+import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory, resolveConfigValue, resolveConfigInventory, validateRequiredConfigValues, renderDeployConfiguration } from '../src/deploy.ts';
 
 const vm = { id: 'debian', label: 'Debian VM', host: 'vm.example.com', port: 22, username: 'root', hostKeySha256: 'SHA256:' + 'A'.repeat(43) };
 const runtime = { MANAGE_TERMINAL_VMS: JSON.stringify([vm]), MANAGE_TERMINAL_GATEWAY_URL: 'https://photointel-ssh.migos.club' };
@@ -199,4 +199,22 @@ test('required configuration rejects keys absent from both sources', () => {
   assert.throws(() => validateRequiredConfigValues({secrets: {DATABASE_URL: 'present'}}, [
     'DATABASE_URL', 'STORAGE_SECRET_KEY',
   ]), /Missing required configuration: STORAGE_SECRET_KEY/);
+});
+
+test('renderer omits GCP reference when a required GitHub secret exists', () => {
+  const raw = JSON.stringify({
+    project_id: 'photointel', region: 'us-central1', repository: 'photointel',
+    ...identity,
+    secrets: {DATABASE_URL: {name: 'legacy-db', version: 'latest'}},
+  });
+  const githubSecrets = Object.fromEntries([
+    'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY',
+    'STORAGE_SECRET_KEY', 'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET',
+    'ICLOUD_SESSION_KEY',
+  ].map(key => [key, 'github-' + key]));
+  const result = renderDeployConfiguration(raw, {
+    project: 'photointel', releaseSha: 'a'.repeat(40), githubSecrets,
+  });
+  assert.equal((result.extra_environment as Record<string, string>).DATABASE_URL, 'github-DATABASE_URL');
+  assert.deepEqual(result.secrets, {});
 });
