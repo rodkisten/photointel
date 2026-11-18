@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useRouterState } from '@tanstack/react-router';
 import { send } from '../lib/client';
 import { Cloud, ExternalLink, RefreshCcw } from 'lucide-react';
 import { Badge, Button, Card, Section } from '../components/ui';
@@ -8,7 +9,8 @@ import { api } from '../lib/client';
 
 type Target = { id: string; name: string; script: string };
 export function ProjectsPage() {
-  const repository = new URLSearchParams(window.location.search).get('project') || 'rodkisten/photointel';
+  const search = useRouterState({ select: state => state.location.searchStr });
+  const repository = new URLSearchParams(search).get('project') || 'rodkisten/photointel';
   const [scope, setScope] = useState<'repository' | 'environment'>('repository');
   const [environment, setEnvironment] = useState('production');
   const [name, setName] = useState('');
@@ -22,9 +24,10 @@ export function ProjectsPage() {
   useEffect(() => { setName(''); setValue(''); setVersion(null); setConfirm(''); }, [repository, scope, environment]);
   const save = useMutation({ mutationFn: () => send('/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment),
     { name, value, version, confirm }, 'PUT'), onSuccess: () => { setConfirm(''); void client.invalidateQueries({ queryKey }); } });
-  const targets = useQuery({ queryKey: ['deploy-router-providers'],
+  const isPrimary = repository === 'rodkisten/photointel';
+  const targets = useQuery({ enabled: isPrimary, queryKey: ['deploy-router-providers'],
     queryFn: () => api<{ cloudflare: Target[] }>('/deploy-router/providers'), retry: false });
-  const runs = useQuery({ queryKey: ['deploy-router'],
+  const runs = useQuery({ enabled: isPrimary, queryKey: ['deploy-router'],
     queryFn: () => api<{ runs: Array<{ target: string; state: string; sha: string }> }>('/deploy-router'),
     retry: false, refetchInterval: 30000 });
   return <div className="space-y-5">
@@ -45,7 +48,7 @@ export function ProjectsPage() {
         <Button disabled={!name || confirm !== repository || save.isPending} onClick={() => save.mutate()}>Salvar variável</Button>
       </Card>
     </Section>
-    <Section title="Projetos conectados" detail="Workers autorizados do PhotoIntel. Esta tela não inicia builds."
+    {isPrimary && <Section title="Projetos conectados" detail="Workers autorizados do PhotoIntel. Esta tela não inicia builds."
       action={<Button size="sm" variant="outline" onClick={() => { void targets.refetch(); void runs.refetch(); }}>
         <RefreshCcw size={14} /> Atualizar</Button>}>
       {targets.isPending && <Spinner />}
@@ -71,7 +74,7 @@ export function ProjectsPage() {
       </div>
       {!targets.isPending && !targets.error && !targets.data?.cloudflare.length &&
         <Card className="p-4 text-sm text-carbon-400">Nenhum Worker conectado encontrado.</Card>}
-    </Section>
-    <Card className="p-4 text-xs text-carbon-400">Conexão de outros repositórios e descoberta de workflows serão implementadas em outra etapa.</Card>
+    </Section>}
+    {!isPrimary && <Card className="p-4 text-xs text-carbon-400">Os Workers do PhotoIntel não são exibidos neste projeto. Configure as integrações específicas do repositório selecionado.</Card>}
   </div>;
 }
