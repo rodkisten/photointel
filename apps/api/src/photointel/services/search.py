@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import UTC, datetime
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import and_, exists, func, not_, or_, select
@@ -369,7 +369,9 @@ async def execute_search(session: AsyncSession, request: SearchRequest) -> Searc
         )
         .limit(request.limit + 1)
     )
-    results = (await session.execute(query)).all()
+    # Both query branches add a scalar sort/distance column. SQLAlchemy's static
+    # select(Asset) inference does not track add_columns() across branches.
+    results = cast(list[tuple[Asset, Any]], (await session.execute(query)).all())
     visible = results[: request.limit]
     items = [
         asset_out(
