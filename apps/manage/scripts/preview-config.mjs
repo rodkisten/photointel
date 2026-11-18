@@ -1,0 +1,12 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const pr = process.argv[2];
+if (!/^[1-9][0-9]{0,8}$/.test(pr || '')) throw new Error('PR number must be a positive integer');
+const config = JSON.parse(readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
+config.name = 'photointel-manage-pr-' + pr;
+config.workers_dev = false;
+config.preview_urls = false;
+config.routes = [{ pattern: 'manage.migos.club/' + pr + '/*', zone_name: 'migos.club' }, { pattern: 'manage.migos.club/' + pr, zone_name: 'migos.club' }];
+config.vars = { GITHUB_REPO: 'rodkisten/photointel', GITHUB_ENVIRONMENT: 'preview', GCP_PROJECT_ID: 'photointel-preview', GCP_REGION: 'us-central1', PHOTOINTEL_PREVIEW: 'true', MANAGE_PREVIEW_PR: pr };
+delete config.previews;
+writeFileSync(new URL('../wrangler.pr.json', import.meta.url), JSON.stringify(config, null, 2) + '\n');
+console.log('Generated isolated preview config for PR #' + pr);
