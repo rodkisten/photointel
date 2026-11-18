@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Card, Input, Section } from '../components/ui';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { Check, ChevronDown } from 'lucide-react';
 import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
 import { DotenvFields } from '../components/dotenv-fields';
 import { IssueBanner, Spinner } from '../components/shared';
@@ -23,6 +25,36 @@ function isEnvironmentLike(variable: Variable): boolean {
   const lines = value.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
   if (lines.length > 0 && lines.every(line => /^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/.test(line))) return true;
   return /(?:^|_)(?:ENV|ENVIRONMENT|DOTENV|CONFIG_ENV|ENV_VARS)(?:_|$)/.test(name);
+}
+
+type MenuOption = { value: string; label: string };
+function ChoiceMenu({ label, value, options, onChange }: {
+  label: string; value: string; options: MenuOption[]; onChange: (value: string) => void;
+}) {
+  const current = options.find(option => option.value === value)?.label ?? 'Selecione…';
+  return <div className="space-y-1">
+    <span className="block text-xs text-carbon-400">{label}</span>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <Button type="button" variant="outline" aria-label={label}
+          className="w-full min-w-0 justify-between text-left text-sm">
+          <span className="min-w-0 truncate">{current}</span><ChevronDown size={16} className="shrink-0" />
+        </Button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content sideOffset={6} align="start"
+          className="z-[100] max-h-[min(55dvh,380px)] min-w-[var(--radix-dropdown-menu-trigger-width)] max-w-[90vw] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-1 text-carbon-200 shadow-2xl">
+          <DropdownMenu.RadioGroup value={value} onValueChange={onChange}>
+            {options.map(option => <DropdownMenu.RadioItem key={option.value} value={option.value}
+              className="relative flex min-h-11 cursor-pointer select-none items-center rounded-lg py-2 pl-9 pr-3 text-sm outline-none focus:bg-carbon-800 data-[state=checked]:text-white">
+              <DropdownMenu.ItemIndicator className="absolute left-3"><Check size={15} /></DropdownMenu.ItemIndicator>
+              <span className="truncate">{option.label}</span>
+            </DropdownMenu.RadioItem>)}
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  </div>;
 }
 
 /** External GitHub repositories use the same CodeMirror/fields controls as PhotoIntel. */
@@ -129,12 +161,9 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         <span className="text-xs text-carbon-400">GitHub Actions · {scope === 'repository' ? 'Repository' : environment}</span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1 text-xs text-carbon-400">Escopo
-          <select aria-label="Escopo GitHub" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
-            value={scope} onChange={event => setScope(event.target.value as Scope)}>
-            <option value="repository">Repositório</option><option value="environment">Environment</option>
-          </select>
-        </label>
+        <ChoiceMenu label="Escopo GitHub" value={scope}
+          options={[{ value: 'repository', label: 'Repositório' }, { value: 'environment', label: 'Environment' }]}
+          onChange={next => setScope(next as Scope)} />
         {scope === 'environment' && <label className="space-y-1 text-xs text-carbon-400">Environment
           <input aria-label="Nome do environment" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
             value={environment} onChange={event => setEnvironment(event.target.value)} />
@@ -161,17 +190,14 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           Variáveis comuns ({simpleVariables.length})
         </Button>
       </div>
-      <label className="block space-y-1 text-xs text-carbon-400">Variável
-        <select aria-label="Selecionar variável GitHub" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
-          value={selected} onChange={event => {
-            const item = variables.data?.items.find(entry => entry.name === event.target.value);
-            setSelected(item?.name ?? ''); setName(item?.name ?? '');
-            setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation(''); setEditing(false); setSavedMessage('');
-          }}>
-          <option value="">Criar nova variável</option>
-          {shownVariables.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
-        </select>
-      </label>
+      <ChoiceMenu label="Selecionar variável GitHub" value={selected}
+        options={[{ value: '', label: 'Criar nova variável' }, ...shownVariables.map(item => ({ value: item.name, label: item.name }))]}
+        onChange={next => {
+          const item = variables.data?.items.find(entry => entry.name === next);
+          setSelected(item?.name ?? ''); setName(item?.name ?? '');
+          setValue(item?.value ?? ''); setVersion(item?.version ?? null);
+          setConfirmation(''); setEditing(false); setSavedMessage('');
+        }} />
       <label className="block space-y-1 text-xs text-carbon-400">Nome
         <input aria-label="Nome da variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base"
           placeholder="NOME_DA_VARIAVEL" value={name}
@@ -217,21 +243,15 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       <Dialog.Root open={copyOpen && Boolean(original)} onOpenChange={setCopyOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-black/70" /><Dialog.Content className="fixed inset-x-3 top-1/2 z-[81] mx-auto max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg -translate-y-1/2 overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between gap-2"><Dialog.Title className="text-sm font-semibold">Copiar {original?.name}</Dialog.Title><Dialog.Close aria-label="Fechar" className="rounded-lg px-3 py-2 text-carbon-400">✕</Dialog.Close></div><Dialog.Description className="text-xs text-carbon-400">Copiar variável entre repositórios sem alterar a origem.</Dialog.Description>
         <p className="text-xs text-carbon-400">A origem permanece intacta. A cópia usa o valor salvo no GitHub, não alterações locais.</p>
-        <label className="block space-y-1 text-xs">Projeto de destino
-          <select aria-label="Projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
-            value={copyTarget} onChange={event => { setCopyTarget(event.target.value); setCopyConfirm(''); }}>
-            <option value="">Selecione um projeto</option>
-            {(projectCatalog.data?.items ?? []).filter(item => item.repository !== repository).map(item =>
-              <option key={item.repository} value={item.repository}>{item.repository}</option>)}
-          </select>
-        </label>
+        <ChoiceMenu label="Projeto de destino" value={copyTarget}
+          options={[{ value: '', label: 'Selecione um projeto' },
+            ...(projectCatalog.data?.items ?? []).filter(item => item.repository !== repository)
+              .map(item => ({ value: item.repository, label: item.repository }))]}
+          onChange={next => { setCopyTarget(next); setCopyConfirm(''); }} />
         {projectCatalog.isError && <IssueBanner error={projectCatalog.error} />}
-        <label className="block space-y-1 text-xs">Escopo de destino
-          <select className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
-            value={copyScope} onChange={event => { setCopyScope(event.target.value as Scope); setCopyConfirm(''); }}>
-            <option value="repository">Repositório</option><option value="environment">Environment</option>
-          </select>
-        </label>
+        <ChoiceMenu label="Escopo de destino" value={copyScope}
+          options={[{ value: 'repository', label: 'Repositório' }, { value: 'environment', label: 'Environment' }]}
+          onChange={next => { setCopyScope(next as Scope); setCopyConfirm(''); }} />
         {copyScope === 'environment' && <label className="block space-y-1 text-xs">Environment de destino
           <Input className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
             value={copyEnvironment} onChange={event => setCopyEnvironment(event.target.value)} />
@@ -247,7 +267,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         <Button disabled={!copyTarget || copyTarget === repository || !destinationVariables.isSuccess ||
           destinationVariables.isFetching || Boolean(destinationExisting) || copyConfirm !== copyTarget || copy.isPending}
           onClick={() => copy.mutate()}>{copy.isPending ? 'Copiando…' : 'Confirmar cópia'}</Button>
-      </Dialog.Content></Dialog.Portal></Dialog.Root>}
+      </Dialog.Content></Dialog.Portal></Dialog.Root>
     </Card>
   </Section>;
 }
