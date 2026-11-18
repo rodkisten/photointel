@@ -1,0 +1,45 @@
+name: 🧪 Manage · PR preview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - 'apps/manage/**'
+      - '.github/workflows/manage-pr-preview.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: manage-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !contains(github.event.pull_request.head.sha, '[skip ci]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: 📦 Install locked dependencies
+        run: npm ci
+      - name: 🧪 Build Manage for numbered prefix
+        env:
+          MANAGE_PREVIEW_PR: ${{ github.event.pull_request.number }}
+        run: npm --prefix apps/manage run build
+      - name: 🔍 Generate preview worker config
+        run: node apps/manage/scripts/preview-config.mjs ${{ github.event.pull_request.number }}
+      - name: 🛡️ Validate config without publishing
+        run: npx wrangler deploy --config apps/manage/wrangler.pr.json --dry-run --outdir /tmp/manage-preview-worker
+
+# Deployment is deliberately gated until manage.migos.club has an Access policy,
+# isolated preview credentials and a verified main route. This workflow never
+# publishes an unauthenticated Worker or reuses production bindings.
