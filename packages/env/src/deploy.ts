@@ -4,6 +4,40 @@ import { parseEnvironment } from './index.ts';
 
 export type DeploymentTarget = 'production' | 'preview';
 
+export type WorkloadIdentity = {
+  provider: string;
+  serviceAccount: string;
+  bootstrapProvider?: string;
+  bootstrapServiceAccount?: string;
+};
+
+const WIF_PROVIDER = /^projects\\/[0-9]+\\/locations\\/global\\/workloadIdentityPools\\/[A-Za-z0-9_-]+\\/providers\\/[A-Za-z0-9_-]+$/;
+const SERVICE_ACCOUNT = /^[a-z][a-z0-9-]*@[a-z][a-z0-9.-]*\\.iam\\.gserviceaccount\\.com$/;
+
+/** Validate metadata only. Authentication and secret retrieval stay in trusted deployment adapters. */
+export function validateWorkloadIdentity(entries: Record<string, string>): WorkloadIdentity {
+  const provider = entries.GCP_WORKLOAD_IDENTITY_PROVIDER;
+  const serviceAccount = entries.GCP_DEPLOY_SERVICE_ACCOUNT;
+  if (!provider || !serviceAccount) {
+    throw new Error('Missing Workload Identity entries: GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT');
+  }
+  if (!WIF_PROVIDER.test(provider)) throw new Error('Invalid GCP_WORKLOAD_IDENTITY_PROVIDER resource name');
+  if (!SERVICE_ACCOUNT.test(serviceAccount)) throw new Error('Invalid GCP_DEPLOY_SERVICE_ACCOUNT email');
+  const bootstrapProvider = entries.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER || undefined;
+  const bootstrapServiceAccount = entries.GCP_BOOTSTRAP_SERVICE_ACCOUNT || undefined;
+  if (Boolean(bootstrapProvider) !== Boolean(bootstrapServiceAccount)) {
+    throw new Error('Bootstrap WIF provider and service account must be configured together');
+  }
+  if (bootstrapProvider && bootstrapServiceAccount &&
+      (!WIF_PROVIDER.test(bootstrapProvider) || !SERVICE_ACCOUNT.test(bootstrapServiceAccount) ||
+       (bootstrapProvider === provider && bootstrapServiceAccount === serviceAccount))) {
+    throw new Error('Invalid or insufficiently separated bootstrap WIF identity');
+  }
+  return {provider, serviceAccount, ...(bootstrapProvider ? {bootstrapProvider, bootstrapServiceAccount} : {})};
+}
+
+
+
 export function normalizeDeployConfig(raw: string) {
   const source = raw.trim();
   if (!source) throw new Error('GCP_CONFIG_ENV is empty');
