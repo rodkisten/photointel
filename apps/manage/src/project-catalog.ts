@@ -14,7 +14,16 @@ async function ensureTable(env: Env) {
 export async function projectCatalogRoute(request: Request, env: Env, identity: Identity): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
-  if (path !== '/api/projects/catalog' && path !== '/api/projects/favorites') return null;
+  if (path !== '/api/projects/catalog' && path !== '/api/projects/favorites' && path !== '/api/projects/resolve') return null;
+  if (path === '/api/projects/resolve') {
+    if (request.method !== 'GET') throw new ApiError(405, 'METHOD', 'Método não permitido');
+    const repository = url.searchParams.get('repository') || '';
+    if (!validRepo(repository)) throw new ApiError(400, 'PROJECT_INPUT', 'Repositório inválido');
+    const token = await githubToken(env);
+    const repo = await provider('https://api.github.com/repos/' + repository, token, { headers }) as Repo;
+    if (repo.full_name !== repository) throw new ApiError(404, 'PROJECT_NOT_FOUND', 'Projeto não encontrado');
+    return json({ id: repo.full_name, name: repo.name, repository: repo.full_name, enabled: repo.full_name === (env.GITHUB_REPO || 'rodkisten/photointel'), status: repo.archived ? 'archived' : 'discovered' });
+  }
   if (path === '/api/projects/favorites') {
     await ensureTable(env);
     if (request.method === 'GET') {
