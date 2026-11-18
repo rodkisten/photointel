@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory } from '../src/deploy.ts';
+import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory, resolveConfigValue, resolveConfigInventory } from '../src/deploy.ts';
 
 const vm = { id: 'debian', label: 'Debian VM', host: 'vm.example.com', port: 22, username: 'root', hostKeySha256: 'SHA256:' + 'A'.repeat(43) };
 const runtime = { MANAGE_TERMINAL_VMS: JSON.stringify([vm]), MANAGE_TERMINAL_GATEWAY_URL: 'https://photointel-ssh.migos.club' };
@@ -128,4 +128,52 @@ test('rejects secret R2 endpoint, missing required secrets and unknown keys', ()
   assert.throws(() => normalizeSecretInventory({
     secrets: {UNKNOWN: {name: 'unknown', version: 'latest'}}, workflowSecrets: {},
   }), /Unknown runtime/);
+});
+
+test('GitHub secret overrides GCP reference without consulting GCP', () => {
+  const actual = resolveConfigValue('DATABASE_URL', {
+    secrets: {DATABASE_URL: 'github-secret'},
+    gcpReferences: {DATABASE_URL: {name: 'old-gcp-database', version: 'latest'}},
+  });
+  assert.deepEqual(actual, {source: 'github-secret', value: 'github-secret'});
+});
+
+test('prefixed GitHub secret is accepted and preferred over GCP', () => {
+  const actual = resolveConfigValue('DATABASE_URL', {
+    secrets: {PHOTOINTEL_DATABASE_URL: 'prefixed-secret'},
+    gcpReferences: {DATABASE_URL: {name: 'old-gcp-database', version: 'latest'}},
+  });
+  assert.equal(actual.value, 'prefixed-secret');
+});
+
+test('GitHub secret takes precedence over GitHub variable', () => {
+  const actual = resolveConfigValue('API_TOKEN', {
+    secrets: {PHOTOINTEL_API_TOKEN: 'secret'},
+    variables: {API_TOKEN: 'variable'},
+  });
+  assert.deepEqual(actual, {source: 'github-secret', value: 'secret'});
+});
+
+test('unprefixed name takes precedence within the same GitHub source', () => {
+  const actual = resolveConfigValue('REGION', {
+    variables: {REGION: 'us-east1', PHOTOINTEL_REGION: 'us-central1'},
+  });
+  assert.equal(actual.value, 'us-east1');
+});
+
+test('legacy GCP reference is used only as fallback', () => {
+  const inventory = resolveConfigInventory(['DATABASE_URL', 'STORAGE_SECRET_KEY'], {
+    variables: {DATABASE_URL: 'github-value'},
+    gcpReferences: {STORAGE_SECRET_KEY: {name: 'old-storage-secret', version: '3'}},
+  });
+  assert.equal(inventory.DATABASE_URL.source, 'github-variable');
+  assert.equal(inventory.STORAGE_SECRET_KEY.source, 'gcp-secret-manager');
+  assert.equal(inventory.STORAGE_SECRET_KEY.reference?.version, '3');
+});
+
+test('empty GitHub values do not shadow GCP references', () => {
+  assert.equal(resolveConfigValue('DATABASE_URL', {
+    secrets: {DATABASE_URL: ''},
+    gcpReferences: {DATABASE_URL: {name: 'old-database', version: 'latest'}},
+  }).source, 'gcp-secret-manager');
 });
