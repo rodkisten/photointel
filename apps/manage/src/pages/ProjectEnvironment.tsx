@@ -118,9 +118,10 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   function originalNameForCopy() { return selected || name; }
   const copy = useMutation({
     mutationFn: () => send(copyEndpoint, {
-      name: originalNameForCopy(), value: variables.data?.items.find(item => item.name === selected)?.value ?? '',
-      version: null, confirm: copyTarget,
-    }, 'PUT'),
+      name: originalNameForCopy(), sourceRepository: repository,
+      sourceScope: scope, sourceEnvironment: environment,
+      sourceVersion: original?.version, confirm: copyTarget,
+    }, 'POST'),
     onSuccess: () => {
       setCopyMessage('Variável copiada para ' + copyTarget + '.');
       setCopyOpen(false);
@@ -242,7 +243,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       {copyMessage && <p role="status" className="text-sm text-emerald-400">{copyMessage}</p>}
       <Dialog.Root open={copyOpen && Boolean(original)} onOpenChange={setCopyOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-black/70" /><Dialog.Content className="fixed inset-x-3 top-1/2 z-[81] mx-auto max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg -translate-y-1/2 overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-5 shadow-2xl space-y-3">
         <div className="flex items-center justify-between gap-2"><Dialog.Title className="text-sm font-semibold">Copiar {original?.name}</Dialog.Title><Dialog.Close aria-label="Fechar" className="rounded-lg px-3 py-2 text-carbon-400">✕</Dialog.Close></div><Dialog.Description className="text-xs text-carbon-400">Copiar variável entre repositórios sem alterar a origem.</Dialog.Description>
-        <p className="text-xs text-carbon-400">A origem permanece intacta. A cópia usa o valor salvo no GitHub, não alterações locais.</p>
+        <p className="text-xs text-carbon-400">O servidor lê o valor diretamente no GitHub e verifica se a origem não mudou. Nada é sobrescrito.</p>
         <ChoiceMenu label="Projeto de destino" value={copyTarget}
           options={[{ value: '', label: 'Selecione um projeto' },
             ...(projectCatalog.data?.items ?? []).filter(item => item.repository !== repository)
