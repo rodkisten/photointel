@@ -58,7 +58,8 @@ jobs:
         with:
           app-id: ${{ secrets.BOT_APP_ID || vars.BOT_APP_ID }}
           private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          permission-contents: write
+          permission-contents: read
+          permission-actions: write
         
       - id: config
         uses: ./.github/actions/gcp-config
@@ -74,7 +75,7 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v3
       - name: "🚀 Executar"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ACTION: ${{ inputs.action }}
           TARGET: ${{ matrix.target }}
           SOURCE: ${{ inputs.source }}
