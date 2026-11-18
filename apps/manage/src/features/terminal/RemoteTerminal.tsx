@@ -1,3 +1,4 @@
+import { managePath } from '../../preview-path';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal, useTerminal } from '@wterm/react';
 import { GhosttyCore } from '@wterm/ghostty';
@@ -34,14 +35,14 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
     setStatus('connecting');
     setNotice('');
     try {
-      const response = await fetch('/api/terminal/ticket', {
+      const response = await fetch(managePath('/api/terminal/ticket'), {
         method: 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }),
       });
       const result = await response.json() as { ticket?: string; message?: string };
       if (!mounted.current) return;
       if (!response.ok || !result.ticket) throw new Error(result.message || 'Sessão não autorizada');
-      const url = new URL('/api/terminal/ws', window.location.href);
+      const url = new URL(managePath('/api/terminal/ws'), window.location.href);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       url.searchParams.set('ticket', result.ticket);
       const ws = new WebSocket(url);
