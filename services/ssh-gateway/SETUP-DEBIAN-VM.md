@@ -185,3 +185,24 @@ Isso comprova que a chave privada dedicada, acessível à conta `photointel-ssh`
 4. Não reiniciar ou alterar o `sshd` durante a implantação do gateway.
 5. Testar SFTP e WebSocket separadamente antes de afirmar que o mini VS Code está operacional.
 6. Atualizações do código no GitHub **não** atualizam automaticamente `/opt/photointel-ssh/server.py`; copiar a nova versão e reiniciar o serviço apenas após validação.
+
+## 8. Próximo bloco: smoke test SFTP real (pendente de execução)
+
+Um teste de integração **somente leitura** foi adicionado em `test-local.py`. Ele verifica `GET /health`, autentica `POST /files` com o segredo lido localmente, lista `/home/rod` via SFTP e lê `/etc/hostname` conferindo o SHA-256 retornado. Não grava arquivos, não expõe o segredo e não depende de Cloudflare.
+
+Na VM:
+
+```bash
+cd ~/photointel
+git pull --ff-only
+cd services/ssh-gateway
+sudo python3 test-local.py
+```
+
+Se o teste falhar, coletar somente os logs sem segredos:
+
+```bash
+sudo journalctl -u photointel-ssh -n 60 --no-pager -o cat
+```
+
+**Não marcar SFTP como validado até ver o resultado do teste.** O teste também não valida WebSocket PTY, escrita, conflitos ou integração com Manage.
