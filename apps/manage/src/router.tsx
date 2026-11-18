@@ -97,7 +97,7 @@ const logSearchSchema = z
     for (const [key, value] of Object.entries(raw)) {
       if (typeof value === 'string') params.set(key, value);
     }
-    return { ...readLogLink(params.toString()), ...(raw.project ? { project: raw.project } : {}) };
+    return readLogLink(params.toString());
   });
 
 const indexRoute = createRoute({
