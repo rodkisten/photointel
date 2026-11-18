@@ -1,7 +1,7 @@
 import { RemoteTerminal } from './RemoteTerminal';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api as requestApi, send } from '../../lib/client';
+import { api as requestApi } from '../../lib/client';
 import { Github, HardDrive, LockKeyhole, MonitorSmartphone, Plus, TerminalSquare } from 'lucide-react';
 
 type Target = { id: string; label: string; kind: 'vm' | 'codespace'; status: 'configured' | 'unavailable'; state?: string };
@@ -11,19 +11,7 @@ export function TerminalPage() {
   const { data, isPending, error, refetch } = useQuery({ queryKey: ['terminal', 'catalog'], queryFn: () => requestApi<Catalog>('/terminal/catalog'), retry: false });
   const targets = data?.items || [];
   const [selected, setSelected] = useState<string | null>(null);
-  const [connectionNotice, setConnectionNotice] = useState('');
-  const [checking, setChecking] = useState(false);
-  const checkConnection = async () => {
-    if (!active || active.kind !== 'vm' || checking) return;
-    setChecking(true);
-    setConnectionNotice('Validando destino autorizado…');
-    try {
-      await send('/terminal/preflight', { targetId: active.id });
-      setConnectionNotice('Gateway ainda não disponível.');
-    } catch (error) {
-      setConnectionNotice(error instanceof Error ? error.message : 'Falha ao verificar conexão');
-    } finally { setChecking(false); }
-  };
+
   const active = targets.find(target => target.id === selected);
   return (
     <section className="space-y-5" aria-label="Terminal remoto">
@@ -39,7 +27,7 @@ export function TerminalPage() {
         <aside className="space-y-3 rounded-2xl border border-carbon-800 bg-carbon-900/40 p-3">
           <h3 className="px-2 text-xs font-semibold uppercase tracking-wider text-carbon-400">Suas máquinas</h3>
           {targets.map(target => (
-            <button type="button" key={target.id} onClick={() => { setSelected(target.id); setConnectionNotice(''); }}
+            <button type="button" key={target.id} onClick={() => { setSelected(target.id); }}
               className="flex w-full items-center gap-3 rounded-xl border border-carbon-800 p-3 text-left text-sm hover:bg-carbon-800">
               {target.kind === 'vm' ? <HardDrive size={18}/> : <Github size={18}/>}
               <span className="min-w-0 flex-1 truncate">{target.label}<span className="block text-xs text-carbon-500">{target.kind === 'codespace' ? target.state : 'VM cadastrada'}</span></span>
@@ -56,16 +44,14 @@ export function TerminalPage() {
         <div className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-carbon-800 bg-[#090d13]">
           <div className="flex items-center justify-between border-b border-carbon-800 px-4 py-3">
             <span className="flex items-center gap-2 text-sm text-carbon-300"><TerminalSquare size={16}/>{active?.label || 'Terminal'}</span>
-            <span className="text-xs text-carbon-500">Desconectado</span>
+            <span className="text-xs text-carbon-500">Sessão privada</span>
           </div>
           {active?.kind === 'vm' ? <RemoteTerminal key={active.id} targetId={active.id} /> : <div className="flex flex-1 flex-col items-center justify-center gap-4 px-5 py-12 text-center">
             <MonitorSmartphone size={34} className="text-carbon-500"/>
             <h3 className="text-base font-semibold text-carbon-200">Terminal pronto para integração</h3>
             <p className="max-w-md text-sm leading-6 text-carbon-400">A interface está isolada. A conexão SSH ficará desativada até existir um gateway autenticado, um catálogo de destinos autorizados e validação das chaves dos hosts.</p>
             {active && <p className="max-w-md text-xs text-carbon-500">{active.label} selecionado. A conexão permanece bloqueada até o gateway estar configurado.</p>}
-            {connectionNotice && <p role="status" className="text-xs text-amber-400">{connectionNotice}</p>}
-            <button type="button" disabled={!active || active.kind !== 'vm' || active.status !== 'configured' || checking} onClick={() => void checkConnection()} className="rounded-lg border border-carbon-700 px-4 py-2 text-sm text-carbon-300 disabled:cursor-not-allowed disabled:opacity-40">{checking ? 'Verificando…' : 'Verificar conexão'}</button>
-            <p className="text-xs text-carbon-500">Próxima etapa: gateway SSH, WebSocket e WTerm/Ghostty.</p>
+            <p className="text-xs text-carbon-500">Selecione uma VM configurada para abrir uma sessão autenticada. Codespaces ainda não oferecem conexão SSH.</p>
           </div>}
         </div>
       </div>
