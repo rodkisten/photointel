@@ -61,6 +61,49 @@ const WORKFLOW_SECRET_FIELDS: Set<string> = new Set([
 ]);
 
 export type SecretBinding = {name: string; version: string};
+
+export type ResolvedConfigValue = {
+  source: 'github-secret' | 'github-variable' | 'gcp-secret-manager' | 'missing';
+  value?: string;
+  reference?: SecretBinding;
+};
+
+/**
+ * Resolve GitHub-provided configuration before consulting legacy GCP references.
+ * GitHub secret values win over variables, and unprefixed names win over PHOTOINTEL_.
+ * Never log or serialize resolved secret values into GitHub job outputs.
+ */
+export function resolveConfigValue(
+  key: string,
+  sources: {
+    secrets?: Record<string, string | undefined>;
+    variables?: Record<string, string | undefined>;
+    gcpReferences?: Record<string, SecretBinding>;
+  },
+): ResolvedConfigValue {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error('Invalid uppercase configuration key: ' + key);
+  const names = [key, 'PHOTOINTEL_' + key];
+  for (const [source, entries] of [
+    ['github-secret', sources.secrets],
+    ['github-variable', sources.variables],
+  ] as const) {
+    for (const name of names) {
+      const value = entries?.[name];
+      if (value !== undefined && value !== '') return {source, value};
+    }
+  }
+  const reference = sources.gcpReferences?.[key];
+  return reference ? {source: 'gcp-secret-manager', reference} : {source: 'missing'};
+}
+
+export function resolveConfigInventory(
+  keys: readonly string[],
+  sources: Parameters<typeof resolveConfigValue>[1],
+): Record<string, ResolvedConfigValue> {
+  return Object.fromEntries(keys.map(key => [key, resolveConfigValue(key, sources)]));
+}
+
+
 export type SecretInventory = {
   secrets: Record<string, SecretBinding>;
   workflowSecrets: Record<string, SecretBinding>;
