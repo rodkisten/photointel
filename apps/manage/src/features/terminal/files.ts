@@ -50,12 +50,16 @@ export async function terminalFilesRoute(request: Request, env: Env, identity: I
   catch { throw new ApiError(503, 'TERMINAL_FILES_GATEWAY', 'Gateway inválido'); }
   if (gateway.protocol !== 'https:' || gateway.username || gateway.password || gateway.search || gateway.hash)
     throw new ApiError(503, 'TERMINAL_FILES_GATEWAY', 'Gateway HTTPS inválido');
+  if (!env.MANAGE_TERMINAL_ACCESS_CLIENT_ID || !env.MANAGE_TERMINAL_ACCESS_CLIENT_SECRET)
+    throw new ApiError(503, 'TERMINAL_FILES_ACCESS', 'Credenciais Cloudflare Access não configuradas');
   const endpoint = new URL('/files', gateway);
   const upstream = await fetch(endpoint.toString(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Terminal-Gateway-Secret': env.MANAGE_TERMINAL_GATEWAY_SECRET,
+      'CF-Access-Client-Id': env.MANAGE_TERMINAL_ACCESS_CLIENT_ID,
+      'CF-Access-Client-Secret': env.MANAGE_TERMINAL_ACCESS_CLIENT_SECRET,
     },
     body: JSON.stringify({ operation, targetId: body.targetId, path: body.path,
       subject: identity.email, ...(operation === 'write' ? { content: body.content, version: body.version } : {}) }),
