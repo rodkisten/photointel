@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deployBindings, normalizeDeployConfig, validateTerminal } from '../src/deploy.ts';
+import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity } from '../src/deploy.ts';
 
 const vm = { id: 'debian', label: 'Debian VM', host: 'vm.example.com', port: 22, username: 'root', hostKeySha256: 'SHA256:' + 'A'.repeat(43) };
 const runtime = { MANAGE_TERMINAL_VMS: JSON.stringify([vm]), MANAGE_TERMINAL_GATEWAY_URL: 'https://photointel-ssh.migos.club' };
@@ -63,4 +63,35 @@ test('invalid gateway is rejected in production but not preview', () => {
   const source = JSON.stringify({ extra_environment: { ...runtime, MANAGE_TERMINAL_GATEWAY_URL: 'https://unsafe.example.com' } });
   assert.throws(() => deployBindings(source, 'production'), /approved/);
   assert.equal(deployBindings(source, 'preview').runtime.MANAGE_TERMINAL_GATEWAY_URL, undefined);
+});
+
+const identity = {
+  GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence',
+  GCP_DEPLOY_SERVICE_ACCOUNT: 'deployer@photointel.iam.gserviceaccount.com',
+};
+
+test('validates production Workload Identity metadata without fetching credentials', () => {
+  assert.deepEqual(validateWorkloadIdentity(identity), {
+    provider: identity.GCP_WORKLOAD_IDENTITY_PROVIDER,
+    serviceAccount: identity.GCP_DEPLOY_SERVICE_ACCOUNT,
+  });
+});
+
+test('rejects missing and malformed WIF metadata', () => {
+  assert.throws(() => validateWorkloadIdentity({}), /Missing Workload Identity/);
+  assert.throws(() => validateWorkloadIdentity({...identity, GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/bad'}), /Invalid GCP_WORKLOAD/);
+  assert.throws(() => validateWorkloadIdentity({...identity, GCP_DEPLOY_SERVICE_ACCOUNT: 'not-an-email'}), /Invalid GCP_DEPLOY/);
+});
+
+test('bootstrap WIF requires a complete, distinct identity', () => {
+  assert.throws(() => validateWorkloadIdentity({...identity, GCP_BOOTSTRAP_SERVICE_ACCOUNT: 'admin@photointel.iam.gserviceaccount.com'}), /configured together/);
+  assert.throws(() => validateWorkloadIdentity({...identity,
+    GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER: identity.GCP_WORKLOAD_IDENTITY_PROVIDER,
+    GCP_BOOTSTRAP_SERVICE_ACCOUNT: identity.GCP_DEPLOY_SERVICE_ACCOUNT,
+  }), /insufficiently separated/);
+  const actual = validateWorkloadIdentity({...identity,
+    GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER: 'projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/bootstrap',
+    GCP_BOOTSTRAP_SERVICE_ACCOUNT: 'bootstrap@photointel.iam.gserviceaccount.com',
+  });
+  assert.equal(actual.bootstrapServiceAccount, 'bootstrap@photointel.iam.gserviceaccount.com');
 });
