@@ -45,7 +45,7 @@ export async function terminalWebsocketRoute(request: Request, env: Env): Promis
   const origin = request.headers.get('Origin');
   if (origin !== url.origin) throw new ApiError(403, 'TERMINAL_ORIGIN', 'Origem não autorizada');
   const ticket = url.searchParams.get('ticket');
-  if (!ticket || ticket.length > 2048 || !/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(ticket))
+  if (!ticket || ticket.length > 2048 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(ticket))
     throw new ApiError(400, 'TERMINAL_TICKET', 'Ticket inválido');
   if (!env.MANAGE_TERMINAL_GATEWAY_URL || !env.MANAGE_TERMINAL_GATEWAY_SECRET)
     throw new ApiError(503, 'TERMINAL_GATEWAY', 'Gateway não configurado');
