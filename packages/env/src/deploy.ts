@@ -64,16 +64,19 @@ export function validateTerminal(runtime: Record<string, string>): void {
 
 export function deployBindings(raw: string, target: DeploymentTarget) {
   const config = normalizeDeployConfig(raw);
-  validateTerminal(config.runtime);
+  if (target === 'production') validateTerminal(config.runtime);
   const runtime = { ...config.runtime };
   if (target === 'preview') {
+    for (const key of Object.keys(runtime)) {
+      if (/^(?:MANAGE_TERMINAL_|MANAGE_CODESPACES_|GITHUB_API_TOKEN|GITHUB_TOKEN|.*(?:SECRET|PRIVATE_KEY|PASSWORD|CREDENTIAL|TOKEN))$/i.test(key)) delete runtime[key];
+    }
     delete runtime.MANAGE_TERMINAL_GATEWAY_SECRET;
     delete runtime.MANAGE_CODESPACES_USER_TOKEN;
     delete runtime.MANAGE_TERMINAL_VMS;
     delete runtime.MANAGE_TERMINAL_GATEWAY_URL;
     runtime.PHOTOINTEL_PREVIEW = 'true';
   }
-  return { runtime, cloudflare: config.cloudflare, workflows: config.workflows };
+  return { runtime, cloudflare: target === 'preview' ? {} : config.cloudflare, workflows: target === 'preview' ? {} : config.workflows };
 }
 
 if (process.argv[1]?.endsWith('/deploy.ts')) {
