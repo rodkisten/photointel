@@ -20,6 +20,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [version, setVersion] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState('');
   const [mode, setMode] = useState<'code' | 'fields'>('code');
+  const [editing, setEditing] = useState(false);
   const key = ['project-variables', repository, scope, environment];
   const endpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
     '&scope=' + scope + '&environment=' + encodeURIComponent(environment);
@@ -30,19 +31,22 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     retry: false,
   });
   useEffect(() => {
-    setSelected(''); setName(''); setValue(''); setVersion(null); setConfirmation('');
+    setSelected(''); setName(''); setValue(''); setVersion(null); setConfirmation(''); setEditing(false);
   }, [repository, scope, environment]);
   const save = useMutation({
     mutationFn: () => send(endpoint, { name, value, version, confirm: confirmation }, 'PUT'),
     onSuccess: () => {
       setConfirmation('');
+      setEditing(false);
       void client.invalidateQueries({ queryKey: key });
     },
   });
   const original = variables.data?.items.find(item => item.name === selected);
-  const dirty = name !== (original?.name ?? '') || value !== (original?.value ?? '');
+  const dirty = editing && (name !== (original?.name ?? '') || value !== (original?.value ?? ''));
+  const staleSelection = Boolean(selected && !original);
+  const staleVersion = Boolean(original && version !== original.version);
   const valid = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && confirmation === repository &&
-    !variables.isPending && !variables.isError && dirty && !save.isPending;
+    !variables.isPending && !variables.isError && !staleSelection && !staleVersion && dirty && !save.isPending;
   return <Section title={'Ambiente GitHub · ' + repository}
     detail="Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados">
     <Card className="space-y-4 p-4" key={repository}>
@@ -69,7 +73,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           value={selected} onChange={event => {
             const item = variables.data?.items.find(entry => entry.name === event.target.value);
             setSelected(item?.name ?? ''); setName(item?.name ?? '');
-            setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation('');
+            setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation(''); setEditing(false);
           }}>
           <option value="">Criar nova variável</option>
           {variables.data?.items.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
@@ -78,7 +82,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       <label className="block space-y-1 text-xs text-carbon-400">Nome
         <input aria-label="Nome da variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 font-mono text-base"
           placeholder="NOME_DA_VARIAVEL" value={name}
-          onChange={event => { setName(event.target.value); if (event.target.value !== selected) setVersion(null); }} />
+          onChange={event => { setEditing(true); setName(event.target.value); if (event.target.value !== selected) setVersion(null); }} />
       </label>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-carbon-400">CodeMirror 6 · {detectEnvironmentFormat(value)} · {value.split(/\r?\n/).length} linhas</span>
@@ -89,14 +93,16 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         </div>
       </div>
       {mode === 'fields' && detectEnvironmentFormat(value) === 'dotenv'
-        ? <DotenvFields value={value} onChange={setValue} />
+        ? <DotenvFields value={value} onChange={next => { setEditing(true); setValue(next); }} />
         : <CodeMirrorEnvEditor ariaLabel={'Editar ' + (name || 'variável GitHub')}
-            value={value} onChange={setValue} format={detectEnvironmentFormat(value)} />}
+            value={value} onChange={next => { setEditing(true); setValue(next); }} format={detectEnvironmentFormat(value)} />}
       <p className="text-xs text-amber-300">⚠️ GitHub Actions Variables não são secrets. Revise o repositório e o valor antes de salvar.</p>
       <label className="block space-y-1 text-xs text-carbon-400">Confirmar repositório · {repository}
         <input aria-label="Confirmar repositório" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
           value={confirmation} placeholder={repository} onChange={event => setConfirmation(event.target.value)} />
       </label>
+      {staleSelection && <p role="alert" className="text-sm text-amber-300">A variável selecionada não está mais disponível. Atualize a lista antes de salvar.</p>}
+      {staleVersion && <p role="alert" className="text-sm text-amber-300">A variável foi atualizada no servidor. Selecione-a novamente antes de salvar.</p>}
       {save.error && <IssueBanner error={save.error} />}
       {save.isSuccess && <p role="status" className="text-sm text-emerald-400">Variável salva no GitHub.</p>}
       <Button disabled={!valid} onClick={() => save.mutate()}>Salvar variável</Button>
