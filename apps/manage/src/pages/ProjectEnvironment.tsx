@@ -61,6 +61,16 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       void client.invalidateQueries({ queryKey: key });
     },
   });
+  const otherScope = scope === 'repository' ? 'environment' : 'repository';
+  const otherEndpoint = '/projects/variables?repository=' + encodeURIComponent(repository) +
+    '&scope=' + otherScope + '&environment=' + encodeURIComponent(environment);
+  const otherVariables = useQuery({
+    queryKey: ['project-variables', repository, otherScope, environment],
+    queryFn: () => api<{ items: Variable[] }>(otherEndpoint),
+    enabled: Boolean(repository && environment.trim()),
+    retry: false,
+  });
+  const otherEnvironmentCount = (otherVariables.data?.items ?? []).filter(isEnvironmentLike).length;
   const environmentVariables = (variables.data?.items ?? []).filter(isEnvironmentLike);
   const simpleVariables = (variables.data?.items ?? []).filter(item => !isEnvironmentLike(item));
   const shownVariables = category === 'environment' ? environmentVariables : simpleVariables;
@@ -97,6 +107,17 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       </div>
       {variables.isPending && <Spinner />}
       {variables.error && <IssueBanner error={variables.error} />}
+      {environmentVariables.length === 0 && otherEnvironmentCount > 0 && (
+        <div className="rounded-lg border border-emerald-500/30 p-3 text-sm text-emerald-300">
+          Encontramos {otherEnvironmentCount} configuração(ões) no escopo {otherScope === 'environment' ? 'Environment' : 'Repositório'}.
+          <Button size="sm" variant="secondary" onClick={() => setScope(otherScope)}>
+            Abrir {otherScope === 'environment' ? 'Environment' : 'Repositório'}
+          </Button>
+        </div>
+      )}
+      {environmentVariables.length === 0 && otherVariables.isSuccess && otherEnvironmentCount === 0 && (
+        <p className="text-xs text-carbon-400">Nenhuma configuração estruturada detectada nos escopos consultados. Variáveis simples permanecem disponíveis.</p>
+      )}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de variável">
         <Button size="sm" variant={category === 'environment' ? 'secondary' : 'ghost'} onClick={() => { setCategory('environment'); setSelected(''); setName(''); setValue(''); setVersion(null); setEditing(false); setConfirmation(''); }}>
           Ambientes ({environmentVariables.length})
