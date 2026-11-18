@@ -146,15 +146,15 @@ export function parseEnvironment(raw: string): ParsedEnvironment {
     if (key.startsWith('ENV__') || key.startsWith('EXTRA_ENVIRONMENT__')) {
       const target = key.split('__').slice(1).join('__');
       if (!/^[A-Z][A-Z0-9_]*$/.test(target)) throw new Error('Invalid runtime key: ' + key);
-      runtime[target] = JSON.stringify(typed(value));
-      if (typeof typed(value) === 'string') runtime[target] = typed(value) as string;
+      const parsed = typed(value);
+      runtime[target] = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
     } else if (key.startsWith('CF__')) {
       const target = key.slice(4);
       if (!/^[A-Z][A-Z0-9_]*$/.test(target)) throw new Error('Invalid Cloudflare key: ' + key);
       const parsed = typed(value);
       cloudflare[target] = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
     } else if (key.startsWith('WF__') || key.startsWith('WORKFLOWS__')) {
-      const parts = key.split('__').slice(1).map(part => part.toLowerCase());
+      const parts = key.split('__').slice(1);
       assignNested(workflows, parts, value);
     }
   }
