@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useNavigate, useRouterState } from '@tanstack/react-router';
 import {
   Activity,
   Bell,
@@ -100,6 +100,8 @@ function sectionForPath(pathname: string): Tab {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+  const routerSearch = useRouterState({ select: state => state.location.searchStr });
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
@@ -148,17 +150,13 @@ export default function App() {
   const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
   const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
   useEffect(() => {
-    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); };
-    window.addEventListener('popstate', onLocation);
-    return () => window.removeEventListener('popstate', onLocation);
-  }, []);
+    setSelectedProject(new URLSearchParams(routerSearch).get('project'));
+  }, [routerSearch]);
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
     setSelectedProject(repository);
     setProjectMenuOpen(false);
-    const next = new URL(window.location.href);
-    next.searchParams.set('project', repository);
-    window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
+    void navigate({ search: previous => ({ ...previous, project: repository }), replace: true });
     window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
