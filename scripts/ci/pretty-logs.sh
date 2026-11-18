@@ -117,9 +117,9 @@ ci_run() {
         printf '\n### ❌ %s\n\n' "$label"
         printf -- '- **Exit code:** %s · **Duration:** %ss\n' "$status" "$duration"
         printf -- '- **Diagnosis:** %s\n' "$hint"
-        printf '\n<details><summary>Failure highlights (last 24)</summary>\n\n```text\n'
-        grep -Ei 'Resource not accessible by integration|HTTP 403|RuntimeError:|JSONDecodeError|Traceback|Error:|permission denied|forbidden|FAILED |[0-9]+ failed' "$logfile" | tail -n 24 || true
-        printf '```\n</details>\n\n'
+        printf '\n<details><summary>🔎 Erros relevantes (até 12 linhas)</summary>\n\n'
+        python3 scripts/ci/failure_summary.py "$logfile"
+        printf '\n</details>\n\n'
         printf -- '- **External action:** [%s](%s)\n' "$title" "$url"
         printf -- '- **Logs:** [Open this run](%s/%s/actions/runs/%s)\n' "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-rodkisten/photointel}" "${GITHUB_RUN_ID:-0}"
       } >> "$GITHUB_STEP_SUMMARY"
