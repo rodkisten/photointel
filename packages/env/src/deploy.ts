@@ -142,6 +142,51 @@ function normalizeRecord(input: unknown): Record<string, string> {
   }));
 }
 
+/** Render the canonical deploy configuration without reading or retrieving secret values. */
+export function renderDeployConfiguration(
+  raw: string,
+  options: {project: string; releaseSha: string},
+): Record<string, unknown> {
+  if (!/^[a-f0-9]{40}$/.test(options.releaseSha)) throw new Error('Invalid release SHA');
+  const source = raw.trim();
+  const structured = source.startsWith('{') ? JSON.parse(source) as Record<string, unknown> : {};
+  const parsed = source.startsWith('{') ? undefined : parseEnvironment(raw);
+  const config = normalizeDeployConfig(raw);
+  const entries = parsed?.entries ?? Object.fromEntries(
+    Object.entries(structured).filter(([, value]) => typeof value === 'string'),
+  ) as Record<string, string>;
+  const identity = validateWorkloadIdentity(entries);
+  const project = String(structured.project_id ?? entries.PROJECT_ID ?? entries.project_id ?? '');
+  const region = String(structured.region ?? entries.REGION ?? entries.region ?? '');
+  const repository = String(structured.repository ?? entries.REPOSITORY ?? entries.repository ?? '');
+  if (!project || !region || !repository || project !== options.project) {
+    throw new Error('Missing deployment metadata or project confirmation mismatch');
+  }
+  const asReferences = (value: unknown): Record<string, SecretBinding> => {
+    if (Array.isArray(value)) return Object.fromEntries(value.map((item: any) =>
+      [item.key, {name: item.name, version: item.version}]));
+    if (!value || typeof value !== 'object') return {};
+    return value as Record<string, SecretBinding>;
+  };
+  const inventory = normalizeSecretInventory({
+    secrets: asReferences(config.secrets),
+    workflowSecrets: asReferences(config.workflowSecrets),
+  }, {requireAll: true, storageEndpoint: String(structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
+  return {
+    ...structured,
+    project_id: project, region, repository,
+    extra_environment: config.runtime,
+    cloudflare_environment: config.cloudflare,
+    workflows: config.workflows,
+    secrets: inventory.secrets,
+    workflow_secrets: inventory.workflowSecrets,
+    release_git_sha: options.releaseSha,
+    image: region + '-docker.pkg.dev/' + project + '/' + repository + '/api:' + options.releaseSha,
+    // WIF metadata is returned separately, never embedded in application configuration.
+    ...(identity ? {} : {}),
+  };
+}
+
 export function validateTerminal(runtime: Record<string, string>): void {
   const raw = runtime.MANAGE_TERMINAL_VMS;
   if (!raw) return;
