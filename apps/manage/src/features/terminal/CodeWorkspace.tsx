@@ -5,7 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { FilePlus2, Save, X, FileCode2 } from 'lucide-react';
 
-type Document = { id: string; name: string; content: string; saved: string };
+type Document = { id: string; name: string; content: string; saved: string; path?: string; version?: string };
 const initial = (): Document[] => [{ id: crypto.randomUUID(), name: 'scratch.txt', content: '', saved: '' }];
 
 /**
@@ -16,6 +16,10 @@ const initial = (): Document[] => [{ id: crypto.randomUUID(), name: 'scratch.txt
 export function CodeWorkspace({ targetId }: { targetId: string }) {
   const [documents, setDocuments] = useState<Document[]>(initial);
   const [activeId, setActiveId] = useState(documents[0].id);
+  const [busy, setBusy] = useState(false);
+  const [remotePath, setRemotePath] = useState('/home/');
+  const [entries, setEntries] = useState<{ name: string; kind: 'file' | 'directory' }[]>([]);
+  const [directory, setDirectory] = useState('/home/');
   const [message, setMessage] = useState('Rascunhos locais nesta sessão. Arquivos remotos ainda não estão conectados.');
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -76,6 +80,60 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
       if (activeId === id) setActiveId(remaining[0].id);
     }
   };
+  const remote = async (operation: 'list' | 'read' | 'write', path: string, document?: Document) => {
+    if (targetId === 'scratch') { setMessage('Selecione uma VM antes de acessar arquivos remotos.'); return; }
+    setBusy(true);
+    try {
+      const response = await fetch('/api/terminal/files', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation, targetId, path,
+          ...(operation === 'write' && document ? { content: document.content, version: document.version } : {}) }),
+      });
+      const payload = await response.json() as { entries?: { name: string; kind: 'file' | 'directory' }[];
+        content?: string; version?: string; message?: string };
+      if (!response.ok) throw new Error(payload.message || 'Operação remota indisponível');
+      if (operation === 'list' && payload.entries) {
+        setEntries(payload.entries);
+        setDirectory(path.endsWith('/') ? path : path + '/');
+        setRemotePath(path);
+        setMessage(payload.entries.length + ' itens encontrados.');
+      }
+      if (operation === 'read' && typeof payload.content === 'string' && payload.version) {
+        const existing = documents.find(item => item.path === path);
+        if (existing) {
+          if (existing.content !== existing.saved) {
+            setActiveId(existing.id);
+            setMessage('Arquivo já aberto com alterações locais. Salve ou descarte antes de recarregar.');
+            return;
+          }
+          setDocuments(items => items.map(item => item.id === existing.id ?
+            { ...item, content: payload.content!, saved: payload.content!, version: payload.version } : item));
+          setActiveId(existing.id);
+        } else {
+          const doc: Document = { id: crypto.randomUUID(), name: path.split('/').pop() || path,
+            path, content: payload.content, saved: payload.content, version: payload.version };
+          setDocuments(items => [...items, doc]);
+          setActiveId(doc.id);
+        }
+        setMessage('Arquivo remoto aberto: ' + path);
+      }
+      if (operation === 'write' && document && payload.version) {
+        setDocuments(items => items.map(item => item.id === document.id ?
+          { ...item, saved: document.content, version: payload.version } : item));
+        setMessage('Arquivo salvo na VM: ' + path);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Falha no acesso remoto');
+    } finally { setBusy(false); }
+  };
+  const openPath = () => {
+    const path = remotePath.trim();
+    if (!path.startsWith('/') || path.split('/').some(part => part === '..' || part === '.')) {
+      setMessage('Informe um caminho absoluto válido.'); return;
+    }
+    void remote(path.endsWith('/') ? 'list' : 'read', path);
+  };
   const download = () => {
     if (!current) return;
     const url = URL.createObjectURL(new Blob([current.content], { type: 'text/plain;charset=utf-8' }));
@@ -102,6 +160,23 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
         <button type="button" onClick={download} aria-label="Baixar arquivo" title="Baixar arquivo localmente" className="rounded-lg border border-carbon-700 p-2"><Save size={16}/></button>
       </div>
     </div>
+    <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 p-2">
+      <input aria-label="Caminho remoto" value={remotePath} onChange={event => setRemotePath(event.target.value)}
+        className="min-h-10 min-w-0 flex-1 rounded-lg border border-carbon-700 bg-carbon-900 px-3 text-base text-carbon-100"
+        placeholder="/home/user/code/" />
+      <button type="button" disabled={busy} onClick={openPath} className="min-h-10 rounded-lg border border-carbon-700 px-3 text-sm disabled:opacity-40">Abrir</button>
+      <button type="button" disabled={busy || !current?.path || current.content === current.saved}
+        onClick={() => current?.path && void remote('write', current.path, current)}
+        className="min-h-10 rounded-lg border border-violet-700 px-3 text-sm disabled:opacity-40">Salvar na VM</button>
+    </div>
+    {entries.length > 0 && <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto border-b border-carbon-800 p-2" aria-label="Arquivos remotos">
+      <button type="button" disabled={busy} onClick={() => void remote('list', directory.replace(/\\/?[^/]+\\/?$/, '/') || '/')}
+        className="rounded-lg border border-carbon-700 px-2 py-1 text-xs">..</button>
+      {entries.map(entry => <button type="button" key={entry.name} disabled={busy}
+        onClick={() => void remote(entry.kind === 'directory' ? 'list' : 'read',
+          directory + entry.name + (entry.kind === 'directory' ? '/' : ''))}
+        className="rounded-lg border border-carbon-700 px-2 py-1 text-xs">{entry.kind === 'directory' ? '📁 ' : '📄 '}{entry.name}</button>)}
+    </div>}
     <div ref={mount} className="min-h-[300px] min-w-0 flex-1 overflow-hidden" aria-label="Editor CodeMirror 6"/>
     <p role="status" className="border-t border-carbon-800 px-3 py-2 text-xs text-carbon-400">{message}</p>
   </div>;
