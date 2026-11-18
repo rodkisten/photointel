@@ -5,7 +5,7 @@ import { api, send } from '../lib/client';
 
 type Repo = { id: string; name: string; repository: string; private: boolean; archived: boolean; description: string | null; enabled: boolean };
 type Page = { items: Repo[]; has_more: boolean; source: string };
-export function ProjectPicker({ selected, onSelect }: { selected: string; onSelect: (repository: string) => void }) {
+export function ProjectPicker({ selected, onSelect }: { selected: string; onSelect: (repository: string, project?: Repo) => void }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -39,7 +39,7 @@ export function ProjectPicker({ selected, onSelect }: { selected: string; onSele
         {catalog.isPending && <p className="p-3 text-xs text-carbon-400">Carregando projetos…</p>}
         {catalog.isError && <p role="alert" className="p-3 text-xs text-amber-400">Não foi possível carregar os repositórios.</p>}
         {visible.map(repo => <div key={repo.id} className="flex items-center gap-1 rounded-lg hover:bg-carbon-800">
-          <button type="button" className="min-w-0 flex-1 px-3 py-3 text-left" onClick={() => { onSelect(repo.repository); setOpen(false); }}>
+          <button type="button" className="min-w-0 flex-1 px-3 py-3 text-left" onClick={() => { onSelect(repo.repository, repo); setOpen(false); }}>
             <span className="block truncate text-sm text-carbon-200">{repo.repository}</span>
             <span className="block truncate text-xs text-carbon-500">{repo.private ? 'Privado' : 'Público'}{repo.archived ? ' · Arquivado' : ''}</span>
           </button>

@@ -28,6 +28,7 @@ import {
 
 import { Badge, Card } from './components/ui';
 import { ProjectPicker } from './components/ProjectPicker';
+import { ProjectProvider, type ManageProject } from './context/ProjectContext';
 import { ProjectEnvironment } from './pages/ProjectEnvironment';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
@@ -154,14 +155,22 @@ export default function App() {
     queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
     retry: false,
   });
-  const activeProject = (selectedProject && projectCatalog.data?.items.find(item => item.id === selectedProject))
-    || (selectedProject ? { id: selectedProject, repository: selectedProject, name: selectedProject.split('/').pop() || selectedProject, enabled: selectedProject === 'rodkisten/photointel', status: 'discovered' } : projectCatalog.data?.items[0]);
+  const availableProjects = projectCatalog.data?.items ?? [];
+  const resolvedProject = useQuery({
+    queryKey: ['project-resolve', selectedProject],
+    queryFn: () => api<ManageProject>('/projects/resolve?repository=' + encodeURIComponent(selectedProject!)),
+    enabled: Boolean(selectedProject && !availableProjects.some(item => item.id === selectedProject || item.repository === selectedProject)),
+    retry: false,
+  });
+  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
+  const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
   useEffect(() => {
-    const onLocation = () => setSelectedProject(new URLSearchParams(window.location.search).get('project'));
+    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); };
     window.addEventListener('popstate', onLocation);
     return () => window.removeEventListener('popstate', onLocation);
   }, []);
-  const chooseProject = (repository: string) => {
+  const chooseProject = (repository: string, catalogProject?: ManageProject) => {
+    if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
     setSelectedProject(repository);
     setProjectMenuOpen(false);
     const next = new URL(window.location.href);
@@ -217,6 +226,7 @@ export default function App() {
   });
 
   return (
+    <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects, isLoading: projectCatalog.isPending || (Boolean(selectedProject) && resolvedProject.isPending && !activeProject), isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
       <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -350,6 +360,8 @@ export default function App() {
             </Card>
           ) : error ? (
             <IssueBanner error={error} />
+          ) : invalidProject ? (
+            <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
           ) : isReadOnlyProject && tab === 'config' ? (
             <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
           ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' ? (
@@ -419,6 +431,7 @@ export default function App() {
           </button>
         </div>
       </nav>   </div>
+    </ProjectProvider>
   );
   
 }
