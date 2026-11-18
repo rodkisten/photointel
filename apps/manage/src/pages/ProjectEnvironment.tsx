@@ -172,7 +172,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     !renameAttempt && !existingName && confirmation === repository &&
     !variables.isPending && !variables.isError && !staleSelection && !staleVersion && dirty && !save.isPending;
   return <Section title={'Ambiente GitHub · ' + repository}
-    detail="Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados">
+    detail={false || "Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados"}>
     <Card className="space-y-4 p-4" key={repository}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge tone={dirty ? 'warning' : 'success'}>{dirty ? 'Não salvo' : 'Sincronizado'}</Badge>
