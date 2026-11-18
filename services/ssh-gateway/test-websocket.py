@@ -55,7 +55,7 @@ async def main():
         ) as ws:
             print("✅ Signed WebSocket ticket accepted")
             await ws.send_json({"type": "resize", "cols": 100, "rows": 30})
-            await ws.send_json({"type": "stdin", "data": f"printf '{marker}\\n'; whoami; exit\\n"})
+            await ws.send_json({"type": "stdin", "data": f"printf {marker}; whoami; exit" + chr(10)})
             output = ""
             deadline = asyncio.get_running_loop().time() + 15
             while asyncio.get_running_loop().time() < deadline:
