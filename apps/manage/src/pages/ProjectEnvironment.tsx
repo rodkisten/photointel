@@ -258,7 +258,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         </label>}
         {destinationVariables.isFetching && <p className="text-xs text-carbon-400">Verificando destino…</p>}
         {destinationVariables.isError && <IssueBanner error={destinationVariables.error} />}
-        {destinationExisting && <p role="alert" className="text-sm text-amber-300">Já existe {original.name} no destino. A cópia foi bloqueada para evitar sobrescrita.</p>}
+        {destinationExisting && <p role="alert" className="text-sm text-amber-300">Já existe {original?.name ?? selected} no destino. A cópia foi bloqueada para evitar sobrescrita.</p>}
         <label className="block space-y-1 text-xs">Confirme digitando o repositório de destino
           <Input aria-label="Confirmar projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
             value={copyConfirm} placeholder={copyTarget} onChange={event => setCopyConfirm(event.target.value)} />
