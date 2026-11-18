@@ -1,5 +1,7 @@
 import { RemoteTerminal } from './RemoteTerminal';
+import { CodeWorkspace } from './CodeWorkspace';
 import { useState } from 'react';
+import { Code2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api as requestApi } from '../../lib/client';
 import { GitBranch, HardDrive, LockKeyhole, MonitorSmartphone, TerminalSquare } from 'lucide-react';
@@ -11,6 +13,7 @@ export function TerminalPage() {
   const { data, isPending, error, refetch } = useQuery({ queryKey: ['terminal', 'catalog'], queryFn: () => requestApi<Catalog>('/terminal/catalog'), retry: false });
   const targets = data?.items || [];
   const [selected, setSelected] = useState<string | null>(null);
+  const [pane, setPane] = useState<'terminal' | 'editor'>('terminal');
   const active = targets.find(target => target.id === selected);
   const [checking, setChecking] = useState(false);
   const [checkMessage, setCheckMessage] = useState('');
@@ -56,7 +59,8 @@ export function TerminalPage() {
             <span className="text-xs text-carbon-500">Desconectado</span>
           </div>
           {active?.kind === 'vm' && <div className="border-b border-carbon-800 p-3 text-xs"><button type="button" disabled={checking} onClick={() => void checkTarget(active.id)} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-50">{checking ? 'Verificando…' : 'Verificar conexão'}</button>{checkMessage && <p role="status" className="mt-2 text-amber-400">{checkMessage}</p>}</div>}
-          {active?.kind === 'vm' ? <RemoteTerminal key={active.id} targetId={active.id} /> : <div className="flex flex-1 flex-col items-center justify-center gap-4 px-5 py-12 text-center">
+          <div className="flex gap-2 border-b border-carbon-800 p-2" role="tablist" aria-label="Área de trabalho"><button type="button" role="tab" aria-selected={pane === 'terminal'} onClick={() => setPane('terminal')} className="min-h-10 rounded-lg px-3 text-sm text-carbon-200"><TerminalSquare size={15}/> Terminal</button><button type="button" role="tab" aria-selected={pane === 'editor'} onClick={() => setPane('editor')} className="min-h-10 rounded-lg px-3 text-sm text-carbon-200"><Code2 size={15}/> Editor</button></div>
+          {pane === 'editor' ? <CodeWorkspace key={active?.id || 'scratch'} targetId={active?.id || 'scratch'} /> : active?.kind === 'vm' ? <RemoteTerminal key={active.id} targetId={active.id} /> : <div className="flex flex-1 flex-col items-center justify-center gap-4 px-5 py-12 text-center">
             <MonitorSmartphone size={34} className="text-carbon-500"/>
             <h3 className="text-base font-semibold text-carbon-200">Terminal pronto para integração</h3>
             <p className="max-w-md text-sm leading-6 text-carbon-400">Selecione uma VM autorizada para abrir uma sessão SSH. Codespaces exigem um gateway compatível; não há sessão SSH disponível para eles neste momento.</p>
