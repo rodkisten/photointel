@@ -66,6 +66,10 @@ Referências `${KEY}`, `${KEY:-fallback}` e `$` são resolvidas com proteção c
 - GitHub Actions não transmite `GITHUB_ENV` automaticamente entre jobs ou workflows. Dados não sensíveis podem usar outputs; segredos devem ser recuperados pelo consumidor autorizado, nunca transportados como outputs.
 - `infra/gcp/gcp_env.py` e `infra/gcp/manage.py` permanecem legados até a paridade completa e substituição verificada.
 
+### Engine da action compartilhada
+
+A action `.github/actions/gcp-config` oferece `engine: python` (padrão compatível) e `engine: typescript` (opt-in). No modo TypeScript, `github-secrets-json` e `github-vars-json` recebem apenas chaves explicitamente autorizadas pelo workflow, que deve usar `environment: production` e nunca registrar o conteúdo. A action produz `infra/gcp/config.local.json` com permissões restritas e continua executando `infra.gcp.manage render` para artefatos de infraestrutura. A opção **não foi ativada em todos os consumidores**, e os testes end-to-end permanecem pendentes.
+
 ### Critérios de conclusão
 
 - [x] Parser compartilhado e referências compactas/legadas
@@ -73,10 +77,10 @@ Referências `${KEY}`, `${KEY:-fallback}` e `$` são resolvidas com proteção c
 - [x] Aliases R2 e validação inicial do inventário
 - [x] Validação TypeScript de metadados WIF
 - [x] Testes unitários das regras de precedência
-- [ ] Integrar o resolvedor à action efetivamente usada nos deploys (a action atual ainda usa Python)
+- [x] Disponibilizar engine TypeScript opt-in na action compartilhada; consumidores continuam usando Python por padrão e precisam passar explicitamente valores GitHub
 - [x] Permitir valores diretos GitHub sem exigir referências GCP obrigatórias no renderizador TypeScript (a action ainda não os fornece)
 - [ ] Disponibilizar configuração normalizada a todos os workflows consumidores sem expor secrets
-- [ ] Evitar execução do parser Python quando o caminho TypeScript estiver habilitado
+- [x] Evitar execução de `infra.gcp.gcp_env` quando `engine: typescript`; `infra.gcp.manage render` ainda é necessário
 - [ ] Comparar renderizações Python/TypeScript e validar CI de ponta a ponta
 - [ ] Remover dependência operacional de GCP sem interromper o deploy
 
