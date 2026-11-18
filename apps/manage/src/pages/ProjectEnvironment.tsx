@@ -9,6 +9,21 @@ import { api, send } from '../lib/client';
 type Variable = { name: string; value: string; version: string };
 type Scope = 'repository' | 'environment';
 
+/** Prefer content evidence; names are only a fallback for empty/new configuration values. */
+function isEnvironmentLike(variable: Variable): boolean {
+  const name = variable.name.toUpperCase();
+  const value = variable.value.trim();
+  if (value.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) return true;
+    } catch { /* malformed JSON is still editable if explicitly named as configuration */ }
+  }
+  const lines = value.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+  if (lines.length > 0 && lines.every(line => /^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=/.test(line))) return true;
+  return /(?:^|_)(?:ENV|ENVIRONMENT|DOTENV|CONFIG_ENV|ENV_VARS)(?:_|$)/.test(name);
+}
+
 /** External GitHub repositories use the same CodeMirror/fields controls as PhotoIntel. */
 export function ProjectEnvironment({ repository }: { repository: string }) {
   const client = useQueryClient();
@@ -20,6 +35,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
   const [version, setVersion] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState('');
   const [mode, setMode] = useState<'code' | 'fields'>('code');
+  const [category, setCategory] = useState<'environment' | 'simple'>('environment');
   const [editing, setEditing] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
   const key = ['project-variables', repository, scope, environment];
@@ -45,7 +61,11 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       void client.invalidateQueries({ queryKey: key });
     },
   });
+  const environmentVariables = (variables.data?.items ?? []).filter(isEnvironmentLike);
+  const simpleVariables = (variables.data?.items ?? []).filter(item => !isEnvironmentLike(item));
+  const shownVariables = category === 'environment' ? environmentVariables : simpleVariables;
   const original = variables.data?.items.find(item => item.name === selected);
+  const useCodeEditor = category === 'environment' || (original ? isEnvironmentLike(original) : false);
   const inventoryReady = variables.isSuccess && !variables.isFetching;
   const dirty = editing && (name !== (original?.name ?? '') || value !== (original?.value ?? ''));
   const staleSelection = Boolean(selected && !original);
@@ -77,6 +97,14 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       </div>
       {variables.isPending && <Spinner />}
       {variables.error && <IssueBanner error={variables.error} />}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Tipo de variável">
+        <Button size="sm" variant={category === 'environment' ? 'secondary' : 'ghost'} onClick={() => { setCategory('environment'); setSelected(''); setName(''); setValue(''); setVersion(null); setEditing(false); setConfirmation(''); }}>
+          Ambientes ({environmentVariables.length})
+        </Button>
+        <Button size="sm" variant={category === 'simple' ? 'secondary' : 'ghost'} onClick={() => { setCategory('simple'); setSelected(''); setName(''); setValue(''); setVersion(null); setEditing(false); setConfirmation(''); }}>
+          Variáveis comuns ({simpleVariables.length})
+        </Button>
+      </div>
       <label className="block space-y-1 text-xs text-carbon-400">Variável
         <select aria-label="Selecionar variável GitHub" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
           value={selected} onChange={event => {
@@ -85,7 +113,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
             setValue(item?.value ?? ''); setVersion(item?.version ?? null); setConfirmation(''); setEditing(false); setSavedMessage('');
           }}>
           <option value="">Criar nova variável</option>
-          {variables.data?.items.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
+          {shownVariables.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
         </select>
       </label>
       <label className="block space-y-1 text-xs text-carbon-400">Nome
@@ -93,6 +121,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           placeholder="NOME_DA_VARIAVEL" value={name}
           onChange={event => { setEditing(true); setSavedMessage(''); setName(event.target.value.toUpperCase()); }} />
       </label>
+      {useCodeEditor ? <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-carbon-400">CodeMirror 6 · {detectEnvironmentFormat(value)} · {value.split(/\r?\n/).length} linhas</span>
         <div role="group" aria-label="Modo do editor" className="flex gap-1 rounded-lg border border-carbon-800 p-1">
@@ -105,6 +134,10 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         ? <DotenvFields value={value} onChange={next => { setEditing(true); setValue(next); }} />
         : <CodeMirrorEnvEditor ariaLabel={'Editar ' + (name || 'variável GitHub')}
             value={value} onChange={next => { setEditing(true); setValue(next); }} format={detectEnvironmentFormat(value)} />}
+      </> : <label className="block space-y-1 text-xs text-carbon-400">Valor
+        <input aria-label="Valor da variável" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base" value={value}
+          onChange={event => { setEditing(true); setValue(event.target.value); }} />
+      </label>}
       <p className="text-xs text-amber-300">⚠️ GitHub Actions Variables não são secrets. Revise o repositório e o valor antes de salvar.</p>
       <label className="block space-y-1 text-xs text-carbon-400">Confirmar repositório · {repository}
         <input aria-label="Confirmar repositório" className="w-full rounded-lg border border-carbon-700 bg-carbon-900 p-3 text-base"
