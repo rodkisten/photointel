@@ -156,7 +156,10 @@ export default function App() {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
     setSelectedProject(repository);
     setProjectMenuOpen(false);
-    // Use the router's own history so it observes the change without\n    // navigating away from the active nested route.\n    const url = new URL(window.location.href);\n    url.searchParams.set('project', repository);\n    router.history.replace(url.pathname + url.search + url.hash);
+    // Preserve the active route and unrelated query parameters.
+    const url = new URL(window.location.href);
+    url.searchParams.set('project', repository);
+    router.history.replace(url.pathname + url.search + url.hash);
     window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
