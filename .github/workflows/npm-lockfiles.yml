@@ -36,6 +36,7 @@ jobs:
     name: "📦 Regenerate and verify npm lockfiles"
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 20
     steps:
       - name: "🔐 Authenticate Ploocky GitHub App"
