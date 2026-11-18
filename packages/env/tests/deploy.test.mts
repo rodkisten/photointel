@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory, resolveConfigValue, resolveConfigInventory } from '../src/deploy.ts';
+import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory, resolveConfigValue, resolveConfigInventory, validateRequiredConfigValues } from '../src/deploy.ts';
 
 const vm = { id: 'debian', label: 'Debian VM', host: 'vm.example.com', port: 22, username: 'root', hostKeySha256: 'SHA256:' + 'A'.repeat(43) };
 const runtime = { MANAGE_TERMINAL_VMS: JSON.stringify([vm]), MANAGE_TERMINAL_GATEWAY_URL: 'https://photointel-ssh.migos.club' };
@@ -176,4 +176,27 @@ test('empty GitHub values do not shadow GCP references', () => {
     secrets: {DATABASE_URL: ''},
     gcpReferences: {DATABASE_URL: {name: 'old-database', version: 'latest'}},
   }).source, 'gcp-secret-manager');
+});
+
+test('direct GitHub secrets satisfy required configuration without GCP references', () => {
+  const resolved = validateRequiredConfigValues({
+    secrets: {DATABASE_URL: 'github-database', PHOTOINTEL_STORAGE_SECRET_KEY: 'github-storage'},
+  }, ['DATABASE_URL', 'STORAGE_SECRET_KEY']);
+  assert.equal(resolved.DATABASE_URL.source, 'github-secret');
+  assert.equal(resolved.STORAGE_SECRET_KEY.source, 'github-secret');
+});
+
+test('required configuration accepts mixed GitHub values and GCP fallback', () => {
+  const resolved = validateRequiredConfigValues({
+    variables: {PHOTOINTEL_REGION: 'us-central1'},
+    gcpReferences: {DATABASE_URL: {name: 'legacy-db', version: 'latest'}},
+  }, ['REGION', 'DATABASE_URL']);
+  assert.equal(resolved.REGION.source, 'github-variable');
+  assert.equal(resolved.DATABASE_URL.source, 'gcp-secret-manager');
+});
+
+test('required configuration rejects keys absent from both sources', () => {
+  assert.throws(() => validateRequiredConfigValues({secrets: {DATABASE_URL: 'present'}}, [
+    'DATABASE_URL', 'STORAGE_SECRET_KEY',
+  ]), /Missing required configuration: STORAGE_SECRET_KEY/);
 });
