@@ -1,6 +1,8 @@
 """GitHub API CLI helper with safe diagnostics and transient GET retries."""
 import json
 import logging
+import os
+import re
 import subprocess
 import time
 
@@ -20,6 +22,7 @@ def gh(*args: str, payload=None):
             capture_output=True,
             text=True,
             check=False,
+            env={**os.environ, "GH_FORCE_TTY": "0", "NO_COLOR": "1", "CLICOLOR": "0", "GH_PAGER": "cat"},
         )
         if result.returncode:
             detail = result.stderr.strip()
@@ -27,7 +30,7 @@ def gh(*args: str, payload=None):
                 f"GitHub API failed (exit {result.returncode}, endpoint {endpoint}): "
                 + (detail[:500] if detail else "verify token permissions")
             )
-        body = result.stdout.strip()
+        # gh may inherit a forced TTY from CI log formatting, producing ANSI\n        # sequences and formatted output instead of a machine-readable body.\n        body = re.sub(r"\\x1b\\[[0-?]*[ -/]*[@-~]", "", result.stdout).strip()
         if not body:
             if not is_read:
                 return None
@@ -36,7 +39,7 @@ def gh(*args: str, payload=None):
             try:
                 return json.loads(body)
             except json.JSONDecodeError as exc:
-                error = f"invalid JSON ({exc.msg} at character {exc.pos})"
+                # Report only the response shape, never its contents or secrets.\n                error = (f"invalid JSON ({exc.msg} at character {exc.pos}; "\n                         f"length={len(body)}, first_codepoint={ord(body[0]) if body else 0})")
         if attempt + 1 < attempts:
             logger.warning("GitHub API GET: %s; retry %d/%d", error, attempt + 1, attempts - 1)
             time.sleep(2 * (attempt + 1))
