@@ -11,7 +11,8 @@ export function normalizeDeployConfig(raw: string) {
     const object: unknown = JSON.parse(source);
     if (!object || typeof object !== 'object' || Array.isArray(object)) throw new Error('Expected JSON object');
     const config = object as Record<string, unknown>;
-    if ('extra_environment' in config || 'workflow_secrets' in config || 'cloudflare_environment' in config) {
+    if (Object.values(config).some(value => value !== null && typeof value === 'object') ||
+      'extra_environment' in config || 'workflow_secrets' in config || 'cloudflare_environment' in config) {
       return {
         runtime: normalizeRecord(config.extra_environment),
         cloudflare: normalizeRecord(config.cloudflare_environment),
