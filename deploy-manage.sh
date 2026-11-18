@@ -31,11 +31,47 @@ command -v sudo >/dev/null || die "sudo não instalado."
 [[ -f "$REPO/apps/manage/package.json" && -f "$REPO/infra/scripts/deploy_manage.py" ]] ||
   die "Repositório PhotoIntel não encontrado em $REPO."
 
-log "🐧 Dependências Debian"
-sudo -v
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl git build-essential python3 python3-venv python3-pip jq
-ok "Pacotes Debian prontos"
+log "🐧 Verificando dependências Debian"
+declare -A required_commands=(
+  [curl]=curl
+  [git]=git
+  [make]=build-essential
+  [gcc]=build-essential
+  [python3]=python3
+  [jq]=jq
+)
+missing_packages=()
+declare -A scheduled_packages=()
+for cmd in curl git make gcc python3 jq; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    ok "$cmd já instalado: $(command -v "$cmd")"
+  else
+    package="${required_commands[$cmd]}"
+    if [[ -z "${scheduled_packages[$package]:-}" ]]; then
+      missing_packages+=("$package")
+      scheduled_packages[$package]=1
+    fi
+    log "$cmd ausente; instalar pacote $package"
+  fi
+done
+
+# HTTPS support for curl is needed to install nvm; install CA certificates
+# only when the Debian certificate bundle is absent.
+if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
+  missing_packages+=(ca-certificates)
+  log "Bundle de certificados CA ausente"
+else
+  ok "Certificados CA presentes"
+fi
+
+if (( ${#missing_packages[@]} > 0 )); then
+  log "📦 Instalando somente pacotes ausentes: ${missing_packages[*]}"
+  sudo -v
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends "${missing_packages[@]}"
+else
+  ok "Todos os requisitos presentes; apt-get não será executado"
+fi
 
 log "🟣 nvm $NVM_VERSION e Node.js $NODE_MAJOR"
 if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
