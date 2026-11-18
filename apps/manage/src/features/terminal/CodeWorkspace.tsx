@@ -208,7 +208,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
         className="min-h-10 rounded-lg border border-violet-700 px-3 text-sm disabled:opacity-40">Salvar na VM</button>
     </div>
     {entries.length > 0 && <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto border-b border-carbon-800 p-2" aria-label="Arquivos remotos">
-      <button type="button" disabled={busy} onClick={() => void remote('list', directory.replace(/\\/?[^/]+\\/?$/, '/') || '/')}
+       <button type="button" disabled={busy} onClick={() => void remote('list', directory.replace(/\/?[^/]+\/?$/, '/') || '/')}
         className="rounded-lg border border-carbon-700 px-2 py-1 text-xs">..</button>
       {entries.map(entry => <button type="button" key={entry.name} disabled={busy}
         onClick={() => void remote(entry.kind === 'directory' ? 'list' : 'read',
