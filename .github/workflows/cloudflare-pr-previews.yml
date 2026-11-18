@@ -46,7 +46,7 @@ jobs:
           fi
           for identity in "$PR_AUTHOR" "$HEAD_AUTHOR" "$ACTOR"; do
             case "${identity,,}" in
-              dependabot|dependabot[bot]|renovate|renovate[bot]|renovate-bot)
+              dependabot|'dependabot[bot]'|renovate|'renovate[bot]'|renovate-bot)
                 echo "reason=automation bot: $identity" >> "$GITHUB_OUTPUT"
                 echo "⏭️ Preview skipped for $identity" >> "$GITHUB_STEP_SUMMARY"
                 exit 0 ;;
@@ -54,7 +54,7 @@ jobs:
           done
           sha="${{ github.event.pull_request.head.sha }}"
           message="$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.commit.message')"
-          if grep -Eiq '\\[skip[[:space:]]+ci\\]' <<< "$message"; then
+          if grep -Eiq '\[skip[[:space:]]+ci\]' <<< "$message"; then
             echo "reason=latest commit contains [skip ci]" >> "$GITHUB_OUTPUT"
             echo "⏭️ Preview skipped: latest commit contains [skip ci]" >> "$GITHUB_STEP_SUMMARY"
             exit 0
