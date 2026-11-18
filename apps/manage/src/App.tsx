@@ -102,6 +102,7 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
+  const [catalogSelection, setCatalogSelection] = useState<ManageProject | null>(null);
   const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
@@ -155,15 +156,16 @@ export default function App() {
     retry: false,
   });
   const availableProjects = projectCatalog.data?.items ?? [];
-  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject) : undefined) ?? (!selectedProject ? availableProjects[0] : undefined);
+  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? (catalogSelection?.repository === selectedProject ? catalogSelection : undefined) : availableProjects[0]);
   const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && !activeProject);
   useEffect(() => {
-    const onLocation = () => setSelectedProject(new URLSearchParams(window.location.search).get('project'));
+    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); setCatalogSelection(null); };
     window.addEventListener('popstate', onLocation);
     return () => window.removeEventListener('popstate', onLocation);
   }, []);
-  const chooseProject = (repository: string) => {
-    if (!availableProjects.some(project => project.id === repository)) return;
+  const chooseProject = (repository: string, catalogProject?: ManageProject) => {
+    if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
+    setCatalogSelection(catalogProject ?? null);
     setSelectedProject(repository);
     setProjectMenuOpen(false);
     const next = new URL(window.location.href);
