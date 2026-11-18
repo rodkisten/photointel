@@ -170,7 +170,7 @@ Isso comprova que a chave privada dedicada, acessível à conta `photointel-ssh`
 - [x] `GET /health` retornando HTTP 200 com `targets=1`
 - [x] Autenticação SSH local como `rod` via chave dedicada
 - [x] Validar **API `POST /files`** com SFTP para listar e ler (22 entradas, SHA-256 correto, 18/11/2026 01:34)
-- [ ] Validar escrita SFTP e conflito de versão
+- [x] Validar escrita SFTP, integridade e conflito 409 (18/11/2026, 01:37, duas execuções bem-sucedidas)
 - [ ] Validar **WebSocket `GET /ws`** com ticket assinado, formato de protocolo e PTY
 - [ ] Corrigir quaisquer incompatibilidades entre assinatura/claims do ticket emitido pelo Worker e o gateway
 - [ ] Configurar Cloudflare Tunnel com política de acesso entre serviços, sem abrir `8789` na internet
@@ -228,3 +228,34 @@ sudo python3 test-write.py
 ```
 
 O script não altera arquivos de projetos existentes. Se falhar, coletar o erro e `sudo journalctl -u photointel-ssh -n 40 --no-pager -o cat`, ocultando segredos.
+
+## 10. Escrita SFTP validada e próximo teste WebSocket (18/11/2026)
+
+Às 01:37 o operador executou `sudo python3 test-write.py` **duas vezes** e ambas passaram:
+
+```text
+✅ Initial SFTP read and SHA-256: OK
+✅ Conditional SFTP write and content integrity: OK
+✅ Stale version rejected with HTTP 409: OK
+🎉 SFTP write/conflict smoke tests passed
+```
+
+O teste usou arquivo temporário e confirmou leitura, gravação e rejeição de versão obsoleta. **Não valida corrida entre escritores simultâneos.**
+
+### Próximo: PTY WebSocket com ticket assinado
+
+O script `test-websocket.py` testa uma conexão WebSocket local com autenticação, ticket HMAC temporário, redimensionamento e execução de `whoami` em PTY. **Ainda não executado.**
+
+```bash
+cd ~/photointel && git pull --ff-only
+cd services/ssh-gateway
+sudo /opt/photointel-ssh/.venv/bin/python test-websocket.py
+```
+
+O script lê o segredo apenas localmente e não imprime seu valor. Se falhar, conferir logs:
+
+```bash
+sudo journalctl -u photointel-ssh -n 50 --no-pager -o cat
+```
+
+Atenção: a validação local não prova que o proxy WebSocket do Cloudflare Worker está funcionando. Isso será uma etapa separada.
