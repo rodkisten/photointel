@@ -171,7 +171,7 @@ Isso comprova que a chave privada dedicada, acessível à conta `photointel-ssh`
 - [x] Autenticação SSH local como `rod` via chave dedicada
 - [x] Validar **API `POST /files`** com SFTP para listar e ler (22 entradas, SHA-256 correto, 18/11/2026 01:34)
 - [x] Validar escrita SFTP, integridade e conflito 409 (18/11/2026, 01:37, duas execuções bem-sucedidas)
-- [ ] Validar **WebSocket `GET /ws`** com ticket assinado, formato de protocolo e PTY
+- [x] Validar **WebSocket `GET /ws` local** com ticket assinado, resize, stdin/stdout e PTY (18/11/2026 01:40, duas execuções)
 - [ ] Corrigir quaisquer incompatibilidades entre assinatura/claims do ticket emitido pelo Worker e o gateway
 - [ ] Configurar Cloudflare Tunnel com política de acesso entre serviços, sem abrir `8789` na internet
 - [ ] Configurar `MANAGE_TERMINAL_GATEWAY_URL`, `MANAGE_TERMINAL_GATEWAY_SECRET` e `MANAGE_TERMINAL_VMS` no Manage Worker
@@ -259,3 +259,16 @@ sudo journalctl -u photointel-ssh -n 50 --no-pager -o cat
 ```
 
 Atenção: a validação local não prova que o proxy WebSocket do Cloudflare Worker está funcionando. Isso será uma etapa separada.
+
+## 11. WebSocket + PTY local validado (18/11/2026, 01:40)
+
+O operador executou `sudo /opt/photointel-ssh/.venv/bin/python test-websocket.py` **duas vezes**, após atualizar o repositório. As duas execuções exibiram:
+
+```text
+✅ Signed WebSocket ticket accepted
+✅ Interactive PTY stdin/stdout: OK
+🎉 Local WebSocket PTY smoke test passed
+⚠️ Cloudflare Worker forwarding and browser integration remain untested
+```
+
+**Conclusão:** a conexão WebSocket local aceita tickets HMAC, abre PTY SSH e transmite comandos e saída. Ainda faltam Cloudflare Tunnel, configuração de segredos no Manage Worker, forwarding de WebSocket e teste do navegador.
