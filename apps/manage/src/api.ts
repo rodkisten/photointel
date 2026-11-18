@@ -480,7 +480,7 @@ export async function api(
     const scope = url.searchParams.get('scope') || 'repository';
     const environment = url.searchParams.get('environment') || 'production';
     const allowed = new Set([env.GITHUB_REPO || DEFAULTS.GITHUB_REPO,
-      ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(/[\\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
+      ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(/[\s,;]+/).filter(repo => PATTERNS.REPOSITORY.test(repo))]);
     if (!PATTERNS.REPOSITORY.test(repository) || !allowed.has(repository))
       throw new ApiError(403, 'PROJECT_SCOPE', 'Repositório não autorizado');
     if (!['repository', 'environment'].includes(scope) || !/^[a-zA-Z0-9_-]{1,64}$/.test(environment))
@@ -504,7 +504,7 @@ export async function api(
       if (input.confirm !== repository) throw new ApiError(409, 'PROJECT_CONFIRM', 'Confirme o nome completo do repositório');
       if (typeof input.name !== 'string' || !PATTERNS.VARIABLE_NAME.test(input.name) ||
         typeof input.value !== 'string' || input.value.length > LIMITS.CONFIG_MAX_LENGTH ||
-        input.value.includes('\\0') || PATTERNS.SECRET_SENSITIVE.test(input.value))
+        input.value.includes('\0') || PATTERNS.SECRET_SENSITIVE.test(input.value))
         throw new ApiError(422, 'VARIABLE_VALUE', 'Nome ou valor inválido; não armazene secrets em variáveis');
       const data = await call(base + '?per_page=100');
       const current = safeList(data, 'variables').find(entry => entry.name === input.name);
