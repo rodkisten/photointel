@@ -169,7 +169,8 @@ Isso comprova que a chave privada dedicada, acessível à conta `photointel-ssh`
 - [x] Porta `127.0.0.1:8789` escutando
 - [x] `GET /health` retornando HTTP 200 com `targets=1`
 - [x] Autenticação SSH local como `rod` via chave dedicada
-- [ ] Validar **API `POST /files`** com SFTP (listar, ler, salvar e conflito de versão)
+- [x] Validar **API `POST /files`** com SFTP para listar e ler (22 entradas, SHA-256 correto, 18/11/2026 01:34)
+- [ ] Validar escrita SFTP e conflito de versão
 - [ ] Validar **WebSocket `GET /ws`** com ticket assinado, formato de protocolo e PTY
 - [ ] Corrigir quaisquer incompatibilidades entre assinatura/claims do ticket emitido pelo Worker e o gateway
 - [ ] Configurar Cloudflare Tunnel com política de acesso entre serviços, sem abrir `8789` na internet
@@ -206,3 +207,24 @@ sudo journalctl -u photointel-ssh -n 60 --no-pager -o cat
 ```
 
 **Não marcar SFTP como validado até ver o resultado do teste.** O teste também não valida WebSocket PTY, escrita, conflitos ou integração com Manage.
+
+## 9. Resultado real do teste de leitura (18/11/2026, 01:34)
+
+O operador executou `sudo python3 test-local.py` na VM após `git pull --ff-only` e enviou a captura do terminal. Saída observada:
+
+```text
+✅ Gateway HTTP health: OK
+✅ SFTP directory listing: 22 entries
+✅ SFTP file read and SHA-256 version: OK
+🎉 Read-only gateway smoke tests passed
+```
+
+**Próximo teste:** `test-write.py` foi adicionado ao repositório, mas **ainda não foi executado na VM**. Cria um arquivo aleatório `.photointel-sftp-smoke-*.txt` em `/home/rod`, grava via API SFTP, testa conflito 409 e apaga o arquivo no final. Rodar:
+
+```bash
+cd ~/photointel && git pull --ff-only
+cd services/ssh-gateway
+sudo python3 test-write.py
+```
+
+O script não altera arquivos de projetos existentes. Se falhar, coletar o erro e `sudo journalctl -u photointel-ssh -n 40 --no-pager -o cat`, ocultando segredos.
