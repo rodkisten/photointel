@@ -53,3 +53,14 @@ test('preview strips private tokens and Cloudflare production bindings', () => {
   assert.deepEqual(result.cloudflare, {});
   assert.deepEqual(result.workflows, {});
 });
+
+test('legacy extra alias remains compatible with terminal catalog', () => {
+  const result = normalizeDeployConfig(JSON.stringify({ extra: runtime, project_id: 'photointel' }));
+  assert.deepEqual(result.runtime, runtime);
+});
+
+test('invalid gateway is rejected in production but not preview', () => {
+  const source = JSON.stringify({ extra_environment: { ...runtime, MANAGE_TERMINAL_GATEWAY_URL: 'https://unsafe.example.com' } });
+  assert.throws(() => deployBindings(source, 'production'), /approved/);
+  assert.equal(deployBindings(source, 'preview').runtime.MANAGE_TERMINAL_GATEWAY_URL, undefined);
+});
