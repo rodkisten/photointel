@@ -139,7 +139,10 @@ jobs:
             else
               echo "failed_app=$app" >> "$GITHUB_OUTPUT"
               echo "::error title=Dependency install failed::npm ci failed for apps/$app"
-              tail -n 50 "$RUNNER_TEMP/npm-$app.log"
+              grep -E 'npm error (code|Invalid:|Missing:|.*not in sync|.*can only install)' "$RUNNER_TEMP/npm-$app.log" | head -n 18 || true
+              echo "::group::npm ci log tail"
+              tail -n 30 "$RUNNER_TEMP/npm-$app.log"
+              echo "::endgroup::"
               exit 1
             fi
           done
