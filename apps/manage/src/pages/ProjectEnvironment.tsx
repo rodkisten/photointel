@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Badge, Button, Card, Section } from '../components/ui';
+import { Badge, Button, Card, Input, Section } from '../components/ui';
+import * as Dialog from '@radix-ui/react-dialog';
 import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
 import { DotenvFields } from '../components/dotenv-fields';
 import { IssueBanner, Spinner } from '../components/shared';
@@ -213,8 +214,8 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
         </Button>
       </div>
       {copyMessage && <p role="status" className="text-sm text-emerald-400">{copyMessage}</p>}
-      {copyOpen && original && <div className="space-y-3 rounded-xl border border-carbon-700 bg-carbon-900/60 p-4">
-        <h3 className="text-sm font-semibold">Copiar {original.name}</h3>
+      <Dialog.Root open={copyOpen && Boolean(original)} onOpenChange={setCopyOpen}><Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-black/70" /><Dialog.Content className="fixed inset-x-3 top-1/2 z-[81] mx-auto max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg -translate-y-1/2 overflow-y-auto rounded-xl border border-carbon-700 bg-carbon-950 p-5 shadow-2xl space-y-3">
+        <div className="flex items-center justify-between gap-2"><Dialog.Title className="text-sm font-semibold">Copiar {original?.name}</Dialog.Title><Dialog.Close aria-label="Fechar" className="rounded-lg px-3 py-2 text-carbon-400">✕</Dialog.Close></div><Dialog.Description className="text-xs text-carbon-400">Copiar variável entre repositórios sem alterar a origem.</Dialog.Description>
         <p className="text-xs text-carbon-400">A origem permanece intacta. A cópia usa o valor salvo no GitHub, não alterações locais.</p>
         <label className="block space-y-1 text-xs">Projeto de destino
           <select aria-label="Projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
@@ -232,21 +233,21 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
           </select>
         </label>
         {copyScope === 'environment' && <label className="block space-y-1 text-xs">Environment de destino
-          <input className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+          <Input className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
             value={copyEnvironment} onChange={event => setCopyEnvironment(event.target.value)} />
         </label>}
         {destinationVariables.isFetching && <p className="text-xs text-carbon-400">Verificando destino…</p>}
         {destinationVariables.isError && <IssueBanner error={destinationVariables.error} />}
         {destinationExisting && <p role="alert" className="text-sm text-amber-300">Já existe {original.name} no destino. A cópia foi bloqueada para evitar sobrescrita.</p>}
         <label className="block space-y-1 text-xs">Confirme digitando o repositório de destino
-          <input aria-label="Confirmar projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
+          <Input aria-label="Confirmar projeto de destino" className="w-full rounded-lg border border-carbon-700 bg-carbon-950 p-3 text-base"
             value={copyConfirm} placeholder={copyTarget} onChange={event => setCopyConfirm(event.target.value)} />
         </label>
         {copy.error && <IssueBanner error={copy.error} />}
         <Button disabled={!copyTarget || copyTarget === repository || !destinationVariables.isSuccess ||
           destinationVariables.isFetching || Boolean(destinationExisting) || copyConfirm !== copyTarget || copy.isPending}
           onClick={() => copy.mutate()}>{copy.isPending ? 'Copiando…' : 'Confirmar cópia'}</Button>
-      </div>}
+      </Dialog.Content></Dialog.Portal></Dialog.Root>}
     </Card>
   </Section>;
 }
