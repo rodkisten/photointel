@@ -4,9 +4,6 @@ run-name: "📦 Lockfiles · ${{ github.event_name == 'pull_request' && format('
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-    paths:
-      - "package.json"
-      - "**/package.json"
   push:
     branches: [main]
     paths:
@@ -17,8 +14,11 @@ on:
       package_path:
         description: "Package directory for manual run (default: apps/web)"
         required: false
+        type: choice
+        options:
+          - "apps/web"
+          - "apps/manage"
         default: "apps/web"
-        type: string
       target_branch:
         description: "Branch to synchronize (leave empty for selected branch)"
         required: false
@@ -36,8 +36,27 @@ jobs:
     name: "📦 Regenerate and verify npm lockfiles"
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 20
     steps:
+      - name: "🔎 Validate private key format"
+        shell: bash
+        env:
+          BOT_KEY: ${{ secrets.BOT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, subprocess, sys
+          key = os.environ["BOT_KEY"].strip().replace("\\n", "\n")
+          if not key.startswith("-----BEGIN ") or "PRIVATE KEY-----" not in key:
+              print("::error title=Invalid BOT_PRIVATE_KEY::Expected the complete PEM private key, not a token, path, or Base64 blob")
+              sys.exit(1)
+          result = subprocess.run(["openssl", "pkey", "-noout"], input=key, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          if result.returncode:
+              print("::error title=Invalid BOT_PRIVATE_KEY::OpenSSL cannot parse the supplied PEM key; re-export the private key from the GitHub App settings")
+              sys.exit(1)
+          print("Private key format validated; key contents withheld")
+          PY
       - name: "🔐 Authenticate Ploocky GitHub App"
         id: app-token
         uses: actions/create-github-app-token@v2
@@ -71,6 +90,9 @@ jobs:
               base="${{ github.event.before }}"
             fi
             mapfile -d '' manifests < <(git diff --name-only -z "$base" HEAD -- 'package.json' '**/package.json')
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              manifests+=("apps/web/package.json" "apps/manage/package.json")
+            fi
           fi
           if (( ${#manifests[@]} == 0 )); then
             echo "### 📦 No package manifests changed" >> "$GITHUB_STEP_SUMMARY"

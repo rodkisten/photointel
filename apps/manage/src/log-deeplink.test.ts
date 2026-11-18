@@ -25,6 +25,13 @@ describe('Manage log URL contract', () => {
     expect(primaryTerm(exact)).toBe('insertId-123');
     expect(apiLogParams(exact, primaryTerm(exact)).get('entry')).toBe('insertId-123');
   });
+  it('preserves the selected repository in shared log links', () => {
+    const link = readLogLink('?source=github&project=rodkisten%2Fuserscripts-cf');
+    expect(link.project).toBe('rodkisten/userscripts-cf');
+    expect(logLinkPath(link)).toContain('project=rodkisten%2Fuserscripts-cf');
+    expect(readLogLink(logLinkPath(link).split('?')[1]).project).toBe('rodkisten/userscripts-cf');
+    expect(readLogLink('?project=../private').project).toBeUndefined();
+  });
   it('rejects malformed or unsafe URL fields', () => {
     const link = readLogLink('?source=https://evil.invalid&job=x%22%29&search=%22%20OR%20true&ray=../');
     expect(link.source).toBe('gcp');
