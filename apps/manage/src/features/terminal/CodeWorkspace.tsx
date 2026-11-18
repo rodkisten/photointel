@@ -4,7 +4,7 @@ import { languages } from '@codemirror/language-data';
 import { persistWorkspace, restoreWorkspace, type WorkspaceDocument } from './workspace-db';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle, LanguageDescription } from '@codemirror/language';
 import { FilePlus2, Save, X, FileCode2 } from 'lucide-react';
 
 type Document = WorkspaceDocument;
