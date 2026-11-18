@@ -305,9 +305,20 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [,, target, output] = process.argv;
-  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'compare') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
+  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'compare' && target !== 'render-config') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
   if (target !== 'diagnose' && !output) throw new Error('Output path required');
   const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
+  if (target === 'render-config') {
+    const config = renderDeployConfiguration(raw, {
+      project: process.env.CONFIRM_PROJECT ?? '',
+      releaseSha: process.env.RELEASE_SHA ?? '',
+      githubSecrets: process.env.PHOTOINTEL_GITHUB_SECRETS_JSON ? JSON.parse(process.env.PHOTOINTEL_GITHUB_SECRETS_JSON) : {},
+      githubVariables: process.env.PHOTOINTEL_GITHUB_VARS_JSON ? JSON.parse(process.env.PHOTOINTEL_GITHUB_VARS_JSON) : {},
+    });
+    writeFileSync(output, JSON.stringify(config), {mode: 0o600});
+    console.log(JSON.stringify({source: 'typescript', project: config.project_id, runtimeKeys: Object.keys(config.extra_environment as object).sort()}));
+    process.exit(0);
+  }
   const config = normalizeDeployConfig(raw);
   if (target === 'compare') {
     const actual = JSON.parse(readFileSync(output, 'utf8')) as Record<string, unknown>;
