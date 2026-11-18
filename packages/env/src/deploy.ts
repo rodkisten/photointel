@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseEnvironment } from './index.ts';
 
 export type DeploymentTarget = 'production' | 'preview';
@@ -79,12 +80,22 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
   return { runtime, cloudflare: target === 'preview' ? {} : config.cloudflare, workflows: target === 'preview' ? {} : config.workflows };
 }
 
-if (process.argv[1]?.endsWith('/deploy.ts')) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [,, target, output] = process.argv;
-  if (target !== 'production' && target !== 'preview') throw new Error('Usage: node deploy.ts production|preview <output.json>');
-  if (!output) throw new Error('Output path required');
+  if (target !== 'production' && target !== 'preview' && target !== 'diagnose') throw new Error('Usage: node deploy.ts production|preview|diagnose [output.json]');
+  if (target !== 'diagnose' && !output) throw new Error('Output path required');
   const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
-  const bindings = deployBindings(raw, target);
-  writeFileSync(output, JSON.stringify(bindings), { mode: 0o600 });
-  console.log(JSON.stringify({ target, runtimeKeys: Object.keys(bindings.runtime).sort(), cloudflareKeys: Object.keys(bindings.cloudflare).sort(), terminalConfigured: Boolean(bindings.runtime.MANAGE_TERMINAL_VMS) }));
+  const config = normalizeDeployConfig(raw);
+  if (target === 'diagnose') {
+    let terminalValid = false;
+    let terminalError = '';
+    try { validateTerminal(config.runtime); terminalValid = Boolean(config.runtime.MANAGE_TERMINAL_VMS); }
+    catch (error) { terminalError = error instanceof Error ? error.message : 'Invalid terminal configuration'; }
+    console.log(JSON.stringify({ source: 'GCP_CONFIG_ENV', runtimeKeys: Object.keys(config.runtime).sort(), terminalPresent: Boolean(config.runtime.MANAGE_TERMINAL_VMS), terminalValid, terminalError, gatewayPresent: Boolean(config.runtime.MANAGE_TERMINAL_GATEWAY_URL) }));
+    if (terminalError) process.exitCode = 1;
+  } else {
+    const bindings = deployBindings(raw, target);
+    writeFileSync(output, JSON.stringify(bindings), { mode: 0o600 });
+    console.log(JSON.stringify({ target, runtimeKeys: Object.keys(bindings.runtime).sort(), cloudflareKeys: Object.keys(bindings.cloudflare).sort(), terminalConfigured: Boolean(bindings.runtime.MANAGE_TERMINAL_VMS) }));
+  }
 }
