@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity } from '../src/deploy.ts';
+import { deployBindings, normalizeDeployConfig, validateTerminal, validateWorkloadIdentity, normalizeSecretInventory } from '../src/deploy.ts';
 
 const vm = { id: 'debian', label: 'Debian VM', host: 'vm.example.com', port: 22, username: 'root', hostKeySha256: 'SHA256:' + 'A'.repeat(43) };
 const runtime = { MANAGE_TERMINAL_VMS: JSON.stringify([vm]), MANAGE_TERMINAL_GATEWAY_URL: 'https://photointel-ssh.migos.club' };
@@ -94,4 +94,38 @@ test('bootstrap WIF requires a complete, distinct identity', () => {
     GCP_BOOTSTRAP_SERVICE_ACCOUNT: 'bootstrap@photointel.iam.gserviceaccount.com',
   });
   assert.equal(actual.bootstrapServiceAccount, 'bootstrap@photointel.iam.gserviceaccount.com');
+});
+
+test('R2 legacy aliases normalize to canonical storage secrets', () => {
+  const inventory = normalizeSecretInventory({
+    secrets: {
+      R2_ACCESS_KEY_ID: {name: 'storage-access', version: 'latest'},
+      R2_SECRET_ACCESS_KEY: {name: 'storage-secret', version: '3'},
+    },
+    workflowSecrets: {},
+  });
+  assert.equal(inventory.secrets.STORAGE_ACCESS_KEY.name, 'storage-access');
+  assert.equal(inventory.secrets.STORAGE_SECRET_KEY.version, '3');
+  assert.equal(inventory.secrets.R2_ACCESS_KEY_ID, undefined);
+});
+
+test('canonical storage secrets take precedence over legacy R2 aliases', () => {
+  const inventory = normalizeSecretInventory({
+    secrets: {
+      STORAGE_ACCESS_KEY: {name: 'canonical-key', version: 'latest'},
+      R2_ACCESS_KEY_ID: {name: 'legacy-key', version: 'latest'},
+    },
+    workflowSecrets: {},
+  });
+  assert.equal(inventory.secrets.STORAGE_ACCESS_KEY.name, 'canonical-key');
+});
+
+test('rejects secret R2 endpoint, missing required secrets and unknown keys', () => {
+  assert.throws(() => normalizeSecretInventory({
+    secrets: {R2_ENDPOINT: {name: 'bad-endpoint', version: 'latest'}}, workflowSecrets: {},
+  }), /STORAGE_ENDPOINT/);
+  assert.throws(() => normalizeSecretInventory({secrets: {}, workflowSecrets: {}}, {requireAll: true}), /Missing required/);
+  assert.throws(() => normalizeSecretInventory({
+    secrets: {UNKNOWN: {name: 'unknown', version: 'latest'}}, workflowSecrets: {},
+  }), /Unknown runtime/);
 });
