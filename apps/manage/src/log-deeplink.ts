@@ -1,6 +1,7 @@
 /** Public URL contract for exact, shareable, read-only investigations. */
 export type LogSource = 'gcp' | 'cloudflare' | 'github' | 'sentry';
 export interface LogLink {
+  project?: string;
   source: LogSource;
   correlation: string;
   job: string;
@@ -38,7 +39,9 @@ export function readLogLink(search: string): LogLink {
   const entry = params.get('entry') || '';
   const minutes = params.get('minutes') || '';
   const at = safeDate(params.get('at'));
+  const project = params.get('project') || '';
   const link: LogLink = {
+    ...( /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(project) ? { project } : {} ),
     source: source === 'cloudflare' || source === 'github' || source === 'sentry' ? source : 'gcp',
     correlation: UUID.test(correlation) ? correlation : '',
     job: UUID.test(job) ? job : '',
@@ -62,6 +65,7 @@ export function primaryTerm(link: LogLink): string {
 
 export function logLinkPath(link: LogLink): string {
   const params = new URLSearchParams({ source: link.source });
+  if (link.project) params.set('project', link.project);
   for (const [key, value] of [
     ['correlation', link.correlation],
     ['job', link.job],
@@ -82,6 +86,7 @@ export function toLogSearch(link: LogLink) {
   return {
     source: link.source,
     minutes: link.minutes,
+    ...(link.project ? { project: link.project } : {}),
     ...(link.correlation ? { correlation: link.correlation } : {}),
     ...(link.job ? { job: link.job } : {}),
     ...(link.jobType ? { job_type: link.jobType } : {}),
