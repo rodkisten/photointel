@@ -106,7 +106,7 @@ runs:
         # are fully migrated. Do not run the legacy configuration parser twice.
         python3 -m infra.gcp.manage render
         node --input-type=module -e '
-          import {readFileSync, appendFileSync} from "node:fs";
+          import {appendFileSync} from "node:fs";
           import {parseEnvironment} from "./packages/env/src/index.ts";
           import {validateWorkloadIdentity} from "./packages/env/src/deploy.ts";
           const raw = process.env.GCP_CONFIG_ENV;
@@ -118,7 +118,7 @@ runs:
             ["service_account", identity.serviceAccount],
             ["bootstrap_workload_identity_provider", identity.bootstrapProvider ?? ""],
             ["bootstrap_service_account", identity.bootstrapServiceAccount ?? ""],
-          ].map(([key, value]) => key + "=" + value).join("\\n") + "\\n";
+          ].map(([key, value]) => key + "=" + value).join("\n") + "\n";
           appendFileSync(process.env.GITHUB_OUTPUT, output);
         '
         echo "### 🟣 TypeScript ENV engine" >> "$GITHUB_STEP_SUMMARY"
