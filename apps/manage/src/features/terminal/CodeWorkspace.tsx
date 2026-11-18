@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
+import { languages } from '@codemirror/language-data';
+import { persistWorkspace, restoreWorkspace, type WorkspaceDocument } from './workspace-db';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, indentOnInput, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { FilePlus2, Save, X, FileCode2 } from 'lucide-react';
 
-type Document = { id: string; name: string; content: string; saved: string; path?: string; version?: string };
-const initial = (): Document[] => [{ id: crypto.randomUUID(), name: 'scratch.txt', content: '', saved: '' }];
+type Document = WorkspaceDocument;
+const initial = (targetId: string): Document[] => [{ id: crypto.randomUUID(), targetId, name: 'scratch.txt', content: '', saved: '', updatedAt: Date.now() }];
 
 /**
  * CodeMirror scratch workspace. Remote file operations MUST be implemented by the
@@ -14,8 +16,10 @@ const initial = (): Document[] => [{ id: crypto.randomUUID(), name: 'scratch.txt
  * No SSH credentials or file contents are persisted in browser storage.
  */
 export function CodeWorkspace({ targetId }: { targetId: string }) {
-  const [documents, setDocuments] = useState<Document[]>(initial);
+  const [documents, setDocuments] = useState<Document[]>(() => initial(targetId));
   const [activeId, setActiveId] = useState(documents[0].id);
+  const [restored, setRestored] = useState(false);
+  const [storageStatus, setStorageStatus] = useState('Carregando sessão local…');
   const [busy, setBusy] = useState(false);
   const [remotePath, setRemotePath] = useState('/home/');
   const [entries, setEntries] = useState<{ name: string; kind: 'file' | 'directory' }[]>([]);
@@ -24,17 +28,45 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const current = documents.find(doc => doc.id === activeId) ?? documents[0];
-  const update = (id: string, content: string) => setDocuments(items => items.map(doc => doc.id === id ? { ...doc, content } : doc));
+  const update = (id: string, content: string) => setDocuments(items => items.map(doc => doc.id === id ? { ...doc, content, updatedAt: Date.now() } : doc));
+  useEffect(() => {
+    let cancelled = false;
+    void restoreWorkspace(targetId).then(({ documents: stored, session }) => {
+      if (cancelled) return;
+      const next = stored.length ? stored : initial(targetId);
+      setDocuments(next);
+      setActiveId(session && next.some(doc => doc.id === session.activeId) ? session.activeId : next[0].id);
+      if (session?.remotePath) setRemotePath(session.remotePath);
+      setStorageStatus('Sessão recuperada do IndexedDB');
+      setRestored(true);
+    }).catch(() => {
+      if (cancelled) return;
+      setStorageStatus('IndexedDB indisponível: alterações não serão persistidas');
+      setRestored(false);
+    });
+    return () => { cancelled = true; };
+  }, [targetId]);
+  useEffect(() => {
+    if (!restored) return;
+    const handle = window.setTimeout(() => {
+      void persistWorkspace(targetId, documents, activeId, remotePath)
+        .then(() => setStorageStatus('Alterações locais protegidas no IndexedDB'))
+        .catch(() => setStorageStatus('Falha ao salvar no IndexedDB'));
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [targetId, documents, activeId, remotePath, restored]);
   useEffect(() => {
     const element = mount.current;
     if (!element || !current) return;
     const id = current.id;
+    const language = new Compartment();
+    let disposed = false;
     const editor = new EditorView({
       parent: element,
       state: EditorState.create({
         doc: current.content,
         extensions: [
-          lineNumbers(), highlightActiveLine(), drawSelection(), history(),
+          lineNumbers(), highlightActiveLine(), drawSelection(), history(), language.of([]),
           indentOnInput(), bracketMatching(), syntaxHighlighting(defaultHighlightStyle),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           EditorView.lineWrapping,
@@ -53,7 +85,13 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
       }),
     });
     view.current = editor;
-    return () => { editor.destroy(); if (view.current === editor) view.current = null; };
+    const description = languages.find(item => item.matchFilename(current.path || current.name));
+    if (description) {
+      void description.load().then(support => {
+        if (!disposed) editor.dispatch({ effects: language.reconfigure(support) });
+      }).catch(() => setMessage('Não foi possível carregar o destaque de sintaxe para ' + current.name));
+    }
+    return () => { disposed = true; editor.destroy(); if (view.current === editor) view.current = null; };
     // Switching tabs remounts from React state. Content edits never remount the editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, targetId]);
@@ -63,7 +101,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
     if (!name) return;
     const safeName = name.trim().slice(0, 100);
     if (!safeName || safeName.includes('/') || safeName.includes('\\\\') || [...safeName].some(char => char.charCodeAt(0) < 32)) { setMessage('Nome de arquivo inválido'); return; }
-    const doc = { id: crypto.randomUUID(), name: safeName, content: '', saved: '' };
+    const doc: Document = { id: crypto.randomUUID(), targetId, name: safeName, content: '', saved: '', updatedAt: Date.now() };
     setDocuments(items => [...items, doc]);
     setActiveId(doc.id);
   };
@@ -72,7 +110,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
     if (!doc || (doc.content !== doc.saved && !window.confirm('Descartar alterações deste rascunho?'))) return;
     const remaining = documents.filter(item => item.id !== id);
     if (!remaining.length) {
-      const replacement = initial();
+      const replacement = initial(targetId);
       setDocuments(replacement);
       setActiveId(replacement[0].id);
     } else {
@@ -108,11 +146,11 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
             return;
           }
           setDocuments(items => items.map(item => item.id === existing.id ?
-            { ...item, content: payload.content!, saved: payload.content!, version: payload.version } : item));
+            { ...item, content: payload.content!, saved: payload.content!, version: payload.version, updatedAt: Date.now() } : item));
           setActiveId(existing.id);
         } else {
           const doc: Document = { id: crypto.randomUUID(), name: path.split('/').pop() || path,
-            path, content: payload.content, saved: payload.content, version: payload.version };
+            path, targetId, content: payload.content, saved: payload.content, version: payload.version, updatedAt: Date.now() };
           setDocuments(items => [...items, doc]);
           setActiveId(doc.id);
         }
@@ -120,7 +158,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
       }
       if (operation === 'write' && document && payload.version) {
         setDocuments(items => items.map(item => item.id === document.id ?
-          { ...item, saved: document.content, version: payload.version } : item));
+          { ...item, saved: document.content, version: payload.version, updatedAt: Date.now() } : item));
         setMessage('Arquivo salvo na VM: ' + path);
       }
     } catch (error) {
@@ -142,7 +180,7 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
     link.download = current.name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setDocuments(items => items.map(doc => doc.id === current.id ? { ...doc, saved: doc.content } : doc));
+    // Download does not acknowledge a remote save or discard pending changes.
     setMessage('Arquivo baixado no dispositivo. Nenhuma alteração foi enviada à VM.');
   };
   return <div className="flex min-h-[420px] min-w-0 flex-1 flex-col">
@@ -178,6 +216,6 @@ export function CodeWorkspace({ targetId }: { targetId: string }) {
         className="rounded-lg border border-carbon-700 px-2 py-1 text-xs">{entry.kind === 'directory' ? '📁 ' : '📄 '}{entry.name}</button>)}
     </div>}
     <div ref={mount} className="min-h-[300px] min-w-0 flex-1 overflow-hidden" aria-label="Editor CodeMirror 6"/>
-    <p role="status" className="border-t border-carbon-800 px-3 py-2 text-xs text-carbon-400">{message}</p>
+    <p role="status" className="border-t border-carbon-800 px-3 py-2 text-xs text-carbon-400">{message} · {storageStatus}</p>
   </div>;
 }
