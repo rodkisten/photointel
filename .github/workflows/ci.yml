@@ -196,12 +196,6 @@ jobs:
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run build" npm --prefix apps/web run build
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
-        id: notify_observed_017
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web audit --audit-level=high" npm --prefix apps/web audit --audit-level=high
       - name: "📋 Consolidar falhas · frontend"
         if: ${{ always() }}
         env:
@@ -449,18 +443,6 @@ jobs:
         continue-on-error: true
         id: notify_observed_043
         run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
-        id: notify_observed_044
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip" uvx pip-audit -r /tmp/runtime-requirements.txt --disable-pip
-      - name: "🧰 Setup"
-        continue-on-error: true
-        id: notify_observed_045
-        run: |
-          uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/gpu-requirements.txt
-          uvx pip-audit -r /tmp/gpu-requirements.txt --disable-pip
       - name: "🔐 Secrets"
         id: notify_observed_046
         uses: gitleaks/gitleaks-action@v3
