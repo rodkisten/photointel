@@ -82,6 +82,12 @@ jobs:
           CONFIRM: ${{ inputs.confirm }}
         run: |
           source scripts/ci/pretty-logs.sh
+
+          export BOT_TOKEN="${{ steps.app-token.outputs.token }}"
+          
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+      
           ci_run "Release console" python3 -m infra.terraform.release_console
       - if: always()
         uses: ./.github/actions/gcp-config
