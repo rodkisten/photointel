@@ -46,12 +46,14 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     },
   });
   const original = variables.data?.items.find(item => item.name === selected);
+  const inventoryReady = variables.isSuccess && !variables.isFetching;
   const dirty = editing && (name !== (original?.name ?? '') || value !== (original?.value ?? ''));
   const staleSelection = Boolean(selected && !original);
   const staleVersion = Boolean(original && version !== original.version);
   const renameAttempt = Boolean(selected && name !== selected);
   const existingName = variables.data?.items.some(item => item.name === name && item.name !== selected);
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && value.length <= 120_000 &&
+    inventoryReady &&
     !renameAttempt && !existingName && confirmation === repository &&
     !variables.isPending && !variables.isError && !staleSelection && !staleVersion && dirty && !save.isPending;
   return <Section title={'Ambiente GitHub · ' + repository}
@@ -112,6 +114,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
       {existingName && <p role="alert" className="text-sm text-amber-300">Já existe uma variável com esse nome. Selecione-a na lista para editar.</p>}
       {staleSelection && <p role="alert" className="text-sm text-amber-300">A variável selecionada não está mais disponível. Atualize a lista antes de salvar.</p>}
       {staleVersion && <p role="alert" className="text-sm text-amber-300">A variável foi atualizada no servidor. Selecione-a novamente antes de salvar.</p>}
+      {variables.isFetching && !variables.isPending && <p role="status" className="text-xs text-carbon-400">Atualizando variáveis do GitHub…</p>}
       {save.error && <IssueBanner error={save.error} />}
       {savedMessage && <p role="status" className="text-sm text-emerald-400">{savedMessage}</p>}
       <Button disabled={!valid} onClick={() => save.mutate({ name, value, version, confirm: confirmation })}>Salvar variável</Button>
