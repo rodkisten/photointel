@@ -237,6 +237,15 @@ export default function App() {
             <div>
               <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">Rod Manage</p>
               <p className="text-[11px] font-medium tracking-wider text-carbon-500">PROJECT CONTROL CENTER</p>
+              <p className="mt-1 font-mono text-[10px] text-carbon-400">
+                Publicado: {import.meta.env.VITE_MANAGE_RELEASE
+                  ? <a className="text-emerald-400 underline underline-offset-2"
+                      href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
+                      title={import.meta.env.VITE_MANAGE_RELEASE} target="_blank" rel="noreferrer">
+                      {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 10)}
+                    </a>
+                  : <span className="text-amber-400">indisponível</span>}
+              </p>
             </div>
           </Link>
 
