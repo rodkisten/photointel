@@ -522,6 +522,44 @@ export async function api(
         name: entry.name, value: entry.value, version: await digest(String(entry.value || '')), updated_at: entry.updated_at,
       }))) });
     }
+    if (method === 'POST') {
+      const input = await bodyJson<{
+        name?: unknown; sourceRepository?: unknown; sourceScope?: unknown;
+        sourceEnvironment?: unknown; sourceVersion?: unknown; confirm?: unknown;
+      }>(request, 4096);
+      const sourceRepository = input.sourceRepository;
+      const sourceScope = input.sourceScope;
+      const sourceEnvironment = input.sourceEnvironment;
+      if (input.confirm !== repository || typeof input.name !== 'string' ||
+          !PATTERNS.VARIABLE_NAME.test(input.name) ||
+          typeof sourceRepository !== 'string' || !PATTERNS.REPOSITORY.test(sourceRepository) ||
+          (sourceScope !== 'repository' && sourceScope !== 'environment') ||
+          typeof sourceEnvironment !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(sourceEnvironment) ||
+          typeof input.sourceVersion !== 'string')
+        throw new ApiError(422, 'VARIABLE_COPY', 'Origem, destino ou confirmação inválidos');
+      if (sourceRepository.toLowerCase() === repository.toLowerCase() &&
+          sourceScope === scope && (scope === 'repository' || sourceEnvironment === environment))
+        throw new ApiError(409, 'VARIABLE_COPY', 'Origem e destino são iguais');
+      const sourceBase = 'https://api.github.com/repos/' + sourceRepository +
+        (sourceScope === 'repository' ? '/actions/variables' :
+          '/environments/' + encodeURIComponent(sourceEnvironment) + '/variables');
+      // Fetch the source directly on the server; never trust a value supplied by the browser.
+      const source = await call(sourceBase + '/' + encodeURIComponent(input.name)) as {
+        name?: string; value?: string;
+      };
+      if (source.name !== input.name || typeof source.value !== 'string' ||
+          await digest(source.value) !== input.sourceVersion)
+        throw new ApiError(409, 'VARIABLE_COPY_STALE', 'A variável de origem mudou. Atualize e tente novamente');
+      if (source.value.length > LIMITS.CONFIG_MAX_LENGTH || source.value.includes('\0') ||
+          PATTERNS.SECRET_SENSITIVE.test(source.value))
+        throw new ApiError(422, 'VARIABLE_VALUE', 'O valor não pode ser copiado como GitHub Variable');
+      const existing = (await listVariables()).some(entry => entry.name === input.name);
+      if (existing) throw new ApiError(409, 'VARIABLE_EXISTS', 'Variável já existe no destino. Cópia cancelada');
+      await call(base, 'POST', { name: input.name, value: source.value });
+      console.log(JSON.stringify({ event: 'project_variable_copied', sourceRepository, sourceScope,
+        sourceEnvironment, repository, scope, environment, name: input.name, operator: identity.email }));
+      return json({ ok: true });
+    }
     if (method === 'PUT') {
       const input = await bodyJson<{ name?: unknown; value?: unknown; version?: unknown; confirm?: unknown }>(request, 130_000);
       if (input.confirm !== repository) throw new ApiError(409, 'PROJECT_CONFIRM', 'Confirme o nome completo do repositório');
