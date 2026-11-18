@@ -1,6 +1,16 @@
 name: "🧩 [GCP CONFIG] Prepare / clean"
 description: "Reuse the production Environment GCP_CONFIG_ENV parser and securely remove temporary deployment files."
 inputs:
+  engine:
+    description: "Configuration engine: legacy Python or TypeScript (opt-in during parity migration)"
+    required: false
+    default: python
+  github-secrets-json:
+    description: "Explicit allowlisted GitHub secrets JSON; never use for job outputs or logs"
+    required: false
+  github-vars-json:
+    description: "Explicit allowlisted GitHub variables JSON"
+    required: false
   mode:
     description: "prepare or cleanup"
     required: true
@@ -16,16 +26,16 @@ inputs:
 outputs:
   workload_identity_provider:
     description: "Provider resource from the validated configuration (deployment identity)"
-    value: ${{ steps.prepare.outputs.workload_identity_provider }}
+    value: ${{ steps.prepare_ts.outputs.workload_identity_provider || steps.prepare.outputs.workload_identity_provider }}
   service_account:
     description: "Service account from the validated configuration (deployment identity)"
-    value: ${{ steps.prepare.outputs.service_account }}
+    value: ${{ steps.prepare_ts.outputs.service_account || steps.prepare.outputs.service_account }}
   bootstrap_workload_identity_provider:
     description: "Separate administrative Workload Identity provider from GCP_CONFIG_ENV"
-    value: ${{ steps.prepare.outputs.bootstrap_workload_identity_provider }}
+    value: ${{ steps.prepare_ts.outputs.bootstrap_workload_identity_provider || steps.prepare.outputs.bootstrap_workload_identity_provider }}
   bootstrap_service_account:
     description: "Separate administrative service account from GCP_CONFIG_ENV"
-    value: ${{ steps.prepare.outputs.bootstrap_service_account }}
+    value: ${{ steps.prepare_ts.outputs.bootstrap_service_account || steps.prepare.outputs.bootstrap_service_account }}
 runs:
   using: composite
   steps:
@@ -33,7 +43,12 @@ runs:
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
+        ENGINE: ${{ inputs.engine }}
       run: |
+        case "$ENGINE" in
+          python|typescript) ;;
+          *) echo "::error::Unsupported configuration engine" >&2; exit 2 ;;
+        esac
         case "$MODE" in
           prepare|cleanup) ;;
           *) echo "::error::Unsupported gcp-config action mode: $MODE" >&2; exit 2 ;;
@@ -58,12 +73,12 @@ runs:
           echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/photointel-env-diagnostic.json")"
         } >> "$GITHUB_STEP_SUMMARY"
     - name: "📦 [CONFIG] Install dotenv parser"
-      if: inputs.mode == 'prepare'
+      if: inputs.mode == 'prepare' && inputs.engine == 'python'
       shell: bash
       run: python3 -m pip install --disable-pip-version-check python-dotenv==1.2.4
     - name: "🧩 [CONFIG] Prepare env vars and render deploy"
       id: prepare
-      if: inputs.mode == 'prepare'
+      if: inputs.mode == 'prepare' && inputs.engine == 'python'
       shell: bash
       env:
         GCP_CONFIG_ENV: ${{ inputs.config-env }}
@@ -73,8 +88,43 @@ runs:
         set -euo pipefail
         python3 -m infra.gcp.gcp_env
         python3 -m infra.gcp.manage render
+    - name: "🟣 [CONFIG] Prepare with TypeScript (no legacy Python parser)"
+      id: prepare_ts
+      if: inputs.mode == 'prepare' && inputs.engine == 'typescript'
+      shell: bash
+      env:
+        GCP_CONFIG_ENV: ${{ inputs.config-env }}
+        CONFIRM_PROJECT: ${{ inputs.confirm-project }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        PHOTOINTEL_GITHUB_SECRETS_JSON: ${{ inputs.github-secrets-json }}
+        PHOTOINTEL_GITHUB_VARS_JSON: ${{ inputs.github-vars-json }}
+      run: |
+        set -euo pipefail
+        umask 077
+        node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
+        # Legacy renderer remains necessary until the generated deployment artifacts
+        # are fully migrated. Do not run the legacy configuration parser twice.
+        python3 -m infra.gcp.manage render
+        node --input-type=module -e '
+          import {readFileSync, appendFileSync} from "node:fs";
+          import {parseEnvironment} from "./packages/env/src/index.ts";
+          import {validateWorkloadIdentity} from "./packages/env/src/deploy.ts";
+          const raw = process.env.GCP_CONFIG_ENV;
+          const entries = raw.trimStart().startsWith("{")
+            ? JSON.parse(raw) : parseEnvironment(raw).entries;
+          const identity = validateWorkloadIdentity(entries);
+          const output = [
+            ["workload_identity_provider", identity.provider],
+            ["service_account", identity.serviceAccount],
+            ["bootstrap_workload_identity_provider", identity.bootstrapProvider ?? ""],
+            ["bootstrap_service_account", identity.bootstrapServiceAccount ?? ""],
+          ].map(([key, value]) => key + "=" + value).join("\\n") + "\\n";
+          appendFileSync(process.env.GITHUB_OUTPUT, output);
+        '
+        echo "### 🟣 TypeScript ENV engine" >> "$GITHUB_STEP_SUMMARY"
+        echo "GitHub-first configuration rendered without running the Python ENV parser." >> "$GITHUB_STEP_SUMMARY"
     - name: "🔬 [CONFIG] Compare TypeScript and legacy rendered bindings"
-      if: inputs.mode == 'prepare'
+      if: inputs.mode == 'prepare' && inputs.engine == 'python'
       continue-on-error: true
       shell: bash
       env:
