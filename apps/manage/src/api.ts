@@ -505,9 +505,20 @@ export async function api(
         ...(payload ? { 'Content-Type': 'application/json' } : {}) },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
+    // Fetch every page so variable selection and optimistic version checks see the same inventory.
+    const listVariables = async () => {
+      const all: Array<{ name: string; value?: string; updated_at?: string }> = [];
+      for (let page = 1; page <= 20; page++) {
+        const data = await call(base + '?per_page=100&page=' + page);
+        const entries = safeList(data, 'variables') as Array<{ name: string; value?: string; updated_at?: string }>;
+        all.push(...entries);
+        if (entries.length < 100) return all;
+      }
+      throw new ApiError(422, 'VARIABLE_LIMIT', 'Mais de 2000 variáveis; não é seguro editar uma lista incompleta');
+    };
     if (method === 'GET') {
-      const data = await call(base + '?per_page=100');
-      return json({ repository, scope, environment, items: await Promise.all(safeList(data, 'variables').map(async entry => ({
+      const entries = await listVariables();
+      return json({ repository, scope, environment, items: await Promise.all(entries.map(async entry => ({
         name: entry.name, value: entry.value, version: await digest(String(entry.value || '')), updated_at: entry.updated_at,
       }))) });
     }
@@ -518,8 +529,8 @@ export async function api(
         typeof input.value !== 'string' || input.value.length > LIMITS.CONFIG_MAX_LENGTH ||
         input.value.includes('\0') || PATTERNS.SECRET_SENSITIVE.test(input.value))
         throw new ApiError(422, 'VARIABLE_VALUE', 'Nome ou valor inválido; não armazene secrets em variáveis');
-      const data = await call(base + '?per_page=100');
-      const current = safeList(data, 'variables').find(entry => entry.name === input.name);
+      const entries = await listVariables();
+      const current = entries.find(entry => entry.name === input.name);
       if (current && input.version !== await digest(String(current.value || '')))
         throw new ApiError(409, 'VARIABLE_CONFLICT', 'Valor alterado; recarregue');
       if (!current && input.version !== null) throw new ApiError(409, 'VARIABLE_CONFLICT', 'Variável nova exige versão vazia');

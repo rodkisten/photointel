@@ -230,13 +230,22 @@ export default function App() {
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
       <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
+          <Link to="/" search={{ project: activeProject?.repository }} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
               <Blocks size={20} />
             </div>
             <div>
               <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">Rod Manage</p>
               <p className="text-[11px] font-medium tracking-wider text-carbon-500">PROJECT CONTROL CENTER</p>
+              <p className="mt-1 font-mono text-[10px] text-carbon-400">
+                Publicado: {import.meta.env.VITE_MANAGE_RELEASE
+                  ? <a className="text-emerald-400 underline underline-offset-2"
+                      href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
+                      title={import.meta.env.VITE_MANAGE_RELEASE} target="_blank" rel="noreferrer">
+                      {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 10)}
+                    </a>
+                  : <span className="text-amber-400">indisponível</span>}
+              </p>
             </div>
           </Link>
 
@@ -331,7 +340,7 @@ export default function App() {
             {NAV_GROUPS.map(group => <div key={group.label} className="space-y-1">
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-carbon-500">{group.label}</p>
               {orderedNav.filter(item => (group.ids as readonly string[]).includes(item.id)).map(item => <Link
-                key={item.id} to={item.to} preload="intent" aria-current={tab === item.id ? 'page' : undefined}
+                key={item.id} to={item.to} search={{ project: activeProject?.repository }} preload="intent" aria-current={tab === item.id ? 'page' : undefined}
                 className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                   tab === item.id ? 'bg-carbon-800 text-carbon-100' : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200')}>
                 <item.icon size={17} />{item.label}
@@ -375,7 +384,17 @@ export default function App() {
           )}
 
           <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
-            Rod Manage · Operações auditáveis · Cloudflare Access
+            <span>Rod Manage · Operações auditáveis · Cloudflare Access</span>
+            <span className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              <span>Publicado:</span>
+              {import.meta.env.VITE_MANAGE_RELEASE
+                ? <a className="text-emerald-400 underline underline-offset-2"
+                    href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
+                    target="_blank" rel="noreferrer" title={import.meta.env.VITE_MANAGE_RELEASE}>
+                    {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 12)}
+                  </a>
+                : <span className="text-amber-400">SHA indisponível</span>}
+            </span>
           </footer>
         </main>
       </div>
@@ -399,7 +418,7 @@ export default function App() {
               onDrop={() => { if (editNav && dragged && dragged !== item.id) reorder(dragged, item.id); setDragged(null); }}
               className="flex min-h-11 items-center gap-2 rounded-lg hover:bg-carbon-900">
               {editNav && <GripVertical size={16} className="ml-1 text-carbon-500" />}
-              <Link to={item.to} onClick={() => setMobileMenu(false)}
+              <Link to={item.to} search={{ project: activeProject?.repository }} onClick={() => setMobileMenu(false)}
                 className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-sm text-carbon-200">
                 <item.icon size={17} />{item.label}
               </Link>
@@ -420,7 +439,7 @@ export default function App() {
       <nav aria-label="Navegação principal mobile"
         className="fixed inset-x-0 bottom-0 z-[60] border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-around gap-1">
-          {pinned.map(item => <Link key={item.id} to={item.to} aria-current={tab === item.id ? 'page' : undefined}
+          {pinned.map(item => <Link key={item.id} to={item.to} search={{ project: activeProject?.repository }} aria-current={tab === item.id ? 'page' : undefined}
             className={cn("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]", tab === item.id ? "bg-carbon-800 text-white" : "text-carbon-400")}>
             <item.icon size={20} /><span className="truncate">{item.label}</span>
           </Link>)}

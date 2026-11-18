@@ -38,7 +38,7 @@ function NotFound() {
     <Card className="space-y-3 p-6">
       <h2 className="text-lg font-semibold text-carbon-100">Página não encontrada</h2>
       <p className="text-sm text-carbon-400">Esta rota não existe no Manage.</p>
-      <Link to="/" className="text-sm text-carbon-200 underline underline-offset-4">
+      <Link to="/" search={{ project: new URLSearchParams(window.location.search).get("project") || undefined }} className="text-sm text-carbon-200 underline underline-offset-4">
         Voltar à visão geral
       </Link>
     </Card>
@@ -46,6 +46,7 @@ function NotFound() {
 }
 
 const rootRoute = createRootRoute({
+  validateSearch: z.object({ project: z.string().optional() }).passthrough(),
   component: App,
   notFoundComponent: NotFound,
 });
@@ -53,9 +54,10 @@ const rootRoute = createRootRoute({
 function RunPage() {
   const { runId } = runRoute.useParams();
   const navigate = useNavigate();
+  const project = new URLSearchParams(window.location.search).get('project') || undefined;
   const id = Number(runId);
   if (!Number.isSafeInteger(id) || id <= 0) return <NotFound />;
-  return <RunDetail id={id} onBack={() => void navigate({ to: '/deploys' })} />;
+  return <RunDetail id={id} onBack={() => void navigate({ to: '/deploys', search: project ? { project } : {} })} />;
 }
 
 function SystemPage() {
@@ -88,13 +90,14 @@ const logSearchSchema = z
     at: z.string().optional(),
     search: z.string().optional(),
     minutes: z.string().optional(),
+    project: z.string().optional(),
   })
   .transform((raw) => {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(raw)) {
       if (typeof value === 'string') params.set(key, value);
     }
-    return readLogLink(params.toString());
+    return { ...readLogLink(params.toString()), ...(raw.project ? { project: raw.project } : {}) };
   });
 
 const indexRoute = createRoute({
@@ -102,30 +105,32 @@ const indexRoute = createRoute({
   path: '/',
   beforeLoad: ({ location }) => {
     // Old PhotoIntel / Telegram links use ?tab=...; keep them working.
-    const tab = new URLSearchParams(location.searchStr).get('tab');
+    const legacyParams = new URLSearchParams(location.searchStr);
+    const tab = legacyParams.get('tab');
+    const project = legacyParams.get('project') || undefined;
     switch (tab) {
       case 'logs':
         throw redirect({
           to: '/logs',
-          search: toLogSearch(readLogLink(location.searchStr)),
+          search: { ...toLogSearch(readLogLink(location.searchStr)), ...(project ? { project } : {}) },
           replace: true,
         });
       case 'deploy':
-        throw redirect({ to: '/deploys', replace: true });
+        throw redirect({ to: '/deploys', search: project ? { project } : {}, replace: true });
       case 'triggers':
-        throw redirect({ to: '/triggers', replace: true });
+        throw redirect({ to: '/triggers', search: project ? { project } : {}, replace: true });
       case 'infrastructure':
-        throw redirect({ to: '/infrastructure', replace: true });
+        throw redirect({ to: '/infrastructure', search: project ? { project } : {}, replace: true });
       case 'costs':
-        throw redirect({ to: '/costs', replace: true });
+        throw redirect({ to: '/costs', search: project ? { project } : {}, replace: true });
       case 'config':
-        throw redirect({ to: '/environment', replace: true });
+        throw redirect({ to: '/environment', search: project ? { project } : {}, replace: true });
       case 'secrets':
-        throw redirect({ to: '/secrets', replace: true });
+        throw redirect({ to: '/secrets', search: project ? { project } : {}, replace: true });
       case 'icloud':
-        throw redirect({ to: '/icloud', replace: true });
+        throw redirect({ to: '/icloud', search: project ? { project } : {}, replace: true });
       case 'settings':
-        throw redirect({ to: '/system', replace: true });
+        throw redirect({ to: '/system', search: project ? { project } : {}, replace: true });
       default:
         break;
     }

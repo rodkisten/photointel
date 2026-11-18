@@ -51,7 +51,7 @@ export function LogViewer() {
   }, [link]);
 
   const updateLink = (next: LogLink) => {
-    void navigate({ to: '/logs', search: toLogSearch(next), replace: true });
+    void navigate({ to: '/logs', search: { ...toLogSearch(next), ...(link.project ? { project: link.project } : {}) }, replace: true });
   };
 
   const params = apiLogParams(link, serverFilter).toString();
