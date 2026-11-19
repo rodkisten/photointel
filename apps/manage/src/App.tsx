@@ -21,8 +21,6 @@ import {
   FolderGit2,
   Menu,
   GripVertical,
-  ChevronDown,
-  Globe2,
   TerminalSquare,
 } from 'lucide-react';
 
