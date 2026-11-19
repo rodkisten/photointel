@@ -27,7 +27,7 @@ export const DEFAULTS = {
   GITHUB_REPO: 'rodkisten/photointel',
 };
 
-export type Item = Record<string, unknown>;
+export type Item = Record<string, any>;
 
 export function safeList(data: unknown, key: string): Item[] {
   const v = data as Record<string, unknown>;
