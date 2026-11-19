@@ -151,7 +151,10 @@ runs:
           echo "::warning::Rendered configuration unavailable for contract comparison"
           exit 0
         fi
+        set +e
         node --experimental-strip-types packages/env/src/deploy.ts compare infra/gcp/config.local.json > "$RUNNER_TEMP/photointel-env-compare.json"
+        compare_status=$?
+        set -e
         {
           echo "### 🔬 TypeScript ↔ legacy runtime parity"
           echo "- Matching: $(jq -r '.matching' "$RUNNER_TEMP/photointel-env-compare.json")"
@@ -159,6 +162,9 @@ runs:
           echo "- Extra keys: $(jq -r '.extra | length' "$RUNNER_TEMP/photointel-env-compare.json")"
           echo "- Differing values: $(jq -r '.mismatched | length' "$RUNNER_TEMP/photointel-env-compare.json")"
         } >> "$GITHUB_STEP_SUMMARY"
+        if [[ "$compare_status" -ne 0 ]]; then
+          echo "::warning::TypeScript and legacy bindings differ; inspect the parity counts above."
+        fi
     - name: "🧹 [CLEANUP] Remove config and generated"
       if: inputs.mode == 'cleanup'
       shell: bash

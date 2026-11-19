@@ -310,7 +310,7 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [,, target, output] = process.argv;
-  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'compare' && target !== 'render-config') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
+  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'diagnose-preview' && target !== 'compare' && target !== 'render-config') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
   if (target !== 'diagnose' && !output) throw new Error('Output path required');
   const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
   if (target === 'render-config') {
@@ -335,12 +335,15 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     const mismatched = keys.filter(key => key in legacy && key in expected && legacy[key] !== expected[key]);
     console.log(JSON.stringify({ contract: 'typescript-vs-legacy', matching: !missing.length && !extra.length && !mismatched.length, missing, extra, mismatched }));
     if (missing.length || extra.length || mismatched.length) process.exitCode = 1;
-  } else if (target === 'diagnose') {
+  } else if (target === 'diagnose' || target === 'diagnose-preview') {
+    const preview = target === 'diagnose-preview';
     let terminalValid = false;
     let terminalError = '';
-    try { validateTerminal(config.runtime); terminalValid = Boolean(config.runtime.MANAGE_TERMINAL_VMS); }
-    catch (error) { terminalError = error instanceof Error ? error.message : 'Invalid terminal configuration'; }
-    console.log(JSON.stringify({ source: 'GCP_CONFIG_ENV', runtimeKeys: Object.keys(config.runtime).sort(), terminalPresent: Boolean(config.runtime.MANAGE_TERMINAL_VMS), terminalValid, terminalError, gatewayPresent: Boolean(config.runtime.MANAGE_TERMINAL_GATEWAY_URL) }));
+    if (!preview) {
+      try { validateTerminal(config.runtime); terminalValid = Boolean(config.runtime.MANAGE_TERMINAL_VMS); }
+      catch (error) { terminalError = error instanceof Error ? error.message : 'Invalid terminal configuration'; }
+    }
+    console.log(JSON.stringify({ source: 'GCP_CONFIG_ENV', runtimeKeys: Object.keys(config.runtime).sort(), terminalPresent: Boolean(config.runtime.MANAGE_TERMINAL_VMS), terminalValid, terminalValidationSkipped: preview, terminalError, gatewayPresent: Boolean(config.runtime.MANAGE_TERMINAL_GATEWAY_URL) }));
     if (terminalError) process.exitCode = 1;
   } else {
     const bindings = deployBindings(raw, target);

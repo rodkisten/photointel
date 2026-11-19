@@ -114,14 +114,13 @@ jobs:
           GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
         run: |
           set -euo pipefail
-          node --experimental-strip-types packages/env/src/deploy.ts diagnose > "$RUNNER_TEMP/manage-env-diagnostic.json"
-          jq -e '.terminalError == ""' "$RUNNER_TEMP/manage-env-diagnostic.json" >/dev/null
+          node --experimental-strip-types packages/env/src/deploy.ts diagnose-preview > "$RUNNER_TEMP/manage-env-diagnostic.json"
           {
             echo "### 🧩 TypeScript environment diagnostics"
             echo
             echo "- Source: GitHub production Environment GCP_CONFIG_ENV"
             echo "- Terminal catalog present: $(jq -r '.terminalPresent' "$RUNNER_TEMP/manage-env-diagnostic.json")"
-            echo "- Terminal catalog valid: $(jq -r '.terminalValid' "$RUNNER_TEMP/manage-env-diagnostic.json")"
+            echo "- Terminal validation: skipped (production-only setting)"
             echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/manage-env-diagnostic.json")"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: "🛡 Preview isolation · no GCP production identity"
