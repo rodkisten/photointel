@@ -671,12 +671,10 @@ async function handleGithubRoutes(request: Request, env: Env, identity: Identity
         started_at: x.started_at,
         completed_at: x.completed_at,
         html_url: x.html_url,
-        steps: (Array.isArray(x.steps) ? x.steps : []).map((s: any) => ({
-          name: s.name,
-          number: s.number,
-          conclusion: s.conclusion,
-          status: s.status,
-        })),
+        steps: (Array.isArray(x.steps) ? x.steps : []).map((step) => {
+          const item = step as Record<string, unknown>;
+          return { name: item.name, number: item.number, conclusion: item.conclusion, status: item.status };
+        }),
       })),
     });
   }
@@ -1747,16 +1745,20 @@ async function handleSystemAndSentryRoutes(
     return json({
       read_enabled: true,
       dashboard_url: dashboardUrl,
-      items: (Array.isArray(items) ? items : []).map((x: any) => ({
-        id: x.id,
-        title: redact(x.title).slice(0, API_CONFIG.SENTRY.TITLE_MAX_LENGTH),
-        level: x.level,
-        count: x.count,
-        lastSeen: x.lastSeen,
-        permalink: x.permalink,
-        culprit: redact(x.culprit).slice(0, API_CONFIG.SENTRY.CULPRIT_MAX_LENGTH),
-        project: x.project?.slug,
-      })),
+      items: (Array.isArray(items) ? items : []).map((issue) => {
+        const item = issue as Record<string, unknown>;
+        const project = item.project as Record<string, unknown> | null;
+        return {
+          id: item.id,
+          title: redact(String(item.title ?? '')).slice(0, API_CONFIG.SENTRY.TITLE_MAX_LENGTH),
+          level: item.level,
+          count: item.count,
+          lastSeen: item.lastSeen,
+          permalink: item.permalink,
+          culprit: redact(String(item.culprit ?? '')).slice(0, API_CONFIG.SENTRY.CULPRIT_MAX_LENGTH),
+          project: project?.slug,
+        };
+      }),
     });
   }
 
