@@ -2,7 +2,6 @@ import {
   WorkflowMessageEditor,
 } from '../components/workflow-message-editor';
 import {
-  useEffect,
   useState,
 } from 'react';
 import {
@@ -87,7 +86,8 @@ export function Deploys() {
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const [selected, setSelected] = useState('');
+  const [selectedOverride, setSelectedOverride] = useState<string | null>(null);
+  const selected = selectedOverride ?? workflows.data?.items[0]?.file ?? '';
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
   const [workflowDialog, setWorkflowDialog] = useState(false);
@@ -126,11 +126,8 @@ export function Deploys() {
     .filter(w => (showAllWorkflows || primaryWorkflows.has(w.file)) &&
       (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()))
     .sort((a, b) => Number(primaryWorkflows.has(b.file)) - Number(primaryWorkflows.has(a.file)) || a.name.localeCompare(b.name));
-  useEffect(() => {
-    if (!selected && workflows.data?.items.length) setSelected(workflows.data.items[0].file);
-  }, [selected, workflows.data]);
   function changeFile(value: string) {
-    setSelected(value);
+    setSelectedOverride(value);
     setInputs({});
   }
   return (
