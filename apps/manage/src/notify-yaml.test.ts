@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from './notification-settings';
+type SettingsRetention = typeof DEFAULT_SETTINGS.retentionMinutes;
 import { parseNotifyYaml, resolveNotifySettings } from './notify-yaml';
 
 describe('repository notify.yml', () => {
@@ -29,8 +30,8 @@ describe('repository notify.yml', () => {
 
   it('merges nested retention fields individually', () => {
     const result = resolveNotifySettings(DEFAULT_SETTINGS,
-      { retentionMinutes: { ...DEFAULT_SETTINGS.retentionMinutes, error: 60 } },
-      { retentionMinutes: { ...DEFAULT_SETTINGS.retentionMinutes, running: 10 } });
+      { retentionMinutes: { error: 60 } as SettingsRetention },
+      { retentionMinutes: { running: 10 } as SettingsRetention });
     expect(result.settings.retentionMinutes.error).toBe(60);
     expect(result.settings.retentionMinutes.running).toBe(10);
   });
