@@ -233,7 +233,7 @@ test('renderer rejects direct GitHub values for optional runtime secret fields t
   });
   assert.throws(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'b'.repeat(40),
-    githubSecrets: {...requiredGitHubSecrets, MODAL_TOKEN: 'github-modal-token'},
+    githubSecrets: {MODAL_TOKEN: 'github-modal-token'},
   }), /Direct GitHub values for runtime secret MODAL_TOKEN/);
 });
 
@@ -256,11 +256,17 @@ test('legacy R2 endpoint reference accepts normalized runtime STORAGE_ENDPOINT',
     'REPOSITORY=photointel',
     ...Object.entries(identity).map(([key, value]) => key + '=' + value),
     'ENV__STORAGE_ENDPOINT=https://storage.example.com',
+    'SECRET__DATABASE_URL=photointel-database-url@1',
+    'SECRET__MIGRATION_DATABASE_URL=photointel-migration-database-url@1',
+    'SECRET__STORAGE_ACCESS_KEY=photointel-storage-access@1',
+    'SECRET__STORAGE_SECRET_KEY=photointel-storage-secret@1',
+    'SECRET__BRIDGE_TOKEN_PEPPER=photointel-bridge-pepper@1',
+    'SECRET__BRIDGE_ENROLLMENT_SECRET=photointel-bridge-enrollment@1',
+    'SECRET__ICLOUD_SESSION_KEY=photointel-icloud-session@1',
     'SECRET__R2_ENDPOINT=legacy-endpoint@latest',
   ].join('\n');
   assert.doesNotThrow(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'd'.repeat(40),
-    githubSecrets: requiredGitHubSecrets,
   }));
 });
 
