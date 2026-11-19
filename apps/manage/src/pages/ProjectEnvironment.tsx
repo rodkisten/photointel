@@ -109,7 +109,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     retry: false,
     enabled: copyOpen,
   });
-  const exactRepositorySearch = /^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(copyRepositorySearch.trim())
+  const exactRepositorySearch = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\/[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(copyRepositorySearch.trim())
     ? copyRepositorySearch.trim() : '';
   const resolvedDestination = useQuery({
     queryKey: ['github-copy-resolve', exactRepositorySearch],

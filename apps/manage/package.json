@@ -7,6 +7,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "npm run tsc7 -- -p tsconfig.json --noEmit && npm run tsc7 -- -p tsconfig.worker.json --noEmit && vite build",
     "typecheck": "node scripts/typecheck-all.mjs",
+    "lint": "eslint src vite.config.ts",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run src && npm run test:pwa",
     "format": "npm --prefix ../.. run format:manage",

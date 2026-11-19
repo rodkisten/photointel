@@ -29,7 +29,7 @@ export function vmTargets(env: Env): VmTarget[] {
 }
 
 /** Session intent is authenticated and validated, but never creates a live shell without a gateway. */
-export function terminalSessionRoute(request: Request, env: Env, identity: Identity): Response | null {
+export async function terminalSessionRoute(request: Request, env: Env, identity: Identity): Promise<Response | null> {
   const path = new URL(request.url).pathname;
   if (path !== '/api/terminal/session') return null;
   if (request.method !== 'POST') throw new ApiError(405, 'TERMINAL_METHOD', 'Método não permitido');
