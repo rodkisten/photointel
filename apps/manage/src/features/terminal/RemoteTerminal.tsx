@@ -4,7 +4,7 @@ import { GhosttyCore } from '@wterm/ghostty';
 import '@wterm/react/css';
 
 type Status = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
-type Frame = { type: 'stdout'; data: string } | { type: 'error'; message: string } | { type: 'exit'; code: number | null } | { type: 'pong' };
+type Frame = { type: 'ready' } | { type: 'stdout'; data: string } | { type: 'error'; message: string } | { type: 'exit'; code: number | null } | { type: 'pong' };
 
 /** Single-use, short-lived session. No automatic input replay or reconnect. */
 export function RemoteTerminal({ targetId }: { targetId: string }) {
@@ -27,8 +27,10 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const [notice, setNotice] = useState('');
   const send = useCallback((frame: object) => {
     const ws = socket.current;
-    if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536) ws.send(JSON.stringify(frame));
-  }, []);
+    if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536 &&
+        (frame && typeof frame === 'object' && 'type' in frame && frame.type === 'resize' || status === 'connected'))
+      ws.send(JSON.stringify(frame));
+  }, [status]);
   const connect = useCallback(async () => {
     if (socket.current || pending.current) return;
     pending.current = true;
@@ -51,19 +53,20 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       pending.current = false;
       ws.onopen = () => {
         if (attempt !== generation.current) { ws.close(); return; }
-        setStatus('connected');
         ws.send(JSON.stringify({ type: 'resize', ...dimensions.current }));
         focus();
       };
       ws.onmessage = event => {
+        if (attempt !== generation.current) return;
         if (typeof event.data !== 'string' || event.data.length > 131072) { ws.close(1009); return; }
         let frame: Frame;
         try { frame = JSON.parse(event.data) as Frame; } catch { ws.close(1002); return; }
+        if (frame.type === 'ready') { setStatus('connected'); focus(); }
         if (frame.type === 'stdout' && typeof frame.data === 'string') write(frame.data);
         if (frame.type === 'error') setNotice(frame.message);
         if (frame.type === 'exit') { setNotice('Shell encerrado'); ws.close(); }
       };
-      ws.onerror = () => { setStatus('error'); setNotice('Falha na conexão WebSocket'); };
+      ws.onerror = () => { if (attempt === generation.current) { setStatus('error'); setNotice('Falha na conexão WebSocket'); } };
       ws.onclose = () => {
         if (socket.current === ws) socket.current = null;
         if (attempt === generation.current) setStatus(current => current === 'error' ? current : 'closed');
@@ -96,7 +99,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         onError={() => setNotice('Falha ao inicializar WTerm')} /> : <div className="p-4 text-sm text-carbon-400">Carregando Ghostty…</div>}
       <div className="flex flex-wrap gap-1 border-t border-carbon-800 p-2 sm:hidden">
         {([['Esc', '\x1b'], ['Tab', '\t'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['↑', '\x1b[A'], ['↓', '\x1b[B']] as const).map(([label, sequence]) =>
-          <button type="button" key={label} className="min-h-11 rounded-lg border border-carbon-700 px-3 text-sm" onClick={() => { send({ type: 'stdin', data: sequence }); focus(); }}>{label}</button>)}
+          <button type="button" key={label} className="min-h-11 rounded-lg border border-carbon-700 px-3 text-sm" disabled={status !== 'connected'} onClick={() => { send({ type: 'stdin', data: sequence }); focus(); }}>{label}</button>)}
       </div>
     </div>
   );
