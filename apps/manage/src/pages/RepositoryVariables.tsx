@@ -62,12 +62,7 @@ export function RepositoryVariables() {
     () => variables.data?.items.find((item) => item.name === selected),
     [variables.data, selected],
   );
-  useEffect(() => {
-    if (!existing) return;
-    setName(existing.name);
-    setValue(existing.value ?? '');
-    setVersion(existing.version);
-  }, [existing]);
+
   const save = useMutation({
     mutationFn: () => send<{ dispatch: 'queued' | 'failed' | 'none'; triggered?: Array<{ target: string; status: string }> }>('/github/variables?scope=' + scope, { name, value, version, confirm: confirmation }, 'PUT'),
     onSuccess: (result) => {
@@ -78,7 +73,6 @@ export function RepositoryVariables() {
     },
   });
   const isGcpEnvVars = name === 'GCP_ENV_VARS';
-  useEffect(() => { setTriggerKey(''); }, [name]);
   const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || isGcpEnvVars || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
@@ -143,7 +137,7 @@ export function RepositoryVariables() {
           Chave
           <Input
             value={name}
-            onChange={(event) => setName(event.target.value.toUpperCase())}
+            onChange={(event) => { setName(event.target.value.toUpperCase()); setTriggerKey(''); }}
             placeholder="NOME_DA_VARIAVEL"
           />
         </label>
