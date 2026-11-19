@@ -10,6 +10,7 @@ import { workflowStudioRoute } from './workflow-studio-api';
 import { parseWorkflowInputs } from './workflow-yaml';
 import { diffNestedEnv } from './nested-env-diff';
 import { notificationSettingsRoute } from './notification-settings';
+import { repositoryNotifyRoute } from './notify-yaml';
 import { workflowTemplateRoute } from './workflow-message';
 import { workflowFailureRoute } from './workflow-failures';
 import { ApiError, bodyJson, json, redact, requireOrigin } from './auth';
@@ -1783,6 +1784,7 @@ export async function api(
     (req, e) => terminalCatalogRoute(req, e),
     cloudRunJobsRoute,
     (req, e) => notificationSettingsRoute(req, e),
+    (req, e) => repositoryNotifyRoute(req, e),
     (req, e) => workflowTemplateRoute(req, e),
     (req, e) => workflowFailureRoute(req, e),
   ];
