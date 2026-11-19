@@ -228,14 +228,14 @@ export function renderDeployConfiguration(
   const references = normalizeSecretInventory({
     secrets: asReferences(config.secrets),
     workflowSecrets: asReferences(config.workflowSecrets),
-  }, {storageEndpoint: String(structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
+  }, {storageEndpoint: String(config.runtime.STORAGE_ENDPOINT ?? structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
   const githubSources = {
     secrets: options.githubSecrets,
     variables: options.githubVariables,
     gcpReferences: references.secrets,
   };
   validateRequiredConfigValues(githubSources);
-  const runtimeKeys = [...new Set([...Object.keys(config.runtime), ...REQUIRED_RUNTIME_SECRETS])];
+  const runtimeKeys = [...new Set([...Object.keys(config.runtime), ...RUNTIME_SECRET_FIELDS])];
   const resolvedRuntime = resolveConfigInventory(runtimeKeys, githubSources);
   // Only references that actually need GCP remain in the legacy secret inventory.
   const secrets = Object.fromEntries(Object.entries(references.secrets).filter(([key]) =>
@@ -249,10 +249,12 @@ export function renderDeployConfiguration(
   const directRuntime = Object.fromEntries(Object.entries(resolvedRuntime)
     .filter(([, item]) => item.source === 'github-secret' || item.source === 'github-variable')
     .map(([key, item]) => [key, item.value]));
+  const mergedRuntime = {...config.runtime, ...directRuntime};
+  validateTerminal(mergedRuntime);
   return {
     ...structured,
     project_id: project, region, repository,
-    extra_environment: {...config.runtime, ...directRuntime},
+    extra_environment: mergedRuntime,
     cloudflare_environment: config.cloudflare,
     workflows: config.workflows,
     secrets,
@@ -292,7 +294,10 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
   const runtime = { ...config.runtime };
   if (target === 'preview') {
     for (const key of Object.keys(runtime)) {
-      if (/^(?:MANAGE_TERMINAL_|MANAGE_CODESPACES_|GITHUB_API_TOKEN|GITHUB_TOKEN|.*(?:SECRET|PRIVATE_KEY|PASSWORD|CREDENTIAL|TOKEN))$/i.test(key)) delete runtime[key];
+      if (RUNTIME_SECRET_FIELDS.has(key) ||
+          /^(?:MANAGE_TERMINAL_|MANAGE_CODESPACES_|GITHUB_API_TOKEN|GITHUB_TOKEN|.*(?:SECRET|PRIVATE_KEY|PASSWORD|CREDENTIAL|TOKEN))$/i.test(key)) {
+        delete runtime[key];
+      }
     }
     delete runtime.MANAGE_TERMINAL_GATEWAY_SECRET;
     delete runtime.MANAGE_CODESPACES_USER_TOKEN;

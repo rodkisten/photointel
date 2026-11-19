@@ -218,3 +218,70 @@ test('renderer omits GCP reference when a required GitHub secret exists', () => 
   assert.equal((result.extra_environment as Record<string, string>).DATABASE_URL, 'github-DATABASE_URL');
   assert.deepEqual(result.secrets, {});
 });
+
+test('runtime optional GitHub secrets are resolved even when absent from dotenv', () => {
+  const raw = JSON.stringify({
+    project_id: 'photointel', region: 'us-central1', repository: 'photointel',
+    ...identity,
+    secrets: Object.fromEntries([
+      ...['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+        'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY'],
+      'MODAL_TOKEN',
+    ].map(key => [key, {name: 'photointel-' + key.toLowerCase().replaceAll('_', '-'), version: 'latest'}])),
+  });
+  const result = renderDeployConfiguration(raw, {
+    project: 'photointel', releaseSha: 'b'.repeat(40),
+    githubSecrets: {
+      ...Object.fromEntries([
+        'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+        'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
+      ].map(key => [key, 'github-' + key])),
+      MODAL_TOKEN: 'github-modal-token',
+    },
+  });
+  assert.equal((result.extra_environment as Record<string, string>).MODAL_TOKEN, 'github-modal-token');
+  assert.deepEqual(result.secrets, {});
+});
+
+test('GitHub-provided terminal values cannot override the approved production gateway', () => {
+  const raw = JSON.stringify({
+    project_id: 'photointel', region: 'us-central1', repository: 'photointel',
+    ...identity, extra_environment: runtime,
+  });
+  assert.throws(() => renderDeployConfiguration(raw, {
+    project: 'photointel', releaseSha: 'c'.repeat(40),
+    githubVariables: {MANAGE_TERMINAL_GATEWAY_URL: 'https://attacker.example.com'},
+  }), /approved Access-protected hostname/);
+});
+
+test('legacy R2 endpoint reference accepts normalized runtime STORAGE_ENDPOINT', () => {
+  const raw = [
+    'PROJECT_ID=photointel',
+    'REGION=us-central1',
+    'REPOSITORY=photointel',
+    ...Object.entries(identity).map(([key, value]) => key + '=' + value),
+    'ENV__STORAGE_ENDPOINT=https://storage.example.com',
+    'SECRET__R2_ENDPOINT=legacy-endpoint@latest',
+  ].join('\\n');
+  assert.doesNotThrow(() => renderDeployConfiguration(raw, {
+    project: 'photointel', releaseSha: 'd'.repeat(40),
+    githubSecrets: Object.fromEntries([
+      'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+      'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
+    ].map(key => [key, 'github-' + key])),
+  }));
+});
+
+test('preview removes known production credentials even without token-like names', () => {
+  const source = JSON.stringify({extra_environment: {
+    DATABASE_URL: 'postgres://private',
+    STORAGE_ACCESS_KEY: 'private-key',
+    ICLOUD_SESSION_KEY: 'private-session',
+    PUBLIC_FEATURE: 'enabled',
+  }});
+  const result = deployBindings(source, 'preview');
+  assert.equal(result.runtime.DATABASE_URL, undefined);
+  assert.equal(result.runtime.STORAGE_ACCESS_KEY, undefined);
+  assert.equal(result.runtime.ICLOUD_SESSION_KEY, undefined);
+  assert.equal(result.runtime.PUBLIC_FEATURE, 'enabled');
+});

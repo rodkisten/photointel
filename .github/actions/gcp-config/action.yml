@@ -59,7 +59,7 @@ runs:
       with:
         node-version: "24"
     - name: "🧩 [CONFIG] Validate shared TypeScript contract"
-      if: inputs.mode == 'prepare'
+      if: inputs.mode == 'prepare' && inputs.engine == 'typescript'
       shell: bash
       env:
         GCP_CONFIG_ENV: ${{ inputs.config-env }}

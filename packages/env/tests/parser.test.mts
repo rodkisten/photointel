@@ -53,3 +53,14 @@ test('rejects malformed Secret Manager identifiers', () => {
   assert.throws(() => parseEnvironment('SECRET__KEY=Invalid/Resource@latest'), /Invalid Secret Manager/);
   assert.throws(() => parseEnvironment('SECRET__KEY=valid-name@zero'), /Invalid Secret Manager/);
 });
+
+test('preserves ordinary strings beginning with brackets or braces', () => {
+  const parsed = parseEnvironment([
+    'ENV__REGEX=[a-z]+',
+    'CF__TEMPLATE={literal-template}',
+    'ENV__JSON=json:{"enabled":true}',
+  ].join('\\n'));
+  assert.equal(parsed.runtime.REGEX, '[a-z]+');
+  assert.equal(parsed.cloudflare.TEMPLATE, '{literal-template}');
+  assert.equal(parsed.runtime.JSON, '{"enabled":true}');
+});
