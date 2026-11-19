@@ -84,7 +84,9 @@ export function CodeMirrorEnvEditor({
   const languageRef = useRef(new Compartment());
   const lintRef = useRef(new Compartment());
   const activeFormat = useRef(format);
-  callbackRef.current = onChange;
+  useEffect(() => {
+    callbackRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (!mount.current) return;
