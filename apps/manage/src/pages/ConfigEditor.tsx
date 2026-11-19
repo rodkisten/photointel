@@ -140,17 +140,6 @@ export function ConfigEditor() {
     retry: false,
   });
   const fullEnvironmentPreview = useMemo(() => listEnvironmentPreview(editor), [editor]);
-  const resolvedPreview = useMemo(() => {
-    if (!editor.trim() || editor.trimStart().startsWith('{')) return null;
-    try {
-      const entries = parseConfiguration(editor);
-      return { entries: Object.entries(entries).filter(([key]) =>
-        !/SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|KEY|AUTH|SESSION/i.test(key)), error: '' };
-    } catch (error) {
-      return { entries: [] as Array<[string, string]>,
-        error: error instanceof Error ? error.message : 'Referência inválida' };
-    }
-  }, [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
     if (!q.data || !dirty) return null;
@@ -419,7 +408,9 @@ export function ConfigEditor() {
                   onClick={() => {
                     try {
                       setEditor(JSON.stringify(JSON.parse(editor), null, 2));
-                    } catch {}
+                    } catch {
+                      // Keep the original editor text when it is not valid JSON.
+                    }
                   }}
                 >
                   <Code2 size={14} />
