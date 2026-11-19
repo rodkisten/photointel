@@ -155,16 +155,23 @@ jobs:
         working-directory: apps/web
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/photos-preview.json"
+          npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/photos-preview-output.txt" 2>&1 || {
+            cat "$RUNNER_TEMP/photos-preview-output.txt"
+            exit 1
+          }
+          url="$(node ../../scripts/parse-wrangler-preview.mjs "$RUNNER_TEMP/photos-preview-output.txt")"
           echo "### Photos Preview" >> "$GITHUB_STEP_SUMMARY"
-          jq -er '.preview.urls[0]' "$RUNNER_TEMP/photos-preview.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
       - name: "🛡 Manage · Wrangler native preview"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/manage-preview.json"
-          url="$(jq -er '.preview.urls[0]' "$RUNNER_TEMP/manage-preview.json")"
+          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/manage-preview-output.txt" 2>&1 || {
+            cat "$RUNNER_TEMP/manage-preview-output.txt"
+            exit 1
+          }
+          url="$(node ../../scripts/parse-wrangler-preview.mjs "$RUNNER_TEMP/manage-preview-output.txt")"
           echo "### Manage native Wrangler preview · PR #${{ inputs.pr_number || github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
           echo "### 🔀 Short URL" >> "$GITHUB_STEP_SUMMARY"
