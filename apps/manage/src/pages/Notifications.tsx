@@ -3,6 +3,9 @@ import { api, send } from '../lib/client';
 import { Card } from '../components/ui';
 import { IssueBanner } from '../components/shared';
 
+type Conflict = { path: string; repository: unknown; manage: unknown; resolvedBy: 'repository' | 'manage' | null };
+type RepositoryConfig = { repository: string; found: boolean; config: Partial<Settings>; overrides: Partial<Settings>; choices: Record<string, 'repository' | 'manage'>; conflicts: Conflict[]; settings: Settings };
+
 type Settings = {
   events: string[]; grouping: 'window' | 'run' | 'none'; windowSeconds: number;
   updateMode: 'edit' | 'new'; retentionMinutes: { running: number; success: number; error: number }; template: string;
@@ -17,9 +20,24 @@ export function NotificationsPage() {
   const [error, setError] = useState<Error | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [repository, setRepository] = useState('rodkisten/photointel');
+  const [repoConfig, setRepoConfig] = useState<RepositoryConfig | null>(null);
+  const [choices, setChoices] = useState<Record<string, 'repository' | 'manage'>>({});
+  const [overrides, setOverrides] = useState<Partial<Settings>>({});
+  const [loadingRepo, setLoadingRepo] = useState(false);
   useEffect(() => {
     void api<{ settings: Settings }>('/notifications/settings').then(data => setSettings(data.settings)).catch(setError);
   }, []);
+  useEffect(() => {
+    let active = true;
+    setLoadingRepo(true);
+    setRepoConfig(null);
+    void api<RepositoryConfig>('/notifications/repository?repository=' + encodeURIComponent(repository))
+      .then(data => { if (active) { setRepoConfig(data); setChoices(data.choices); setOverrides(data.overrides); } })
+      .catch(err => { if (active) setError(err as Error); })
+      .finally(() => { if (active) setLoadingRepo(false); });
+    return () => { active = false; };
+  }, [repository]);
   const change = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   if (!settings) return <Card className="p-5">{error ? <IssueBanner error={error} /> : 'Carregando notificações…'}</Card>;
   const sample = settings.template.replace(/{{(\w+)}}/g, (_, key: string) => ({
@@ -27,6 +45,47 @@ export function NotificationsPage() {
     error: 'Permissão insuficiente (403)', diagnosis: 'Revisar IAM', url: 'https://github.com/rodkisten/photointel/actions',
   } as Record<string, string>)[key] || 'exemplo');
   return <div className="space-y-5">
+    <Card className="space-y-4 p-5">
+      <h2 className="font-semibold text-carbon-100">Configuração por repositório · notify.yml</h2>
+      <label className="block text-sm">Repositório
+        <input className="mt-1 w-full rounded bg-carbon-900 p-2" value={repository} onChange={e => setRepository(e.target.value)} placeholder="owner/repo" />
+      </label>
+      {loadingRepo && <p className="text-sm text-carbon-400">Carregando notify.yml do GitHub…</p>}
+      {repoConfig && <>
+        <p className="text-sm text-carbon-300">{repoConfig.found ? 'Arquivo encontrado no GitHub' : 'Sem notify.yml: usando padrões globais'}</p>
+        <p className="text-xs text-carbon-400">Edite somente os campos que deseja sobrescrever. Os demais herdam o arquivo e os padrões.</p>
+        <label className="block text-sm">Template personalizado
+          <textarea className="mt-1 min-h-28 w-full rounded bg-carbon-900 p-3 font-mono text-sm"
+            value={overrides.template ?? ''} placeholder="Herdar template do repositório"
+            onChange={e => setOverrides(current => ({ ...current, template: e.target.value || undefined }))}/>
+        </label>
+        <label className="block text-sm">Janela personalizada
+          <select className="mt-1 w-full rounded bg-carbon-900 p-2" value={overrides.windowSeconds ?? ''}
+            onChange={e => setOverrides(current => ({ ...current, windowSeconds: e.target.value ? Number(e.target.value) : undefined }))}>
+            <option value="">Herdar</option>{[5, 10, 15, 30].map(n => <option key={n} value={n}>{n} segundos</option>)}
+          </select>
+        </label>
+        {repoConfig.conflicts.length > 0 && <div className="space-y-3 rounded-xl border border-amber-500/40 p-3">
+          <h3 className="font-semibold">Conflitos de configuração</h3>
+          {repoConfig.conflicts.map(conflict => <div key={conflict.path} className="space-y-2 text-sm">
+            <p className="font-mono">{conflict.path}</p>
+            <p className="break-words text-carbon-400">Arquivo: {JSON.stringify(conflict.repository)} · Manage: {JSON.stringify(conflict.manage)}</p>
+            <select className="w-full rounded bg-carbon-900 p-2" value={choices[conflict.path] || ''}
+              onChange={e => setChoices(current => ({ ...current, [conflict.path]: e.target.value as 'repository' | 'manage' }))}>
+              <option value="">Resolver conflito…</option><option value="repository">Manter notify.yml</option><option value="manage">Usar Manage</option>
+            </select>
+          </div>)}
+        </div>}
+        <button className="rounded bg-carbon-200 px-4 py-2 text-sm font-semibold text-carbon-950 disabled:opacity-50"
+          disabled={saving} onClick={async () => { setSaving(true); setSaved(false); setError(null);
+            try {
+              await send('/notifications/repository?repository=' + encodeURIComponent(repository), { overrides, choices }, 'PUT');
+              const next = await api<RepositoryConfig>('/notifications/repository?repository=' + encodeURIComponent(repository));
+              setRepoConfig(next); setChoices(next.choices); setOverrides(next.overrides); setSaved(true);
+            } catch (err) { setError(err as Error); } finally { setSaving(false); }
+          }}>{saving ? 'Salvando…' : 'Salvar escolhas do repositório'}</button>
+      </>}
+    </Card>
     <Card className="space-y-4 p-5">
       <h2 className="font-semibold text-carbon-100">Eventos que geram notificações</h2>
       <div className="grid gap-3 sm:grid-cols-2">{Object.entries(labels).map(([id, label]) =>
