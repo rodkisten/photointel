@@ -39,6 +39,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: "🧬 Generate Hey API SDK"
         run: npm run generate:api
+      - name: "🧪 Typecheck generated SDK consumers"
+        run: npm run typecheck
       - name: "🔍 Verify generated SDK"
         run: |
           test -d src/api/hey-api
