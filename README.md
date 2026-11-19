@@ -73,7 +73,7 @@ A action `.github/actions/gcp-config` oferece `engine: python` (padrão compatí
 ### Sincronização dos lockfiles
 
 - `.github/workflows/python-lockfiles.yml` regenera `uv.lock` com Python 3.15 e valida o resultado com `uv lock --check`.
-- A sincronização usa a GitHub App Ploocky para gravar somente `uv.lock) na branch selecionada, com verificação otimista para não sobrescrever commits concorrentes.
+- A sincronização usa a GitHub App Ploocky para gravar somente `uv.lock` na branch selecionada, com verificação otimista para não sobrescrever commits concorrentes.
 - O workflow roda automaticamente quando sua própria definição é alterada na branch de trabalho e também aceita execução manual por `workflow_dispatch` depois de integrado à `main`.
 - `.github/workflows/npm-lockfiles.yml` continua responsável pelos `package-lock.json`; não misture as duas rotinas.
 

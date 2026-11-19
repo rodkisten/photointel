@@ -676,7 +676,7 @@ jobs:
           failures=()
           check_step() {
             local name="$1" outcome="$2"
-            if [ "$outcome" = "failure" ]; then
+            if [ "$outcome" != "success" ]; then
               failures+=("$name")
               echo "::error title=Etapa falhou::$name"
             fi
@@ -689,7 +689,7 @@ jobs:
           check_step "web-multiarch" "$WEB_BUILD_OUTCOME"
 
           echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
-          echo "Etapas com falha: ${#failures[@]}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha ou canceladas: ${#failures[@]}" >> "$GITHUB_STEP_SUMMARY"
           if [ "${#failures[@]}" -gt 0 ]; then
             printf '%s\\n' "${failures[@]}" | sed 's/^/- ❌ /' >> "$GITHUB_STEP_SUMMARY"
             exit 1
