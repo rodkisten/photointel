@@ -69,6 +69,10 @@ const identity = {
   GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence',
   GCP_DEPLOY_SERVICE_ACCOUNT: 'deployer@photointel.iam.gserviceaccount.com',
 };
+const requiredGitHubSecrets = Object.fromEntries([
+  'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+  'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
+].map(key => [key, 'github-' + key]));
 
 test('validates production Workload Identity metadata without fetching credentials', () => {
   assert.deepEqual(validateWorkloadIdentity(identity), {
@@ -250,6 +254,7 @@ test('GitHub-provided terminal values cannot override the approved production ga
   });
   assert.throws(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'c'.repeat(40),
+    githubSecrets: requiredGitHubSecrets,
     githubVariables: {MANAGE_TERMINAL_GATEWAY_URL: 'https://attacker.example.com'},
   }), /approved Access-protected hostname/);
 });
@@ -262,13 +267,10 @@ test('legacy R2 endpoint reference accepts normalized runtime STORAGE_ENDPOINT',
     ...Object.entries(identity).map(([key, value]) => key + '=' + value),
     'ENV__STORAGE_ENDPOINT=https://storage.example.com',
     'SECRET__R2_ENDPOINT=legacy-endpoint@latest',
-  ].join('\\n');
+  ].join('\n');
   assert.doesNotThrow(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'd'.repeat(40),
-    githubSecrets: Object.fromEntries([
-      'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
-      'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
-    ].map(key => [key, 'github-' + key])),
+    githubSecrets: requiredGitHubSecrets,
   }));
 });
 

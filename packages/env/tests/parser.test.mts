@@ -59,7 +59,9 @@ test('preserves ordinary strings beginning with brackets or braces', () => {
     'ENV__REGEX=[a-z]+',
     'CF__TEMPLATE={literal-template}',
     'ENV__JSON=json:{"enabled":true}',
-  ].join('\\n'));
+    'ENV__NUMBER=42',
+  ].join('\n'));
+  assert.equal(parsed.runtime.NUMBER, '42');
   assert.equal(parsed.runtime.REGEX, '[a-z]+');
   assert.equal(parsed.cloudflare.TEMPLATE, '{literal-template}');
   assert.equal(parsed.runtime.JSON, '{"enabled":true}');
