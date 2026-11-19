@@ -30,7 +30,7 @@ on:
         type: choice
         required: true
         default: all
-        options: [all, auto, python, frontend, integration, containers, security]
+        options: [all, auto, python, frontend, frontend-web, frontend-manage, integration, containers, security]
 
 permissions:
   contents: read
@@ -60,9 +60,8 @@ jobs:
            !contains(github.event.head_commit.message, 'dependabot[bot]') &&
            !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     outputs:
-      # Flags de nível de Job
+      # Flags de nível de Job (gerais)
       python: ${{ steps.scope.outputs.python }}
-      frontend: ${{ steps.scope.outputs.frontend }}
       integration: ${{ steps.scope.outputs.integration }}
       containers: ${{ steps.scope.outputs.containers }}
       security: ${{ steps.scope.outputs.security }}
@@ -73,9 +72,9 @@ jobs:
       py_gpu: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_gpu == 'true' }}
       py_bridges: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_bridges == 'true' }}
 
-      # Flags granulares de nível de Step (Frontend)
-      web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || steps.paths.outputs.web == 'true' }}
-      manage_web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || steps.paths.outputs.manage_web == 'true' }}
+      # Flags de nível de Job (Frontend separado em Web e Manage)
+      front_web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || inputs.scope == 'frontend-web' || steps.paths.outputs.front_web == 'true' }}
+      front_manage: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || inputs.scope == 'frontend-manage' || steps.paths.outputs.front_manage == 'true' }}
 
     steps:
       - name: "📥 Baixar repositório"
@@ -99,11 +98,6 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            py_shared:
-              - 'packages/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/ci.yml'
             py_api:
               - 'apps/api/**'
               - 'tests/api/**'
@@ -132,12 +126,12 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/ci.yml'
-            web:
+            front_web:
               - 'apps/web/**'
               - 'packages/ui/**'
               - 'packages/shared/**'
               - '.github/workflows/ci.yml'
-            manage_web:
+            front_manage:
               - 'apps/manage/**'
               - 'packages/ui/**'
               - 'packages/shared/**'
@@ -292,113 +286,141 @@ jobs:
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
-  # 3. Aplicações Web (Frontend: apps/web & apps/manage)
+  # 3A. Frontend: Web (apps/web)
   # ============================================================================
-  frontend:
-    name: "🌐 Frontend · lint, types, tests, build"
+  frontend-web:
+    name: "🌐 Front: web · lint, types, tests, build"
     needs: changes
-    if: needs.changes.outputs.frontend == 'true'
+    if: needs.changes.outputs.front_web == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: "📥 Baixar código"
-        id: notify_observed_010
+        id: web_checkout
         continue-on-error: true
         uses: actions/checkout@v7
 
       - name: "🧰 Configurar Node.js 26"
-        id: notify_observed_011
+        id: web_setup_node
         continue-on-error: true
         uses: actions/setup-node@v7
         with:
           node-version: '26'
           cache: npm
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            apps/manage/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
 
-      # ============================= APPS / WEB =============================
-      - name: "📦 [web] Instalar dependências (npm ci)"
+      - name: "📦 Instalar dependências (npm ci)"
         id: web_install
-        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web ci" npm --prefix apps/web ci
 
-      - name: "🧹 [web] Verificar lint (ESLint)"
+      - name: "🧹 Verificar lint (ESLint)"
         id: web_lint
-        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run lint" npm --prefix apps/web run lint
 
-      - name: "🔎 [web] Verificar tipagem (TypeScript)"
+      - name: "🔎 Verificar tipagem (TypeScript)"
         id: web_typecheck
-        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run typecheck" npm --prefix apps/web run typecheck
 
-      - name: "🧪 [web] Executar testes"
+      - name: "🧪 Executar testes"
         id: web_test
-        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web test" npm --prefix apps/web test
 
-      - name: "🏗️ [web] Gerar build de produção"
+      - name: "🏗️ Gerar build de produção"
         id: web_build
-        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run build" npm --prefix apps/web run build
 
-      # ============================ APPS / MANAGE ===========================
-      - name: "📦 [manage] Instalar dependências (npm ci)"
+      - name: "📋 Consolidar falhas · front: web"
+        if: ${{ always() }}
+        env:
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          printf '%s' "$STEP_RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.outcome == "failure")
+            | "::error title=Etapa falhou::" + .key
+          '
+          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # 3B. Frontend: Manage (apps/manage)
+  # ============================================================================
+  frontend-manage:
+    name: "🛠️ Front: manage · lint, types, tests, build"
+    needs: changes
+    if: needs.changes.outputs.front_manage == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Baixar código"
+        id: manage_checkout
+        continue-on-error: true
+        uses: actions/checkout@v7
+
+      - name: "🧰 Configurar Node.js 26"
+        id: manage_setup_node
+        continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/manage/package-lock.json
+
+      - name: "📦 Instalar dependências (npm ci)"
         id: manage_install
-        if: needs.changes.outputs.manage_web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/manage ci" npm --prefix apps/manage ci
 
-      - name: "🧹 [manage] Verificar lint (ESLint)"
+      - name: "🧹 Verificar lint (ESLint)"
         id: manage_lint
-        if: needs.changes.outputs.manage_web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/manage run lint" npm --prefix apps/manage run lint
 
-      - name: "🔎 [manage] Verificar tipagem (TypeScript)"
+      - name: "🔎 Verificar tipagem (TypeScript)"
         id: manage_typecheck
-        if: needs.changes.outputs.manage_web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/manage run typecheck" npm --prefix apps/manage run typecheck
 
-      - name: "🧪 [manage] Executar testes"
+      - name: "🧪 Executar testes"
         id: manage_test
-        if: needs.changes.outputs.manage_web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/manage test" npm --prefix apps/manage test
 
-      - name: "🏗️ [manage] Gerar build de produção"
+      - name: "🏗️ Gerar build de produção"
         id: manage_build
-        if: needs.changes.outputs.manage_web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/manage run build" npm --prefix apps/manage run build
 
-      - name: "📋 Consolidar falhas · frontend"
+      - name: "📋 Consolidar falhas · front: manage"
         if: ${{ always() }}
         env:
           STEP_RESULTS: ${{ toJSON(steps) }}
