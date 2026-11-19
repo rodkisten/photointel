@@ -1,5 +1,6 @@
 /** Shared transport for the Hey API-generated client. */
 import { client as api } from './hey-api/client.gen';
+import { searchV1SearchPost, assetDetailV1AssetsAssetIdGet } from './hey-api/sdk.gen';
 import type { components } from './schema';
 import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types';
 import { API_BASE } from './client';
@@ -44,8 +45,8 @@ function completeFilter(node: FilterNode): components['schemas']['FilterNode'] {
 }
 
 export async function searchAssets(input: SearchRequest): Promise<SearchPage> {
-  const result = await api.post({
-    url: '/v1/search',
+  const result = await searchV1SearchPost({
+    client: api,
     body: {
       ...input,
       minimum_similarity: input.minimum_similarity ?? 0,
@@ -57,6 +58,6 @@ export async function searchAssets(input: SearchRequest): Promise<SearchPage> {
 
 export async function readAsset(id: string): Promise<AssetDetail> {
   const path = `/v1/assets/${encodeURIComponent(id)}`;
-  const result = await api.get({ url: path });
+  const result = await assetDetailV1AssetsAssetIdGet({ client: api, path: { asset_id: id } });
   return unwrap<AssetDetail>(result, path, 'GET');
 }
