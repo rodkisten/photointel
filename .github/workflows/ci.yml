@@ -41,10 +41,10 @@ concurrency:
 
 jobs:
   # ============================================================================
-  # 1. Roteamento de Contexto
+  # 1. Roteamento de Contexto & Filtro Granular de Caminhos
   # ============================================================================
   changes:
-    name: "🧭 Detectar contexto"
+    name: "🧭 Detectar contexto e pacotes alterados"
     runs-on: ubuntu-latest
     # Ignora PRs e pushes diretos de bots de dependência; workflow_dispatch segue permitido.
     if: >-
@@ -60,11 +60,23 @@ jobs:
            !contains(github.event.head_commit.message, 'dependabot[bot]') &&
            !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     outputs:
+      # Flags de nível de Job
       python: ${{ steps.scope.outputs.python }}
       frontend: ${{ steps.scope.outputs.frontend }}
       integration: ${{ steps.scope.outputs.integration }}
       containers: ${{ steps.scope.outputs.containers }}
       security: ${{ steps.scope.outputs.security }}
+
+      # Flags granulares de nível de Step (Python)
+      py_api: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_api == 'true' }}
+      py_manage: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_manage == 'true' }}
+      py_gpu: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_gpu == 'true' }}
+      py_bridges: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_bridges == 'true' }}
+
+      # Flags granulares de nível de Step (Frontend)
+      web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || steps.paths.outputs.web == 'true' }}
+      manage_web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || steps.paths.outputs.manage_web == 'true' }}
+
     steps:
       - name: "📥 Baixar repositório"
         uses: actions/checkout@v7
@@ -81,6 +93,55 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: python3 -m scripts.ci.select_context
+
+      - name: "🔍 Mapear sub-apps e pacotes alterados"
+        id: paths
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            py_shared:
+              - 'packages/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+            py_api:
+              - 'apps/api/**'
+              - 'tests/api/**'
+              - 'packages/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+            py_manage:
+              - 'apps/manage/**'
+              - 'tests/manage/**'
+              - 'packages/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+            py_gpu:
+              - 'gpu/**'
+              - 'tests/gpu/**'
+              - 'packages/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+            py_bridges:
+              - 'bridges/**'
+              - 'tests/bridges/**'
+              - 'packages/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'apps/web/**'
+              - 'packages/ui/**'
+              - 'packages/shared/**'
+              - '.github/workflows/ci.yml'
+            manage_web:
+              - 'apps/manage/**'
+              - 'packages/ui/**'
+              - 'packages/shared/**'
+              - '.github/workflows/ci.yml'
 
   # ============================================================================
   # 2. Backend & Workers (Python)
@@ -125,35 +186,89 @@ jobs:
           source scripts/ci/pretty-logs.sh
           ci_run "uv sync --frozen --group ingest" uv sync --frozen --group ingest
 
-      - name: "🧹 Verificar lint e formatação (Ruff)"
-        id: notify_observed_006
+      # -------------------- Lint (Ruff) por módulo alterado --------------------
+      - name: "🧹 [api] Lint e formatação (Ruff)"
+        id: ruff_api
+        if: needs.changes.outputs.py_api == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run ruff check ." uv run ruff check .
+          ci_run "uv run ruff check apps/api" uv run ruff check apps/api
 
-      - name: "🔎 Verificar tipagem estática (Mypy)"
-        id: notify_observed_007
+      - name: "🧹 [manage] Lint e formatação (Ruff)"
+        id: ruff_manage
+        if: needs.changes.outputs.py_manage == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run mypy apps/api/src gpu bridges" uv run mypy apps/api/src gpu bridges
+          ci_run "uv run ruff check apps/manage" uv run ruff check apps/manage
 
-      - name: "🧪 Executar testes unitários (Pytest)"
-        id: notify_observed_008
+      - name: "🧹 [gpu & bridges] Lint e formatação (Ruff)"
+        id: ruff_workers
+        if: needs.changes.outputs.py_gpu == 'true' || needs.changes.outputs.py_bridges == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run pytest -m not integration and not gpu and not e2e --junitxml=" uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+          ci_run "uv run ruff check gpu bridges packages" uv run ruff check gpu bridges packages
 
-      - name: "📤 Publicar relatório JUnit"
+      # ----------------- Tipagem Estática (Mypy) por módulo -----------------
+      - name: "🔎 [api] Tipagem estática (Mypy)"
+        id: mypy_api
+        if: needs.changes.outputs.py_api == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run mypy apps/api/src" uv run mypy apps/api/src
+
+      - name: "🔎 [manage] Tipagem estática (Mypy)"
+        id: mypy_manage
+        if: needs.changes.outputs.py_manage == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run mypy apps/manage" uv run mypy apps/manage
+
+      - name: "🔎 [gpu & bridges] Tipagem estática (Mypy)"
+        id: mypy_workers
+        if: needs.changes.outputs.py_gpu == 'true' || needs.changes.outputs.py_bridges == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run mypy gpu bridges" uv run mypy gpu bridges
+
+      # ---------------- Testes Unitários (Pytest) por módulo ----------------
+      - name: "🧪 [api] Testes unitários (Pytest)"
+        id: pytest_api
+        if: needs.changes.outputs.py_api == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run pytest tests/api" uv run pytest tests/api -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-api.xml
+
+      - name: "🧪 [manage] Testes unitários (Pytest)"
+        id: pytest_manage
+        if: needs.changes.outputs.py_manage == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run pytest tests/manage" uv run pytest tests/manage -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-manage.xml
+
+      - name: "🧪 [gpu & bridges] Testes unitários (Pytest)"
+        id: pytest_workers
+        if: needs.changes.outputs.py_gpu == 'true' || needs.changes.outputs.py_bridges == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "uv run pytest tests --ignore=tests/api --ignore=tests/manage" uv run pytest tests --ignore=tests/api --ignore=tests/manage -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-workers.xml
+
+      - name: "📤 Publicar relatórios JUnit"
         id: notify_observed_009
         continue-on-error: true
-        if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_008.outcome == 'failure') }}
+        if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.pytest_api.outcome == 'failure' || steps.pytest_manage.outcome == 'failure' || steps.pytest_workers.outcome == 'failure') }}
         uses: actions/upload-artifact@v7
         with:
           name: unit-results
-          path: reports/unit.xml
+          path: reports/unit-*.xml
           if-no-files-found: ignore
           retention-days: 3
 
@@ -177,7 +292,7 @@ jobs:
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
-  # 3. Aplicação Web (Frontend)
+  # 3. Aplicações Web (Frontend: apps/web & apps/manage)
   # ============================================================================
   frontend:
     name: "🌐 Frontend · lint, types, tests, build"
@@ -197,42 +312,91 @@ jobs:
         with:
           node-version: '26'
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: |
+            apps/web/package-lock.json
+            apps/manage/package-lock.json
 
-      - name: "📦 Instalar dependências (npm ci)"
-        id: notify_observed_012
+      # ============================= APPS / WEB =============================
+      - name: "📦 [web] Instalar dependências (npm ci)"
+        id: web_install
+        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web ci" npm --prefix apps/web ci
 
-      - name: "🧹 Verificar lint (ESLint)"
-        id: notify_observed_013
+      - name: "🧹 [web] Verificar lint (ESLint)"
+        id: web_lint
+        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run lint" npm --prefix apps/web run lint
 
-      - name: "🔎 Verificar tipagem (TypeScript)"
-        id: notify_observed_014
+      - name: "🔎 [web] Verificar tipagem (TypeScript)"
+        id: web_typecheck
+        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run typecheck" npm --prefix apps/web run typecheck
 
-      - name: "🧪 Executar testes de componentes"
-        id: notify_observed_015
+      - name: "🧪 [web] Executar testes"
+        id: web_test
+        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web test" npm --prefix apps/web test
 
-      - name: "🏗️ Gerar build de produção"
-        id: notify_observed_016
+      - name: "🏗️ [web] Gerar build de produção"
+        id: web_build
+        if: needs.changes.outputs.web == 'true'
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run build" npm --prefix apps/web run build
+
+      # ============================ APPS / MANAGE ===========================
+      - name: "📦 [manage] Instalar dependências (npm ci)"
+        id: manage_install
+        if: needs.changes.outputs.manage_web == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "npm --prefix apps/manage ci" npm --prefix apps/manage ci
+
+      - name: "🧹 [manage] Verificar lint (ESLint)"
+        id: manage_lint
+        if: needs.changes.outputs.manage_web == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "npm --prefix apps/manage run lint" npm --prefix apps/manage run lint
+
+      - name: "🔎 [manage] Verificar tipagem (TypeScript)"
+        id: manage_typecheck
+        if: needs.changes.outputs.manage_web == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "npm --prefix apps/manage run typecheck" npm --prefix apps/manage run typecheck
+
+      - name: "🧪 [manage] Executar testes"
+        id: manage_test
+        if: needs.changes.outputs.manage_web == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "npm --prefix apps/manage test" npm --prefix apps/manage test
+
+      - name: "🏗️ [manage] Gerar build de produção"
+        id: manage_build
+        if: needs.changes.outputs.manage_web == 'true'
+        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "npm --prefix apps/manage run build" npm --prefix apps/manage run build
 
       - name: "📋 Consolidar falhas · frontend"
         if: ${{ always() }}
