@@ -25,7 +25,7 @@ const FORBIDDEN = new Set(['__proto__', 'prototype', 'constructor']);
 const FIELDS = new Set(['events', 'grouping', 'windowSeconds', 'updateMode', 'retentionMinutes', 'template']);
 
 export function parseNotifyYaml(source: string): Partial<NotificationSettings> {
-  if (source.length > 32_768) throw new Error('notify.yml exceeds 32 KiB');
+  if (new TextEncoder().encode(source).length > 32_768) throw new Error('notify.yml exceeds 32 KiB');
   const document: unknown = load(source, { json: false });
   if (!isRecord(document)) throw new Error('notify.yml must contain a mapping');
   if (document.version !== 1) throw new Error('notify.yml requires version: 1');
@@ -124,7 +124,7 @@ export async function repositoryNotifyRoute(request: Request, env: Env): Promise
   const allowed = new Set([env.GITHUB_REPO, ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(',').map(x => x.trim())]);
   if (!allowed.has(repository)) throw new ApiError(403, 'NOTIFY_REPO', 'Repositório fora da allowlist');
   const variable = '/actions/variables/PHOTOINTEL_NOTIFY_OVERRIDES';
-  const saved = await gh(env, variable).catch((error: unknown) => { if (error instanceof ApiError && error.code === 'GITHUB_404') return null; throw error; }) as { value?: string } | null;
+  const saved = await gh(env, variable).catch((error: unknown) => { if (error instanceof ApiError && error.status === 404) return null; throw error; }) as { value?: string } | null;
   let state: Record<string, { overrides?: Partial<NotificationSettings>; choices?: Record<string, 'repository' | 'manage'> }> = {};
   if (saved?.value) {
     try {
@@ -136,6 +136,16 @@ export async function repositoryNotifyRoute(request: Request, env: Env): Promise
     const body = await request.json() as { overrides?: Partial<NotificationSettings>; choices?: Record<string, 'repository' | 'manage'> };
     if (!isRecord(body) || !isRecord(body.overrides) || !isRecord(body.choices))
       throw new ApiError(422, 'NOTIFY_OVERRIDES', 'Overrides e escolhas inválidos');
+    for (const [path] of flatten(body.overrides as Record<string, unknown>)) {
+      if (!/^(events|grouping|windowSeconds|updateMode|template|retentionMinutes\\.(running|success|error))$/.test(path))
+        throw new ApiError(422, 'NOTIFY_OVERRIDES', 'Campo de override inválido: ' + path);
+    }
+    const normalizedOverrides = { ...body.overrides };
+    validateNotificationSettings({
+      ...DEFAULT_SETTINGS,
+      ...normalizedOverrides,
+      retentionMinutes: { ...DEFAULT_SETTINGS.retentionMinutes, ...normalizedOverrides.retentionMinutes },
+    });
     for (const [path, choice] of Object.entries(body.choices)) {
       if (!/^(events|grouping|windowSeconds|updateMode|template|retentionMinutes\.(running|success|error))$/.test(path) ||
         !['repository', 'manage'].includes(choice))
@@ -146,7 +156,7 @@ export async function repositoryNotifyRoute(request: Request, env: Env): Promise
     const resolved = resolveNotifySettings(DEFAULT_SETTINGS, file.config, body.overrides, body.choices);
     if (resolved.conflicts.some(item => item.resolvedBy === null))
       return json({ error: 'Unresolved conflicts', conflicts: resolved.conflicts }, 409);
-    state[repository] = { overrides: body.overrides, choices: body.choices };
+    state[repository] = { overrides: normalizedOverrides, choices: body.choices };
     await gh(env, saved ? variable : '/actions/variables', saved ? 'PATCH' : 'POST',
       { name: 'PHOTOINTEL_NOTIFY_OVERRIDES', value: JSON.stringify(state) });
     return json({ ok: true, repository, ...resolved });
