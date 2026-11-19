@@ -576,3 +576,7 @@ As rotas `GET /api/projects/workflows` e `GET /api/projects/runs` exigem
 com status, conclusão e links para os logs completos no GitHub. O endpoint é
 somente leitura, valida o repositório na allowlist e nunca retorna tokens.
 O Manage não baixa nem exibe o conteúdo bruto dos arquivos ZIP de logs nesta etapa.
+
+## iOS workflow notifications (XRelay)
+
+Workflow failure notifications include the repository name, GitHub run URL and `groupType: workflow`. The group key is scoped to repository and window/run, preventing cross-repository mixing. `cancelled` and `skipped` runs are not sent by the failure notifier. Manage settings now expose a 5-second window (also 10/15/30 seconds). **Important:** these settings describe the grouping key and window; actual delayed batching, native iOS thread identifiers, notification replacement and click handling require XRelay support. The Manage sender does not itself buffer webhooks or guarantee a 5-second debounce.
