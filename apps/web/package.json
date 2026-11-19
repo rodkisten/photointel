@@ -7,10 +7,10 @@
     "predev": "node scripts/generate-brand.mjs",
     "dev": "vite --host 0.0.0.0",
     "prebuild": "node scripts/generate-brand.mjs",
-    "build": "tsc -b && vite build",
+    "build": "npm run tsc7 -- -b && vite build",
     "postbuild": "node scripts/inject-precache.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "npm run tsc7 -- -b --pretty false",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -19,7 +19,9 @@
     "format:check": "npm --prefix ../.. run format:check:web",
     "test:pwa": "node --test scripts/offline-sw.test.mjs",
     "generate:api:hey": "openapi-ts",
-    "generate:api:legacy": "openapi-typescript ../../packages/contracts/openapi.json -o src/api/schema.d.ts"
+    "generate:api:legacy": "openapi-typescript ../../packages/contracts/openapi.json -o src/api/schema.d.ts",
+    "tsc7": "node node_modules/@typescript/native/bin/tsc",
+    "tsc6": "tsc6"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.0",
@@ -60,10 +62,11 @@
     "globals": "^17.0.0",
     "jsdom": "^31.0.0",
     "openapi-typescript": "^7.9.1",
-    "typescript": "~5.9.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "^8.44.1",
     "vite": "^8.0.0",
     "vitest": "^5.0.4",
-    "@hey-api/openapi-ts": "0.99.0"
+    "@hey-api/openapi-ts": "0.99.0",
+    "@typescript/native": "npm:typescript@7.0.2"
   }
 }
