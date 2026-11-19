@@ -50,6 +50,7 @@ export type TerminalClientFrame =
   | { type: 'resize'; cols: number; rows: number }
   | { type: 'ping' };
 export type TerminalServerFrame =
+  | { type: 'ready' }
   | { type: 'stdout'; data: string }
   | { type: 'exit'; code: number | null }
   | { type: 'error'; code: string; message: string }

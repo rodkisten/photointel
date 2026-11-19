@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 import { Client } from 'ssh2';
 import { WebSocketServer } from 'ws';
 
@@ -64,9 +65,29 @@ wss.on('connection', (ws, claims) => {
   const ssh = new Client();
   active.set(claims.jti, ssh);
   let stream;
+  const stdoutDecoder = new StringDecoder('utf8');
+  const stderrDecoder = new StringDecoder('utf8');
+  let requestedSize = { cols: 80, rows: 24 };
   let lastActivity = Date.now();
   const send = frame => { if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(frame)); else if (ws.bufferedAmount >= 1024 * 1024) ws.close(1009, 'Backpressure'); };
   const close = () => { active.delete(claims.jti); stream?.close(); ssh.end(); };
+  // WebSocket messages must stay bounded even when SSH emits a large output chunk.
+  // Split at UTF-8 code point boundaries so the client never sees malformed text.
+  const sendOutput = value => {
+    let chunk = '';
+    let bytes = 0;
+    for (const char of value) {
+      const size = Buffer.byteLength(char, 'utf8');
+      if (bytes + size > 16_384) {
+        send({ type: 'stdout', data: chunk });
+        chunk = '';
+        bytes = 0;
+      }
+      chunk += char;
+      bytes += size;
+    }
+    if (chunk) send({ type: 'stdout', data: chunk });
+  };
   const sshTimeout = setTimeout(() => { send({ type: 'error', code: 'TIMEOUT', message: 'Tempo limite da sessão excedido' }); ws.close(); }, 12_000);
   sshTimeout.unref();
   const idle = setInterval(() => { if (Date.now() - lastActivity > IDLE_MS) ws.close(1000, 'Idle timeout'); }, 15000);
@@ -84,18 +105,34 @@ wss.on('connection', (ws, claims) => {
     } else if (frame.type === 'resize' && Object.keys(frame).length === 3 &&
       Number.isInteger(frame.cols) && frame.cols >= 20 && frame.cols <= 500 &&
       Number.isInteger(frame.rows) && frame.rows >= 5 && frame.rows <= 200) {
+      requestedSize = { rows: frame.rows, cols: frame.cols };
       stream?.setWindow(frame.rows, frame.cols, 0, 0);
     } else if (frame.type === 'ping' && Object.keys(frame).length === 1) send({ type: 'pong' });
     else ws.close(1002, 'Invalid frame');
   });
   ssh.on('ready', () => {
     clearTimeout(sshTimeout);
-    ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (error, channel) => {
+    ssh.shell({ term: 'xterm-256color', ...requestedSize }, (error, channel) => {
       if (error) { send({ type: 'error', code: 'SHELL', message: 'Falha ao abrir shell' }); ws.close(); return; }
       stream = channel;
-      channel.on('data', data => { lastActivity = Date.now(); send({ type: 'stdout', data: data.toString('utf8') }); });
-      channel.stderr.on('data', data => send({ type: 'stdout', data: data.toString('utf8') }));
-      channel.on('close', code => { send({ type: 'exit', code: typeof code === 'number' ? code : null }); ws.close(); });
+      channel.setWindow(requestedSize.rows, requestedSize.cols, 0, 0);
+      send({ type: 'ready' });
+      channel.on('data', data => {
+        lastActivity = Date.now();
+        const output = stdoutDecoder.write(data);
+        if (output) sendOutput(output);
+      });
+      channel.stderr.on('data', data => {
+        lastActivity = Date.now();
+        const output = stderrDecoder.write(data);
+        if (output) send({ type: 'stdout', data: output });
+      });
+      channel.on('close', code => {
+        const trailing = stdoutDecoder.end() + stderrDecoder.end();
+        if (trailing) sendOutput(trailing);
+        send({ type: 'exit', code: typeof code === 'number' ? code : null });
+        ws.close();
+      });
     });
   });
   ssh.on('error', () => { clearTimeout(sshTimeout); send({ type: 'error', code: 'SSH', message: 'Falha na conexão SSH' }); ws.close(); });
