@@ -26,10 +26,10 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const socket = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [notice, setNotice] = useState('');
-  const send = useCallback((frame: object) => {
+  const send = useCallback((frame: { type: string; [key: string]: unknown }) => {
     const ws = socket.current;
     if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536 &&
-        (frame && typeof frame === 'object' && 'type' in frame && frame.type === 'resize' || status === 'connected'))
+        (frame.type === 'resize' || status === 'connected'))
       ws.send(JSON.stringify(frame));
   }, [status]);
   const disconnect = useCallback(() => {
@@ -99,7 +99,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 px-3 py-2 text-xs text-carbon-400">
         <span role="status">{status === 'connected' ? 'Conectado' : status === 'connecting' ? 'Conectando…' : 'Desconectado'}</span>
         <button type="button" onClick={() => void connect()} disabled={status === 'connecting' || status === 'connected'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Conectar</button>
-        <button type="button" onClick={() => { generation.current++; pending.current = false; socket.current?.close(); socket.current = null; setStatus('closed'); }} disabled={status !== 'connected'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Desconectar</button>
+        <button type="button" onClick={disconnect} disabled={status !== 'connected' && status !== 'connecting'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Desconectar</button>
         <button type="button" onClick={() => focus()} className="rounded-lg border border-carbon-700 px-3 py-2">Teclado</button>
       </div>
       {notice && <p role="alert" className="px-3 py-2 text-xs text-amber-400">{notice}</p>}
