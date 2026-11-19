@@ -10,7 +10,6 @@ import {
 } from '@tanstack/react-query';
 import {
   Check,
-  Cloud,
   Code2,
   Copy,
   RotateCcw,
@@ -39,7 +38,6 @@ import {
   date,
 } from '../lib/utils';
 import type {
-  Run,
 } from '../types';
 import {
   Spinner,
