@@ -6,13 +6,18 @@ import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types
 import { API_BASE } from './client';
 import { apiNetworkError, isRequestAbort, responseError } from './error';
 
+// Preserve error payloads before the SDK consumes response bodies.
+const errorResponses = new WeakMap<Response, Response>();
+
 api.setConfig({
   baseUrl: API_BASE || window.location.origin,
   credentials: 'include',
   cache: 'no-store',
   fetch: async (input) => {
     try {
-      return await globalThis.fetch(input);
+      const response = await globalThis.fetch(input);
+      if (!response.ok) errorResponses.set(response, response.clone());
+      return response;
     } catch (cause) {
       if (isRequestAbort(cause)) throw cause;
       const request = new Request(input);
@@ -27,7 +32,7 @@ async function unwrap<T>(
   method: string,
 ): Promise<T> {
   if (!result.response || !result.response.ok || result.data === undefined) {
-    if (result.response) throw await responseError(result.response.clone(), path, method);
+    if (result.response) throw await responseError(errorResponses.get(result.response) ?? result.response, path, method);
     throw apiNetworkError(result.error, method, path);
   }
   return result.data;
