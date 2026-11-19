@@ -381,7 +381,7 @@ function TopSpenders({ data }: { data: CostsResponse }) {
 }
 
 export function CostsPage() {
-  const choices = useMemo(months, []);
+  const choices = useMemo(() => months(), []);
   const [month, setMonth] = useState(choices[0].value);
   const costs = useQuery({
     queryKey: ['costs', month],
