@@ -1,4 +1,4 @@
-import { ApiError, json, redact } from './auth';
+import { redact } from './auth';
 
 // Constantes centralizadas (Eliminando variáveis mágicas)
 export const PATTERNS = {
