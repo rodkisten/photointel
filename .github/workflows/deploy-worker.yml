@@ -180,44 +180,53 @@ jobs:
 
       - name: "📦 Instalar dependências (${{ matrix.app }})"
         working-directory: apps/${{ matrix.app }}
-        run: npm ci
+        run: |
+          npm ci
 
       - name: "🧹 Verificar lint · ESLint (${{ matrix.app }})"
         if: matrix.app == 'web'
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
-        run: npm run lint
+        run: |
+          npm run lint
 
       - name: "🔎 Verificar tipagem · TypeScript (${{ matrix.app }})"
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
-        run: npm run typecheck
+        run: |
+          npm run typecheck
 
       - name: "🧪 Executar testes unitários (${{ matrix.app }})"
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
-        run: npm test
+        run: |
+          npm test
 
       - name: "📱 Executar testes de PWA (web)"
         if: matrix.app == 'web'
         continue-on-error: true
         working-directory: apps/web
-        run: npm run test:pwa
+        run: |
+          npm run test:pwa
 
       - name: "🏗️ Gerar build de produção (${{ matrix.app }})"
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
-        run: npm run build
+        run: |
+          npm run build
 
       - name: "⚡ Executar testes do Cloudflare Worker"
         if: matrix.app == 'web'
         continue-on-error: true
-        run: ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        run: |
+          ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" \
+            node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
       - name: "🐍 Validar sintaxe do script de deploy (manage)"
         if: matrix.app == 'manage'
         continue-on-error: true
-        run: python3 -m py_compile infra/scripts/deploy_manage.py
+        run: |
+          python3 -m py_compile infra/scripts/deploy_manage.py
 
       - name: "📋 Consolidar resultado · ${{ matrix.app }}"
         if: ${{ always() }}
@@ -295,13 +304,17 @@ jobs:
         id: worker_env
         env:
           CONFIRM_PROJECT: photointel
-        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" \
+            python3 -m infra.scripts.prepare_workflow_env worker
 
       - name: "🔎 Diagnosticar domínio e audience do Cloudflare Access"
         continue-on-error: true
         env:
           CONFIRM_PROJECT: photointel
-        run: ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" python3 -m infra.scripts.diagnose_access
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" \
+            python3 -m infra.scripts.diagnose_access
 
       - name: "🧰 Configurar Node.js 26"
         id: notify_observed_002
@@ -314,13 +327,16 @@ jobs:
       - name: "📦 Instalar dependências do frontend (web)"
         id: notify_observed_003
         working-directory: apps/web
-        run: npm ci
+        run: |
+          npm ci
 
       - name: "🏗️ Gerar build do frontend (web)"
         id: notify_observed_004
         env:
           CONFIRM_PROJECT: photointel
-        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-build
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" \
+            python3 -m infra.scripts.prepare_workflow_env worker-build
 
       - name: "📱 Notificar etapa 1/3 · Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
@@ -341,11 +357,14 @@ jobs:
 
       - name: "🛡️ Testar diagnóstico de erros da API"
         working-directory: apps/web
-        run: npm test -- src/test/api-security.test.tsx
+        run: |
+          npm test -- src/test/api-security.test.tsx
 
       - name: "🧪 Testar proxy relay e SPA do Worker"
         id: worker_tests
-        run: ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        run: |
+          ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" \
+            node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
       - name: "📱 Notificar etapa 2/3 · Testes"
         if: ${{ always() && (steps.worker_tests.outcome == 'success' || steps.worker_tests.outcome == 'failure' || steps.worker_tests.outcome == 'cancelled') }}
@@ -366,13 +385,16 @@ jobs:
 
       - name: "📄 Copiar regras de headers para dist/_headers"
         id: notify_observed_005
-        run: cp infra/cloudflare/worker-headers apps/web/dist/_headers
+        run: |
+          cp infra/cloudflare/worker-headers apps/web/dist/_headers
 
       - name: "🚀 Publicar Photos Worker no Cloudflare"
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
-        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-deploy
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" \
+            python3 -m infra.scripts.prepare_workflow_env worker-deploy
 
       - name: "📱 Notificar etapa 3/3 · Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
@@ -465,18 +487,25 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: "📦 Instalar dependências do frontend (manage)"
-        run: npm --prefix apps/manage ci
+        run: |
+          npm --prefix apps/manage ci
 
       - name: "🔎 Configurar Sentry browser DSN"
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" python3 -m infra.scripts.deploy_manage browser-env
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" \
+            python3 -m infra.scripts.deploy_manage browser-env
 
       - name: "🏗️ Gerar build de produção (manage)"
-        run: ci_run "Cloudflare: npm --prefix apps/manage run build" npm --prefix apps/manage run build
+        run: |
+          ci_run "Cloudflare: npm --prefix apps/manage run build" \
+            npm --prefix apps/manage run build
 
       - name: "🚀 Publicar Manage Worker, Access e domínio"
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" python3 -m infra.scripts.deploy_manage apply
+        run: |
+          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" \
+            python3 -m infra.scripts.deploy_manage apply
 
       - name: "🧹 Limpar configuração temporária (GCP)"
         if: always()
