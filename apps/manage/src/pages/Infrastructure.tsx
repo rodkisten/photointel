@@ -44,12 +44,13 @@ async function waitForVmOperation(name: string) {
 }
 
 function CountDown({ deadline }: { deadline: string | null }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   if (!deadline) return <span className="text-carbon-500">Expiração não informada pelo GCP</span>;
+  if (now === null) return <span className="font-mono text-lg tabular-nums text-white">--:--:--</span>;
   const seconds = Math.max(0, Math.floor((Date.parse(deadline) - now) / 1000));
   const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
   return <span className="font-mono text-lg font-semibold tabular-nums text-white">{[h, m, s].map((v) => String(v).padStart(2, '0')).join(':')}</span>;
@@ -88,8 +89,8 @@ export function Infrastructure() {
     refetchInterval: 10_000, retry: false,
   });
   const [minutes, setMinutes] = useState('120');
-  const [selectedTrigger, setSelectedTrigger] = useState('');
-  const [buildId, setBuildId] = useState('');
+  const [selectedTriggerOverride, setSelectedTrigger] = useState('');
+  const [buildIdOverride, setBuildId] = useState('');
   const [logTab, setLogTab] = useState<'vm' | 'build'>('vm');
   const [search, setSearch] = useState('');
   const [live, setLive] = useState(true);
@@ -108,13 +109,10 @@ export function Infrastructure() {
     [regionalTriggers, globalTriggers],
   );
   const authorized = useMemo(() => triggers.filter((x) => x.authorized && !x.disabled), [triggers]);
-  useEffect(() => {
-    if (authorized.length && !authorized.some((x) => x.location + ':' + x.id === selectedTrigger))
-      setSelectedTrigger(authorized[0].location + ':' + authorized[0].id);
-  }, [authorized, selectedTrigger]);
-  useEffect(() => {
-    if (builds.length && !builds.some((x) => x.id === buildId)) setBuildId(builds[0].id);
-  }, [builds, buildId]);
+  const selectedTrigger = authorized.some((x) => x.location + ':' + x.id === selectedTriggerOverride)
+    ? selectedTriggerOverride : authorized[0] ? authorized[0].location + ':' + authorized[0].id : '';
+  const buildId = builds.some((x) => x.id === buildIdOverride)
+    ? buildIdOverride : builds[0]?.id ?? '';
 
   const mutation = useMutation({
     mutationFn: async (action: 'start' | 'stop' | 'build') => {
