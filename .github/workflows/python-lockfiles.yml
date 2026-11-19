@@ -83,5 +83,5 @@ jobs:
           fi
           git push origin "HEAD:$TARGET_BRANCH"
           echo "### ✅ uv.lock synchronized" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Branch: `$TARGET_BRANCH`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Commit: `$(git rev-parse HEAD)`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: $TARGET_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
