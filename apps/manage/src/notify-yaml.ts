@@ -1,4 +1,4 @@
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 import { githubToken } from './github-app';
 import { ApiError, json } from './auth';
 import type { Env } from './auth';
@@ -26,7 +26,7 @@ const FIELDS = new Set(['events', 'grouping', 'windowSeconds', 'updateMode', 're
 
 export function parseNotifyYaml(source: string): Partial<NotificationSettings> {
   if (source.length > 32_768) throw new Error('notify.yml exceeds 32 KiB');
-  const document: unknown = yaml.load(source, { json: false });
+  const document: unknown = load(source, { json: false });
   if (!isRecord(document)) throw new Error('notify.yml must contain a mapping');
   if (document.version !== 1) throw new Error('notify.yml requires version: 1');
   if (Object.keys(document).some(key => !['version', 'notifications'].includes(key))) throw new Error('Unknown notify.yml root field');
@@ -124,7 +124,7 @@ export async function repositoryNotifyRoute(request: Request, env: Env): Promise
   const allowed = new Set([env.GITHUB_REPO, ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(',').map(x => x.trim())]);
   if (!allowed.has(repository)) throw new ApiError(403, 'NOTIFY_REPO', 'Repositório fora da allowlist');
   const variable = '/actions/variables/PHOTOINTEL_NOTIFY_OVERRIDES';
-  const saved = await gh(env, variable).catch(() => null) as { value?: string } | null;
+  const saved = await gh(env, variable).catch((error: unknown) => { if (error instanceof ApiError && error.code === 'GITHUB_404') return null; throw error; }) as { value?: string } | null;
   let state: Record<string, { overrides?: Partial<NotificationSettings>; choices?: Record<string, 'repository' | 'manage'> }> = {};
   if (saved?.value) {
     try {
