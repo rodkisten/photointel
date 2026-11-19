@@ -42,9 +42,9 @@ const PATTERNS = {
   UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
   OPERATION: /^[A-Za-z0-9_-]{1,128}$/,
   TRIGGER_ALLOWLIST: /^(us-central1|global):[0-9a-f-]{16,64}$/i,
-  SERIAL_STARTUP: /terminal-startup: [A-Za-z0-9 _.:/@=\-]{1,180}/,
+  SERIAL_STARTUP: /terminal-startup: [A-Za-z0-9 _.:/@=-]{1,180}/,
   SERIAL_FAILED: /startup-script.*failed with error: exit status (\d{1,3})/i,
-  SERIAL_READY: /Terminal ready: ssh rod@[A-Za-z0-9.\-]{1,60}\. Maximum uptime: \d+ minutes\./,
+  SERIAL_READY: /Terminal ready: ssh rod@[A-Za-z0-9.-]{1,60}\. Maximum uptime: \d+ minutes\./,
 };
 
 // --- API ENDPOINTS BUILDERS ---
