@@ -12,13 +12,14 @@ on:
   workflow_dispatch:
     inputs:
       package_path:
-        description: "Package directory for manual run (default: apps/web)"
+        description: "Package directory for manual run (default: both)"
         required: false
         type: choice
         options:
+          - "both"
           - "apps/web"
           - "apps/manage"
-        default: "apps/web"
+        default: "both"
       target_branch:
         description: "Branch to synchronize (leave empty for selected branch)"
         required: false
@@ -101,8 +102,12 @@ jobs:
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             target="${{ inputs.package_path }}"
-            [[ -n "$target" ]] || target="apps/web"
-            manifests=("$target/package.json")
+            [[ -n "$target" ]] || target="both"
+            if [[ "$target" == "both" ]]; then
+              manifests=("apps/web/package.json" "apps/manage/package.json")
+            else
+              manifests=("$target/package.json")
+            fi
           else
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               base="${{ github.event.pull_request.base.sha }}"
