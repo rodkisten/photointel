@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -100,10 +99,12 @@ export function ConfigEditor() {
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const [editor, setEditor] = useState('');
+  const [editorDraft, setEditorDraft] = useState<string | null>(null);
+  const editor = editorDraft ?? q.data?.value ?? '';
+  const setEditor = (value: string) => setEditorDraft(value);
   const [pythonPreview, setPythonPreview] = useState<{ ok: boolean; config?: unknown; references?: Array<{ scope: string; key: string; name: string; version: string }>; error?: string } | null>(null);
   const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
-  const [version, setVersion] = useState('');
+  const version = q.data?.version ?? '';
   const [confirm, setConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [autoApply, setAutoApply] = useState(true);
@@ -113,12 +114,7 @@ export function ConfigEditor() {
     blocked?: boolean;
     auto_apply?: boolean;
   } | null>(null);
-  useEffect(() => {
-    if (q.data) {
-      setEditor(q.data.value);
-      setVersion(q.data.version);
-    }
-  }, [q.data]);
+
   const update = useMutation({
     mutationFn: () =>
       send<{
