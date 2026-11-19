@@ -24,6 +24,7 @@ on:
       - '.github/actions/gcp-config/**'
       - '.github/actions/frontend-source/**'
       - '.github/workflows/deploy-worker.yml'
+
   pull_request:
     paths:
       - 'package.json'
@@ -43,6 +44,7 @@ on:
       - '.github/actions/gcp-config/**'
       - '.github/actions/frontend-source/**'
       - '.github/workflows/deploy-worker.yml'
+
   workflow_dispatch:
     inputs:
       action:
@@ -64,29 +66,41 @@ on:
         type: string
         default: ''
 
-permissions: {contents: read}
+permissions:
+  contents: read
 
 concurrency:
-  # PR previews are disposable; production deploys must finish safely.
+  # PR previews são descartáveis; deploys de produção devem concluir com segurança.
   group: ${{ github.event_name == 'pull_request' && format('photointel-frontends-pr-{0}', github.event.pull_request.number) || 'photointel-frontends-production' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # ============================================================================
+  # 1. Detecção de Alterações & Seleção de Apps
+  # ============================================================================
   detect-changes:
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' || (github.actor != 'renovate[bot]' && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'renovate[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' && github.event.head_commit.author.username != 'renovate[bot]' && github.event.head_commit.author.username != 'dependabot[bot]' && !contains(github.event.head_commit.message, 'dependabot[bot]') && !contains(github.event.head_commit.message, 'renovate[bot]')) }}
-    name: "🔍 Detectar Alterações"
+    name: "🔍 Detectar alterações"
     runs-on: ubuntu-latest
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.actor != 'renovate[bot]' &&
+           github.actor != 'dependabot[bot]' &&
+           github.event.pull_request.user.login != 'renovate[bot]' &&
+           github.event.pull_request.user.login != 'dependabot[bot]' &&
+           github.event.head_commit.author.username != 'renovate[bot]' &&
+           github.event.head_commit.author.username != 'dependabot[bot]' &&
+           !contains(github.event.head_commit.message, 'dependabot[bot]') &&
+           !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     outputs:
       apps: ${{ steps.set-matrix.outputs.apps }}
     steps:
-      - name: "📥 Checkout completo"
+      - name: "📥 Baixar histórico completo do repositório"
         uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: "🗳️ Selecionar aplicações"
+      - name: "🗳️ Selecionar aplicações afetadas"
         id: set-matrix
         shell: bash
         env:
@@ -127,6 +141,9 @@ jobs:
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
           echo "Selected: $apps"
 
+  # ============================================================================
+  # 2. Validação & Build (Preflight por App)
+  # ============================================================================
   preflight:
     name: "🧪 Build & Test · ${{ matrix.app }}"
     needs: detect-changes
@@ -138,66 +155,68 @@ jobs:
       matrix:
         app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
     steps:
-      - name: "📥 Checkout"
+      - name: "📥 Baixar código"
         uses: actions/checkout@v7
-        with: {persist-credentials: false, fetch-depth: 0}
-      - name: "📌 Fonte"
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: "📌 Resolver SHA de origem"
         uses: ./.github/actions/frontend-source
         with:
           sha: ${{ inputs.sha }}
 
-
-      - name: "🧰 Node.js (${{ matrix.app }})"
+      - name: "🧰 Configurar Node.js 26 (${{ matrix.app }})"
         uses: actions/setup-node@v7
         with:
           node-version: '26'
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
 
-      - name: "📦 Install dependencies (${{ matrix.app }})"
+      - name: "📦 Instalar dependências (${{ matrix.app }})"
+        working-directory: apps/${{ matrix.app }}
         run: npm ci
-        working-directory: apps/${{ matrix.app }}
 
-      - name: "🧹 ESLint (${{ matrix.app }})"
-        continue-on-error: true
+      - name: "🧹 Verificar lint · ESLint (${{ matrix.app }})"
         if: matrix.app == 'web'
+        continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
         run: npm run lint
-        working-directory: apps/${{ matrix.app }}
 
-      - name: "📐 TypeScript (${{ matrix.app }})"
+      - name: "🔎 Verificar tipagem · TypeScript (${{ matrix.app }})"
         continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
         run: npm run typecheck
-        working-directory: apps/${{ matrix.app }}
 
-      - name: "🧪 Tests (${{ matrix.app }})"
+      - name: "🧪 Executar testes unitários (${{ matrix.app }})"
         continue-on-error: true
+        working-directory: apps/${{ matrix.app }}
         run: npm test
-        working-directory: apps/${{ matrix.app }}
 
-      - name: "🧪 PWA tests"
-        continue-on-error: true
+      - name: "📱 Executar testes de PWA (web)"
         if: matrix.app == 'web'
-        run: npm run test:pwa
+        continue-on-error: true
         working-directory: apps/web
+        run: npm run test:pwa
 
-      - name: "🏗 Production build"
+      - name: "🏗️ Gerar build de produção (${{ matrix.app }})"
         continue-on-error: true
-        run: npm run build
         working-directory: apps/${{ matrix.app }}
+        run: npm run build
 
-      - name: "🧪 Cloudflare Worker tests"
-        continue-on-error: true
+      - name: "⚡ Executar testes do Cloudflare Worker"
         if: matrix.app == 'web'
+        continue-on-error: true
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
-      - name: "🐍 Validate Manage deployment script"
-        continue-on-error: true
+      - name: "🐍 Validar sintaxe do script de deploy (manage)"
         if: matrix.app == 'manage'
+        continue-on-error: true
         run: python3 -m py_compile infra/scripts/deploy_manage.py
 
-      - name: "📋 Resultado consolidado"
+      - name: "📋 Consolidar resultado · ${{ matrix.app }}"
         if: ${{ always() }}
         env:
           STEP_RESULTS: ${{ toJSON(steps) }}
@@ -212,28 +231,33 @@ jobs:
           fi
           echo "✅ Sem falhas." >> "$GITHUB_STEP_SUMMARY"
 
+  # ============================================================================
+  # 3. Deploy em Produção · Photos Web Worker (apps/web)
+  # ============================================================================
   deploy-web:
     name: "🌐 Publish Photos Worker"
-    runs-on: ubuntu-latest
     needs: [detect-changes, preflight]
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.action != 'build' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'web') }}
+    runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
       id-token: write
       actions: read
     steps:
-      - name: "📥 Código"
+      - name: "📥 Baixar código"
         id: notify_observed_001
         uses: actions/checkout@v7
-        with: {persist-credentials: false, fetch-depth: 0}
-      - name: "📌 Fonte"
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: "📌 Resolver SHA de origem"
         uses: ./.github/actions/frontend-source
         with:
           sha: ${{ inputs.sha }}
 
-
-      - name: "📱 Live · Início"
+      - name: "📱 Notificar início do deploy (Live)"
         id: notify_live_start
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -246,7 +270,7 @@ jobs:
           workflow: ${{ github.workflow }}
           job: ${{ github.job }}
 
-      - name: "⚙ GCP Config"
+      - name: "⚙️ Preparar configuração de produção (GCP)"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -255,16 +279,16 @@ jobs:
           confirm-project: photointel
           release-sha: ${{ github.sha }}
 
-      - name: "🔐 GCP Login"
+      - name: "🔐 Autenticar no GCP via Workload Identity"
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
-      - name: "🧰 Gcloud"
+      - name: "🧰 Configurar Google Cloud SDK (gcloud)"
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: "⚙ Env"
+      - name: "⚙️ Gerar variáveis de ambiente do Worker"
         id: worker_env
         env:
           CONFIRM_PROJECT: photointel
@@ -272,7 +296,7 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker
 
-      - name: "🔎 Diagnose Access domain and application audience"
+      - name: "🔎 Diagnosticar domínio e audience do Cloudflare Access"
         continue-on-error: true
         env:
           CONFIRM_PROJECT: photointel
@@ -280,25 +304,28 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" python3 -m infra.scripts.diagnose_access
 
-      - name: "🧰 Config"
+      - name: "🧰 Configurar Node.js 26"
         id: notify_observed_002
         uses: actions/setup-node@v7
-        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-        
-      - name: "▶ ️ Execute command (Web install)"
-        id: notify_observed_003
-        run: npm ci
-        working-directory: apps/web
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
-      - name: "🏗 Build do frontend"
+      - name: "📦 Instalar dependências do frontend (web)"
+        id: notify_observed_003
+        working-directory: apps/web
+        run: npm ci
+
+      - name: "🏗️ Gerar build do frontend (web)"
         id: notify_observed_004
         env:
           CONFIRM_PROJECT: photointel
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-build
-        
-      - name: "📱 Build"
+
+      - name: "📱 Notificar etapa 1/3 · Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -314,18 +341,18 @@ jobs:
           completed: "1"
           total: "3"
           outcome: ${{ steps.notify_observed_004.outcome }}
-          
-      - name: "🧪 API error diagnostics"
-        run: npm test -- src/test/api-security.test.tsx
-        working-directory: apps/web
 
-      - name: "🧪 Worker relay + SPA"
+      - name: "🛡️ Testar diagnóstico de erros da API"
+        working-directory: apps/web
+        run: npm test -- src/test/api-security.test.tsx
+
+      - name: "🧪 Testar proxy relay e SPA do Worker"
         id: worker_tests
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-        
-      - name: "📱 Testes"
+
+      - name: "📱 Notificar etapa 2/3 · Testes"
         if: ${{ always() && (steps.worker_tests.outcome == 'success' || steps.worker_tests.outcome == 'failure' || steps.worker_tests.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -342,11 +369,11 @@ jobs:
           completed: "2"
           total: "3"
 
-      - name: "▶ ️ Execute command (Headers copy)"
+      - name: "📄 Copiar regras de headers para dist/_headers"
         id: notify_observed_005
         run: cp infra/cloudflare/worker-headers apps/web/dist/_headers
-        
-      - name: "🚀 Publicar Worker"
+
+      - name: "🚀 Publicar Photos Worker no Cloudflare"
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
@@ -354,7 +381,7 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-deploy
 
-      - name: "📱 Publicação"
+      - name: "📱 Notificar etapa 3/3 · Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -371,13 +398,13 @@ jobs:
           total: "3"
           outcome: ${{ steps.notify_observed_006.outcome }}
 
-      - name: "🧹 Config"
+      - name: "🧹 Limpar configuração temporária (GCP)"
         if: ${{ always() && steps.notify_observed_001.outcome == 'success' }}
         uses: ./.github/actions/gcp-config
         with:
           mode: cleanup
 
-      - name: "🔔 Resultado"
+      - name: "🔔 Notificar resultado final do deploy"
         if: ${{ always() && steps.notify_observed_001.outcome == 'success' }}
         continue-on-error: true
         uses: ./.github/actions/notify
@@ -392,11 +419,14 @@ jobs:
           completed: "3"
           total: "3"
 
+  # ============================================================================
+  # 4. Deploy em Produção · Manage Worker (apps/manage)
+  # ============================================================================
   deploy-manage:
-    name: "🧰 Publish Manage Worker"
-    runs-on: ubuntu-latest
+    name: "🛠️ Publish Manage Worker"
     needs: [detect-changes, preflight]
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.action != 'build' && needs.preflight.result == 'success' && contains(fromJSON(needs.detect-changes.outputs.apps), 'manage') }}
+    runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
     permissions:
@@ -405,23 +435,25 @@ jobs:
     env:
       CONFIRM_PROJECT: photointel
     steps:
-      - name: "📥 Checkout"
+      - name: "📥 Baixar código"
         uses: actions/checkout@v7
-        with: {persist-credentials: false, fetch-depth: 0}
-      - name: "📌 Fonte"
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: "📌 Resolver SHA de origem"
         uses: ./.github/actions/frontend-source
         with:
           sha: ${{ inputs.sha }}
 
-
-      - name: "🟢 Node.js"
+      - name: "🧰 Configurar Node.js 26"
         uses: actions/setup-node@v7
         with:
           node-version: '26'
           cache: npm
           cache-dependency-path: apps/manage/package-lock.json
 
-      - name: "⚙️ Prepare production configuration"
+      - name: "⚙️ Preparar configuração de produção (GCP)"
         id: config
         uses: ./.github/actions/gcp-config
         with:
@@ -430,34 +462,36 @@ jobs:
           confirm-project: photointel
           release-sha: ${{ github.sha }}
 
-      - name: "🔐 Authenticate GCP WIF"
+      - name: "🔐 Autenticar no GCP via Workload Identity"
         uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
 
-      - name: "🧰 Setup gcloud"
+      - name: "🧰 Configurar Google Cloud SDK (gcloud)"
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: "📦 Install Manage"
+      - name: "📦 Instalar dependências do frontend (manage)"
         run: npm --prefix apps/manage ci
 
-      - name: "🔎 Configure Sentry browser DSN"
+      - name: "🔎 Configurar Sentry browser DSN"
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" python3 -m infra.scripts.deploy_manage browser-env
 
-      - name: "🏗 Build Manage"
+      - name: "🏗️ Gerar build de produção (manage)"
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: npm --prefix apps/manage run build" npm --prefix apps/manage run build
 
-      - name: "🚀 Deploy Manage Worker, Access and domain"
+      - name: "🚀 Publicar Manage Worker, Access e domínio"
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" python3 -m infra.scripts.deploy_manage apply
 
-      - name: "🧹 Remove temporary production config"
+      - name: "🧹 Limpar configuração temporária (GCP)"
         if: always()
         uses: ./.github/actions/gcp-config
         with:
