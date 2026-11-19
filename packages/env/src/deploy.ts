@@ -234,18 +234,33 @@ export function renderDeployConfiguration(
     variables: options.githubVariables,
     gcpReferences: references.secrets,
   };
-  validateRequiredConfigValues(githubSources);
+  // Cloud Run consumes Secret Manager references, not raw GitHub secret values.
+  // Reject direct secret overrides until the trusted adapter can version them in
+  // Secret Manager; never silently drop a value or produce an invalid deployment.
+  for (const key of RUNTIME_SECRET_FIELDS) {
+    const resolved = resolveConfigValue(key, githubSources);
+    if (resolved.source === 'github-secret' || resolved.source === 'github-variable') {
+      throw new Error('Direct GitHub values for runtime secret ' + key +
+        ' are not supported yet; keep its Google Secret Manager reference');
+    }
+  }
+  const workflowSources = {
+    secrets: options.githubSecrets,
+    variables: options.githubVariables,
+    gcpReferences: references.workflowSecrets,
+  };
+  for (const key of WORKFLOW_SECRET_FIELDS) {
+    const resolved = resolveConfigValue(key, workflowSources);
+    if (resolved.source === 'github-secret' || resolved.source === 'github-variable') {
+      throw new Error('Direct GitHub values for workflow credential ' + key +
+        ' are not supported yet; keep its Google Secret Manager reference');
+    }
+  }
+  validateRequiredConfigValues({gcpReferences: references.secrets});
   const runtimeKeys = [...new Set([...Object.keys(config.runtime), ...RUNTIME_SECRET_FIELDS])];
   const resolvedRuntime = resolveConfigInventory(runtimeKeys, githubSources);
-  // Only references that actually need GCP remain in the legacy secret inventory.
-  const secrets = Object.fromEntries(Object.entries(references.secrets).filter(([key]) =>
-    resolveConfigValue(key, githubSources).source === 'gcp-secret-manager'));
-  const workflowSecrets = Object.fromEntries(Object.entries(references.workflowSecrets).filter(([key]) =>
-    resolveConfigValue(key, {
-      secrets: options.githubSecrets,
-      variables: options.githubVariables,
-      gcpReferences: references.workflowSecrets,
-    }).source === 'gcp-secret-manager'));
+  const secrets = references.secrets;
+  const workflowSecrets = references.workflowSecrets;
   const directRuntime = Object.fromEntries(Object.entries(resolvedRuntime)
     .filter(([, item]) => item.source === 'github-secret' || item.source === 'github-variable')
     .map(([key, item]) => [key, item.value]));

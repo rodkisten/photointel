@@ -205,7 +205,7 @@ test('required configuration rejects keys absent from both sources', () => {
   ]), /Missing required configuration: STORAGE_SECRET_KEY/);
 });
 
-test('renderer omits GCP reference when a required GitHub secret exists', () => {
+test('renderer rejects direct GitHub runtime secrets until Secret Manager sync exists', () => {
   const raw = JSON.stringify({
     project_id: 'photointel', region: 'us-central1', repository: 'photointel',
     ...identity,
@@ -216,14 +216,12 @@ test('renderer omits GCP reference when a required GitHub secret exists', () => 
     'STORAGE_SECRET_KEY', 'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET',
     'ICLOUD_SESSION_KEY',
   ].map(key => [key, 'github-' + key]));
-  const result = renderDeployConfiguration(raw, {
+  assert.throws(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'a'.repeat(40), githubSecrets,
-  });
-  assert.equal((result.extra_environment as Record<string, string>).DATABASE_URL, 'github-DATABASE_URL');
-  assert.deepEqual(result.secrets, {});
+  }), /Direct GitHub values for runtime secret DATABASE_URL/);
 });
 
-test('runtime optional GitHub secrets are resolved even when absent from dotenv', () => {
+test('renderer rejects direct GitHub values for optional runtime secret fields too', () => {
   const raw = JSON.stringify({
     project_id: 'photointel', region: 'us-central1', repository: 'photointel',
     ...identity,
@@ -231,20 +229,12 @@ test('runtime optional GitHub secrets are resolved even when absent from dotenv'
       ...['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
         'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY'],
       'MODAL_TOKEN',
-    ].map(key => [key, {name: 'photointel-' + key.toLowerCase().replaceAll('_', '-'), version: 'latest'}])),
+    ].map(key => [key, {name: 'photointel-' + key.toLowerCase().replaceAll('_', '-'), version: '1'}])),
   });
-  const result = renderDeployConfiguration(raw, {
+  assert.throws(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'b'.repeat(40),
-    githubSecrets: {
-      ...Object.fromEntries([
-        'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
-        'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
-      ].map(key => [key, 'github-' + key])),
-      MODAL_TOKEN: 'github-modal-token',
-    },
-  });
-  assert.equal((result.extra_environment as Record<string, string>).MODAL_TOKEN, 'github-modal-token');
-  assert.deepEqual(result.secrets, {});
+    githubSecrets: {...requiredGitHubSecrets, MODAL_TOKEN: 'github-modal-token'},
+  }), /Direct GitHub values for runtime secret MODAL_TOKEN/);
 });
 
 test('GitHub-provided terminal values cannot override the approved production gateway', () => {
@@ -286,4 +276,20 @@ test('preview removes known production credentials even without token-like names
   assert.equal(result.runtime.STORAGE_ACCESS_KEY, undefined);
   assert.equal(result.runtime.ICLOUD_SESSION_KEY, undefined);
   assert.equal(result.runtime.PUBLIC_FEATURE, 'enabled');
+});
+
+test('renderer rejects GitHub workflow credentials while preserving the GCP reference contract', () => {
+  const raw = JSON.stringify({
+    project_id: 'photointel', region: 'us-central1', repository: 'photointel',
+    ...identity,
+    secrets: Object.fromEntries([
+      'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+      'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
+    ].map(key => [key, {name: 'photointel-' + key.toLowerCase().replaceAll('_', '-'), version: '1'}])),
+    workflow_secrets: {CLOUDFLARE_API_TOKEN: {name: 'photointel-cloudflare-token', version: '1'}},
+  });
+  assert.throws(() => renderDeployConfiguration(raw, {
+    project: 'photointel', releaseSha: 'e'.repeat(40),
+    githubSecrets: {CLOUDFLARE_API_TOKEN: 'github-token'},
+  }), /Direct GitHub values for workflow credential CLOUDFLARE_API_TOKEN/);
 });

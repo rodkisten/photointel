@@ -37,7 +37,7 @@ A configuração de produção está migrando do Google Secret Manager para **Gi
 4. `vars.PHOTOINTEL_DATABASE_URL`
 5. Referência legada do Google Secret Manager, apenas se nenhuma entrada GitHub não vazia existir.
 
-A primeira entrada não vazia vence; os nomes canônicos sem prefixo têm prioridade dentro da mesma fonte. Secrets vencem Variables. **Não imprima valores resolvidos em logs, summaries ou job outputs.** O contrato de resolução não implica que a action já leia automaticamente todos os secrets do GitHub: o workflow precisa fornecê-los explicitamente ao adaptador confiável.
+A primeira entrada não vazia vence; os nomes canônicos sem prefixo têm prioridade dentro da mesma fonte. Secrets vencem Variables. **Não imprima valores resolvidos em logs, summaries ou job outputs.** Para credenciais de runtime do Cloud Run e credenciais de workflow ainda consumidas por `prepare_workflow_env.py`/`deploy_manage.py`, a renderização atual exige referências do Google Secret Manager e rejeita overrides diretos do GitHub até existir sincronização segura de versões no Secret Manager. Valores GitHub não são silenciosamente descartados. O contrato de resolução não implica que a action já leia automaticamente todos os secrets do GitHub: o workflow precisa fornecê-los explicitamente ao adaptador confiável.
 
 ### Sintaxes aceitas pelo parser TypeScript
 
