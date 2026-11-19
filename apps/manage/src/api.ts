@@ -138,7 +138,7 @@ const API_CONFIG = {
     ENVIRONMENT_NAME: /^[a-zA-Z0-9_-]{1,64}$/,
     POSITIVE_INT: /^[1-9]\d*$/,
     USD_AMOUNT: /^\d+(?:\.\d{1,2})?$/,
-    CRON_EXPRESSION: /^[0-9*,\/ -]+$/,
+    CRON_EXPRESSION: /^[0-9*,/ -]+$/,
     CRON_FIELDS_COUNT: 5,
     WORKER_NAME: /^photointel(?:-[a-z0-9-]+)?$/,
     WORKER_NAME_MAX_LENGTH: 70,
