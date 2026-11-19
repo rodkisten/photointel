@@ -64,6 +64,7 @@ wss.on('connection', (ws, claims) => {
   const ssh = new Client();
   active.set(claims.jti, ssh);
   let stream;
+  let requestedSize = { cols: 80, rows: 24 };
   let lastActivity = Date.now();
   const send = frame => { if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(frame)); else if (ws.bufferedAmount >= 1024 * 1024) ws.close(1009, 'Backpressure'); };
   const close = () => { active.delete(claims.jti); stream?.close(); ssh.end(); };
@@ -84,15 +85,17 @@ wss.on('connection', (ws, claims) => {
     } else if (frame.type === 'resize' && Object.keys(frame).length === 3 &&
       Number.isInteger(frame.cols) && frame.cols >= 20 && frame.cols <= 500 &&
       Number.isInteger(frame.rows) && frame.rows >= 5 && frame.rows <= 200) {
+      requestedSize = { rows: frame.rows, cols: frame.cols };
       stream?.setWindow(frame.rows, frame.cols, 0, 0);
     } else if (frame.type === 'ping' && Object.keys(frame).length === 1) send({ type: 'pong' });
     else ws.close(1002, 'Invalid frame');
   });
   ssh.on('ready', () => {
     clearTimeout(sshTimeout);
-    ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (error, channel) => {
+    ssh.shell({ term: 'xterm-256color', ...requestedSize }, (error, channel) => {
       if (error) { send({ type: 'error', code: 'SHELL', message: 'Falha ao abrir shell' }); ws.close(); return; }
       stream = channel;
+      channel.setWindow(requestedSize.rows, requestedSize.cols, 0, 0);
       channel.on('data', data => { lastActivity = Date.now(); send({ type: 'stdout', data: data.toString('utf8') }); });
       channel.stderr.on('data', data => send({ type: 'stdout', data: data.toString('utf8') }));
       channel.on('close', code => { send({ type: 'exit', code: typeof code === 'number' ? code : null }); ws.close(); });
