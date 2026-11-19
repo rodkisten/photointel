@@ -12,7 +12,8 @@
     "format": "npm --prefix ../.. run format:manage",
     "format:check": "npm --prefix ../.. run format:check:manage",
     "postbuild": "node scripts/inject-precache.mjs",
-    "test:pwa": "node --test scripts/offline-sw.test.mjs"
+    "test:pwa": "node --test scripts/offline-sw.test.mjs",
+    "generate:api:hey": "openapi-ts"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
@@ -72,6 +73,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.44.1",
     "vite": "^8.0.0",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.4",
+    "@hey-api/openapi-ts": "0.99.0"
   }
 }
