@@ -1,4 +1,7 @@
 import yaml from 'js-yaml';
+import { githubToken } from './github-app';
+import { ApiError, json } from './auth';
+import type { Env } from './auth';
 import { validateNotificationSettings, type NotificationSettings } from './notification-settings';
 
 export type NotifySource = 'default' | 'repository' | 'manage';
@@ -84,4 +87,38 @@ export function resolveNotifySettings(
     }
   }
   return { settings: validateNotificationSettings(output), sources, conflicts };
+}
+
+const REPOSITORY_PATTERN = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
+
+export async function readRepositoryNotifyYaml(
+  env: Env,
+  repository: string,
+): Promise<{ found: boolean; config: Partial<NotificationSettings>; sha?: string }> {
+  if (!REPOSITORY_PATTERN.test(repository)) throw new ApiError(422, 'NOTIFY_REPO', 'Repositório inválido');
+  const token = await githubToken(env);
+  const response = await fetch(
+    `https://api.github.com/repos/${repository}/contents/notify.yml`,
+    { headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.raw+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'PhotoIntel-Manage',
+    }, redirect: 'manual', signal: AbortSignal.timeout(12000) },
+  );
+  if (response.status === 404) return { found: false, config: {} };
+  if (!response.ok) throw new ApiError(503, 'NOTIFY_GITHUB', 'Não foi possível ler notify.yml do GitHub (HTTP ' + response.status + ')');
+  const content = await response.text();
+  return { found: true, config: parseNotifyYaml(content), sha: response.headers.get('etag') ?? undefined };
+}
+
+/** Read-only repository config endpoint. The UI resolves conflicts before applying overrides. */
+export async function repositoryNotifyRoute(request: Request, env: Env): Promise<Response | null> {
+  if (new URL(request.url).pathname !== '/api/notifications/repository') return null;
+  if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+  const repository = new URL(request.url).searchParams.get('repository') || env.GITHUB_REPO;
+  const allowed = new Set([env.GITHUB_REPO, ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(',').map(x => x.trim())]);
+  if (!allowed.has(repository)) throw new ApiError(403, 'NOTIFY_REPO', 'Repositório fora da allowlist');
+  const result = await readRepositoryNotifyYaml(env, repository);
+  return json({ repository, ...result });
 }
