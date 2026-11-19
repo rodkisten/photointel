@@ -38,6 +38,12 @@ export function NotificationsPage() {
       .finally(() => { if (active) setLoadingRepo(false); });
     return () => { active = false; };
   }, [repository]);
+  const activeConflicts = repoConfig ? Object.entries(overrides).flatMap(([path, value]) => {
+    const repositoryValue = repoConfig.config[path as keyof Settings];
+    return repositoryValue !== undefined && JSON.stringify(repositoryValue) !== JSON.stringify(value)
+      ? [{ path, repository: repositoryValue, manage: value, resolvedBy: choices[path] ?? null }]
+      : [];
+  }) : [];
   const change = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   if (!settings) return <Card className="p-5">{error ? <IssueBanner error={error} /> : 'Carregando notificações…'}</Card>;
   const sample = settings.template.replace(/{{(\w+)}}/g, (_, key: string) => ({
@@ -65,9 +71,9 @@ export function NotificationsPage() {
             <option value="">Herdar</option>{[5, 10, 15, 30].map(n => <option key={n} value={n}>{n} segundos</option>)}
           </select>
         </label>
-        {repoConfig.conflicts.length > 0 && <div className="space-y-3 rounded-xl border border-amber-500/40 p-3">
+        {activeConflicts.length > 0 && <div className="space-y-3 rounded-xl border border-amber-500/40 p-3">
           <h3 className="font-semibold">Conflitos de configuração</h3>
-          {repoConfig.conflicts.map(conflict => <div key={conflict.path} className="space-y-2 text-sm">
+          {activeConflicts.map(conflict => <div key={conflict.path} className="space-y-2 text-sm">
             <p className="font-mono">{conflict.path}</p>
             <p className="break-words text-carbon-400">Arquivo: {JSON.stringify(conflict.repository)} · Manage: {JSON.stringify(conflict.manage)}</p>
             <select className="w-full rounded bg-carbon-900 p-2" value={choices[conflict.path] || ''}
