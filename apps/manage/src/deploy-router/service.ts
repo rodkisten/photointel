@@ -16,7 +16,6 @@ type Run = { id: string; delivery_id: string; rule_id: string; rule_name: string
   provider: string; target: string; sha: string; state: string; provider_id: string | null;
   status_url: string | null; detail: string | null; created_at: string; updated_at: string };
 type RuleRow = Omit<DeployRule, 'enabled' | 'patterns'> & { enabled: number; patterns_json: string };
-type Delivery = { id: string; sha: string; changed_files: string; created_at: string };
 const SHA = /^[a-f0-9]{40}$/i;
 const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const FINISHED = new Set(['success', 'failed', 'cancelled']);
