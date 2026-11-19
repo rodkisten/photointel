@@ -238,16 +238,6 @@ export async function tick(env: Env): Promise<void> {
     catch { console.error(JSON.stringify({ event: 'deploy_poll_failed', run_id: run.id })); }
   }
 }
-async function changedFiles(env: Env, before: string, after: string): Promise<string[]> {
-  if (!SHA.test(before) || /^0{40}$/.test(before))
-    throw new ApiError(422, 'BASE_SHA', 'Push inicial sem base verificável; execute manualmente as regras');
-  const response = (await gh(env, '/compare/' + before + '...' + after + '?per_page=300')) as {
-    files?: Array<{ filename?: string; previous_filename?: string }>; total_commits?: number };
-  if (!Array.isArray(response.files) || response.files.length >= 300)
-    throw new ApiError(422, 'DIFF_TRUNCATED', 'Diff do GitHub está incompleto ou muito grande; não executado');
-  return [...new Set(response.files.flatMap((file) => [file.filename, file.previous_filename])
-    .filter((x): x is string => typeof x === 'string' && x.length > 0))].slice(0, 500);
-}
 async function validSignature(request: Request, secret: string, body: string): Promise<boolean> {
   const signature = request.headers.get('X-Hub-Signature-256') || '';
   if (!secret || !/^sha256=[0-9a-f]{64}$/i.test(signature)) return false;
