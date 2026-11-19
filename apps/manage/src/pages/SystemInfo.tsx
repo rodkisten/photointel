@@ -18,7 +18,6 @@ import {
   Cloud,
   History,
   LoaderCircle,
-  Logs,
   RefreshCcw,
   Server,
   X,
@@ -40,11 +39,9 @@ import {
 import {
   cn,
   date,
-  state,
 } from '../lib/utils';
 import type {
   Meta,
-  Run,
 } from '../types';
 import {
   External,
