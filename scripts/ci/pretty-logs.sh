@@ -27,7 +27,10 @@ ci_help() {
     resource="$(grep -Eo 'photointel-[a-z0-9-]+' "$logfile" | head -n 1 || true)"
     region="$(grep -Eo 'us-(central|east|west)[0-9]+' "$logfile" | head -n 1 || true)"
   fi
-  if [[ "$command" != "gcloud" && "$command" != "photointel-gcloud" && "$command" != "terraform" && "$command" != "docker" && "$command" != "wrangler" ]]; then
+  if [[ -f "$logfile" ]] && grep -Eqi 'Resource not accessible by integration|HTTP 403.*integration' "$logfile"; then
+    hint="GitHub App HTTP 403: grant Actions Read and write to the installed bot app, approve updated installation permissions, then retry."
+    title="GitHub App permissions"; url="https://github.com/settings/installations"
+  elif [[ "$command" != "gcloud" && "$command" != "photointel-gcloud" && "$command" != "terraform" && "$command" != "docker" && "$command" != "wrangler" ]]; then
     hint="Inspect the command output and the reported test or dependency errors."
     title="Workflow run"; url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-rodkisten/photointel}/actions/runs/${GITHUB_RUN_ID:-0}"
   elif [[ -f "$logfile" ]] && grep -Eqi 'Error acquiring the state lock|state lock|Lock Info:' "$logfile"; then
@@ -104,9 +107,9 @@ ci_run() {
     url="${diagnosis[2]}"
     ci_fail "$label failed (exit ${status}, ${duration}s). $hint"
     if [[ -f "$logfile" ]]; then
-      printf '::group::🔎 Failure highlights · %s\\n' "$label"
-      grep -E '(^|[[:space:]])(FAILED |[[:alnum:]_./-]+\.py:[0-9]+: error:|[EF][0-9]{3} |[0-9]+ failed,|Found [0-9]+ errors)' "$logfile" | tail -n 24 || true
-      printf '::endgroup::\\n'
+      printf '::group::🔎 Failure highlights · %s\n' "$label"
+      grep -Ei 'Resource not accessible by integration|HTTP 403|RuntimeError:|JSONDecodeError|Traceback|Error:|permission denied|forbidden|FAILED |[0-9]+ failed' "$logfile" | tail -n 24 || true
+      printf '::endgroup::\n'
     fi
     ci_note "Next action: $title ($url)"
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
@@ -114,9 +117,9 @@ ci_run() {
         printf '\n### ❌ %s\n\n' "$label"
         printf -- '- **Exit code:** %s · **Duration:** %ss\n' "$status" "$duration"
         printf -- '- **Diagnosis:** %s\n' "$hint"
-        printf '\\n<details><summary>Failure highlights (last 24)</summary>\\n\\n```text\\n'
-        grep -E '(^|[[:space:]])(FAILED |[[:alnum:]_./-]+\\.py:[0-9]+: error:|[EF][0-9]{3} |[0-9]+ failed,|Found [0-9]+ errors)' "$logfile" | tail -n 24 || true
-        printf '```\\n</details>\\n\\n'
+        printf '\n<details><summary>🔎 Erros relevantes (até 12 linhas)</summary>\n\n'
+        python3 scripts/ci/failure_summary.py "$logfile"
+        printf '\n</details>\n\n'
         printf -- '- **External action:** [%s](%s)\n' "$title" "$url"
         printf -- '- **Logs:** [Open this run](%s/%s/actions/runs/%s)\n' "${GITHUB_SERVER_URL:-https://github.com}" "${GITHUB_REPOSITORY:-rodkisten/photointel}" "${GITHUB_RUN_ID:-0}"
       } >> "$GITHUB_STEP_SUMMARY"

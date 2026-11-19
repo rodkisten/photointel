@@ -439,7 +439,11 @@ function PreviewDiagnosticDialog({
   );
 }
 
-export function PrivateImage({
+export function PrivateImage(props: PrivateImageProps) {
+  return <PrivateImageContent key={props.src ?? ''} {...props} />;
+}
+
+function PrivateImageContent({
   src,
   alt,
   className,
@@ -474,14 +478,6 @@ export function PrivateImage({
     return result;
   }, [src, overrideSrc]);
 
-  // Reseta estado interno de renderização quando a props src originária muda
-  useEffect(() => {
-    setFailed(false);
-    setLoaded(false);
-    setVariant(0);
-    setAttempt(0);
-    setOverrideSrc(null);
-  }, [src]);
 
   const current = candidates[Math.min(variant, candidates.length - 1)];
 

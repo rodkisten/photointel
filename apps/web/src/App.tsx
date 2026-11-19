@@ -105,8 +105,6 @@ function Shell() {
     }
   }
   useEffect(() => {
-    setMenu(false);
-    setToolsOpen(false);
     document.title = `${current?.label ?? 'PhotoIntel'} · Photo Intelligence`;
   }, [location.pathname, current?.label]);
   return (
@@ -234,7 +232,7 @@ function Shell() {
       <Dialog open={menu} onOpenChange={setMenu} title="Seu workspace" className="mobile-menu">
         <nav aria-label="Todas as páginas">
           {navigation.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMenu(false)}>
+            <NavLink key={to} to={to} end={to === '/'} onClick={() => { setMenu(false); setToolsOpen(false); }}>
               <Icon size={18} />
               {label}
               <ChevronRight size={14} />

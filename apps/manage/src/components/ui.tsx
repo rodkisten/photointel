@@ -150,7 +150,7 @@ Textarea.displayName = 'Textarea';
 
 export interface SectionProps extends React.HTMLAttributes<HTMLElement> {
   title: string;
-  detail?: string;
+  detail?: string | boolean;
   action?: React.ReactNode;
 }
 

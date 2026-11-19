@@ -167,6 +167,18 @@ jobs:
           url="$(jq -er '.preview.urls[0]' "$RUNNER_TEMP/manage-preview.json")"
           echo "### Manage native Wrangler preview · PR #${{ inputs.pr_number || github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🔀 Short URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] 🧪 Native Manage preview created" >> "$GITHUB_STEP_SUMMARY"
+          # Validate the destination before allowing the redirect Worker to serve it.
+          if ! [[ "$url" =~ ^https://([a-zA-Z0-9-]+[.])+workers[.]dev(/[^[:space:]]*)?$ ]]; then
+            echo "::error::Unexpected Wrangler preview destination; refusing to publish short link"
+            exit 1
+          fi
+          pr="${{ inputs.pr_number || github.event.pull_request.number }}"
+          printf '%s' "$url" > "$RUNNER_TEMP/manage-preview-url.txt" 
+          npx --yes wrangler@4.135.0 kv key put "pr:$pr" --namespace-id 24ed6613990448e1b923d36dcaf1a3d7 --remote --path "$RUNNER_TEMP/manage-preview-url.txt"
+          echo "- [x] 🔗 https://manage.migos.club/$pr/" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [x] 🛡️ Destination validated and KV mapping updated" >> "$GITHUB_STEP_SUMMARY"
       - name: "📝 Preview configuration"
         if: steps.credentials.outputs.ready != 'true'
         run: |
@@ -220,5 +232,6 @@ jobs:
       - name: "🧹 Delete native Wrangler previews"
         run: |
           set -euo pipefail
+          npx --yes wrangler@4.135.0 kv key delete "pr:${{ github.event.pull_request.number }}" --namespace-id 24ed6613990448e1b923d36dcaf1a3d7 --remote 
           npx --yes wrangler@4.135.0 preview delete --config apps/manage/wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation
           npx --yes wrangler@4.135.0 preview delete --config apps/web/wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation

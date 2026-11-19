@@ -1,0 +1,10 @@
+{
+  "$schema": "../../../apps/manage/node_modules/wrangler/config-schema.json",
+  "name": "photointel-manage-shortlinks",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "manage.migos.club/*", "zone_name": "migos.club" }],
+  "kv_namespaces": [{ "binding": "PREVIEW_LINKS", "id": "24ed6613990448e1b923d36dcaf1a3d7" }]
+}

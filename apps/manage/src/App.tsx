@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Outlet, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import {
   Activity,
   Bell,
@@ -100,10 +100,11 @@ function sectionForPath(pathname: string): Tab {
 }
 
 export default function App() {
+  const router = useRouter();
+  const routerSearch = useRouterState({ select: state => state.location.searchStr });
   const [mobileMenu, setMobileMenu] = useState(false);
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
-  const [topVisible, setTopVisible] = useState(true);
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
     catch { return []; }
@@ -116,22 +117,6 @@ export default function App() {
       return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string').slice(0, 4) : ['overview', 'deploy', 'costs', 'settings'];
     } catch { return ['overview', 'deploy', 'costs', 'settings']; }
   });
-  useEffect(() => {
-    let last = window.scrollY;
-    let directionDistance = 0;
-    const onScroll = () => {
-      const current = Math.max(0, window.scrollY);
-      const delta = current - last;
-      if (Math.sign(delta) !== Math.sign(directionDistance)) directionDistance = 0;
-      directionDistance += delta;
-      if (current < 80) setTopVisible(true);
-      else if (directionDistance > 48) { setTopVisible(false); directionDistance = 0; }
-      else if (directionDistance < -32) { setTopVisible(true); directionDistance = 0; }
-      last = current;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
   const orderedNav = [...NAV].sort((a, b) => {
     const rank = (id: string) => { const index = navOrder.indexOf(id); return index < 0 ? NAV.findIndex(x => x.id === id) + NAV.length : index; };
     return rank(a.id) - rank(b.id);
@@ -165,17 +150,16 @@ export default function App() {
   const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
   const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
   useEffect(() => {
-    const onLocation = () => { setSelectedProject(new URLSearchParams(window.location.search).get('project')); };
-    window.addEventListener('popstate', onLocation);
-    return () => window.removeEventListener('popstate', onLocation);
-  }, []);
+    setSelectedProject(new URLSearchParams(routerSearch).get('project'));
+  }, [routerSearch]);
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
     setSelectedProject(repository);
     setProjectMenuOpen(false);
-    const next = new URL(window.location.href);
-    next.searchParams.set('project', repository);
-    window.history.replaceState(window.history.state, '', next.pathname + next.search + next.hash);
+    // Preserve the active route and unrelated query parameters.
+    const url = new URL(window.location.href);
+    url.searchParams.set('project', repository);
+    router.history.replace(url.pathname + url.search + url.hash);
     window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -228,7 +212,7 @@ export default function App() {
   return (
     <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects, isLoading: projectCatalog.isPending || (Boolean(selectedProject) && resolvedProject.isPending && !activeProject), isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
     <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
-      <header className={cn("sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/80 backdrop-blur-xl transition-transform duration-200", !topVisible && "-translate-y-full")}>
+      <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/95 backdrop-blur-xl">
         <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link to="/" search={{ project: activeProject?.repository }} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
             <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">

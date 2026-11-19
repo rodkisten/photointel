@@ -69,19 +69,21 @@ function describe(value: unknown): string {
 
 export function IncidentInspector() {
   const inspector = useUi((state) => state.inspector);
+  return <IncidentInspectorContent key={inspector?.incident.id ?? 'closed'} />;
+}
+
+function IncidentInspectorContent() {
+  const inspector = useUi((state) => state.inspector);
   const close = useUi((state) => state.closeInspector);
   const [data, setData] = useState<IncidentResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(inspector?.incident.id && inspector.incident.source === 'gcp'));
   const [lookupError, setLookupError] = useState<string | null>(null);
   const id = inspector?.incident.id;
   const source = inspector?.incident.source;
 
   useEffect(() => {
-    setData(null);
-    setLookupError(null);
     if (!id || source !== 'gcp') return;
     const abort = new AbortController();
-    setLoading(true);
     void request<IncidentResponse>(`/v1/observability/incidents/${id}`, {
       signal: abort.signal,
     })
