@@ -4,7 +4,7 @@ import { Card } from '../components/ui';
 import { IssueBanner } from '../components/shared';
 
 type Settings = {
-  events: string[]; grouping: 'window' | 'run' | 'none'; windowMinutes: number;
+  events: string[]; grouping: 'window' | 'run' | 'none'; windowSeconds: number;
   updateMode: 'edit' | 'new'; retentionMinutes: { running: number; success: number; error: number }; template: string;
 };
 const labels: Record<string, string> = {
@@ -37,9 +37,9 @@ export function NotificationsPage() {
         <label className="text-sm">Agrupar<select className="mt-1 w-full rounded bg-carbon-900 p-2" value={settings.grouping}
           onChange={e => change({ grouping: e.target.value as Settings['grouping'] })}>
           <option value="window">Por janela</option><option value="run">Por execução</option><option value="none">Individual</option></select></label>
-        <label className="text-sm">Janela<select className="mt-1 w-full rounded bg-carbon-900 p-2" value={settings.windowMinutes}
-          onChange={e => change({ windowMinutes: Number(e.target.value) })}>
-          {[2, 5, 10].map(n => <option key={n} value={n}>{n} minutos</option>)}</select></label>
+        <label className="text-sm">Janela<select className="mt-1 w-full rounded bg-carbon-900 p-2" value={settings.windowSeconds}
+          onChange={e => change({ windowSeconds: Number(e.target.value) })}>
+          {[5, 10, 15, 30].map(n => <option key={n} value={n}>{n} segundos</option>)}</select></label>
         <label className="text-sm">Atualizações<select className="mt-1 w-full rounded bg-carbon-900 p-2" value={settings.updateMode}
           onChange={e => change({ updateMode: e.target.value as Settings['updateMode'] })}>
           <option value="edit">Editar mensagem</option><option value="new">Nova mensagem</option></select></label>
@@ -64,7 +64,7 @@ export function NotificationsPage() {
       {error && <IssueBanner error={error}/>}
     </Card>
     <Card className="space-y-3 p-5">
-      <h2 className="font-semibold text-carbon-100">Prévia do Telegram</h2>
+      <h2 className="font-semibold text-carbon-100">Prévia da notificação</h2>
       <div className="max-w-lg rounded-xl border border-carbon-700 bg-carbon-900 p-4">
         <p className="mb-2 text-xs font-semibold text-carbon-300">PhotoIntel · Bot</p>
         <pre className="whitespace-pre-wrap break-words text-sm">{sample}</pre>
@@ -73,7 +73,7 @@ export function NotificationsPage() {
           <span className="rounded border border-carbon-700 p-2">🔧 Manage</span>
         </div>
       </div>
-      <p className="text-xs text-carbon-400">Simulação. A exclusão automática e o agrupamento exigem suporte do Relay.</p>
+      <p className="text-xs text-carbon-400">Simulação. O agrupamento e a entrega em lote após 5 segundos dependem do suporte do Relay.</p>
     </Card>
   </div>;
 }
