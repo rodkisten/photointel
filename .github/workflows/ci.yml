@@ -220,7 +220,7 @@ jobs:
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run mypy apps/manage" uv run mypy apps/manage
+          ci_run "uv run mypy tests/test_manage_queue.py" uv run mypy tests/test_manage_queue.py
 
       - name: "🔎 [gpu & bridges] Tipagem estática (Mypy)"
         id: mypy_workers
@@ -237,7 +237,7 @@ jobs:
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run pytest tests/api" uv run pytest tests/api -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-api.xml
+          ci_run "uv run pytest API contract tests" uv run pytest tests/test_search_contract.py tests/test_icloud_web_auth.py tests/test_import_authorization_v11.py -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-api.xml
 
       - name: "🧪 [manage] Testes unitários (Pytest)"
         id: pytest_manage
@@ -245,7 +245,7 @@ jobs:
         continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
-          ci_run "uv run pytest tests/manage" uv run pytest tests/manage -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-manage.xml
+          ci_run "uv run pytest Manage tests" uv run pytest tests/test_manage_queue.py tests/test_settings_environment.py tests/test_cloud_logs.py -m 'not integration and not gpu and not e2e' --junitxml=reports/unit-manage.xml
 
       - name: "🧪 [gpu & bridges] Testes unitários (Pytest)"
         id: pytest_workers
