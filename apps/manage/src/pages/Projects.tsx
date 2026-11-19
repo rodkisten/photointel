@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useProject } from '../context/ProjectContext';
 import { send } from '../lib/client';
 import { Cloud, ExternalLink, RefreshCcw } from 'lucide-react';
@@ -9,6 +9,10 @@ import { api } from '../lib/client';
 
 type Target = { id: string; name: string; script: string };
 export function ProjectsPage() {
+  return <ProjectsEditor key={repository} repository={repository} projectLoading={isLoading} />;
+}
+
+function ProjectsEditor({ repository, projectLoading }: { repository: string; projectLoading: boolean }) {
   const { project, isLoading } = useProject();
   const repository = project?.repository ?? '';
   const [scope, setScope] = useState<'repository' | 'environment'>('repository');
@@ -22,7 +26,6 @@ export function ProjectsPage() {
   const queryKey = ['project-variables', repository, scope, environment];
   const vars = useQuery({ enabled: Boolean(repository), queryKey, queryFn: () => api<{ items: Array<{ name: string; value: string; version: string }> }>(
     '/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment)), retry: false });
-  useEffect(() => { setName(''); setValue(''); setVersion(null); setOriginalName(''); setConfirm(''); }, [repository, scope, environment]);
   const save = useMutation({ mutationFn: () => send('/projects/variables?repository=' + encodeURIComponent(repository) + '&scope=' + scope + '&environment=' + encodeURIComponent(environment),
     { name, value, version, confirm }, 'PUT'), onSuccess: () => { setConfirm(''); void client.invalidateQueries({ queryKey }); } });
   const isPrimary = repository === 'rodkisten/photointel';
@@ -31,7 +34,7 @@ export function ProjectsPage() {
   const runs = useQuery({ enabled: isPrimary, queryKey: ['deploy-router'],
     queryFn: () => api<{ runs: Array<{ target: string; state: string; sha: string }> }>('/deploy-router'),
     retry: false, refetchInterval: 30000 });
-  if (isLoading) return <Spinner />;
+  if (projectLoading) return <Spinner />;
   if (!project) return <Card className="p-4" role="alert">Selecione um projeto autorizado para visualizar as variáveis.</Card>;
   return <div className="space-y-5">
     <Section title={'Variáveis GitHub Actions · ' + repository} detail="Alterações são aplicadas ao repositório selecionado. Secrets não podem ser lidos aqui.">
