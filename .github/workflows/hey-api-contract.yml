@@ -4,6 +4,9 @@ on:
     paths:
       - "packages/contracts/openapi.json"
       - "apps/web/openapi-ts.config.ts"
+      - "apps/web/src/api/**"
+      - "apps/web/src/api/client.ts"
+      - "apps/manage/src/api/**"
       - "apps/manage/openapi-ts.config.ts"
       - "apps/web/package.json"
       - "apps/manage/package.json"
