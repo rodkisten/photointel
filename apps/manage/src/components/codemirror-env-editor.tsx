@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { EditorState, Compartment, Transaction } from '@codemirror/state';
-import { EditorView, drawSelection, keymap } from '@codemirror/view';
+import { EditorView, drawSelection } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { json, jsonParseLinter } from '@codemirror/lang-json';
 import { HighlightStyle, StreamLanguage, syntaxHighlighting } from '@codemirror/language';
