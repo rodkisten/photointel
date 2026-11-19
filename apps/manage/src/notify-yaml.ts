@@ -2,7 +2,8 @@ import yaml from 'js-yaml';
 import { githubToken } from './github-app';
 import { ApiError, json } from './auth';
 import type { Env } from './auth';
-import { validateNotificationSettings, type NotificationSettings } from './notification-settings';
+import { DEFAULT_SETTINGS, validateNotificationSettings, type NotificationSettings } from './notification-settings';
+import { gh } from './providers';
 
 export type NotifySource = 'default' | 'repository' | 'manage';
 export type NotifyConflict = {
@@ -28,7 +29,8 @@ export function parseNotifyYaml(source: string): Partial<NotificationSettings> {
   const document: unknown = yaml.load(source, { json: false });
   if (!isRecord(document)) throw new Error('notify.yml must contain a mapping');
   if (document.version !== 1) throw new Error('notify.yml requires version: 1');
-  const settings = document.notifications ?? document.settings;
+  if (Object.keys(document).some(key => !['version', 'notifications'].includes(key))) throw new Error('Unknown notify.yml root field');
+  const settings = document.notifications;
   if (!isRecord(settings)) throw new Error('notify.yml requires notifications mapping');
   for (const key of Object.keys(settings)) {
     if (FORBIDDEN.has(key) || !FIELDS.has(key)) throw new Error('Unknown notification field: ' + key);
@@ -40,7 +42,9 @@ export function parseNotifyYaml(source: string): Partial<NotificationSettings> {
         throw new Error('Unknown retention field: ' + key);
     }
   }
-  return settings as Partial<NotificationSettings>;
+  const parsed = settings as Partial<NotificationSettings>;
+  validateNotificationSettings({ ...DEFAULT_SETTINGS, ...parsed, retentionMinutes: { ...DEFAULT_SETTINGS.retentionMinutes, ...parsed.retentionMinutes } });
+  return parsed;
 }
 
 function flatten(value: Record<string, unknown>, prefix = ''): Array<[string, unknown]> {
@@ -115,10 +119,40 @@ export async function readRepositoryNotifyYaml(
 /** Read-only repository config endpoint. The UI resolves conflicts before applying overrides. */
 export async function repositoryNotifyRoute(request: Request, env: Env): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/notifications/repository') return null;
-  if (request.method !== 'GET') return json({ error: 'Method not allowed' }, 405);
+  if (request.method !== 'GET' && request.method !== 'PUT') return json({ error: 'Method not allowed' }, 405);
   const repository = new URL(request.url).searchParams.get('repository') || env.GITHUB_REPO;
   const allowed = new Set([env.GITHUB_REPO, ...(env.MANAGE_PROJECT_REPOSITORIES || '').split(',').map(x => x.trim())]);
   if (!allowed.has(repository)) throw new ApiError(403, 'NOTIFY_REPO', 'Repositório fora da allowlist');
-  const result = await readRepositoryNotifyYaml(env, repository);
-  return json({ repository, ...result });
+  const variable = '/actions/variables/PHOTOINTEL_NOTIFY_OVERRIDES';
+  const saved = await gh(env, variable).catch(() => null) as { value?: string } | null;
+  let state: Record<string, { overrides?: Partial<NotificationSettings>; choices?: Record<string, 'repository' | 'manage'> }> = {};
+  if (saved?.value) {
+    try {
+      const decoded: unknown = JSON.parse(saved.value);
+      if (isRecord(decoded)) state = decoded as typeof state;
+    } catch { throw new ApiError(503, 'NOTIFY_OVERRIDES', 'Configurações salvas inválidas'); }
+  }
+  if (request.method === 'PUT') {
+    const body = await request.json() as { overrides?: Partial<NotificationSettings>; choices?: Record<string, 'repository' | 'manage'> };
+    if (!isRecord(body) || !isRecord(body.overrides) || !isRecord(body.choices))
+      throw new ApiError(422, 'NOTIFY_OVERRIDES', 'Overrides e escolhas inválidos');
+    for (const [path, choice] of Object.entries(body.choices)) {
+      if (!/^(events|grouping|windowSeconds|updateMode|template|retentionMinutes\.(running|success|error))$/.test(path) ||
+        !['repository', 'manage'].includes(choice))
+        throw new ApiError(422, 'NOTIFY_OVERRIDES', 'Escolha de conflito inválida');
+    }
+    // Resolve against repository configuration before persisting any changes.
+    const file = await readRepositoryNotifyYaml(env, repository);
+    const resolved = resolveNotifySettings(DEFAULT_SETTINGS, file.config, body.overrides, body.choices);
+    if (resolved.conflicts.some(item => item.resolvedBy === null))
+      return json({ error: 'Unresolved conflicts', conflicts: resolved.conflicts }, 409);
+    state[repository] = { overrides: body.overrides, choices: body.choices };
+    await gh(env, saved ? variable : '/actions/variables', saved ? 'PATCH' : 'POST',
+      { name: 'PHOTOINTEL_NOTIFY_OVERRIDES', value: JSON.stringify(state) });
+    return json({ ok: true, repository, ...resolved });
+  }
+  const file = await readRepositoryNotifyYaml(env, repository);
+  const entry = state[repository] || {};
+  const resolved = resolveNotifySettings(DEFAULT_SETTINGS, file.config, entry.overrides || {}, entry.choices || {});
+  return json({ repository, ...file, overrides: entry.overrides || {}, choices: entry.choices || {}, ...resolved });
 }
