@@ -587,7 +587,7 @@ Workflow failure notifications include the repository name, GitHub run URL and `
 
 ## Per-repository notification YAML (in progress)
 
-Each GitHub repository can define a root-level `notify.yml` with versioned, partial notification settings. The Manage backend has a pure `js-yaml` parser and field-level resolver in `src/notify-yaml.ts`. This is **not yet connected to GitHub fetching, the Manage UI or the Relay**. No runtime behavior changes until those integrations are completed and tested.
+Each GitHub repository can define a root-level `notify.yml` with versioned, partial notification settings. The Manage backend has a pure `js-yaml` parser and field-level resolver in `src/notify-yaml.ts`. The authenticated read-only endpoint `GET /api/notifications/repository?repository=owner/name` now fetches `notify.yml` from GitHub for allowlisted repositories and reports missing files without failing. The Manage conflict-resolution UI, persisted choices and Relay delivery integration are **not yet connected**. Existing delivery behavior is unchanged.
 
 ```yaml
 version: 1
