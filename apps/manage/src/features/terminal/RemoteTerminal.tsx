@@ -13,6 +13,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const pending = useRef(false);
   const generation = useRef(0);
   const dimensions = useRef({ cols: 80, rows: 24 });
+  const [ctrl, setCtrl] = useState(false);
   useEffect(() => {
     let disposed = false;
     let instance: GhosttyCore | undefined;
@@ -94,12 +95,26 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       </div>
       {notice && <p role="alert" className="px-3 py-2 text-xs text-amber-400">{notice}</p>}
       {core ? <Terminal core={core} ref={ref} className="min-h-[320px] flex-1 overflow-hidden p-2" autoResize
-        onData={data => send({ type: 'stdin', data })}
+        onData={data => {
+          if (status !== 'connected') return;
+          if (ctrl) {
+            const key = data.length === 1 ? data.toUpperCase().charCodeAt(0) : 0;
+            send({ type: 'stdin', data: key >= 64 && key <= 95 ? String.fromCharCode(key - 64) : data });
+            setCtrl(false);
+          } else send({ type: 'stdin', data });
+        }}
         onResize={(cols, rows) => { dimensions.current = { cols, rows }; send({ type: 'resize', cols, rows }); }}
         onError={() => setNotice('Falha ao inicializar WTerm')} /> : <div className="p-4 text-sm text-carbon-400">Carregando Ghostty…</div>}
       <div className="flex flex-wrap gap-1 border-t border-carbon-800 p-2 sm:hidden">
-        {([['Esc', '\x1b'], ['Tab', '\t'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['↑', '\x1b[A'], ['↓', '\x1b[B']] as const).map(([label, sequence]) =>
-          <button type="button" key={label} className="min-h-11 rounded-lg border border-carbon-700 px-3 text-sm" disabled={status !== 'connected'} onClick={() => { send({ type: 'stdin', data: sequence }); focus(); }}>{label}</button>)}
+        <button type="button" aria-pressed={ctrl} disabled={status !== 'connected'}
+          className={'min-h-11 rounded-lg border px-3 text-sm disabled:opacity-40 ' +
+            (ctrl ? 'border-violet-400 bg-violet-500/20 text-violet-200' : 'border-carbon-700')}
+          onClick={() => { setCtrl(value => !value); focus(); }}>Ctrl</button>
+        {([['Esc', '\\x1b'], ['Tab', '\\t'], ['Ctrl+C', '\\x03'], ['Ctrl+D', '\\x04'],
+          ['←', '\\x1b[D'], ['↑', '\\x1b[A'], ['↓', '\\x1b[B'], ['→', '\\x1b[C'],
+          ['Home', '\\x1b[H'], ['End', '\\x1b[F'], ['PgUp', '\\x1b[5~'], ['PgDn', '\\x1b[6~']] as const).map(([label, sequence]) =>
+          <button type="button" key={label} className="min-h-11 rounded-lg border border-carbon-700 px-3 text-sm disabled:opacity-40"
+            disabled={status !== 'connected'} onClick={() => { send({ type: 'stdin', data: sequence }); setCtrl(false); focus(); }}>{label}</button>)}
       </div>
     </div>
   );
