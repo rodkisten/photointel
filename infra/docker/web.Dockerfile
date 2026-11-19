@@ -6,6 +6,8 @@ RUN --mount=type=secret,id=build_ca,required=false \
     if [ -f /run/secrets/build_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/build_ca; fi; \
     npm ci --strict-ssl=true
 COPY apps/web/ ./
+# Hey API generation resolves the versioned contract relative to /app.
+COPY packages/contracts/openapi.json /packages/contracts/openapi.json
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
