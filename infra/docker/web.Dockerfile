@@ -8,6 +8,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
 COPY apps/web/ ./
 # Hey API generation resolves the versioned contract relative to /app.
 COPY packages/contracts/openapi.json /packages/contracts/openapi.json
+COPY packages/design-tokens/ /packages/design-tokens/
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
