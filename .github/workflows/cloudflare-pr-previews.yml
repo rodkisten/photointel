@@ -109,48 +109,86 @@ jobs:
             echo "::warning::Configure CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the GitHub production Environment. Preview Workers remain isolated from production routes."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: "⚙ Load production configuration (same as frontend deploy)"
-        id: config
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: prepare
-          config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: photointel
-          release-sha: ${{ github.sha }}
-      - name: "🔐 Authenticate to GCP"
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ steps.config.outputs.service_account }}
-      - name: "🧰 Set up gcloud"
-        uses: google-github-actions/setup-gcloud@v2
-      - name: "⚙ Prepare Manage browser environment from production"
+      - name: "🧩 Validate TypeScript environment contract (read-only)"
         env:
-          CONFIRM_PROJECT: photointel
-        run: python3 -m infra.scripts.deploy_manage browser-env
-      - name: "📦 Install both apps"
+          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
         run: |
-          npm --prefix apps/web ci
-          npm --prefix apps/manage ci
+          set -euo pipefail
+          node --experimental-strip-types packages/env/src/deploy.ts diagnose-preview > "$RUNNER_TEMP/manage-env-diagnostic.json"
+          {
+            echo "### 🧩 TypeScript environment diagnostics"
+            echo
+            echo "- Source: GitHub production Environment GCP_CONFIG_ENV"
+            echo "- Terminal catalog present: $(jq -r '.terminalPresent' "$RUNNER_TEMP/manage-env-diagnostic.json")"
+            echo "- Terminal validation: skipped (production-only setting)"
+            echo "- Gateway configured: $(jq -r '.gatewayPresent' "$RUNNER_TEMP/manage-env-diagnostic.json")"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: "🛡 Preview isolation · no GCP production identity"
+        run: |
+          echo "### 🛡 Isolated PR preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "No GCP Workload Identity Federation or Secret Manager access is used by this preview." >> "$GITHUB_STEP_SUMMARY"
+          echo "Production deployment configuration is not rendered into preview builds." >> "$GITHUB_STEP_SUMMARY"
+      - name: "📦 Install both apps"
+        id: install
+        run: |
+          set -euo pipefail
+          for app in web manage; do
+            if npm --prefix "apps/$app" ci > "$RUNNER_TEMP/npm-$app.log" 2>&1; then
+              echo "✅ apps/$app installed"
+            else
+              echo "failed_app=$app" >> "$GITHUB_OUTPUT"
+              echo "::error title=Dependency install failed::npm ci failed for apps/$app"
+              grep -E 'npm error (code|Invalid:|Missing:|.*not in sync|.*can only install)' "$RUNNER_TEMP/npm-$app.log" | head -n 18 || true
+              echo "::group::npm ci log tail"
+              tail -n 30 "$RUNNER_TEMP/npm-$app.log"
+              echo "::endgroup::"
+              exit 1
+            fi
+          done
       - name: "🏗 Build static Photos and Manage"
         run: |
           npm --prefix apps/web run build
           npm --prefix apps/manage run build
+      - name: "🔗 Enable preview URLs without enabling production workers.dev"
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for worker in photointel photointel-manage; do
+            response="$(curl --fail-with-body --silent --show-error --request POST \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/subdomain" \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data '{"enabled":false,"previews_enabled":true}')"
+            if ! jq -e '.success == true' <<< "$response" >/dev/null; then
+              echo "::error::Could not enable preview URLs for $worker"
+              jq '{errors, messages}' <<< "$response"
+              exit 1
+            fi
+            echo "✅ Preview URLs enabled for $worker; production workers.dev disabled"
+          done
       - name: "🖼 Photos static preview, no production API"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/photos-preview.json"
+          npx --yes wrangler@4.135.0 preview --config wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/photos-preview-output.txt" 2>&1 || {
+            cat "$RUNNER_TEMP/photos-preview-output.txt"
+            exit 1
+          }
+          url="$(node ../../scripts/parse-wrangler-preview.mjs "$RUNNER_TEMP/photos-preview-output.txt")"
           echo "### Photos Preview" >> "$GITHUB_STEP_SUMMARY"
-          jq -er '.preview.urls[0]' "$RUNNER_TEMP/photos-preview.json" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
       - name: "🛡 Manage · Wrangler native preview"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/manage-preview.json"
-          url="$(jq -er '.preview.urls[0]' "$RUNNER_TEMP/manage-preview.json")"
+          npx --yes wrangler@4.135.0 preview --config wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --json > "$RUNNER_TEMP/manage-preview-output.txt" 2>&1 || {
+            cat "$RUNNER_TEMP/manage-preview-output.txt"
+            exit 1
+          }
+          url="$(node ../../scripts/parse-wrangler-preview.mjs "$RUNNER_TEMP/manage-preview-output.txt")"
           echo "### Manage native Wrangler preview · PR #${{ inputs.pr_number || github.event.pull_request.number }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Preview: $url" >> "$GITHUB_STEP_SUMMARY"
           echo "### 🔀 Short URL" >> "$GITHUB_STEP_SUMMARY"
@@ -170,6 +208,39 @@ jobs:
         run: |
           echo "### Previews not deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Configure CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID in GitHub Environment production. Preview Workers remain isolated." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "📋 Preview diagnostic summary"
+        if: always()
+        env:
+          INSTALL: ${{ steps.install.outcome }}
+          FAILED_APP: ${{ steps.install.outputs.failed_app }}
+          PREVIEW_READY: ${{ steps.credentials.outputs.ready }}
+          HEAD_SHA: ${{ steps.selected_pr.outputs.sha || github.event.pull_request.head.sha || github.sha }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          {
+            echo "## 🧪 Cloudflare preview · diagnostic"
+            echo
+            echo "| Field | Value |"
+            echo "|:--|:--|"
+            echo "| PR | #$PR_NUMBER |"
+            echo "| SHA | [${HEAD_SHA:0:12}](https://github.com/$GITHUB_REPOSITORY/commit/$HEAD_SHA) |"
+            echo "| Dependencies | $INSTALL |"
+            echo "| Preview credentials | ${PREVIEW_READY:-not-checked} |"
+            echo "| Run | [Open logs](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) |"
+            echo
+            if [[ "$INSTALL" == failure ]]; then
+              echo "### ❌ Dependency installation failed"
+              echo "Affected application: apps/${FAILED_APP:-unknown}"
+              echo "Check package.json / package-lock.json consistency."
+              echo "Run: npm --prefix apps/${FAILED_APP:-web} install --package-lock-only"
+              echo "Then: npm --prefix apps/${FAILED_APP:-web} ci"
+            elif [[ "$PREVIEW_READY" != true ]]; then
+              echo "### ⚠️ Preview credentials unavailable or not checked"
+            else
+              echo "### 🔎 Inspect build and publication steps for preview URLs"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   cleanup:
     name: "Closed PR preview cleanup"

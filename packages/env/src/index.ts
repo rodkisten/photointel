@@ -101,23 +101,71 @@ export function parseEnvironment(raw: string): ParsedEnvironment {
   const cloudflare: Record<string, string> = Object.create(null);
   const secrets: SecretReference[] = [];
   const prefix = entries.SECRET_NAME_PREFIX?.replace(/-?$/, '-') || 'photointel-';
+  const references = new Map<string, SecretReference>();
+  const wifKeys = new Set([
+    'GCP_WORKLOAD_IDENTITY_PROVIDER', 'GCP_DEPLOY_SERVICE_ACCOUNT',
+    'GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER', 'GCP_BOOTSTRAP_SERVICE_ACCOUNT',
+  ]);
+  const typed = (value: string): unknown => {
+    if (value.startsWith('json:')) return JSON.parse(value.slice(5));
+    if (/^(?:true|false|null)$/.test(value) ||
+        /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
+      return JSON.parse(value);
+    }
+    if (/^[{[]/.test(value)) {
+      try { return JSON.parse(value); } catch { return value; }
+    }
+    return value;
+  };
+  const validSecretName = /^[a-z][a-z0-9-]{0,254}$/;
+  const validVersion = /^(?:latest|[1-9][0-9]{0,9})$/;
   for (const [key, value] of Object.entries(entries)) {
     if (typeof value !== 'string') throw new Error('Expected string value for ' + key);
-    const compact = /^(SECRET|WORKFLOW_SECRET)__([A-Z][A-Z0-9_]*)$/.exec(key);
-    if (compact || value.startsWith('secret://')) {
-      const scope = compact?.[1] === 'WORKFLOW_SECRET' ? 'workflow' : 'runtime';
-      const nameAndVersion = value.startsWith('secret://') ? value.slice(9) : value;
-      const [name, version = 'latest'] = nameAndVersion.split('@');
-      secrets.push({scope, key: compact?.[2] || key, name: name || prefix + key.toLowerCase().replaceAll('_', '-'), version});
+    if (key === 'SECRET_NAME_PREFIX' || wifKeys.has(key)) continue;
+    const explicit = /^(SECRET|WORKFLOW_SECRET)__([A-Z][A-Z0-9_]*)$/.exec(key);
+    const legacy = /^(SECRETS|WORKFLOW_SECRETS)__([A-Z][A-Z0-9_]*)__(NAME|VERSION)$/.exec(key);
+    if (explicit || legacy || value.startsWith('secret://')) {
+      const scope = (explicit?.[1] === 'WORKFLOW_SECRET' || legacy?.[1] === 'WORKFLOW_SECRETS')
+        ? 'workflow' : 'runtime';
+      const target = explicit?.[2] || legacy?.[2] || key;
+      if (!/^[A-Z][A-Z0-9_]*$/.test(target)) throw new Error('Invalid secret binding: ' + key);
+      const id = scope + ':' + target;
+      const previous = references.get(id);
+      let name = previous?.name || '';
+      let version = previous?.version || 'latest';
+      if (legacy) {
+        if (legacy[3] === 'NAME') name = value;
+        else version = value;
+      } else {
+        const reference = value.startsWith('secret://') ? value.slice('secret://'.length) : value;
+        const at = reference.lastIndexOf('@');
+        name = (at < 0 ? reference : reference.slice(0, at)) ||
+          prefix + target.toLowerCase().replaceAll('_', '-');
+        version = at < 0 ? 'latest' : reference.slice(at + 1);
+      }
+      references.set(id, {scope, key: target, name, version});
       continue;
     }
     if (key.startsWith('ENV__') || key.startsWith('EXTRA_ENVIRONMENT__')) {
-      runtime[key.split('__').slice(1).join('__')] = value;
+      const target = key.split('__').slice(1).join('__');
+      if (!/^[A-Z][A-Z0-9_]*$/.test(target)) throw new Error('Invalid runtime key: ' + key);
+      const parsed = typed(value);
+      runtime[target] = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
     } else if (key.startsWith('CF__')) {
-      cloudflare[key.slice(4)] = value;
+      const target = key.slice(4);
+      if (!/^[A-Z][A-Z0-9_]*$/.test(target)) throw new Error('Invalid Cloudflare key: ' + key);
+      const parsed = typed(value);
+      cloudflare[target] = typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
     } else if (key.startsWith('WF__') || key.startsWith('WORKFLOWS__')) {
-      assignNested(workflows, key.split('__').slice(1), value);
+      const parts = key.split('__').slice(1);
+      assignNested(workflows, parts, value);
     }
+  }
+  for (const reference of references.values()) {
+    if (!validSecretName.test(reference.name) || !validVersion.test(reference.version)) {
+      throw new Error('Invalid Secret Manager name/version for ' + reference.key);
+    }
+    secrets.push(reference);
   }
   return {entries, workflows, runtime, cloudflare, secrets};
 }

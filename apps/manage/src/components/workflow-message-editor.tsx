@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../lib/client';
 import { Card, Button, Textarea } from './ui';
@@ -13,8 +13,11 @@ export function WorkflowMessageEditor() {
     queryKey: ['github-message-template'],
     queryFn: () => api<{ template: string; placeholders: string[] }>('/workflows/message-template'),
   });
-  const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
-  useEffect(() => { if (settings.data) setTemplate(settings.data.template); }, [settings.data]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const template = draft ?? settings.data?.template ?? DEFAULT_TEMPLATE;
+  const setTemplate = (next: string | ((current: string) => string)) => {
+    setDraft(typeof next === 'function' ? next(template) : next);
+  };
   const save = useMutation({
     mutationFn: async () => {
       const response = await fetch('/api/workflows/message-template', {

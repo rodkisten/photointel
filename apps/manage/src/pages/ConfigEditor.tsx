@@ -1,51 +1,63 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Dialog from '@radix-ui/react-dialog';
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  ArrowUpRight,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import {
   Check,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  Cloud,
-  CloudCog,
   Code2,
   Copy,
-  ExternalLink,
-  GitBranch,
-  History,
-  LoaderCircle,
-  Logs,
-  Menu,
-  Play,
-  RefreshCcw,
   RotateCcw,
   Save,
-  Search,
-  Server,
-  Settings2,
-  Shield,
-  Terminal,
-  Workflow,
-  X,
 } from 'lucide-react';
-import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
-import { api, send } from '../lib/client';
-import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, optimizeDotenv, parseConfiguration, planConfigChange } from '../config-reconcile';
-import type { ConfigPlan } from '../config-reconcile';
-import { cn, date, human, state } from '../lib/utils';
-import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
-import { External, Spinner, Empty, IssueBanner } from '../components/shared';
-import { RunRow, RunDetail } from '../components/runs';
-import { ConfirmDialog } from '../components/confirm-dialog';
-import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
-import { DotenvFields } from '../components/dotenv-fields';
-import { organizeEnvironment } from '../env-organizer';
-import { RepositoryVariables } from './RepositoryVariables';
+import {
+  Badge,
+  Button,
+  Card,
+  Section,
+} from '../components/ui';
+import {
+  api,
+  send,
+} from '../lib/client';
+import {
+  findDuplicateConfigKeys,
+  optimizeDotenv,
+  parseConfiguration,
+  planConfigChange,
+} from '../config-reconcile';
+import type {
+  ConfigPlan,
+} from '../config-reconcile';
+import {
+  date,
+} from '../lib/utils';
+import type {
+} from '../types';
+import {
+  Spinner,
+  IssueBanner,
+} from '../components/shared';
+import {
+  ConfirmDialog,
+} from '../components/confirm-dialog';
+import {
+  CodeMirrorEnvEditor,
+  detectEnvironmentFormat,
+} from '../components/codemirror-env-editor';
+import {
+  DotenvFields,
+} from '../components/dotenv-fields';
+import {
+  organizeEnvironment,
+} from '../env-organizer';
+import {
+  RepositoryVariables,
+} from './RepositoryVariables';
 
 type EnvironmentPreviewEntry = { key: string; value: string; secretName: string | null };
 
@@ -87,10 +99,13 @@ export function ConfigEditor() {
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const [editor, setEditor] = useState('');
+  const [editorDraft, setEditorDraft] = useState<string | null>(null);
+  const editor = editorDraft ?? q.data?.value ?? '';
+  const setEditor = (value: string) => setEditorDraft(value);
   const [pythonPreview, setPythonPreview] = useState<{ ok: boolean; config?: unknown; references?: Array<{ scope: string; key: string; name: string; version: string }>; error?: string } | null>(null);
   const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
-  const [version, setVersion] = useState('');
+  const [versionOverride, setVersion] = useState<string | null>(null);
+  const version = versionOverride ?? q.data?.version ?? '';
   const [confirm, setConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [autoApply, setAutoApply] = useState(true);
@@ -100,12 +115,7 @@ export function ConfigEditor() {
     blocked?: boolean;
     auto_apply?: boolean;
   } | null>(null);
-  useEffect(() => {
-    if (q.data) {
-      setEditor(q.data.value);
-      setVersion(q.data.version);
-    }
-  }, [q.data]);
+
   const update = useMutation({
     mutationFn: () =>
       send<{
@@ -140,17 +150,6 @@ export function ConfigEditor() {
     retry: false,
   });
   const fullEnvironmentPreview = useMemo(() => listEnvironmentPreview(editor), [editor]);
-  const resolvedPreview = useMemo(() => {
-    if (!editor.trim() || editor.trimStart().startsWith('{')) return null;
-    try {
-      const entries = parseConfiguration(editor);
-      return { entries: Object.entries(entries).filter(([key]) =>
-        !/SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|KEY|AUTH|SESSION/i.test(key)), error: '' };
-    } catch (error) {
-      return { entries: [] as Array<[string, string]>,
-        error: error instanceof Error ? error.message : 'Referência inválida' };
-    }
-  }, [editor]);
   const dirty = Boolean(q.data && editor !== q.data.value);
   const preview = useMemo(() => {
     if (!q.data || !dirty) return null;
@@ -419,7 +418,9 @@ export function ConfigEditor() {
                   onClick={() => {
                     try {
                       setEditor(JSON.stringify(JSON.parse(editor), null, 2));
-                    } catch {}
+                    } catch {
+                      // Keep the original editor text when it is not valid JSON.
+                    }
                   }}
                 >
                   <Code2 size={14} />

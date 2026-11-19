@@ -1,0 +1,368 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { parseEnvironment } from './index.ts';
+
+export type DeploymentTarget = 'production' | 'preview';
+
+export type WorkloadIdentity = {
+  provider: string;
+  serviceAccount: string;
+  bootstrapProvider?: string;
+  bootstrapServiceAccount?: string;
+};
+
+const WIF_PROVIDER = /^projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[A-Za-z0-9_-]+\/providers\/[A-Za-z0-9_-]+$/;
+const SERVICE_ACCOUNT = /^[a-z][a-z0-9-]*@[a-z][a-z0-9.-]*\.iam\.gserviceaccount\.com$/;
+
+/** Validate metadata only. Authentication and secret retrieval stay in trusted deployment adapters. */
+export function validateWorkloadIdentity(entries: Record<string, string>): WorkloadIdentity {
+  const provider = entries.GCP_WORKLOAD_IDENTITY_PROVIDER;
+  const serviceAccount = entries.GCP_DEPLOY_SERVICE_ACCOUNT;
+  if (!provider || !serviceAccount) {
+    throw new Error('Missing Workload Identity entries: GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_DEPLOY_SERVICE_ACCOUNT');
+  }
+  if (!WIF_PROVIDER.test(provider)) throw new Error('Invalid GCP_WORKLOAD_IDENTITY_PROVIDER resource name');
+  if (!SERVICE_ACCOUNT.test(serviceAccount)) throw new Error('Invalid GCP_DEPLOY_SERVICE_ACCOUNT email');
+  const bootstrapProvider = entries.GCP_BOOTSTRAP_WORKLOAD_IDENTITY_PROVIDER || undefined;
+  const bootstrapServiceAccount = entries.GCP_BOOTSTRAP_SERVICE_ACCOUNT || undefined;
+  if (Boolean(bootstrapProvider) !== Boolean(bootstrapServiceAccount)) {
+    throw new Error('Bootstrap WIF provider and service account must be configured together');
+  }
+  if (bootstrapProvider && bootstrapServiceAccount &&
+      (!WIF_PROVIDER.test(bootstrapProvider) || !SERVICE_ACCOUNT.test(bootstrapServiceAccount) ||
+       (bootstrapProvider === provider && bootstrapServiceAccount === serviceAccount))) {
+    throw new Error('Invalid or insufficiently separated bootstrap WIF identity');
+  }
+  return {provider, serviceAccount, ...(bootstrapProvider ? {bootstrapProvider, bootstrapServiceAccount} : {})};
+}
+
+
+
+
+export const REQUIRED_RUNTIME_SECRETS = [
+  'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY',
+  'STORAGE_SECRET_KEY', 'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET',
+  'ICLOUD_SESSION_KEY',
+] as const;
+
+const RUNTIME_SECRET_FIELDS: Set<string> = new Set([
+  ...REQUIRED_RUNTIME_SECRETS, 'MODAL_TOKEN', 'MODAL_PROXY_KEY', 'MODAL_PROXY_SECRET',
+  'NOTIFY_DEVICE_ID', 'NOTIFY_TOKEN', 'SENTRY_DSN', 'SENTRY_API_TOKEN',
+  'TELEGRAM_NOTIFICATION_API_TOKEN',
+]);
+const WORKFLOW_SECRET_FIELDS: Set<string> = new Set([
+  'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'TS_OAUTH_CLIENT_ID',
+  'TS_OAUTH_SECRET', 'SENTRY_AUTH_TOKEN', 'MANAGE_GITHUB_API_TOKEN',
+  'MANAGE_CLOUDFLARE_API_TOKEN', 'MANAGE_SENTRY_API_TOKEN',
+  'MANAGE_MODAL_BILLING_TOKEN', 'MANAGE_GITHUB_WEBHOOK_SECRET',
+  'MANAGE_GCP_BUILD_RELEASE_URL', 'MANAGE_GCP_BUILD_PROVISION_URL',
+  'MANAGE_GCP_BUILD_CALLBACK_SECRET', 'MANAGE_XRELAY_NOTIFICATION_URL',
+  'MANAGE_XRELAY_NOTIFICATION_TOKEN',
+]);
+
+export type SecretBinding = {name: string; version: string};
+
+export type ResolvedConfigValue = {
+  source: 'github-secret' | 'github-variable' | 'gcp-secret-manager' | 'missing';
+  value?: string;
+  reference?: SecretBinding;
+};
+
+/**
+ * Resolve GitHub-provided configuration before consulting legacy GCP references.
+ * GitHub secret values win over variables, and unprefixed names win over PHOTOINTEL_.
+ * Never log or serialize resolved secret values into GitHub job outputs.
+ */
+export function resolveConfigValue(
+  key: string,
+  sources: {
+    secrets?: Record<string, string | undefined>;
+    variables?: Record<string, string | undefined>;
+    gcpReferences?: Record<string, SecretBinding>;
+  },
+): ResolvedConfigValue {
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) throw new Error('Invalid uppercase configuration key: ' + key);
+  const names = [key, 'PHOTOINTEL_' + key];
+  for (const [source, entries] of [
+    ['github-secret', sources.secrets],
+    ['github-variable', sources.variables],
+  ] as const) {
+    for (const name of names) {
+      const value = entries?.[name];
+      if (value !== undefined && value !== '') return {source, value};
+    }
+  }
+  const reference = sources.gcpReferences?.[key];
+  return reference ? {source: 'gcp-secret-manager', reference} : {source: 'missing'};
+}
+
+export function resolveConfigInventory(
+  keys: readonly string[],
+  sources: Parameters<typeof resolveConfigValue>[1],
+): Record<string, ResolvedConfigValue> {
+  return Object.fromEntries(keys.map(key => [key, resolveConfigValue(key, sources)]));
+}
+
+
+export type SecretInventory = {
+  secrets: Record<string, SecretBinding>;
+  workflowSecrets: Record<string, SecretBinding>;
+};
+
+/** Convert R2 legacy aliases to canonical storage bindings and validate the full inventory. */
+/**
+ * Enforce mandatory deployment credentials after applying GitHub-first precedence.
+ * A direct GitHub value satisfies the requirement without any GCP reference.
+ */
+export function validateRequiredConfigValues(
+  sources: Parameters<typeof resolveConfigValue>[1],
+  required: readonly string[] = REQUIRED_RUNTIME_SECRETS,
+): Record<string, ResolvedConfigValue> {
+  const resolved = resolveConfigInventory(required, sources);
+  const missing = required.filter(key => resolved[key].source === 'missing');
+  if (missing.length) throw new Error('Missing required configuration: ' + missing.join(', '));
+  return resolved;
+}
+
+export function normalizeSecretInventory(
+  input: SecretInventory,
+  options: {requireAll?: boolean; storageEndpoint?: string} = {},
+): SecretInventory {
+  const secrets = {...input.secrets};
+  const workflowSecrets = {...input.workflowSecrets};
+  for (const [legacy, canonical] of [
+    ['R2_ACCESS_KEY_ID', 'STORAGE_ACCESS_KEY'],
+    ['R2_SECRET_ACCESS_KEY', 'STORAGE_SECRET_KEY'],
+  ]) {
+    if (legacy in secrets) {
+      if (!(canonical in secrets)) secrets[canonical] = secrets[legacy];
+      delete secrets[legacy];
+    }
+  }
+  if ('R2_ENDPOINT' in secrets) {
+    if (!options.storageEndpoint) throw new Error('R2_ENDPOINT is not a secret: set STORAGE_ENDPOINT');
+    delete secrets.R2_ENDPOINT;
+  }
+  if (options.requireAll) {
+    const missing = REQUIRED_RUNTIME_SECRETS.filter(key => !(key in secrets));
+    if (missing.length) throw new Error('Missing required Secret Manager references: ' + missing.join(', '));
+  }
+  for (const [scope, refs, allowed] of [
+    ['runtime', secrets, RUNTIME_SECRET_FIELDS],
+    ['workflow', workflowSecrets, WORKFLOW_SECRET_FIELDS],
+  ] as const) {
+    for (const [key, ref] of Object.entries(refs)) {
+      if (!allowed.has(key)) throw new Error('Unknown ' + scope + ' Secret Manager reference: ' + key);
+      if (!ref || !/^[a-z][a-z0-9-]{0,254}$/.test(ref.name) ||
+          !/^(?:latest|[1-9][0-9]{0,9})$/.test(ref.version)) {
+        throw new Error('Invalid Secret Manager reference for ' + key);
+      }
+    }
+  }
+  return {secrets, workflowSecrets};
+}
+
+export function normalizeDeployConfig(raw: string) {
+  const source = raw.trim();
+  if (!source) throw new Error('GCP_CONFIG_ENV is empty');
+  if (source.startsWith('{')) {
+    const object: unknown = JSON.parse(source);
+    if (!object || typeof object !== 'object' || Array.isArray(object)) throw new Error('Expected JSON object');
+    const config = object as Record<string, unknown>;
+    if (Object.values(config).some(value => value !== null && typeof value === 'object') ||
+      'extra_environment' in config || 'workflow_secrets' in config || 'cloudflare_environment' in config) {
+      return {
+        runtime: normalizeRecord(config.extra_environment ?? config.extra),
+        cloudflare: normalizeRecord(config.cloudflare_environment),
+        workflows: config.workflows ?? {},
+        secrets: config.secrets ?? {},
+        workflowSecrets: config.workflow_secrets ?? {},
+      };
+    }
+  }
+  const parsed = parseEnvironment(raw);
+  return {
+    runtime: parsed.runtime,
+    cloudflare: parsed.cloudflare,
+    workflows: parsed.workflows,
+    secrets: parsed.secrets.filter(s => s.scope === 'runtime'),
+    workflowSecrets: parsed.secrets.filter(s => s.scope === 'workflow'),
+  };
+}
+
+function normalizeRecord(input: unknown): Record<string, string> {
+  if (input == null) return {};
+  if (typeof input !== 'object' || Array.isArray(input)) throw new Error('Expected environment object');
+  return Object.fromEntries(Object.entries(input).map(([key, value]) => {
+    if (value == null) throw new Error('Null environment binding: ' + key);
+    return [key, typeof value === 'string' ? value : JSON.stringify(value)];
+  }));
+}
+
+/** Render the canonical deploy configuration without reading or retrieving secret values. */
+export function renderDeployConfiguration(
+  raw: string,
+  options: {project: string; releaseSha: string; githubSecrets?: Record<string, string | undefined>; githubVariables?: Record<string, string | undefined>},
+): Record<string, unknown> {
+  if (!/^[a-f0-9]{40}$/.test(options.releaseSha)) throw new Error('Invalid release SHA');
+  const source = raw.trim();
+  const structured = source.startsWith('{') ? JSON.parse(source) as Record<string, unknown> : {};
+  const parsed = source.startsWith('{') ? undefined : parseEnvironment(raw);
+  const config = normalizeDeployConfig(raw);
+  const entries = parsed?.entries ?? Object.fromEntries(
+    Object.entries(structured).filter(([, value]) => typeof value === 'string'),
+  ) as Record<string, string>;
+  validateWorkloadIdentity(entries);
+  const project = String(structured.project_id ?? entries.PROJECT_ID ?? entries.project_id ?? '');
+  const region = String(structured.region ?? entries.REGION ?? entries.region ?? '');
+  const repository = String(structured.repository ?? entries.REPOSITORY ?? entries.repository ?? '');
+  if (!project || !region || !repository || project !== options.project) {
+    throw new Error('Missing deployment metadata or project confirmation mismatch');
+  }
+  const asReferences = (value: unknown): Record<string, SecretBinding> => {
+    if (Array.isArray(value)) return Object.fromEntries(value.map((item: any) =>
+      [item.key, {name: item.name, version: item.version}]));
+    if (!value || typeof value !== 'object') return {};
+    return value as Record<string, SecretBinding>;
+  };
+  const references = normalizeSecretInventory({
+    secrets: asReferences(config.secrets),
+    workflowSecrets: asReferences(config.workflowSecrets),
+  }, {storageEndpoint: String(config.runtime.STORAGE_ENDPOINT ?? structured.storage_endpoint ?? entries.STORAGE_ENDPOINT ?? '')});
+  const githubSources = {
+    secrets: options.githubSecrets,
+    variables: options.githubVariables,
+    gcpReferences: references.secrets,
+  };
+  // Cloud Run consumes Secret Manager references, not raw GitHub secret values.
+  // Reject direct secret overrides until the trusted adapter can version them in
+  // Secret Manager; never silently drop a value or produce an invalid deployment.
+  for (const key of RUNTIME_SECRET_FIELDS) {
+    const resolved = resolveConfigValue(key, githubSources);
+    if (resolved.source === 'github-secret' || resolved.source === 'github-variable') {
+      throw new Error('Direct GitHub values for runtime secret ' + key +
+        ' are not supported yet; keep its Google Secret Manager reference');
+    }
+  }
+  const workflowSources = {
+    secrets: options.githubSecrets,
+    variables: options.githubVariables,
+    gcpReferences: references.workflowSecrets,
+  };
+  for (const key of WORKFLOW_SECRET_FIELDS) {
+    const resolved = resolveConfigValue(key, workflowSources);
+    if (resolved.source === 'github-secret' || resolved.source === 'github-variable') {
+      throw new Error('Direct GitHub values for workflow credential ' + key +
+        ' are not supported yet; keep its Google Secret Manager reference');
+    }
+  }
+  validateRequiredConfigValues({gcpReferences: references.secrets});
+  const runtimeKeys = [...new Set([...Object.keys(config.runtime), ...RUNTIME_SECRET_FIELDS])];
+  const resolvedRuntime = resolveConfigInventory(runtimeKeys, githubSources);
+  const secrets = references.secrets;
+  const workflowSecrets = references.workflowSecrets;
+  const directRuntime = Object.fromEntries(Object.entries(resolvedRuntime)
+    .filter(([, item]) => item.source === 'github-secret' || item.source === 'github-variable')
+    .map(([key, item]) => [key, item.value]));
+  const mergedRuntime = {...config.runtime, ...directRuntime};
+  validateTerminal(mergedRuntime);
+  return {
+    ...structured,
+    project_id: project, region, repository,
+    extra_environment: mergedRuntime,
+    cloudflare_environment: config.cloudflare,
+    workflows: config.workflows,
+    secrets,
+    workflow_secrets: workflowSecrets,
+    release_git_sha: options.releaseSha,
+    image: region + '-docker.pkg.dev/' + project + '/' + repository + '/api:' + options.releaseSha,
+    // WIF metadata is validated but never embedded in application configuration.
+  };
+}
+
+export function validateTerminal(runtime: Record<string, string>): void {
+  const raw = runtime.MANAGE_TERMINAL_VMS;
+  if (!raw) return;
+  const targets: unknown = JSON.parse(raw);
+  if (!Array.isArray(targets) || !targets.length || targets.length > 30) throw new Error('MANAGE_TERMINAL_VMS must be a nonempty array (max 30)');
+  const ids = new Set<string>();
+  for (const item of targets) {
+    if (!item || typeof item !== 'object') throw new Error('Invalid VM target');
+    const vm = item as Record<string, unknown>;
+    if (typeof vm.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(vm.id) || ids.has(vm.id) ||
+      typeof vm.label !== 'string' || !vm.label.trim() || vm.label.length > 80 ||
+      typeof vm.host !== 'string' || !/^[a-zA-Z0-9.-]{1,253}$/.test(vm.host) ||
+      !Number.isInteger(vm.port) || Number(vm.port) < 1 || Number(vm.port) > 65535 ||
+      typeof vm.username !== 'string' || !/^[a-z_][a-z0-9_-]{0,31}$/i.test(vm.username) ||
+      typeof vm.hostKeySha256 !== 'string' || !/^SHA256:[A-Za-z0-9+/]{43}=?$/.test(vm.hostKeySha256)) {
+      throw new Error('Invalid VM target fields: id, label, host, port, username, hostKeySha256');
+    }
+    ids.add(vm.id);
+  }
+  if (runtime.MANAGE_TERMINAL_GATEWAY_URL !== 'https://photointel-ssh.migos.club')
+    throw new Error('Terminal gateway must use the approved Access-protected hostname');
+}
+
+export function deployBindings(raw: string, target: DeploymentTarget) {
+  const config = normalizeDeployConfig(raw);
+  if (target === 'production') validateTerminal(config.runtime);
+  const runtime = { ...config.runtime };
+  if (target === 'preview') {
+    for (const key of Object.keys(runtime)) {
+      if (RUNTIME_SECRET_FIELDS.has(key) ||
+          /^(?:MANAGE_TERMINAL_|MANAGE_CODESPACES_|GITHUB_API_TOKEN|GITHUB_TOKEN|.*(?:SECRET|PRIVATE_KEY|PASSWORD|CREDENTIAL|TOKEN))$/i.test(key)) {
+        delete runtime[key];
+      }
+    }
+    delete runtime.MANAGE_TERMINAL_GATEWAY_SECRET;
+    delete runtime.MANAGE_CODESPACES_USER_TOKEN;
+    delete runtime.MANAGE_TERMINAL_VMS;
+    delete runtime.MANAGE_TERMINAL_GATEWAY_URL;
+    runtime.PHOTOINTEL_PREVIEW = 'true';
+  }
+  return { runtime, cloudflare: target === 'preview' ? {} : config.cloudflare, workflows: target === 'preview' ? {} : config.workflows };
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const [,, target, output] = process.argv;
+  if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'diagnose-preview' && target !== 'compare' && target !== 'render-config') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
+  if (target !== 'diagnose' && target !== 'diagnose-preview' && !output) throw new Error('Output path required');
+  const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
+  if (target === 'render-config') {
+    const config = renderDeployConfiguration(raw, {
+      project: process.env.CONFIRM_PROJECT ?? '',
+      releaseSha: process.env.RELEASE_SHA ?? '',
+      githubSecrets: process.env.PHOTOINTEL_GITHUB_SECRETS_JSON ? JSON.parse(process.env.PHOTOINTEL_GITHUB_SECRETS_JSON) : {},
+      githubVariables: process.env.PHOTOINTEL_GITHUB_VARS_JSON ? JSON.parse(process.env.PHOTOINTEL_GITHUB_VARS_JSON) : {},
+    });
+    writeFileSync(output, JSON.stringify(config), {mode: 0o600});
+    console.log(JSON.stringify({source: 'typescript', project: config.project_id, runtimeKeys: Object.keys(config.extra_environment as object).sort()}));
+    process.exit(0);
+  }
+  const config = normalizeDeployConfig(raw);
+  if (target === 'compare') {
+    const actual = JSON.parse(readFileSync(output, 'utf8')) as Record<string, unknown>;
+    const legacy = normalizeRecord(actual.extra_environment);
+    const expected = config.runtime;
+    const keys = [...new Set([...Object.keys(legacy), ...Object.keys(expected)])].sort();
+    const missing = keys.filter(key => !(key in legacy));
+    const extra = keys.filter(key => !(key in expected));
+    const mismatched = keys.filter(key => key in legacy && key in expected && legacy[key] !== expected[key]);
+    console.log(JSON.stringify({ contract: 'typescript-vs-legacy', matching: !missing.length && !extra.length && !mismatched.length, missing, extra, mismatched }));
+    if (missing.length || extra.length || mismatched.length) process.exitCode = 1;
+  } else if (target === 'diagnose' || target === 'diagnose-preview') {
+    const preview = target === 'diagnose-preview';
+    let terminalValid = false;
+    let terminalError = '';
+    if (!preview) {
+      try { validateTerminal(config.runtime); terminalValid = Boolean(config.runtime.MANAGE_TERMINAL_VMS); }
+      catch (error) { terminalError = error instanceof Error ? error.message : 'Invalid terminal configuration'; }
+    }
+    console.log(JSON.stringify({ source: 'GCP_CONFIG_ENV', runtimeKeys: Object.keys(config.runtime).sort(), terminalPresent: Boolean(config.runtime.MANAGE_TERMINAL_VMS), terminalValid, terminalValidationSkipped: preview, terminalError, gatewayPresent: Boolean(config.runtime.MANAGE_TERMINAL_GATEWAY_URL) }));
+    if (terminalError) process.exitCode = 1;
+  } else {
+    const bindings = deployBindings(raw, target);
+    writeFileSync(output, JSON.stringify(bindings), { mode: 0o600 });
+    console.log(JSON.stringify({ target, runtimeKeys: Object.keys(bindings.runtime).sort(), cloudflareKeys: Object.keys(bindings.cloudflare).sort(), terminalConfigured: Boolean(bindings.runtime.MANAGE_TERMINAL_VMS) }));
+  }
+}

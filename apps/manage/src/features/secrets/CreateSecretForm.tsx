@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, Card, Input } from '../../components/ui';
 import { ConfirmDialog } from '../../components/confirm-dialog';
@@ -12,11 +12,9 @@ export function CreateSecretForm({
   busy: boolean;
   onCreate(name: string): void;
 }) {
-  const [name, setName] = useState(suggestedName || '');
+  const [draftName, setDraftName] = useState<string | null>(null);
+  const name = draftName ?? suggestedName ?? '';
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => {
-    if (suggestedName) setName(suggestedName);
-  }, [suggestedName]);
   const valid = /^photointel-[a-z0-9-]{1,90}$/.test(name);
   return (
     <Card className="space-y-3 p-4">
@@ -28,7 +26,7 @@ export function CreateSecretForm({
       <Input
         aria-label="Nome do novo secret"
         value={name}
-        onChange={(event) => setName(event.target.value)}
+        onChange={(event) => setDraftName(event.target.value)}
         placeholder="photointel-nome-do-secret"
         autoComplete="off"
         spellCheck={false}
