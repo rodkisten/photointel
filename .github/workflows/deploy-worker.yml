@@ -69,6 +69,13 @@ on:
 permissions:
   contents: read
 
+env:
+  BASH_ENV: ${{ github.workspace }}/scripts/ci/pretty-logs.sh
+
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+
 concurrency:
   # PR previews são descartáveis; deploys de produção devem concluir com segurança.
   group: ${{ github.event_name == 'pull_request' && format('photointel-frontends-pr-{0}', github.event.pull_request.number) || 'photointel-frontends-production' }}
@@ -102,14 +109,12 @@ jobs:
 
       - name: "🗳️ Selecionar aplicações afetadas"
         id: set-matrix
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           REQUESTED_APP: ${{ inputs.app || 'all' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE_SHA: ${{ github.event.before }}
         run: |
-          set -euo pipefail
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             case "$REQUESTED_APP" in
               all) apps='["web","manage"]' ;;
@@ -207,9 +212,7 @@ jobs:
       - name: "⚡ Executar testes do Cloudflare Worker"
         if: matrix.app == 'web'
         continue-on-error: true
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        run: ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
       - name: "🐍 Validar sintaxe do script de deploy (manage)"
         if: matrix.app == 'manage'
@@ -292,17 +295,13 @@ jobs:
         id: worker_env
         env:
           CONFIRM_PROJECT: photointel
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker
+        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker
 
       - name: "🔎 Diagnosticar domínio e audience do Cloudflare Access"
         continue-on-error: true
         env:
           CONFIRM_PROJECT: photointel
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" python3 -m infra.scripts.diagnose_access
+        run: ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" python3 -m infra.scripts.diagnose_access
 
       - name: "🧰 Configurar Node.js 26"
         id: notify_observed_002
@@ -321,9 +320,7 @@ jobs:
         id: notify_observed_004
         env:
           CONFIRM_PROJECT: photointel
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-build
+        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-build
 
       - name: "📱 Notificar etapa 1/3 · Build"
         if: ${{ always() && (steps.notify_observed_004.outcome == 'success' || steps.notify_observed_004.outcome == 'failure' || steps.notify_observed_004.outcome == 'cancelled') }}
@@ -348,9 +345,7 @@ jobs:
 
       - name: "🧪 Testar proxy relay e SPA do Worker"
         id: worker_tests
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        run: ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
       - name: "📱 Notificar etapa 2/3 · Testes"
         if: ${{ always() && (steps.worker_tests.outcome == 'success' || steps.worker_tests.outcome == 'failure' || steps.worker_tests.outcome == 'cancelled') }}
@@ -377,9 +372,7 @@ jobs:
         id: notify_observed_006
         env:
           CONFIRM_PROJECT: photointel
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-deploy
+        run: ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" python3 -m infra.scripts.prepare_workflow_env worker-deploy
 
       - name: "📱 Notificar etapa 3/3 · Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
@@ -476,20 +469,14 @@ jobs:
 
       - name: "🔎 Configurar Sentry browser DSN"
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" python3 -m infra.scripts.deploy_manage browser-env
+        run: ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" python3 -m infra.scripts.deploy_manage browser-env
 
       - name: "🏗️ Gerar build de produção (manage)"
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: npm --prefix apps/manage run build" npm --prefix apps/manage run build
+        run: ci_run "Cloudflare: npm --prefix apps/manage run build" npm --prefix apps/manage run build
 
       - name: "🚀 Publicar Manage Worker, Access e domínio"
         if: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
-          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" python3 -m infra.scripts.deploy_manage apply
+        run: ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" python3 -m infra.scripts.deploy_manage apply
 
       - name: "🧹 Limpar configuração temporária (GCP)"
         if: always()
