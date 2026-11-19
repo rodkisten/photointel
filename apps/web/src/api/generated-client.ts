@@ -20,11 +20,17 @@ api.setConfig({
   },
 });
 
-async function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, path: string, method: string): Promise<T> {
-  if (!result.response.ok || result.data === undefined) {
-    throw await responseError(result.response.clone(), path, method);
+async function unwrap<T>(
+  result: { data?: unknown; error?: unknown; response?: Response },
+  path: string,
+  method: string,
+): Promise<T> {
+  if (!result.response || !result.response.ok || result.data === undefined) {
+    if (result.response) throw await responseError(result.response.clone(), path, method);
+    throw apiNetworkError(result.error, method, path);
   }
-  return result.data;
+  // The generic transport does not infer operation schemas. Keep the contract assertion here.
+  return result.data as T;
 }
 
 function completeFilter(node: FilterNode): components['schemas']['FilterNode'] {
