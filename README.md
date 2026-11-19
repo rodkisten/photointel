@@ -70,6 +70,15 @@ Referências `${KEY}`, `${KEY:-fallback}` e `$` são resolvidas com proteção c
 
 A action `.github/actions/gcp-config` oferece `engine: python` (padrão compatível) e `engine: typescript` (opt-in). No modo TypeScript, `github-secrets-json` e `github-vars-json` recebem apenas chaves explicitamente autorizadas pelo workflow, que deve usar `environment: production` e nunca registrar o conteúdo. A action produz `infra/gcp/config.local.json` com permissões restritas e continua executando `infra.gcp.manage render` para artefatos de infraestrutura. A opção **não foi ativada em todos os consumidores**, e os testes end-to-end permanecem pendentes.
 
+### Sincronização dos lockfiles
+
+- `.github/workflows/python-lockfiles.yml` regenera `uv.lock` com Python 3.15 e valida o resultado com `uv lock --check`.
+- A sincronização usa a GitHub App Ploocky para gravar somente `uv.lock) na branch selecionada, com verificação otimista para não sobrescrever commits concorrentes.
+- O workflow roda automaticamente quando sua própria definição é alterada na branch de trabalho e também aceita execução manual por `workflow_dispatch` depois de integrado à `main`.
+- `.github/workflows/npm-lockfiles.yml` continua responsável pelos `package-lock.json`; não misture as duas rotinas.
+
+A primeira execução da migração atualizou as constraints de segurança e os pacotes `certifi`, `filelock`, `opentelemetry-api`, `pyasn1` e `setuptools`. O `uv lock --check` passou após a sincronização.
+
 ### Critérios de conclusão
 
 - [x] Parser compartilhado e referências compactas/legadas
