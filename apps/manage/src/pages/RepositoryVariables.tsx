@@ -60,7 +60,7 @@ export function RepositoryVariables() {
   const selectedWorkflows = triggerDraft?.key === triggerDraftKey ? triggerDraft.workflows : activeRule?.workflows || [];
   const webhookUrl = triggerDraft?.key === triggerDraftKey ? triggerDraft.webhook : activeRule?.webhook || '';
   const setTriggerMode = (mode: 'none' | 'workflows' | 'webhook') => setTriggerDraft({ key: triggerDraftKey, mode, workflows: selectedWorkflows, webhook: webhookUrl });
-  const setSelectedWorkflows = (workflows: string[]) => setTriggerDraft({ key: triggerDraftKey, mode: triggerMode, workflows, webhook: webhookUrl });
+  const setSelectedWorkflows = (update: string[] | ((current: string[]) => string[])) => setTriggerDraft({ key: triggerDraftKey, mode: triggerMode, workflows: typeof update === 'function' ? update(selectedWorkflows) : update, webhook: webhookUrl });
   const setWebhookUrl = (webhook: string) => setTriggerDraft({ key: triggerDraftKey, mode: triggerMode, workflows: selectedWorkflows, webhook });
   const existing = useMemo(
     () => variables.data?.items.find((item) => item.name === selected),
