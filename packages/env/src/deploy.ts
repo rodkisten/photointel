@@ -311,7 +311,7 @@ export function deployBindings(raw: string, target: DeploymentTarget) {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [,, target, output] = process.argv;
   if (target !== 'production' && target !== 'preview' && target !== 'diagnose' && target !== 'diagnose-preview' && target !== 'compare' && target !== 'render-config') throw new Error('Usage: node deploy.ts production|preview|diagnose|compare [output.json]');
-  if (target !== 'diagnose' && !output) throw new Error('Output path required');
+  if (target !== 'diagnose' && target !== 'diagnose-preview' && !output) throw new Error('Output path required');
   const raw = process.env.GCP_CONFIG_ENV ?? (process.env.GCP_CONFIG_ENV_FILE ? readFileSync(process.env.GCP_CONFIG_ENV_FILE, 'utf8') : '');
   if (target === 'render-config') {
     const config = renderDeployConfiguration(raw, {
