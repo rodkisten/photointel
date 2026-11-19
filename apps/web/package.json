@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "node scripts/generate-brand.mjs",
     "dev": "vite --host 0.0.0.0",
-    "prebuild": "node scripts/generate-brand.mjs",
+    "prebuild": "npm run generate:api && node scripts/generate-brand.mjs",
     "build": "npm run tsc7 -- -b && vite build",
     "postbuild": "node scripts/inject-precache.mjs",
     "preview": "vite preview --host 0.0.0.0",
@@ -18,7 +18,8 @@
     "format": "npm --prefix ../.. run format:web",
     "format:check": "npm --prefix ../.. run format:check:web",
     "test:pwa": "node --test scripts/offline-sw.test.mjs",
-    "tsc7": "node node_modules/@typescript/native/bin/tsc"
+    "tsc7": "node node_modules/@typescript/native/bin/tsc",
+    "pretypecheck": "npm run generate:api"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.0",
