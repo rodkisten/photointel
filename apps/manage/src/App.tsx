@@ -155,10 +155,10 @@ export default function App() {
     window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRun, setSelectedRun] = useState<{ repository: string; id: number } | null>(null);
-  const selectedRunId = selectedRun?.repository === activeProject?.repository ? selectedRun.id : null;
+  const selectedRunId = selectedRun && selectedRun.repository === activeProject?.repository ? selectedRun.id : null;
   const setSelectedRunId = (update: number | null | ((current: number | null) => number | null)) => {
     setSelectedRun((current) => {
-      const currentId = current?.repository === activeProject?.repository ? current.id : null;
+      const currentId = current && current.repository === activeProject?.repository ? current.id : null;
       const nextId = typeof update === 'function' ? update(currentId) : update;
       return nextId === null || !activeProject?.repository ? null : { repository: activeProject.repository, id: nextId };
     });
