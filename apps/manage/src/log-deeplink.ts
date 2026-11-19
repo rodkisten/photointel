@@ -41,7 +41,7 @@ export function readLogLink(search: string): LogLink {
   const at = safeDate(params.get('at'));
   const project = params.get('project') || '';
   const link: LogLink = {
-    ...( /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(project) ? { project } : {} ),
+    ...( /^[A-Za-z0-9_-][A-Za-z0-9_.-]*\/[A-Za-z0-9_-][A-Za-z0-9_.-]*$/.test(project) ? { project } : {} ),
     source: source === 'cloudflare' || source === 'github' || source === 'sentry' ? source : 'gcp',
     correlation: UUID.test(correlation) ? correlation : '',
     job: UUID.test(job) ? job : '',
