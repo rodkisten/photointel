@@ -69,10 +69,6 @@ const identity = {
   GCP_WORKLOAD_IDENTITY_PROVIDER: 'projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence',
   GCP_DEPLOY_SERVICE_ACCOUNT: 'deployer@photointel.iam.gserviceaccount.com',
 };
-const requiredGitHubSecrets = Object.fromEntries([
-  'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
-  'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
-].map(key => [key, 'github-' + key]));
 
 test('validates production Workload Identity metadata without fetching credentials', () => {
   assert.deepEqual(validateWorkloadIdentity(identity), {
@@ -240,11 +236,15 @@ test('renderer rejects direct GitHub values for optional runtime secret fields t
 test('GitHub-provided terminal values cannot override the approved production gateway', () => {
   const raw = JSON.stringify({
     project_id: 'photointel', region: 'us-central1', repository: 'photointel',
-    ...identity, extra_environment: runtime,
+    ...identity,
+    extra_environment: runtime,
+    secrets: Object.fromEntries([
+      'DATABASE_URL', 'MIGRATION_DATABASE_URL', 'STORAGE_ACCESS_KEY', 'STORAGE_SECRET_KEY',
+      'BRIDGE_TOKEN_PEPPER', 'BRIDGE_ENROLLMENT_SECRET', 'ICLOUD_SESSION_KEY',
+    ].map(key => [key, {name: 'photointel-' + key.toLowerCase().replaceAll('_', '-'), version: '1'}])),
   });
   assert.throws(() => renderDeployConfiguration(raw, {
     project: 'photointel', releaseSha: 'c'.repeat(40),
-    githubSecrets: requiredGitHubSecrets,
     githubVariables: {MANAGE_TERMINAL_GATEWAY_URL: 'https://attacker.example.com'},
   }), /approved Access-protected hostname/);
 });
