@@ -15,7 +15,9 @@
     "postbuild": "node scripts/inject-precache.mjs",
     "test:pwa": "node --test scripts/offline-sw.test.mjs",
     "tsc7": "node node_modules/@typescript/native/bin/tsc",
-    "generate:api": "openapi-ts"
+    "generate:api": "openapi-ts",
+    "prebuild": "npm run generate:api",
+    "pretypecheck": "npm run generate:api"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
