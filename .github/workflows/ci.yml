@@ -667,21 +667,34 @@ jobs:
       - name: "📋 Consolidar falhas · containers"
         if: ${{ always() }}
         env:
-          STEP_RESULTS: ${{ toJSON(steps) }}
+          CHECKOUT_OUTCOME: ${{ steps.notify_observed_036.outcome }}
+          QEMU_OUTCOME: ${{ steps.notify_observed_037.outcome }}
+          BUILDX_OUTCOME: ${{ steps.notify_observed_038.outcome }}
+          API_BUILD_OUTCOME: ${{ steps.notify_observed_039.outcome }}
+          WEB_BUILD_OUTCOME: ${{ steps.notify_observed_040.outcome }}
         run: |
-          printf '%s' "$STEP_RESULTS" | jq -r '
-            to_entries[]
-            | select(.value.outcome == "failure")
-            | "::error title=Etapa falhou::" + .key
-          '
-          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
+          failures=()
+          check_step() {
+            local name="$1" outcome="$2"
+            if [ "$outcome" = "failure" ]; then
+              failures+=("$name")
+              echo "::error title=Etapa falhou::$name"
+            fi
+          }
+
+          check_step "checkout" "$CHECKOUT_OUTCOME"
+          check_step "qemu" "$QEMU_OUTCOME"
+          check_step "buildx" "$BUILDX_OUTCOME"
+          check_step "api-multiarch" "$API_BUILD_OUTCOME"
+          check_step "web-multiarch" "$WEB_BUILD_OUTCOME"
+
           echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
-          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$count" -gt 0 ]; then
-            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
+          echo "Etapas com falha: ${#failures[@]}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${#failures[@]}" -gt 0 ]; then
+            printf '%s\\n' "${failures[@]}" | sed 's/^/- ❌ /' >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ Builds multi-arquitetura concluídos." >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
   # 6. Auditoria de Segurança & Segredos
