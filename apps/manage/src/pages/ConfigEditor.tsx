@@ -104,7 +104,8 @@ export function ConfigEditor() {
   const setEditor = (value: string) => setEditorDraft(value);
   const [pythonPreview, setPythonPreview] = useState<{ ok: boolean; config?: unknown; references?: Array<{ scope: string; key: string; name: string; version: string }>; error?: string } | null>(null);
   const [editorMode, setEditorMode] = useState<'code' | 'fields'>('code');
-  const version = q.data?.version ?? '';
+  const [versionOverride, setVersion] = useState<string | null>(null);
+  const version = versionOverride ?? q.data?.version ?? '';
   const [confirm, setConfirm] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [autoApply, setAutoApply] = useState(true);
