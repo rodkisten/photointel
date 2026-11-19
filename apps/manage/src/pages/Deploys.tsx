@@ -17,7 +17,6 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {
   Play,
   RefreshCcw,
-  Workflow,
   X,
 } from 'lucide-react';
 import {
