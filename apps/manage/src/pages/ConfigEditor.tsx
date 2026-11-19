@@ -1,51 +1,66 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import * as Dialog from '@radix-ui/react-dialog';
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  ArrowUpRight,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import {
   Check,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
   Cloud,
-  CloudCog,
   Code2,
   Copy,
-  ExternalLink,
-  GitBranch,
-  History,
-  LoaderCircle,
-  Logs,
-  Menu,
-  Play,
-  RefreshCcw,
   RotateCcw,
   Save,
-  Search,
-  Server,
-  Settings2,
-  Shield,
-  Terminal,
-  Workflow,
-  X,
 } from 'lucide-react';
-import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
-import { api, send } from '../lib/client';
-import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, optimizeDotenv, parseConfiguration, planConfigChange } from '../config-reconcile';
-import type { ConfigPlan } from '../config-reconcile';
-import { cn, date, human, state } from '../lib/utils';
-import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
-import { External, Spinner, Empty, IssueBanner } from '../components/shared';
-import { RunRow, RunDetail } from '../components/runs';
-import { ConfirmDialog } from '../components/confirm-dialog';
-import { CodeMirrorEnvEditor, detectEnvironmentFormat } from '../components/codemirror-env-editor';
-import { DotenvFields } from '../components/dotenv-fields';
-import { organizeEnvironment } from '../env-organizer';
-import { RepositoryVariables } from './RepositoryVariables';
+import {
+  Badge,
+  Button,
+  Card,
+  Section,
+} from '../components/ui';
+import {
+  api,
+  send,
+} from '../lib/client';
+import {
+  findDuplicateConfigKeys,
+  optimizeDotenv,
+  parseConfiguration,
+  planConfigChange,
+} from '../config-reconcile';
+import type {
+  ConfigPlan,
+} from '../config-reconcile';
+import {
+  date,
+} from '../lib/utils';
+import type {
+  Run,
+} from '../types';
+import {
+  Spinner,
+  IssueBanner,
+} from '../components/shared';
+import {
+  ConfirmDialog,
+} from '../components/confirm-dialog';
+import {
+  CodeMirrorEnvEditor,
+  detectEnvironmentFormat,
+} from '../components/codemirror-env-editor';
+import {
+  DotenvFields,
+} from '../components/dotenv-fields';
+import {
+  organizeEnvironment,
+} from '../env-organizer';
+import {
+  RepositoryVariables,
+} from './RepositoryVariables';
 
 type EnvironmentPreviewEntry = { key: string; value: string; secretName: string | null };
 
