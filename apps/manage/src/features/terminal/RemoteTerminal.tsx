@@ -32,6 +32,15 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         (frame && typeof frame === 'object' && 'type' in frame && frame.type === 'resize' || status === 'connected'))
       ws.send(JSON.stringify(frame));
   }, [status]);
+  const disconnect = useCallback(() => {
+    generation.current++;
+    pending.current = false;
+    socket.current?.close(1000, 'User disconnect');
+    socket.current = null;
+    setCtrl(false);
+    setStatus('closed');
+    setNotice('Sessão desconectada.');
+  }, []);
   const connect = useCallback(async () => {
     if (socket.current || pending.current) return;
     pending.current = true;
