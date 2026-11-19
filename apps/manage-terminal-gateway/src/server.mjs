@@ -71,6 +71,23 @@ wss.on('connection', (ws, claims) => {
   let lastActivity = Date.now();
   const send = frame => { if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(frame)); else if (ws.bufferedAmount >= 1024 * 1024) ws.close(1009, 'Backpressure'); };
   const close = () => { active.delete(claims.jti); stream?.close(); ssh.end(); };
+  // WebSocket messages must stay bounded even when SSH emits a large output chunk.
+  // Split at UTF-8 code point boundaries so the client never sees malformed text.
+  const sendOutput = value => {
+    let chunk = '';
+    let bytes = 0;
+    for (const char of value) {
+      const size = Buffer.byteLength(char, 'utf8');
+      if (bytes + size > 16_384) {
+        send({ type: 'stdout', data: chunk });
+        chunk = '';
+        bytes = 0;
+      }
+      chunk += char;
+      bytes += size;
+    }
+    if (chunk) send({ type: 'stdout', data: chunk });
+  };
   const sshTimeout = setTimeout(() => { send({ type: 'error', code: 'TIMEOUT', message: 'Tempo limite da sessão excedido' }); ws.close(); }, 12_000);
   sshTimeout.unref();
   const idle = setInterval(() => { if (Date.now() - lastActivity > IDLE_MS) ws.close(1000, 'Idle timeout'); }, 15000);
@@ -103,7 +120,7 @@ wss.on('connection', (ws, claims) => {
       channel.on('data', data => {
         lastActivity = Date.now();
         const output = stdoutDecoder.write(data);
-        if (output) send({ type: 'stdout', data: output });
+        if (output) sendOutput(output);
       });
       channel.stderr.on('data', data => {
         lastActivity = Date.now();
@@ -112,7 +129,7 @@ wss.on('connection', (ws, claims) => {
       });
       channel.on('close', code => {
         const trailing = stdoutDecoder.end() + stderrDecoder.end();
-        if (trailing) send({ type: 'stdout', data: trailing });
+        if (trailing) sendOutput(trailing);
         send({ type: 'exit', code: typeof code === 'number' ? code : null });
         ws.close();
       });
