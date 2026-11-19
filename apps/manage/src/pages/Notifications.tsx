@@ -38,12 +38,34 @@ export function NotificationsPage() {
       .finally(() => { if (active) setLoadingRepo(false); });
     return () => { active = false; };
   }, [repository]);
-  const activeConflicts = repoConfig ? Object.entries(overrides).flatMap(([path, value]) => {
-    const repositoryValue = repoConfig.config[path as keyof Settings];
+  const activeConflicts: Conflict[] = repoConfig ? Object.entries({
+    ...Object.fromEntries(Object.entries(overrides).filter(([key]) => key !== 'retentionMinutes')),
+    ...Object.fromEntries(Object.entries(overrides.retentionMinutes ?? {}).map(([key, value]) => ['retentionMinutes.' + key, value])),
+  }).flatMap(([path, value]) => {
+    const repositoryValue: unknown = path.startsWith('retentionMinutes.')
+      ? repoConfig.config.retentionMinutes?.[path.split('.')[1] as keyof Settings['retentionMinutes']]
+      : repoConfig.config[path as keyof Settings];
     return repositoryValue !== undefined && JSON.stringify(repositoryValue) !== JSON.stringify(value)
       ? [{ path, repository: repositoryValue, manage: value, resolvedBy: choices[path] ?? null }]
       : [];
   }) : [];
+  const changeOverride = <K extends keyof Settings>(key: K, value: Settings[K] | undefined) =>
+    setOverrides(current => {
+      const next = { ...current };
+      if (value === undefined) delete next[key];
+      else Object.assign(next, { [key]: value });
+      return next;
+    });
+  const changeRetention = (key: keyof Settings['retentionMinutes'], value: number | undefined) =>
+    setOverrides(current => {
+      const retention = { ...current.retentionMinutes };
+      if (value === undefined) delete retention[key];
+      else retention[key] = value;
+      const next = { ...current };
+      if (Object.keys(retention).length) next.retentionMinutes = retention as Settings['retentionMinutes'];
+      else delete next.retentionMinutes;
+      return next;
+    });
   const change = (patch: Partial<Settings>) => setSettings(current => current ? { ...current, ...patch } : current);
   if (!settings) return <Card className="p-5">{error ? <IssueBanner error={error} /> : 'Carregando notificações…'}</Card>;
   const sample = settings.template.replace(/{{(\w+)}}/g, (_, key: string) => ({
@@ -63,14 +85,53 @@ export function NotificationsPage() {
         <label className="block text-sm">Template personalizado
           <textarea className="mt-1 min-h-28 w-full rounded bg-carbon-900 p-3 font-mono text-sm"
             value={overrides.template ?? ''} placeholder="Herdar template do repositório"
-            onChange={e => setOverrides(current => ({ ...current, template: e.target.value || undefined }))}/>
+            onChange={e => changeOverride('template', e.target.value || undefined)}/>
         </label>
         <label className="block text-sm">Janela personalizada
           <select className="mt-1 w-full rounded bg-carbon-900 p-2" value={overrides.windowSeconds ?? ''}
-            onChange={e => setOverrides(current => ({ ...current, windowSeconds: e.target.value ? Number(e.target.value) : undefined }))}>
+            onChange={e => changeOverride('windowSeconds', e.target.value ? Number(e.target.value) : undefined)}>
             <option value="">Herdar</option>{[5, 10, 15, 30].map(n => <option key={n} value={n}>{n} segundos</option>)}
           </select>
         </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">Agrupamento
+            <select className="mt-1 w-full rounded bg-carbon-900 p-2" value={overrides.grouping ?? ''}
+              onChange={e => changeOverride('grouping', (e.target.value || undefined) as Settings['grouping'] | undefined)}>
+              <option value="">Herdar</option><option value="window">Por janela</option><option value="run">Por execução</option><option value="none">Individual</option>
+            </select>
+          </label>
+          <label className="text-sm">Atualização
+            <select className="mt-1 w-full rounded bg-carbon-900 p-2" value={overrides.updateMode ?? ''}
+              onChange={e => changeOverride('updateMode', (e.target.value || undefined) as Settings['updateMode'] | undefined)}>
+              <option value="">Herdar</option><option value="edit">Editar mensagem</option><option value="new">Nova mensagem</option>
+            </select>
+          </label>
+        </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Eventos personalizados</legend>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={overrides.events !== undefined}
+              onChange={e => changeOverride('events', e.target.checked ? [...(repoConfig.settings.events ?? [])] : undefined)}/>
+            Sobrescrever eventos (desmarcado = herdar)
+          </label>
+          {overrides.events !== undefined && <div className="grid gap-2 sm:grid-cols-2">
+            {Object.entries(labels).map(([id, label]) => <label key={id} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={overrides.events?.includes(id) ?? false}
+                onChange={e => changeOverride('events', e.target.checked ? [...(overrides.events ?? []), id] : (overrides.events ?? []).filter(event => event !== id))}/>
+              {label}
+            </label>)}
+          </div>}
+        </fieldset>
+        <fieldset className="grid gap-3 sm:grid-cols-3">
+          <legend className="mb-2 text-sm font-medium">Retenção personalizada (minutos)</legend>
+          {(['running', 'success', 'error'] as const).map(key => <label key={key} className="text-sm">
+            {({ running: 'Executando', success: 'Sucesso', error: 'Erro' })[key]}
+            <input className="mt-1 w-full rounded bg-carbon-900 p-2" type="number" min={0} max={43200}
+              value={overrides.retentionMinutes?.[key] ?? ''} placeholder="Herdar"
+              onChange={e => changeRetention(key, e.target.value === '' ? undefined : Number(e.target.value))}/>
+          </label>)}
+        </fieldset>
+        <p className="text-xs text-carbon-400">Configuração efetiva atual: {repoConfig.settings.events.length} eventos · {repoConfig.settings.windowSeconds}s · {repoConfig.settings.grouping}</p>
         {activeConflicts.length > 0 && <div className="space-y-3 rounded-xl border border-amber-500/40 p-3">
           <h3 className="font-semibold">Conflitos de configuração</h3>
           {activeConflicts.map(conflict => <div key={conflict.path} className="space-y-2 text-sm">
@@ -83,7 +144,7 @@ export function NotificationsPage() {
           </div>)}
         </div>}
         <button className="rounded bg-carbon-200 px-4 py-2 text-sm font-semibold text-carbon-950 disabled:opacity-50"
-          disabled={saving} onClick={async () => { setSaving(true); setSaved(false); setError(null);
+          disabled={saving || loadingRepo || activeConflicts.some(conflict => !choices[conflict.path])} onClick={async () => { setSaving(true); setSaved(false); setError(null);
             try {
               await send('/notifications/repository?repository=' + encodeURIComponent(repository), { overrides, choices }, 'PUT');
               const next = await api<RepositoryConfig>('/notifications/repository?repository=' + encodeURIComponent(repository));
