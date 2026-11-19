@@ -193,7 +193,6 @@ export default function App() {
   const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  useEffect(() => { setMobileMenu(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
