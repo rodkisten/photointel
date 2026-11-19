@@ -55,12 +55,15 @@ export async function sendWorkflowFailure(env: Env, runId: number): Promise<void
   if (endpoint.protocol !== 'https:' || !endpoint.hostname.endsWith('.migos.club') ||
     endpoint.username || endpoint.password || endpoint.hash)
     throw new Error('Relay URL inválida');
-  const started = Date.parse(String(run.created_at || ''));
+  // Group by arrival time, not run creation time: old runs may finish much later.
   const windowMs = notificationSettings.windowSeconds * 1000;
-  const windowId = Math.floor((Number.isFinite(started) ? started : Date.now()) / windowMs);
+  const windowId = Math.floor(Date.now() / windowMs);
   const grouping = notificationSettings.updateMode === 'edit' ? notificationSettings.grouping : 'none';
   const groupKey = grouping === 'window' ? 'github:workflow:' + repo + ':' + windowId :
     grouping === 'run' ? 'github:workflow:' + repo + ':run:' + runId : undefined;
+  // Avoid sending stale failures after a rerun has already changed conclusion.
+  const latest = await gh(env, '/actions/runs/' + runId) as Obj;
+  if (latest.conclusion !== 'failure') return;
   const response = await fetch(endpoint.href, {
     method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(10000),
     headers: { Authorization: 'Bearer ' + env.XRELAY_NOTIFICATION_TOKEN, 'Content-Type': 'application/json' },
