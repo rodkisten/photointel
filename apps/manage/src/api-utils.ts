@@ -29,9 +29,55 @@ export const DEFAULTS = {
 
 export type Item = Record<string, unknown>;
 
-export function safeList(data: unknown, key: string): Item[] {
-  const v = data as Record<string, unknown>;
-  return Array.isArray(v?.[key]) ? (v[key] as Item[]) : [];
+export interface GitHubActor extends Item { login?: string }
+
+export interface GitHubWorkflowRun extends Item {
+  id?: number; name?: string; display_title?: string; status?: string;
+  conclusion?: string | null; run_number?: number; created_at?: string;
+  updated_at?: string; html_url?: string; actor?: GitHubActor;
+  head_sha?: string; event?: string;
+}
+
+export interface CloudflareLogEvent extends Item {
+  timestamp?: string; source?: unknown;
+  $metadata?: { id?: string; service?: string; level?: string; message?: unknown; error?: unknown };
+  $workers?: { scriptName?: string; outcome?: string };
+}
+
+export interface CloudRunService extends Item {
+  name?: string; uri?: string; latestReadyRevision?: string; latestCreatedRevision?: string;
+  updateTime?: string; terminalCondition?: { state?: string }; reconciling?: boolean;
+}
+
+export interface CloudRunJob extends Item {
+  name?: string; updateTime?: string; latestCreatedExecution?: { name?: string }; executionCount?: number;
+}
+
+export interface CloudRunExecution extends Item {
+  name?: string; createTime?: string; startTime?: string; completionTime?: string;
+  runningCount?: number; succeededCount?: number; failedCount?: number; cancelledCount?: number;
+  taskCount?: number; conditions?: Array<{ state?: string }>; logUri?: string;
+}
+
+export interface CloudSchedulerJob extends Item {
+  name?: string; state?: string; schedule?: string; timeZone?: string;
+  lastAttemptTime?: string; status?: { code?: number };
+}
+
+export interface CloudflareWorkerScript extends Item { id?: string; modified_on?: string }
+export interface CloudflareWorkerDomain extends Item { hostname?: string; service?: string }
+
+function isRecord(value: unknown): value is Item {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function safeArray<T extends Item = Item>(data: unknown): T[] {
+  return Array.isArray(data) ? data.filter(isRecord) as T[] : [];
+}
+
+export function safeList<T extends Item = Item>(data: unknown, key: string): T[] {
+  if (!isRecord(data)) return [];
+  return safeArray<T>(data[key]);
 }
 
 export function sanitizeLog(message: unknown, maxLength: number = 450): string {

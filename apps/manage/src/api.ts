@@ -23,7 +23,11 @@ import { parseLogRequest, gcpLogFilter } from './log-query';
 import { secretRoutes } from './routes/secrets';
 import { icloudAuthRoute } from './routes/icloud-auth';
 import { handleIcloudDiagnostics } from './api-handlers';
-import { PATTERNS, LIMITS, DEFAULTS, safeList } from './api-utils';
+import { PATTERNS, LIMITS, DEFAULTS, safeList, safeArray } from './api-utils';
+import type {
+  CloudRunExecution, CloudRunJob, CloudRunService, CloudSchedulerJob,
+  CloudflareLogEvent, CloudflareWorkerDomain, CloudflareWorkerScript, GitHubWorkflowRun,
+} from './api-utils';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -642,7 +646,7 @@ async function handleGithubRoutes(request: Request, env: Env, identity: Identity
   if (method === 'GET' && path === '/api/runs') {
     const data = await gh(env, `/actions/runs?per_page=${API_CONFIG.GITHUB.MAX_RUNS_PER_PAGE}`);
     return json({
-      items: safeList(data, 'workflow_runs').map((x) => ({
+      items: safeList<GitHubWorkflowRun>(data, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
         display_title: x.display_title,
@@ -1304,11 +1308,11 @@ async function handleCloudflareOpsRoutes(request: Request, env: Env): Promise<Re
   if (method === 'GET' && path === '/api/cloudflare/workers') {
     const [scripts, domains] = await Promise.all([cf(env, '/workers/scripts'), cf(env, '/workers/domains')]);
     return json({
-      items: safeList(scripts, 'result').map((x) => ({
+      items: safeList<CloudflareWorkerScript>(scripts, 'result').map((x) => ({
         name: x.id,
         modified_on: x.modified_on,
       })),
-      domains: safeList(domains, 'result').map((x) => ({
+      domains: safeList<CloudflareWorkerDomain>(domains, 'result').map((x) => ({
         hostname: x.hostname,
         service: x.service,
       })),
@@ -1332,7 +1336,7 @@ async function handleCloudflareOpsRoutes(request: Request, env: Env): Promise<Re
     });
 
     const result = (data as { result?: Record<string, unknown> }).result;
-    const events = safeList(result?.events, 'events');
+    const events = safeArray<CloudflareLogEvent>(result?.events);
     const matching = investigation.entry
       ? events.filter((x) => String(x.$metadata?.id || '') === investigation.entry)
       : events;
@@ -1454,7 +1458,7 @@ async function handleGcpOpsRoutes(request: Request, env: Env, identity: Identity
   if (method === 'GET' && path === '/api/gcp/services') {
     const data = await gcp(env, identity, `${gcpBase(env)}/services?pageSize=${API_CONFIG.GCP.SERVICES_PAGE_SIZE}`);
     return json({
-      items: safeList(data, 'services').map((x) => ({
+      items: safeList<CloudRunService>(data, 'services').map((x) => ({
         name: x.name,
         uri: x.uri,
         latestReadyRevision: x.latestReadyRevision,
@@ -1469,7 +1473,7 @@ async function handleGcpOpsRoutes(request: Request, env: Env, identity: Identity
   if (method === 'GET' && path === '/api/gcp/jobs') {
     const data = await gcp(env, identity, `${gcpBase(env)}/jobs?pageSize=${API_CONFIG.GCP.JOBS_PAGE_SIZE}`);
     return json({
-      items: safeList(data, 'jobs').map((x) => ({
+      items: safeList<CloudRunJob>(data, 'jobs').map((x) => ({
         name: x.name,
         updateTime: x.updateTime,
         latestCreatedExecution: x.latestCreatedExecution?.name,
@@ -1490,7 +1494,7 @@ async function handleGcpOpsRoutes(request: Request, env: Env, identity: Identity
     );
     return json({
       job: name,
-      items: safeList(data, 'executions').map((x) => ({
+      items: safeList<CloudRunExecution>(data, 'executions').map((x) => ({
         name: x.name,
         createTime: x.createTime,
         startTime: x.startTime,
@@ -1611,7 +1615,7 @@ async function handleGcpOpsRoutes(request: Request, env: Env, identity: Identity
       `${API_CONFIG.GCP.SCHEDULER_API_BASE}/projects/${project}/locations/${region}/jobs?pageSize=${API_CONFIG.GCP.SCHEDULER_PAGE_SIZE}`,
     );
     return json({
-      items: safeList(data, 'jobs')
+      items: safeList<CloudSchedulerJob>(data, 'jobs')
         .filter((x) => (String(x.name).split('/').pop() || '').startsWith(API_CONFIG.GCP.RESOURCE_PREFIX))
         .map((x) => ({
           name: x.name,
@@ -1701,7 +1705,7 @@ async function handleSystemAndSentryRoutes(
     return json({
       provider_events: providerEvents,
       correlation_id: correlationId,
-      runs: safeList(ghData, 'workflow_runs').map((x) => ({
+      runs: safeList<GitHubWorkflowRun>(ghData, 'workflow_runs').map((x) => ({
         id: x.id,
         name: x.name,
         status: x.status,
@@ -1710,8 +1714,8 @@ async function handleSystemAndSentryRoutes(
         html_url: x.html_url,
         run_number: x.run_number,
       })),
-      workers: safeList(cfData, 'result').map((x) => ({ name: x.id, modified_on: x.modified_on })),
-      services: safeList(gcpData, 'services').map((x) => ({
+      workers: safeList<CloudflareWorkerScript>(cfData, 'result').map((x) => ({ name: x.id, modified_on: x.modified_on })),
+      services: safeList<CloudRunService>(gcpData, 'services').map((x) => ({
         name: x.name,
         uri: x.uri,
         latestReadyRevision: x.latestReadyRevision,
