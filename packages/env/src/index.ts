@@ -109,7 +109,7 @@ export function parseEnvironment(raw: string): ParsedEnvironment {
   const typed = (value: string): unknown => {
     if (value.startsWith('json:')) return JSON.parse(value.slice(5));
     if (/^(?:true|false|null)$/.test(value) ||
-        /^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$/.test(value)) {
+        /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value)) {
       return JSON.parse(value);
     }
     if (/^[{[]/.test(value)) {
