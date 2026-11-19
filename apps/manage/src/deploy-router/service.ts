@@ -46,7 +46,7 @@ export async function getTree(env: Env): Promise<TreeEntry[]> {
 function validatedInput(raw: Record<string, unknown>): { name: string; provider: DeployRule['provider'];
   target: string; patterns: string[]; enabled: boolean } {
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
-  if (!name || name.length > 80 || /[\x00-\x1f]/.test(name))
+  if (!name || name.length > 80 || new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + ']').test(name))
     throw new ApiError(422, 'ROUTE_NAME', 'Nome de 1 a 80 caracteres obrigatório');
   const { provider, target } = validateTarget(raw.provider, raw.target);
   return { name, provider, target, patterns: validatePatterns(raw.patterns),
