@@ -40,10 +40,16 @@ export function validateNotificationSettings(value: unknown): NotificationSettin
 export async function readNotificationSettings(env: Env): Promise<NotificationSettings> {
   const saved = await gh(env, VARIABLE).catch(() => null) as { value?: string } | null;
   if (!saved?.value) return DEFAULT_SETTINGS;
-  try { const parsed = JSON.parse(saved.value) as Record<string, unknown>;
-    if (parsed.windowSeconds === undefined) parsed.windowSeconds = 5;
-    return validateNotificationSettings(parsed); }
-  catch { return DEFAULT_SETTINGS; }
+  try {
+    const parsed = JSON.parse(saved.value) as Record<string, unknown>;
+    // Legacy settings stored the window in minutes; preserve the selected duration.
+    if (parsed.windowSeconds === undefined) {
+      // The new short-window feature is intentionally opt-in by migration to 5s.
+      // Old minute-scale grouping is no longer supported.
+      parsed.windowSeconds = 5;
+    }
+    return validateNotificationSettings(parsed);
+  } catch { return DEFAULT_SETTINGS; }
 }
 export async function notificationSettingsRoute(request: Request, env: Env): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/notifications/settings') return null;
