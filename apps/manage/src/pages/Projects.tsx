@@ -9,12 +9,12 @@ import { api } from '../lib/client';
 
 type Target = { id: string; name: string; script: string };
 export function ProjectsPage() {
-  return <ProjectsEditor key={repository} repository={repository} projectLoading={isLoading} />;
-}
-
-function ProjectsEditor({ repository, projectLoading }: { repository: string; projectLoading: boolean }) {
   const { project, isLoading } = useProject();
   const repository = project?.repository ?? '';
+  return <ProjectsEditor key={repository} repository={repository} projectLoading={isLoading} hasProject={Boolean(project)} />;
+}
+
+function ProjectsEditor({ repository, projectLoading, hasProject }: { repository: string; projectLoading: boolean; hasProject: boolean }) {
   const [scope, setScope] = useState<'repository' | 'environment'>('repository');
   const [environment, setEnvironment] = useState('production');
   const [name, setName] = useState('');
@@ -35,7 +35,7 @@ function ProjectsEditor({ repository, projectLoading }: { repository: string; pr
     queryFn: () => api<{ runs: Array<{ target: string; state: string; sha: string }> }>('/deploy-router'),
     retry: false, refetchInterval: 30000 });
   if (projectLoading) return <Spinner />;
-  if (!project) return <Card className="p-4" role="alert">Selecione um projeto autorizado para visualizar as variáveis.</Card>;
+  if (!hasProject) return <Card className="p-4" role="alert">Selecione um projeto autorizado para visualizar as variáveis.</Card>;
   return <div className="space-y-5">
     <Section title={'Variáveis GitHub Actions · ' + repository} detail="Alterações são aplicadas ao repositório selecionado. Secrets não podem ser lidos aqui.">
       <Card className="space-y-3 p-4">
