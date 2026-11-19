@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { StringDecoder } from 'node:string_decoder';
 import { Client } from 'ssh2';
 import { WebSocketServer } from 'ws';
 
@@ -64,6 +65,8 @@ wss.on('connection', (ws, claims) => {
   const ssh = new Client();
   active.set(claims.jti, ssh);
   let stream;
+  const stdoutDecoder = new StringDecoder('utf8');
+  const stderrDecoder = new StringDecoder('utf8');
   let requestedSize = { cols: 80, rows: 24 };
   let lastActivity = Date.now();
   const send = frame => { if (ws.readyState === 1 && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(frame)); else if (ws.bufferedAmount >= 1024 * 1024) ws.close(1009, 'Backpressure'); };
@@ -97,9 +100,22 @@ wss.on('connection', (ws, claims) => {
       stream = channel;
       channel.setWindow(requestedSize.rows, requestedSize.cols, 0, 0);
       send({ type: 'ready' });
-      channel.on('data', data => { lastActivity = Date.now(); send({ type: 'stdout', data: data.toString('utf8') }); });
-      channel.stderr.on('data', data => send({ type: 'stdout', data: data.toString('utf8') }));
-      channel.on('close', code => { send({ type: 'exit', code: typeof code === 'number' ? code : null }); ws.close(); });
+      channel.on('data', data => {
+        lastActivity = Date.now();
+        const output = stdoutDecoder.write(data);
+        if (output) send({ type: 'stdout', data: output });
+      });
+      channel.stderr.on('data', data => {
+        lastActivity = Date.now();
+        const output = stderrDecoder.write(data);
+        if (output) send({ type: 'stdout', data: output });
+      });
+      channel.on('close', code => {
+        const trailing = stdoutDecoder.end() + stderrDecoder.end();
+        if (trailing) send({ type: 'stdout', data: trailing });
+        send({ type: 'exit', code: typeof code === 'number' ? code : null });
+        ws.close();
+      });
     });
   });
   ssh.on('error', () => { clearTimeout(sshTimeout); send({ type: 'error', code: 'SSH', message: 'Falha na conexão SSH' }); ws.close(); });
