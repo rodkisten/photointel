@@ -101,8 +101,7 @@ export default function App() {
   const router = useRouter();
   const routerSearch = useRouterState({ select: state => state.location.searchStr });
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
+  const selectedProject = new URLSearchParams(routerSearch).get('project');
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
     catch { return []; }
@@ -147,21 +146,23 @@ export default function App() {
   });
   const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
   const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
-  useEffect(() => {
-    setSelectedProject(new URLSearchParams(routerSearch).get('project'));
-  }, [routerSearch]);
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
-    setSelectedProject(repository);
-    setProjectMenuOpen(false);
     // Preserve the active route and unrelated query parameters.
     const url = new URL(window.location.href);
     url.searchParams.set('project', repository);
     router.history.replace(url.pathname + url.search + url.hash);
     window.dispatchEvent(new Event('manage:project-changed'));
   };
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  useEffect(() => { setSelectedRunId(null); }, [activeProject?.repository]);
+  const [selectedRun, setSelectedRun] = useState<{ repository: string; id: number } | null>(null);
+  const selectedRunId = selectedRun?.repository === activeProject?.repository ? selectedRun.id : null;
+  const setSelectedRunId = (update: number | null | ((current: number | null) => number | null)) => {
+    setSelectedRun((current) => {
+      const currentId = current?.repository === activeProject?.repository ? current.id : null;
+      const nextId = typeof update === 'function' ? update(currentId) : update;
+      return nextId === null || !activeProject?.repository ? null : { repository: activeProject.repository, id: nextId };
+    });
+  };
   const projectRunJobs = useQuery({
     queryKey: ['project-run-jobs', activeProject?.repository, selectedRunId],
     queryFn: () => api<{ repository: string; run_id: number; items: {
@@ -192,7 +193,7 @@ export default function App() {
   const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  useEffect(() => { setMobileMenu(false); setProjectMenuOpen(false); }, [pathname]);
+  useEffect(() => { setMobileMenu(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
