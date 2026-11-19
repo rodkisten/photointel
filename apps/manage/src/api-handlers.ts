@@ -1,6 +1,5 @@
-import { ApiError, json, redact } from './auth';
-import { PATTERNS, LIMITS, DEFAULTS, safeList, sanitizeLog } from './api-utils';
-import { gcpBase, provider, digest } from './providers';
+import { json } from './auth';
+import { DEFAULTS, safeList, sanitizeLog } from './api-utils';
 
 export async function handleIcloudDiagnostics(env: any, identity: any, gcp: Function, gh: Function, mapCloudLogs: Function) {
   const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
