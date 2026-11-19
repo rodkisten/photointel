@@ -11,13 +11,15 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const { ref, write, focus } = useTerminal();
   const [core, setCore] = useState<GhosttyCore | null>(null);
   const pending = useRef(false);
+  const generation = useRef(0);
+  const dimensions = useRef({ cols: 80, rows: 24 });
   useEffect(() => {
     let disposed = false;
     let instance: GhosttyCore | undefined;
     void GhosttyCore.load().then(loaded => {
       instance = loaded;
       if (disposed) loaded.dispose(); else setCore(loaded);
-    }).catch(() => setNotice('Não foi possível carregar o núcleo Ghostty'));
+    }).catch(() => { if (!disposed) setNotice('Não foi possível carregar o núcleo Ghostty'); });
     return () => { disposed = true; instance?.dispose(); };
   }, []);
   const socket = useRef<WebSocket | null>(null);
@@ -30,6 +32,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const connect = useCallback(async () => {
     if (socket.current || pending.current) return;
     pending.current = true;
+    const attempt = ++generation.current;
     setStatus('connecting');
     setNotice('');
     try {
@@ -38,6 +41,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetId }),
       });
       const result = await response.json() as { ticket?: string; message?: string };
+      if (attempt !== generation.current) return;
       if (!response.ok || !result.ticket) throw new Error(result.message || 'Sessão não autorizada');
       const url = new URL('/api/terminal/ws', window.location.href);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -45,7 +49,12 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
       const ws = new WebSocket(url);
       socket.current = ws;
       pending.current = false;
-      ws.onopen = () => { setStatus('connected'); focus(); };
+      ws.onopen = () => {
+        if (attempt !== generation.current) { ws.close(); return; }
+        setStatus('connected');
+        ws.send(JSON.stringify({ type: 'resize', ...dimensions.current }));
+        focus();
+      };
       ws.onmessage = event => {
         if (typeof event.data !== 'string' || event.data.length > 131072) { ws.close(1009); return; }
         let frame: Frame;
@@ -55,26 +64,35 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
         if (frame.type === 'exit') { setNotice('Shell encerrado'); ws.close(); }
       };
       ws.onerror = () => { setStatus('error'); setNotice('Falha na conexão WebSocket'); };
-      ws.onclose = () => { socket.current = null; setStatus(current => current === 'error' ? current : 'closed'); };
+      ws.onclose = () => {
+        if (socket.current === ws) socket.current = null;
+        if (attempt === generation.current) setStatus(current => current === 'error' ? current : 'closed');
+      };
     } catch (error) {
+      if (attempt !== generation.current) return;
       pending.current = false;
       setStatus('error');
       setNotice(error instanceof Error ? error.message : 'Falha ao iniciar sessão');
     }
   }, [targetId, focus, write]);
-  useEffect(() => () => { pending.current = false; socket.current?.close(1000, 'Unmount'); socket.current = null; }, [targetId]);
+  useEffect(() => () => {
+    generation.current++;
+    pending.current = false;
+    socket.current?.close(1000, 'Unmount');
+    socket.current = null;
+  }, [targetId]);
   return (
     <div className="flex h-full min-h-[380px] flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-carbon-800 px-3 py-2 text-xs text-carbon-400">
         <span role="status">{status === 'connected' ? 'Conectado' : status === 'connecting' ? 'Conectando…' : 'Desconectado'}</span>
         <button type="button" onClick={() => void connect()} disabled={status === 'connecting' || status === 'connected'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Conectar</button>
-        <button type="button" onClick={() => { socket.current?.close(); socket.current = null; setStatus('closed'); }} disabled={status !== 'connected'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Desconectar</button>
+        <button type="button" onClick={() => { generation.current++; pending.current = false; socket.current?.close(); socket.current = null; setStatus('closed'); }} disabled={status !== 'connected'} className="rounded-lg border border-carbon-700 px-3 py-2 disabled:opacity-40">Desconectar</button>
         <button type="button" onClick={() => focus()} className="rounded-lg border border-carbon-700 px-3 py-2">Teclado</button>
       </div>
       {notice && <p role="alert" className="px-3 py-2 text-xs text-amber-400">{notice}</p>}
       {core ? <Terminal core={core} ref={ref} className="min-h-[320px] flex-1 overflow-hidden p-2" autoResize
         onData={data => send({ type: 'stdin', data })}
-        onResize={(cols, rows) => send({ type: 'resize', cols, rows })}
+        onResize={(cols, rows) => { dimensions.current = { cols, rows }; send({ type: 'resize', cols, rows }); }}
         onError={() => setNotice('Falha ao inicializar WTerm')} /> : <div className="p-4 text-sm text-carbon-400">Carregando Ghostty…</div>}
       <div className="flex flex-wrap gap-1 border-t border-carbon-800 p-2 sm:hidden">
         {([['Esc', '\x1b'], ['Tab', '\t'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['↑', '\x1b[A'], ['↓', '\x1b[B']] as const).map(([label, sequence]) =>
