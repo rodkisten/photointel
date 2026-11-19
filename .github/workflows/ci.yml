@@ -1,5 +1,6 @@
 name: "🧪 CI · Validate"
 run-name: "🧪 CI · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }} · ${{ github.event_name }}"
+
 on:
   push:
     branches: [main]
@@ -30,14 +31,22 @@ on:
         required: true
         default: all
         options: [all, auto, python, frontend, integration, containers, security]
-permissions: {contents: read}
+
+permissions:
+  contents: read
+
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
+  # ============================================================================
+  # 1. Roteamento de Contexto
+  # ============================================================================
   changes:
-    # Ignore Renovate/Dependabot PRs and their direct pushes to main.
-    # Manual workflow_dispatch remains available for explicitly testing updates.
+    name: "🧭 Detectar contexto"
+    runs-on: ubuntu-latest
+    # Ignora PRs e pushes diretos de bots de dependência; workflow_dispatch segue permitido.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
           (github.actor != 'renovate[bot]' &&
@@ -50,8 +59,6 @@ jobs:
            github.event.head_commit.committer.username != 'dependabot[bot]' &&
            !contains(github.event.head_commit.message, 'dependabot[bot]') &&
            !contains(github.event.head_commit.message, 'renovate[bot]')) }}
-    name: "🧭 Detectar contexto"
-    runs-on: ubuntu-latest
     outputs:
       python: ${{ steps.scope.outputs.python }}
       frontend: ${{ steps.scope.outputs.frontend }}
@@ -59,80 +66,97 @@ jobs:
       containers: ${{ steps.scope.outputs.containers }}
       security: ${{ steps.scope.outputs.security }}
     steps:
-      - uses: actions/checkout@v7
+      - name: "📥 Baixar repositório"
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: "🧭 Selecionar jobs"
+
+      - name: "🧭 Selecionar jobs afetados"
         id: scope
+        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           SCOPE: ${{ inputs.scope || 'auto' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-        shell: bash
         run: python3 -m scripts.ci.select_context
+
+  # ============================================================================
+  # 2. Backend & Workers (Python)
+  # ============================================================================
   python:
+    name: "🐍 Python · lint, types, unit"
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    name: "🐍 Python · lint, types, unit"
     runs-on: ubuntu-latest
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
+      - name: "📥 Baixar código"
         id: notify_observed_002
+        continue-on-error: true
         uses: actions/checkout@v7
-      - name: "🧰 Config"
-        continue-on-error: true
+
+      - name: "🧰 Configurar uv"
         id: notify_observed_003
-        uses: astral-sh/setup-uv@v10.3.3
-        with: {version: '0.12.23', enable-cache: true}
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+          enable-cache: true
+
+      - name: "🐍 Instalar Python 3.15"
         id: notify_observed_004
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv python install 3.15" uv python install 3.15
+
       - name: "🔒 Verificar consistência do lockfile"
-        continue-on-error: true
         id: python_lock_check
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv lock --check" uv lock --check
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "📦 Sincronizar dependências (uv)"
         id: notify_observed_005
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv sync --frozen --group ingest" uv sync --frozen --group ingest
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🧹 Verificar lint e formatação (Ruff)"
         id: notify_observed_006
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv run ruff check ." uv run ruff check .
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🔎 Verificar tipagem estática (Mypy)"
         id: notify_observed_007
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv run mypy apps/api/src gpu bridges" uv run mypy apps/api/src gpu bridges
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🧪 Executar testes unitários (Pytest)"
         id: notify_observed_008
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv run pytest -m not integration and not gpu and not e2e --junitxml=" uv run pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
-      - name: "📦 Testes"
-        continue-on-error: true
+
+      - name: "📤 Publicar relatório JUnit"
         id: notify_observed_009
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_008.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
         with:
           name: unit-results
           path: reports/unit.xml
           if-no-files-found: ignore
           retention-days: 3
+
       - name: "📋 Consolidar falhas · python"
         if: ${{ always() }}
         env:
@@ -151,51 +175,65 @@ jobs:
             exit 1
           fi
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # 3. Aplicação Web (Frontend)
+  # ============================================================================
   frontend:
+    name: "🌐 Frontend · lint, types, tests, build"
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    name: "🌐 Frontend · lint, types, tests, build"
     runs-on: ubuntu-latest
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
+      - name: "📥 Baixar código"
         id: notify_observed_010
+        continue-on-error: true
         uses: actions/checkout@v7
-      - name: "🧰 Config"
-        continue-on-error: true
+
+      - name: "🧰 Configurar Node.js 26"
         id: notify_observed_011
-        uses: actions/setup-node@v7
-        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: "📦 Instalar dependências (npm ci)"
         id: notify_observed_012
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web ci" npm --prefix apps/web ci
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🧹 Verificar lint (ESLint)"
         id: notify_observed_013
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run lint" npm --prefix apps/web run lint
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🔎 Verificar tipagem (TypeScript)"
         id: notify_observed_014
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run typecheck" npm --prefix apps/web run typecheck
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🧪 Executar testes de componentes"
         id: notify_observed_015
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web test" npm --prefix apps/web test
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🏗️ Gerar build de produção"
         id: notify_observed_016
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web run build" npm --prefix apps/web run build
+
       - name: "📋 Consolidar falhas · frontend"
         if: ${{ always() }}
         env:
@@ -214,6 +252,10 @@ jobs:
             exit 1
           fi
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # 4. Testes de Integração & E2E
+  # ============================================================================
   # TEMPORARILY DISABLED (2026-11-15, PR #240): PostgreSQL integration tests.
   # Reason: this job has no PostgreSQL service configured, yet migrations, restore,
   # integration pytest and browser E2E expect a database at localhost:5432.
@@ -226,39 +268,45 @@ jobs:
   # then remove the temporary 'false &&' guard below.
   # Tracking: https://github.com/rodkisten/photointel/pull/240
   integration:
+    name: "⏸️ Integration · PostgreSQL indisponível (PR #240)"
     needs: changes
     if: ${{ false && needs.changes.outputs.integration == 'true' }}
-    name: "⏸ Integration · PostgreSQL unavailable (temporary, PR #240)"
     runs-on: ubuntu-latest
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
+      - name: "📥 Baixar código"
         id: notify_observed_018
+        continue-on-error: true
         uses: actions/checkout@v7
-      - name: "🧰 Config"
-        continue-on-error: true
+
+      - name: "🧰 Configurar uv"
         id: notify_observed_019
-        uses: astral-sh/setup-uv@v10.3.3
-        with: {version: '0.12.23'}
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+
+      - name: "🐍 Instalar Python 3.15"
         id: notify_observed_020
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv python install 3.15" uv python install 3.15
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "📦 Sincronizar dependências (uv)"
         id: notify_observed_021
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv sync --frozen --group ingest" uv sync --frozen --group ingest
-      - name: "🧰 Código"
-        continue-on-error: true
+
+      - name: "🐳 Configurar Docker Buildx"
         id: notify_observed_022
-        uses: docker/setup-buildx-action@v4
-      - name: "🧰 Código"
         continue-on-error: true
+        uses: docker/setup-buildx-action@v4
+
+      - name: "🏗️ Construir imagem local do MinIO"
         id: notify_observed_023
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -268,59 +316,71 @@ jobs:
           push: false
           cache-from: type=gha,scope=photointel-minio
           cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
-      - name: "⚙ ️  Start private local obje"
-        continue-on-error: true
+
+      - name: "🪣 Iniciar container MinIO"
         id: notify_observed_024
-        run: |
-          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
-      - name: "⚙ ️  Wait for storage and cre"
         continue-on-error: true
+        run: |
+          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER=ci-access \
+            -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret \
+            photointel-minio:ci server /data
+
+      - name: "⏳ Aguardar MinIO e criar bucket privado"
         id: notify_observed_025
-        run: |
-          uv run python infra/scripts/init-private-bucket.py
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        run: uv run python infra/scripts/init-private-bucket.py
+
+      - name: "🧬 Aplicar migrations do banco (Alembic)"
         id: notify_observed_026
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv run alembic -c infra/migrations/alembic.ini upgrade head" uv run alembic -c infra/migrations/alembic.ini upgrade head
-      - name: "🗃 ️  Verify dump and restore "
-        continue-on-error: true
+
+      - name: "🗃️ Validar restore inicial do PostgreSQL"
         id: notify_observed_027
+        continue-on-error: true
         run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
-      - name: "🗃 Imagem"
-        continue-on-error: true
+
+      - name: "💾 Validar ciclo de backup e restore"
         id: notify_observed_028
-        run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+
+      - name: "🧪 Executar testes de integração (Pytest)"
         id: notify_observed_029
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "uv run pytest -m integration --junitxml=reports/integration.xml" uv run pytest -m integration --junitxml=reports/integration.xml
-      - name: "🧰 Config"
-        continue-on-error: true
+
+      - name: "🧰 Configurar Node.js 26"
         id: notify_observed_030
-        uses: actions/setup-node@v7
-        with: {node-version: '26', cache: npm, cache-dependency-path: apps/web/package-lock.json}
-      - name: "▶ ️  Execute command"
         continue-on-error: true
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: "📦 Instalar dependências do frontend (npm ci)"
         id: notify_observed_031
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npm --prefix apps/web ci" npm --prefix apps/web ci
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+
+      - name: "🎭 Instalar navegador Chromium (Playwright)"
         id: notify_observed_032
+        continue-on-error: true
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "npx --prefix apps/web playwright install --with-deps chromium" npx --prefix apps/web playwright install --with-deps chromium
-      - name: "⚙ ️  Browser E2E against real"
-        continue-on-error: true
+
+      - name: "🌐 Executar testes E2E no navegador"
         id: notify_observed_033
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "bash infra/scripts/run-e2e.sh" bash infra/scripts/run-e2e.sh
+        continue-on-error: true
         env:
           APP_ENV: test
           INFERENCE_BACKEND: test
@@ -329,26 +389,32 @@ jobs:
           GPU_ENABLED: 'true'
           JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
           SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
-      - name: "📦 Testes"
-        continue-on-error: true
+        run: |
+          source scripts/ci/pretty-logs.sh
+          ci_run "bash infra/scripts/run-e2e.sh" bash infra/scripts/run-e2e.sh
+
+      - name: "📤 Publicar relatório de integração"
         id: notify_observed_034
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_029.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
         with:
           name: integration-results
           path: reports/integration.xml
           if-no-files-found: ignore
           retention-days: 3
-      - name: "📦 Testes"
-        continue-on-error: true
+
+      - name: "📤 Publicar relatório do Playwright"
         id: notify_observed_035
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
         if: ${{ always() && (github.event_name == 'workflow_dispatch' || steps.notify_observed_033.outcome == 'failure') }}
+        uses: actions/upload-artifact@v7
         with:
           name: browser-results
           path: apps/web/playwright-report
           if-no-files-found: ignore
           retention-days: 3
+
       - name: "📋 Consolidar falhas · integration"
         if: ${{ always() }}
         env:
@@ -367,42 +433,51 @@ jobs:
             exit 1
           fi
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # 5. Imagens Docker Multi-Arquitetura
+  # ============================================================================
   containers:
+    name: "🐳 Containers · architectures"
     needs: changes
     if: needs.changes.outputs.containers == 'true'
-    name: "🐳 Containers · architectures"
     runs-on: ubuntu-latest
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
+      - name: "📥 Baixar código"
         id: notify_observed_036
+        continue-on-error: true
         uses: actions/checkout@v7
-      - name: "🧰 Build"
-        continue-on-error: true
+
+      - name: "⚙️ Configurar emulação QEMU"
         id: notify_observed_037
+        continue-on-error: true
         uses: docker/setup-qemu-action@v4
-      - name: "🧰 Build"
-        continue-on-error: true
+
+      - name: "🐳 Configurar Docker Buildx"
         id: notify_observed_038
-        uses: docker/setup-buildx-action@v4
-      - name: "🏗 Build"
         continue-on-error: true
+        uses: docker/setup-buildx-action@v4
+
+      - name: "🏗️ Validar build multi-arch · API"
         id: notify_observed_039
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/api.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
-      - name: "🏗 Build"
-        continue-on-error: true
+
+      - name: "🏗️ Validar build multi-arch · Web"
         id: notify_observed_040
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/web.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
+
       - name: "📋 Consolidar falhas · containers"
         if: ${{ always() }}
         env:
@@ -421,33 +496,43 @@ jobs:
             exit 1
           fi
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================================
+  # 6. Auditoria de Segurança & Segredos
+  # ============================================================================
   security:
+    name: "🔐 Security · dependency and secret audit"
     needs: changes
     if: needs.changes.outputs.security == 'true'
-    name: "🔐 Security · dependency and secret audit"
     runs-on: ubuntu-latest
     steps:
-      - name: "📥 Código"
-        continue-on-error: true
+      - name: "📥 Baixar histórico completo"
         id: notify_observed_041
+        continue-on-error: true
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: "🧰 Config"
-        continue-on-error: true
+
+      - name: "🧰 Configurar uv"
         id: notify_observed_042
+        continue-on-error: true
         uses: astral-sh/setup-uv@v10.3.3
-        with: {version: '0.12.23'}
-      - name: "▶ ️  Execute command"
-        continue-on-error: true
+        with:
+          version: '0.12.23'
+
+      - name: "📄 Exportar dependências de runtime"
         id: notify_observed_043
-        run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
-      - name: "🔐 Secrets"
-        id: notify_observed_046
-        uses: gitleaks/gitleaks-action@v3
         continue-on-error: true
-        env: {GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'}
+        run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
+
+      - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
+        id: notify_observed_046
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: "📋 Consolidar falhas · security"
         if: ${{ always() }}
         env:
