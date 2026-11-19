@@ -150,6 +150,24 @@ jobs:
         run: |
           npm --prefix apps/web run build
           npm --prefix apps/manage run build
+      - name: "🔗 Enable preview URLs without enabling production workers.dev"
+        if: steps.credentials.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for worker in photointel photointel-manage; do
+            response="$(curl --fail-with-body --silent --show-error --request POST \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/subdomain" \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data '{"enabled":false,"previews_enabled":true}')"
+            if ! jq -e '.success == true' <<< "$response" >/dev/null; then
+              echo "::error::Could not enable preview URLs for $worker"
+              jq '{errors, messages}' <<< "$response"
+              exit 1
+            fi
+            echo "✅ Preview URLs enabled for $worker; production workers.dev disabled"
+          done
       - name: "🖼 Photos static preview, no production API"
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
