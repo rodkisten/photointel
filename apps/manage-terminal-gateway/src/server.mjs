@@ -96,6 +96,7 @@ wss.on('connection', (ws, claims) => {
       if (error) { send({ type: 'error', code: 'SHELL', message: 'Falha ao abrir shell' }); ws.close(); return; }
       stream = channel;
       channel.setWindow(requestedSize.rows, requestedSize.cols, 0, 0);
+      send({ type: 'ready' });
       channel.on('data', data => { lastActivity = Date.now(); send({ type: 'stdout', data: data.toString('utf8') }); });
       channel.stderr.on('data', data => send({ type: 'stdout', data: data.toString('utf8') }));
       channel.on('close', code => { send({ type: 'exit', code: typeof code === 'number' ? code : null }); ws.close(); });
