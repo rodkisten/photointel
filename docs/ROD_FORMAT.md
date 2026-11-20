@@ -1,33 +1,25 @@
 # 🎨 Rod Universal Format integration
 
-> Shared formatter from [rodkisten/github](https://github.com/rodkisten/github), integrated without replacing existing build, typecheck, test, deployment or preview workflows.
+> Integrated into the **existing workflows**, not a new GitHub Actions workflow.
 
-## Execution modes
+| Repository | Existing workflow | Integration |
+| :-- | :-- | :-- |
+| Userscripts | `prettier-full.yml` | Shared format + lint before existing Prettier, PR/commit and rich summary |
+| Shell | `check.yml` | Additional read-only format job alongside existing filtered CI |
+| PhotoIntel | `frontend-format-fix.yml` | Shared format validation after existing selective ESLint/Prettier fix and before its commit step |
 
-| Trigger | Mode | Scope | Writes to remote? |
-| :-- | :-- | :-- | :-- |
-| Pull request | `check` | `changed` | No |
-| Manual dispatch | `check` or `fix` | `changed` or `all` | No |
+The shared TypeScript Action is checked out under `.rod-actions` and built at runtime until versioned standalone bundles are published. The workflow uses the local action with the repository's installed tools and configuration.
 
-Open **Actions → 🎨 Rod Universal Format → Run workflow** to select mode and scope. In `fix`, the Action rewrites the runner checkout, but **does not commit or push**. This initial integration is deliberately read-only with respect to GitHub branches; automatic GitHub App commits and sticky PR comments can be enabled after a successful validation run.
+## Modes
 
-## Supported languages
+- `check`: verify without writing source files.
+- `fix`: rewrite supported files in the runner checkout.
+- `changed`: compare the PR branch against `origin/main`.
+- `all`: inspect tracked files across the repository.
 
-Prettier for JavaScript, TypeScript, React, Vue, CSS, HTML, JSON, YAML, Markdown, GraphQL, Svelte and Astro; `gofmt` for Go; `rustfmt` for Rust; Ruff formatting for Python; `shfmt` and ShellCheck for Bash/POSIX shell; `zsh -n` for Zsh syntax. Some tools must be preinstalled on the runner; missing tools may be reported as skipped. Zsh autoformat is not supported.
-
-## Implementation details
-
-1. Check out the current PR head with full Git history.
-2. Install the repository's own dependencies so Prettier and ESLint use local configuration.
-3. Check out `rodkisten/github` under `.rod-actions` and build standalone TypeScript Actions from source. The central repository currently does not publish the new formatter bundle in `dist` on `main`, so a direct remote `uses: rodkisten/github/actions/format@main` is **not yet reliable**.
-4. Invoke `./.rod-actions/actions/format` using `origin/main` as the diff base.
-5. Upload a JSON report artifact and include a readable GitHub Actions job summary.
-
-## Existing workflows
-
-This integration runs **alongside** the existing selective validation, tests, typechecks, previews and deployment pipelines. It does not modify their existing triggers, jobs, branch conditions or release behavior.
+The existing workflow's dispatch options and publishing behavior remain authoritative. This integration does **not** add a new workflow, automatic deployment or separate release pipeline.
 
 > [!IMPORTANT]
-> This is the first rollout stage. Verify a real PR run before enabling auto-fix commits. A strict missing-tool policy and release-pinned bundles are recommended before production-wide adoption.
+> Missing tools may be reported as skipped. Zsh receives syntax validation only, not automatic formatting. The full PR CI must be green before merging.
 
-[Central formatter documentation](https://github.com/rodkisten/github/blob/main/docs/FORMAT.md)
+[Shared formatter documentation](https://github.com/rodkisten/github/blob/main/docs/FORMAT.md)
