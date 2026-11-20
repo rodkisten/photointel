@@ -3,8 +3,6 @@ run-name: 🎨 Format · ${{ github.event_name == 'pull_request' && format('PR #
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths-ignore:
-      - '**/*.md'
   workflow_dispatch:
     inputs:
       mode:
@@ -51,7 +49,10 @@ jobs:
           path: .rod-actions
           persist-credentials: false
       - name: 📦 Install and build shared Actions
-        run: npm ci --prefix .rod-actions --no-audit --no-fund && npm run build --prefix .rod-actions
+        working-directory: .rod-actions
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: 🔎 Verify formatter bundle
+        run: node --input-type=module -e "import { statSync } from 'node:fs'; const file = '.rod-actions/dist/format.js'; if (statSync(file).size < 1000) throw new Error('Formatter bundle missing or empty');"
       - name: 🎨 Check or format selected files
         id: format
         uses: ./.rod-actions/actions/format
