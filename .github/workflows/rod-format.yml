@@ -1,6 +1,8 @@
 name: 🎨 Rod Universal Format
 run-name: 🎨 Format · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }} · ${{ inputs.mode || 'check' }}
 on:
+  push:
+    branches: [feat/rod-universal-format-integration]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
