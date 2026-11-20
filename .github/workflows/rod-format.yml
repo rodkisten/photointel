@@ -1,0 +1,70 @@
+name: 🎨 Rod Universal Format
+run-name: 🎨 Format · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }} · ${{ inputs.mode || 'check' }}
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only check or rewrite working tree (no automatic push)
+        type: choice
+        options: [check, fix]
+        default: check
+      scope:
+        description: Modified files or entire repository
+        type: choice
+        options: [changed, all]
+        default: changed
+permissions:
+  contents: read
+concurrency:
+  group: rod-format-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  format:
+    name: 🎨 photointel · format & lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: 📦 Install repository tooling
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: 🐍 Install Ruff
+        uses: astral-sh/setup-uv@v6
+      - name: 🐍 Enable Ruff
+        run: uv tool install ruff
+      - name: 🧩 Checkout shared Rod Actions
+        uses: actions/checkout@v4
+        with:
+          repository: rodkisten/github
+          ref: main
+          path: .rod-actions
+          persist-credentials: false
+      - name: 📦 Install and build shared Actions
+        run: npm ci --prefix .rod-actions --no-audit --no-fund && npm run build --prefix .rod-actions
+      - name: 🎨 Check or format selected files
+        id: format
+        uses: ./.rod-actions/actions/format
+        with:
+          mode: ${{ inputs.mode || 'check' }}
+          scope: ${{ inputs.scope || 'changed' }}
+          base: origin/main
+          lint: 'true'
+          results-file: ${{ runner.temp }}/rod-format-results.json
+      - name: 📊 Upload detailed results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rod-format-results
+          path: ${{ runner.temp }}/rod-format-results.json
+          if-no-files-found: warn
