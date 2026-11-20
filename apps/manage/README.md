@@ -1,5 +1,8 @@
 # PhotoIntel Manage
 
+> 🔔 **Notificações e webhooks:** [guia completo Manage × xrelay, com sumário, exemplos e troubleshooting](./RELAY_NOTIFICATIONS.md).
+
+
 ## GitHub → Cloudflare/GCP deploy router
 
 Configure signed GitHub push webhooks, path/filename rules, Cloudflare Workers Builds / GCP Cloud Build and D1 deploy history at `/triggers`. See [DEPLOY_ROUTER.md](./DEPLOY_ROUTER.md) for production D1 migrations, callback status, credentials and xrelay notification integration.
