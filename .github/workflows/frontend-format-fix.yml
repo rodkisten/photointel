@@ -76,6 +76,27 @@ jobs:
           BASE_REF: ${{ inputs.base_ref }}
         run: bash scripts/format-changed-frontends.sh
 
+      - name: "🧩 Checkout Rod Actions"
+        uses: actions/checkout@v4
+        with:
+          repository: rodkisten/github
+          ref: main
+          path: .rod-actions
+          persist-credentials: false
+
+      - name: "📦 Build shared TypeScript Actions"
+        working-directory: .rod-actions
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - name: "🎨 Validate universal formatting"
+        uses: ./.rod-actions/actions/format
+        with:
+          mode: check
+          scope: ${{ inputs.mode }}
+          base: ${{ inputs.base_ref || 'origin/main' }}
+          lint: 'false'
+          results-file: ${{ runner.temp }}/rod-format-results.json
+
       - name: "💾 Commit and push fixes"
         if: steps.format.outputs.has_files == 'true'
         env:
