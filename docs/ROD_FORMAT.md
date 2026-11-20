@@ -4,11 +4,11 @@
 
 | Repository | Existing workflow | Integration |
 | :-- | :-- | :-- |
-| Userscripts | `prettier-full.yml` | Shared format + lint before existing Prettier, PR/commit and rich summary |
+| Userscripts | `prettier-full.yml` | Shared format + lint replaces the duplicate Prettier step; existing PR/commit and rich summary remain |
 | Shell | `check.yml` | Additional read-only format job alongside existing filtered CI |
 | PhotoIntel | `frontend-format-fix.yml` | Shared format validation after existing selective ESLint/Prettier fix and before its commit step |
 
-The shared TypeScript Action is checked out under `.rod-actions` and built at runtime until versioned standalone bundles are published. The workflow uses the local action with the repository's installed tools and configuration.
+The existing workflow consumes `rodkisten/github/actions/format@main` directly. No nested checkout, local compilation or temporary `.rod-actions` directory is required. **Merge the central bundle-publishing PR #11 first** so the remote Action can resolve `dist/format.js`.
 
 ## Modes
 
