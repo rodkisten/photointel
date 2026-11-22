@@ -587,3 +587,24 @@ Workflow failure notifications include the repository name, GitHub run URL and `
 ### Delivery boundaries (verified against xtelegram-cf)
 
 `XRELAY_NOTIFICATION_URL` points to the XRelay `/notifications/send` endpoint, which currently delivers **Telegram** messages, not Notify! iOS pushes. XRelay's `group_key` aggregates D1 events and edits a Telegram message immediately; it does **not** wait five seconds before the first send. `url`, `repository` and `groupType` in the Manage request are not interpreted by this Telegram endpoint; the supported GitHub link is the HTTPS URL button. Notify! iOS push delivery is implemented separately in `xtelegram-cf/src/services/notify.ts`, with `groupType` currently hardcoded at transport level. Do not describe this Manage configuration as native APNs grouping or delayed push batching until the Notify! sender and relay contract are updated and tested.
+
+## Per-repository notification YAML (in progress)
+
+Each GitHub repository can define a root-level `notify.yml` with versioned, partial notification settings. The Manage backend has a pure `js-yaml` parser and field-level resolver in `src/notify-yaml.ts`. The authenticated read-only endpoint `GET /api/notifications/repository?repository=owner/name` now fetches `notify.yml` from GitHub for allowlisted repositories and reports missing files without failing. The Manage conflict-resolution UI, persisted choices and Relay delivery integration are **not yet connected**. Existing delivery behavior is unchanged.
+
+```yaml
+version: 1
+notifications:
+  events: [workflow_failure, deploy_failed, job_failed]
+  grouping: window
+  windowSeconds: 10
+  updateMode: edit
+  retentionMinutes:
+    error: 60
+  template: |
+    ❌ {{repository}} · {{workflow}}
+    {{error}}
+    {{url}}
+```
+
+Resolution is by leaf field: defaults → repository YAML → explicit Manage override. A disagreement between two explicitly supplied values produces a conflict with both values and a persisted choice must resolve it. Until then, the repository value is retained rather than silently overwritten. Array values such as `events` are atomic; nested `retentionMinutes` values merge individually. Never store credentials in `notify.yml`.
