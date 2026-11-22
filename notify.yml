@@ -1,0 +1,18 @@
+# notify.yml · EXEMPLO, validar schema antes de ativar
+version: 1
+enabled: true
+
+notifications:
+  on:
+    - failure
+    - success
+    - cancelled
+  filters:
+   # branches: [main]
+    paths:
+      - "apps/**"
+      - ".github/workflows/**"
+  template:
+    title: "{{status_emoji}} {{repository}} · {{workflow}}"
+    body: "{{branch}} · {{short_sha}} · {{status}}"
+    url: "{{run_url}}"
