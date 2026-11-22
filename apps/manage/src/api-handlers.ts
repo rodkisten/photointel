@@ -1,11 +1,14 @@
-import { ApiError, json, redact } from './auth';
-import { PATTERNS, LIMITS, DEFAULTS, safeList, sanitizeLog } from './api-utils';
-import { gcpBase, provider, digest } from './providers';
+import { json } from './auth';
+import type { Env, Identity } from './auth';
+import type { gcp, gh, mapCloudLogs } from './providers';
+type DiagnosticEvent = { timestamp?: string; service?: string; severity?: string; message?: unknown };
+type WorkflowRun = { id?: number; name?: string; status?: string; conclusion?: string | null; created_at?: string; html_url?: string };
+import { DEFAULTS, safeList, sanitizeLog } from './api-utils';
 
-export async function handleIcloudDiagnostics(env: any, identity: any, gcp: Function, gh: Function, mapCloudLogs: Function) {
+export async function handleIcloudDiagnostics(env: Env, identity: Identity, gcpRequest: typeof gcp, githubRequest: typeof gh, mapLogs: typeof mapCloudLogs) {
   const project = env.GCP_PROJECT_ID || DEFAULTS.PROJECT_ID;
   const [cloud, runs] = await Promise.allSettled([
-    gcp(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
+    gcpRequest(env, identity, 'https://logging.googleapis.com/v2/entries:list', {
       resourceNames: ['projects/' + project],
       filter:
         '(resource.type="cloud_run_job" OR resource.type="cloud_run_revision") ' +
@@ -16,18 +19,18 @@ export async function handleIcloudDiagnostics(env: any, identity: any, gcp: Func
       orderBy: 'timestamp desc',
       pageSize: 30,
     }),
-    gh(env, '/actions/workflows/icloud-setup.yml/runs?per_page=5'),
+    githubRequest(env, '/actions/workflows/icloud-setup.yml/runs?per_page=5'),
   ]);
 
-  const events = cloud.status === 'fulfilled' ? mapCloudLogs((cloud.value as { entries?: unknown }).entries) : [];
-  const sanitized = events.map((event: any) => ({
-    timestamp: event.timestamp,
-    service: event.service,
-    severity: event.severity,
-    message: sanitizeLog(event.message, 450),
-  }));
+  const events = cloud.status === 'fulfilled' ? mapLogs((cloud.value as { entries?: unknown }).entries) : [];
+  const sanitized = events.map((event) => { const item = event as DiagnosticEvent; return ({
+    timestamp: item.timestamp,
+    service: item.service,
+    severity: item.severity,
+    message: sanitizeLog(item.message, 450),
+  }); });
 
-  const suspected = sanitized.some((item: any) =>
+  const suspected = sanitized.some((item) =>
     /ICLOUD_AUTH_EXPIRED|2fa|session.expired|authentication.failed|reauth/i.test(String(item.message)),
   );
 
@@ -39,14 +42,14 @@ export async function handleIcloudDiagnostics(env: any, identity: any, gcp: Func
     recent_events: sanitized,
     preflight_runs:
       runs.status === 'fulfilled'
-        ? safeList(runs.value, 'workflow_runs').map((run: any) => ({
-            id: run.id,
-            name: run.name,
-            status: run.status,
-            conclusion: run.conclusion,
-            created_at: run.created_at,
-            html_url: run.html_url,
-          }))
+        ? safeList(runs.value, 'workflow_runs').map((run) => { const item = run as WorkflowRun; return ({
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            conclusion: item.conclusion,
+            created_at: item.created_at,
+            html_url: item.html_url,
+          }); })
         : [],
     suggest_reauth: suspected,
     reason: suspected

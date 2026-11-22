@@ -1,45 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  Cloud,
-  CloudCog,
-  Code2,
-  Copy,
-  ExternalLink,
-  GitBranch,
-  History,
-  LoaderCircle,
-  Logs,
-  Menu,
-  Play,
-  RefreshCcw,
-  RotateCcw,
-  Save,
-  Search,
-  Server,
-  Settings2,
-  Shield,
-  Terminal,
-  Workflow,
-  X,
-} from 'lucide-react';
-import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
-import { api, send } from '../lib/client';
-import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, planConfigChange } from '../config-reconcile';
-import type { ConfigPlan } from '../config-reconcile';
-import { cn, date, human, state } from '../lib/utils';
-import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
+import { Check, X } from 'lucide-react';
+import { Button, Input } from '../components/ui';
 import { Spinner } from './shared';
+
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -58,11 +22,11 @@ export function ConfirmDialog({
   busy?: boolean;
 }) {
   const [typed, setTyped] = useState('');
-  useEffect(() => {
-    if (!open) setTyped('');
-  }, [open]);
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => {
+      if (!nextOpen) setTyped('');
+      onOpenChange(nextOpen);
+    }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed inset-x-3 top-1/2 z-50 mx-auto max-w-md -translate-y-1/2 rounded-2xl border border-[#34363b] bg-[#191b1e] p-5 shadow-2xl">

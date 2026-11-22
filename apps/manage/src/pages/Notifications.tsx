@@ -24,14 +24,12 @@ export function NotificationsPage() {
   const [repoConfig, setRepoConfig] = useState<RepositoryConfig | null>(null);
   const [choices, setChoices] = useState<Record<string, 'repository' | 'manage'>>({});
   const [overrides, setOverrides] = useState<Partial<Settings>>({});
-  const [loadingRepo, setLoadingRepo] = useState(false);
+  const [loadingRepo, setLoadingRepo] = useState(true);
   useEffect(() => {
     void api<{ settings: Settings }>('/notifications/settings').then(data => setSettings(data.settings)).catch(setError);
   }, []);
   useEffect(() => {
     let active = true;
-    setLoadingRepo(true);
-    setRepoConfig(null);
     void api<RepositoryConfig>('/notifications/repository?repository=' + encodeURIComponent(repository))
       .then(data => { if (active) { setRepoConfig(data); setChoices(data.choices); setOverrides(data.overrides); } })
       .catch(err => { if (active) setError(err as Error); })
@@ -76,7 +74,7 @@ export function NotificationsPage() {
     <Card className="space-y-4 p-5">
       <h2 className="font-semibold text-carbon-100">Configuração por repositório · notify.yml</h2>
       <label className="block text-sm">Repositório
-        <input className="mt-1 w-full rounded bg-carbon-900 p-2" value={repository} onChange={e => setRepository(e.target.value)} placeholder="owner/repo" />
+        <input className="mt-1 w-full rounded bg-carbon-900 p-2" value={repository} onChange={e => { setRepository(e.target.value); setLoadingRepo(true); setRepoConfig(null); }} placeholder="owner/repo" />
       </label>
       {loadingRepo && <p className="text-sm text-carbon-400">Carregando notify.yml do GitHub…</p>}
       {repoConfig && <>

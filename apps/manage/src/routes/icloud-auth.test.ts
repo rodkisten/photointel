@@ -61,7 +61,7 @@ describe('iCloud password and 2FA gateway', () => {
     });
     globalThis.fetch = upstream as typeof fetch;
     const result = await icloudAuthRoute(request('start', { password: 'shortpass' }), env, identity);
-    expect((await result?.json()).state).toBe('verification_required');
+    expect((await result?.json())?.state).toBe('verification_required');
   });
 
   it('checks iCloud readiness via GET without sending a password or a code', async () => {
@@ -90,7 +90,7 @@ describe('iCloud password and 2FA gateway', () => {
     });
     globalThis.fetch = upstream as typeof fetch;
     const result = await icloudAuthRoute(request('verify', { challenge: 'A'.repeat(40), code: '123456' }), env, identity);
-    expect((await result?.json()).session_published).toBe(true);
+    expect((await result?.json())?.session_published).toBe(true);
   });
 
   it('rejects injection and untrusted upstream origins before sending secrets', async () => {

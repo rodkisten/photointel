@@ -1,5 +1,5 @@
 import { diffNestedEnv } from '../nested-env-diff';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Plus, Save } from 'lucide-react';
 import { Badge, Button, Card, Input, Section, Select } from '../components/ui';
@@ -22,9 +22,7 @@ export function RepositoryVariables() {
   const [dispatch, setDispatch] = useState<'queued' | 'failed' | 'none'>('none');
   const [triggerResults, setTriggerResults] = useState<Array<{ target: string; status: string }>>([]);
   const [mode, setMode] = useState<'code' | 'fields'>('code');
-  const [triggerMode, setTriggerMode] = useState<'none' | 'workflows' | 'webhook'>('none');
-  const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([]);
-  const [webhookUrl, setWebhookUrl] = useState('');
+  const [triggerDraft, setTriggerDraft] = useState<{ key: string; mode: 'none' | 'workflows' | 'webhook'; workflows: string[]; webhook: string } | null>(null);
   const [triggerKey, setTriggerKey] = useState('');
   const [tab, setTab] = useState<'variables' | 'triggers'>('variables');
   const triggerRules = useQuery({
@@ -57,17 +55,18 @@ export function RepositoryVariables() {
     catch (error) { return { changes: [] as ReturnType<typeof diffNestedEnv>, error: error instanceof Error ? error.message : 'Formato inválido' }; }
   }, [name, value, variables.data, selected]);
   const activeRule = triggerRules.data?.rules[triggerKey || name];
-  useEffect(() => { setTriggerMode(activeRule?.mode || 'none'); setSelectedWorkflows(activeRule?.workflows || []); setWebhookUrl(activeRule?.webhook || ''); }, [name, triggerKey, activeRule?.mode, triggerRules.data?.version]);
+  const triggerDraftKey = triggerKey || name;
+  const triggerMode = triggerDraft?.key === triggerDraftKey ? triggerDraft.mode : activeRule?.mode || 'none';
+  const selectedWorkflows = triggerDraft?.key === triggerDraftKey ? triggerDraft.workflows : activeRule?.workflows || [];
+  const webhookUrl = triggerDraft?.key === triggerDraftKey ? triggerDraft.webhook : activeRule?.webhook || '';
+  const setTriggerMode = (mode: 'none' | 'workflows' | 'webhook') => setTriggerDraft({ key: triggerDraftKey, mode, workflows: selectedWorkflows, webhook: webhookUrl });
+  const setSelectedWorkflows = (update: string[] | ((current: string[]) => string[])) => setTriggerDraft({ key: triggerDraftKey, mode: triggerMode, workflows: typeof update === 'function' ? update(selectedWorkflows) : update, webhook: webhookUrl });
+  const setWebhookUrl = (webhook: string) => setTriggerDraft({ key: triggerDraftKey, mode: triggerMode, workflows: selectedWorkflows, webhook });
   const existing = useMemo(
     () => variables.data?.items.find((item) => item.name === selected),
     [variables.data, selected],
   );
-  useEffect(() => {
-    if (!existing) return;
-    setName(existing.name);
-    setValue(existing.value ?? '');
-    setVersion(existing.version);
-  }, [existing]);
+
   const save = useMutation({
     mutationFn: () => send<{ dispatch: 'queued' | 'failed' | 'none'; triggered?: Array<{ target: string; status: string }> }>('/github/variables?scope=' + scope, { name, value, version, confirm: confirmation }, 'PUT'),
     onSuccess: (result) => {
@@ -78,7 +77,6 @@ export function RepositoryVariables() {
     },
   });
   const isGcpEnvVars = name === 'GCP_ENV_VARS';
-  useEffect(() => { setTriggerKey(''); }, [name]);
   const triggersManage = (name === 'GCP_COST_ALERT_USD' && scope === 'environment') || isGcpEnvVars || activeRule?.mode === 'workflows' || activeRule?.mode === 'webhook';
   const unchanged = Boolean(existing && name === existing.name && value === (existing.value ?? ''));
   const valid = /^[A-Z_][A-Z0-9_]{0,99}$/.test(name) && name !== 'GCP_CONFIG_ENV' && value.length <= 120_000;
@@ -143,7 +141,7 @@ export function RepositoryVariables() {
           Chave
           <Input
             value={name}
-            onChange={(event) => setName(event.target.value.toUpperCase())}
+            onChange={(event) => { setName(event.target.value.toUpperCase()); setTriggerKey(''); }}
             placeholder="NOME_DA_VARIAVEL"
           />
         </label>

@@ -14,6 +14,7 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   const generation = useRef(0);
   const dimensions = useRef({ cols: 80, rows: 24 });
   const [ctrl, setCtrl] = useState(false);
+  const [notice, setNotice] = useState('');
   useEffect(() => {
     let disposed = false;
     let instance: GhosttyCore | undefined;
@@ -25,7 +26,6 @@ export function RemoteTerminal({ targetId }: { targetId: string }) {
   }, []);
   const socket = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<Status>('idle');
-  const [notice, setNotice] = useState('');
   const send = useCallback((frame: { type: string; [key: string]: unknown }) => {
     const ws = socket.current;
     if (ws?.readyState === WebSocket.OPEN && ws.bufferedAmount < 65536 &&

@@ -398,6 +398,20 @@ For actual provider APIs, configure a local Cloudflare Worker with a safe
 .dev.vars file (without the space), copied from .dev.vars.example.
 The Vite UI proxies /api to the local Wrangler port 8788.
 
+## Contratos de resposta da API
+
+As integrações externas do Manage são tratadas como dados não confiáveis. O helper
+`safeList<T>()` valida envelopes e `safeArray<T>()` valida arrays recebidos
+diretamente. Os contratos de GitHub Actions, Cloudflare, Cloud Run e Cloud Scheduler
+ficam centralizados em `src/api-utils.ts`.
+
+Ao adicionar endpoints:
+- declare o contrato específico do payload em `api-utils.ts`;
+- use `safeList<Contrato>(payload, chave)` para envelopes e
+  `safeArray<Contrato>(payload)` para arrays diretos;
+- não reintroduza `any` para contornar incompatibilidades;
+- cubra payloads ausentes, nulos e malformados em `src/api-utils.test.ts`.
+
 ## Guardrails
 
 - Cloudflare Access signed RS256 JWT, required issuer, separate manage

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Card, Input, Section } from '../components/ui';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -59,6 +59,10 @@ function ChoiceMenu({ label, value, options, onChange }: {
 
 /** External GitHub repositories use the same CodeMirror/fields controls as PhotoIntel. */
 export function ProjectEnvironment({ repository }: { repository: string }) {
+  return <ProjectEnvironmentEditor key={repository} repository={repository} />;
+}
+
+function ProjectEnvironmentEditor({ repository }: { repository: string }) {
   const client = useQueryClient();
   const [scope, setScope] = useState<Scope>('repository');
   const [environment, setEnvironment] = useState('production');
@@ -88,9 +92,6 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     enabled: Boolean(repository && (scope === 'repository' || environment.trim())),
     retry: false,
   });
-  useEffect(() => {
-    setSelected(''); setName(''); setValue(''); setVersion(null); setConfirmation(''); setEditing(false); setSavedMessage('');
-  }, [repository, scope, environment]);
   const save = useMutation({
     mutationFn: (input: { name: string; value: string; version: string | null; confirm: string }) =>
       send(endpoint, input, 'PUT'),
@@ -172,7 +173,7 @@ export function ProjectEnvironment({ repository }: { repository: string }) {
     !renameAttempt && !existingName && confirmation === repository &&
     !variables.isPending && !variables.isError && !staleSelection && !staleVersion && dirty && !save.isPending;
   return <Section title={'Ambiente GitHub · ' + repository}
-    detail={false || "Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados"}>
+    detail="Variáveis do repositório selecionado · CodeMirror 6 · secrets nunca são recuperados">
     <Card className="space-y-4 p-4" key={repository}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Badge tone={dirty ? 'warning' : 'success'}>{dirty ? 'Não salvo' : 'Sincronizado'}</Badge>

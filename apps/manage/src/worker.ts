@@ -1,5 +1,5 @@
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
-import type { Env, Identity } from './auth';
+import type { Env } from './auth';
 import { api } from './api';
 import { terminalWebsocketRoute } from './features/terminal/ticket';
 import { captureManageError } from './sentry';

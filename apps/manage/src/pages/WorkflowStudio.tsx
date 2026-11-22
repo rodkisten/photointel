@@ -45,7 +45,7 @@ export function WorkflowStudio() {
   const [saveEpoch, setSaveEpoch] = useState(0);
   const saving = useRef(false);
   const latest = useRef({ name, nodes, edges });
-  latest.current = { name, nodes, edges };
+  useEffect(() => { latest.current = { name, nodes, edges }; }, [name, nodes, edges]);
   const suppress = useRef(false);
   const markDirty = useCallback(() => { if (!suppress.current) setDirty(true); }, []);
   useEffect(() => {
@@ -131,7 +131,7 @@ export function WorkflowStudio() {
         {saved.map((flow) => <option key={flow.id} value={flow.id}>{flow.name} · r{flow.revision}</option>)}
       </Select>
       <Button size="sm" variant="outline" onClick={newFlow}>Novo</Button>
-      <Button size="sm" onClick={() => void save()} disabled={!ready || saving.current}>Salvar</Button>
+      <Button size="sm" onClick={() => void save()} disabled={!ready}>Salvar</Button>
       <span role="status" aria-live="polite" className="self-center text-xs text-carbon-400">{status}{dirty ? ' · alterações pendentes' : ''}</span>
     </div>
     <Input aria-label="Workflow name" value={name} onChange={(event) => { setName(event.target.value); markDirty(); }} />

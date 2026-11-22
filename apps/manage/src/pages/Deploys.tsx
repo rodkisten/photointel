@@ -1,53 +1,63 @@
-import { WorkflowMessageEditor } from '../components/workflow-message-editor';
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import {
+  WorkflowMessageEditor,
+} from '../components/workflow-message-editor';
+import {
+  useState,
+} from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import {
+  Link,
+} from '@tanstack/react-router';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
-  Activity,
-  AlertCircle,
-  ArrowLeft,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleAlert,
-  Cloud,
-  CloudCog,
-  Code2,
-  Copy,
-  ExternalLink,
-  GitBranch,
-  History,
-  LoaderCircle,
-  Logs,
-  Menu,
   Play,
   RefreshCcw,
-  RotateCcw,
-  Save,
-  Search,
-  Server,
-  Settings2,
-  Shield,
-  Terminal,
-  Workflow,
   X,
 } from 'lucide-react';
-import { Badge, Button, Card, Input, Section, Select, Textarea } from '../components/ui';
-import { api, send } from '../lib/client';
-import { sentryIssueSearch } from '../lib/sentry';
-import { findDuplicateConfigKeys, planConfigChange } from '../config-reconcile';
-import type { ConfigPlan } from '../config-reconcile';
-import { cn, date, human, state } from '../lib/utils';
-import type { Meta, Run, WF, Job, CloudLog, CfLog, Issue } from '../types';
-import { External, Spinner, Empty, IssueBanner } from '../components/shared';
-import { RunRow, RunDetail } from '../components/runs';
-import type { RunCostsResponse } from '../components/run-cost';
-import type { CostSource } from './Costs';
-import { money } from './Costs';
-import { ConfirmDialog } from '../components/confirm-dialog';
-import { CloudflareDeployPanel } from '../CloudflareDeployPanel';
+import {
+  Button,
+  Card,
+  Input,
+  Section,
+  Select,
+} from '../components/ui';
+import {
+  api,
+  send,
+} from '../lib/client';
+import {
+  date,
+} from '../lib/utils';
+import type {
+  Run,
+  WF,
+} from '../types';
+import {
+  Spinner,
+  IssueBanner,
+} from '../components/shared';
+import {
+  RunRow,
+} from '../components/runs';
+import type {
+  RunCostsResponse,
+} from '../components/run-cost';
+import type {
+  CostSource,
+} from './Costs';
+import {
+  money,
+} from './Costs';
+import {
+  ConfirmDialog,
+} from '../components/confirm-dialog';
+import {
+  CloudflareDeployPanel,
+} from '../CloudflareDeployPanel';
 export function Deploys() {
   const qc = useQueryClient();
   const lastFailure = useQuery({
@@ -76,7 +86,8 @@ export function Deploys() {
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const [selected, setSelected] = useState('');
+  const [selectedOverride, setSelectedOverride] = useState<string | null>(null);
+  const selected = selectedOverride ?? workflows.data?.items[0]?.file ?? '';
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
   const [workflowDialog, setWorkflowDialog] = useState(false);
@@ -115,11 +126,8 @@ export function Deploys() {
     .filter(w => (showAllWorkflows || primaryWorkflows.has(w.file)) &&
       (w.name + ' ' + w.file).toLowerCase().includes(workflowSearch.toLowerCase()))
     .sort((a, b) => Number(primaryWorkflows.has(b.file)) - Number(primaryWorkflows.has(a.file)) || a.name.localeCompare(b.name));
-  useEffect(() => {
-    if (!selected && workflows.data?.items.length) setSelected(workflows.data.items[0].file);
-  }, [selected, workflows.data]);
   function changeFile(value: string) {
-    setSelected(value);
+    setSelectedOverride(value);
     setInputs({});
   }
   return (
