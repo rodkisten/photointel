@@ -7,7 +7,7 @@ export type NotificationEvent = typeof NOTIFICATION_EVENTS[number];
 export type NotificationSettings = {
   events: NotificationEvent[];
   grouping: 'window' | 'run' | 'none';
-  windowMinutes: number;
+  windowSeconds: number;
   updateMode: 'edit' | 'new';
   retentionMinutes: { running: number; success: number; error: number };
   template: string;
@@ -15,7 +15,7 @@ export type NotificationSettings = {
 const VARIABLE = '/actions/variables/PHOTOINTEL_NOTIFICATION_SETTINGS';
 export const DEFAULT_SETTINGS: NotificationSettings = {
   events: ['workflow_failure', 'workflow_recovered', 'deploy_failed', 'job_failed'],
-  grouping: 'window', windowMinutes: 5, updateMode: 'edit',
+  grouping: 'window', windowSeconds: 5, updateMode: 'edit',
   retentionMinutes: { running: 30, success: 60, error: 0 },
   template: '❌ {{workflow}} #{{run_number}}\nJob: {{job}}\nEtapa: {{step}}\nErro: {{error}}\nDiagnóstico: {{diagnosis}}\n{{url}}',
 };
@@ -26,22 +26,30 @@ export function validateNotificationSettings(value: unknown): NotificationSettin
   const retention = v.retentionMinutes as Record<string, unknown> | undefined;
   if (!Array.isArray(events) || events.some(x => typeof x !== 'string' || !(NOTIFICATION_EVENTS as readonly string[]).includes(x)) ||
     !['window', 'run', 'none'].includes(String(v.grouping)) ||
-    ![2, 5, 10].includes(Number(v.windowMinutes)) ||
+    ![5, 10, 15, 30].includes(Number(v.windowSeconds)) ||
     !['edit', 'new'].includes(String(v.updateMode)) ||
     !retention || ['running', 'success', 'error'].some(k =>
       !Number.isSafeInteger(retention[k]) || Number(retention[k]) < 0 || Number(retention[k]) > 43200) ||
     typeof v.template !== 'string' || !v.template.trim() || v.template.length > 3500)
     throw new ApiError(422, 'NOTIFICATIONS', 'Eventos, janela, retenção ou template inválidos');
   return { events: [...new Set(events)] as NotificationEvent[], grouping: v.grouping as NotificationSettings['grouping'],
-    windowMinutes: Number(v.windowMinutes), updateMode: v.updateMode as NotificationSettings['updateMode'],
+    windowSeconds: Number(v.windowSeconds), updateMode: v.updateMode as NotificationSettings['updateMode'],
     retentionMinutes: { running: Number(retention.running), success: Number(retention.success), error: Number(retention.error) },
     template: v.template };
 }
 export async function readNotificationSettings(env: Env): Promise<NotificationSettings> {
   const saved = await gh(env, VARIABLE).catch(() => null) as { value?: string } | null;
   if (!saved?.value) return DEFAULT_SETTINGS;
-  try { return validateNotificationSettings(JSON.parse(saved.value)); }
-  catch { return DEFAULT_SETTINGS; }
+  try {
+    const parsed = JSON.parse(saved.value) as Record<string, unknown>;
+    // Legacy settings stored the window in minutes; preserve the selected duration.
+    if (parsed.windowSeconds === undefined) {
+      // The new short-window feature is intentionally opt-in by migration to 5s.
+      // Old minute-scale grouping is no longer supported.
+      parsed.windowSeconds = 5;
+    }
+    return validateNotificationSettings(parsed);
+  } catch { return DEFAULT_SETTINGS; }
 }
 export async function notificationSettingsRoute(request: Request, env: Env): Promise<Response | null> {
   if (new URL(request.url).pathname !== '/api/notifications/settings') return null;
