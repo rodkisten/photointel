@@ -10,6 +10,7 @@ type ErrorItem = {
   fingerprint: string; script: string; source: string; message: string; stack: string;
   url: string; request: { url?: string; method?: string; contentType?: string | null; body?: string | null; truncated?: boolean } | null;
   response: { status?: number | null; contentType?: string | null; durationMs?: number | null; body?: string | null; error?: string | null; truncated?: boolean } | null;
+  scripts: string[];
   count: number; firstSeen: string; lastSeen: string;
 };
 
@@ -64,7 +65,7 @@ export function UserscriptErrors() {
         {filtered.length === 0 ? <p className="p-5 text-sm text-carbon-500">{items.length ? 'Nenhum erro corresponde à busca.' : 'Nenhum erro recebido ainda. O runtime envia novas ocorrências automaticamente.'}</p> : filtered.map(item => <button key={item.fingerprint} onClick={() => setActive(item.fingerprint)} className={`w-full border-b border-carbon-800/70 p-4 text-left transition-colors ${selected?.fingerprint === item.fingerprint ? 'bg-carbon-800/70' : 'hover:bg-carbon-900'}`}>
           <div className="flex items-start gap-3"><span className="mt-0.5 rounded-md bg-rose-500/10 p-1.5 text-rose-300"><Bug size={15} /></span><div className="min-w-0 flex-1">
             <p className="line-clamp-2 text-sm font-medium text-carbon-100">{item.message}</p>
-            <p className="mt-1 truncate font-mono text-[10px] text-carbon-500">{item.script} · {item.source}</p>
+            <p className="mt-1 truncate font-mono text-[10px] text-carbon-500">{item.scripts?.join(', ') || item.script} · {item.source}</p>
             <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-carbon-500"><span className="flex items-center gap-1"><Clock3 size={11} />{formatDate(item.lastSeen)}</span><span className="rounded bg-carbon-800 px-1.5 py-0.5">{item.count}×</span></div>
           </div><ChevronRight size={15} className="mt-1 shrink-0 text-carbon-600" /></div>
         </button>)}
@@ -75,7 +76,7 @@ export function UserscriptErrors() {
         <header className="space-y-3 border-b border-carbon-800 pb-4">
           <div className="flex flex-wrap items-center gap-2"><span className="rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-300">Error</span><span className="font-mono text-[10px] text-carbon-500">{selected.fingerprint}</span></div>
           <h2 className="break-words text-lg font-semibold text-carbon-100">{selected.message}</h2>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-carbon-400"><span>Script: <b className="font-mono text-carbon-200">{selected.script}</b></span><span>Origem: <b className="font-mono text-carbon-200">{selected.source}</b></span><span>Ocorrências: <b className="text-carbon-200">{selected.count}</b></span></div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-carbon-400"><span>Userscript: <b className="font-mono text-carbon-200">{selected.scripts?.join(', ') || selected.script}</b></span><span>Origem: <b className="font-mono text-carbon-200">{selected.source}</b></span><span>Ocorrências: <b className="text-carbon-200">{selected.count}</b></span></div>
           <p className="break-all font-mono text-[11px] text-sky-300">{selected.url || 'URL não informada'}</p>
           <p className="text-[10px] text-carbon-500">Primeira ocorrência: {formatDate(selected.firstSeen)} · Última: {formatDate(selected.lastSeen)}</p>
         </header>
