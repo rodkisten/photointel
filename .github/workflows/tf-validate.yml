@@ -1,5 +1,5 @@
 name: "🔮 RV · TF · Validate"
-run-name: "TF · Validate · ${{ github.ref_name }}"
+run-name: "🔮 TF · Validate · ${{ github.ref_name }}"
 on:
   pull_request:
     paths:
@@ -32,7 +32,7 @@ jobs:
         with:
           terraform_version: "1.17.2"
           terraform_wrapper: false
-      - name: "TF · Format"
+      - name: "🔮 TF · Format"
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "Terraform format" terraform fmt -recursive infra/terraform
@@ -41,24 +41,24 @@ jobs:
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Terraform init · ${{ matrix.root }}" terraform init -backend=false -input=false
-      - name: "TF · Generate offline Cloudflare schema fixture"
+      - name: "🔮 TF · Generate offline Cloudflare schema fixture"
         if: matrix.root == 'cloudflare'
         env:
           TF_OFFLINE_FIXTURE: 'true'
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
           command: python3 -m infra.terraform.cloudflare_release fixture
-      - name: "TF · Validate"
+      - name: "🔮 TF · Validate"
         working-directory: infra/terraform/environments/${{ matrix.root }}
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Terraform validate · ${{ matrix.root }}" terraform validate -no-color
-      - name: "TF · Test Job configuration with mocked providers"
+      - name: "🔮 TF · Test Job configuration with mocked providers"
         working-directory: infra/terraform/environments/${{ matrix.root }}
         run: |
           source "$GITHUB_WORKSPACE/scripts/ci/pretty-logs.sh"
           ci_run "Terraform test · ${{ matrix.root }}" terraform test -no-color
-      - name: "TF · Test adoption, release retention and plan safety"
+      - name: "🔮 TF · Test adoption, release retention and plan safety"
         run: |
           source scripts/ci/pretty-logs.sh
           ci_run "Terraform offline contracts" python3 -m unittest discover -s infra/gcp/tests -v
