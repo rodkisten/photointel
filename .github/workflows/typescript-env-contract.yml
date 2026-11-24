@@ -17,11 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
       - name: "🧪 Run shared environment tests"
-        run: npm --prefix packages/env test
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          package-manager: npm
+          install: 'false'
+          cache: 'false'
+          script: npm --prefix packages/env test
       - name: "📋 Publish results"
         if: always()
         run: |

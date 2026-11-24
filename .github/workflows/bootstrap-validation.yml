@@ -159,47 +159,65 @@ jobs:
         id: contracts
         if: steps.openapi.outcome == 'success' && steps.node_install.outcome == 'success'
         continue-on-error: true
-        run: npm --prefix apps/web run generate:api
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run generate:api
       - name: "🧪 Lint"
         id: python_lint
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync ruff check . --output-format=github
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync ruff check . --output-format=github
       - name: "🧪 Testes"
         id: python_types
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync mypy apps/api/src gpu bridges
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync mypy apps/api/src gpu bridges
       - name: "🧪 Testes"
         id: python_tests
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
       - name: "🧪 Jobs"
         id: worker_smoke
         if: steps.python_install.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync python tests/worker_core_smoke.py > reports/worker-core-smoke.txt
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync python tests/worker_core_smoke.py > reports/worker-core-smoke.txt
       - name: "🧪 Lint"
         id: web_lint
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
-        run: npm --prefix apps/web run lint
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run lint
       - name: "🧪 Testes"
         id: web_types
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
-        run: npm --prefix apps/web run typecheck
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run typecheck
       - name: "🧪 Testes"
         id: web_tests
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
-        run: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
       - name: "🏗 ️  Frontend production buil"
         id: web_build
         if: steps.node_install.outcome == 'success'
         continue-on-error: true
-        run: npm --prefix apps/web run build
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run build
       - name: "🧰 Código"
         id: notify_observed_007
         if: steps.python_install.outcome == 'success'
@@ -228,12 +246,16 @@ jobs:
         id: migrate
         if: steps.storage.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
       - name: "🗃 ️  Verify real dump and res"
         id: restore
         if: steps.migrate.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
       - name: "🗃 Neon"
         id: app_role
         if: steps.migrate.outcome == 'success'
@@ -244,7 +266,9 @@ jobs:
         id: integration
         if: steps.app_role.outcome == 'success'
         continue-on-error: true
-        run: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
         env:
           DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
       - name: "⚙ ️  Browser E2E on real API "

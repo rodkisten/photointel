@@ -28,8 +28,13 @@ jobs:
             exit 1
           }
       - name: "🌐 Deploy wildcard router"
-        working-directory: infra/cloudflare/manage-preview-router
-        run: npx --yes wrangler@4.135.0 deploy --config wrangler.jsonc
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          working-directory: infra/cloudflare/manage-preview-router
+          package-manager: npm
+          install: 'false'
+          cache: 'false'
+          script: npx --yes wrangler@4.135.0 deploy --config wrangler.jsonc
       - name: "📍 Preview domains"
         run: |
           echo "### Manage preview router" >> "$GITHUB_STEP_SUMMARY"
