@@ -1,4 +1,4 @@
-name: "🎞️ Media · CI"
+name: "🔮 RV · 🎞️ Media · CI"
 on:
   pull_request:
     paths:
@@ -20,9 +20,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: rodkisten/github/setup-node@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
-          node-version: "26"
+          node-version: '26'
+          install: 'false'
+          cache: 'false'
       - name: Run all checks and summarize failures
         shell: bash
         run: bash apps/media/ci/check-all.sh

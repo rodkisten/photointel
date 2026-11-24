@@ -1,4 +1,4 @@
-name: "☁️ GCP Check"
+name: "🔮 RV · ☁️ GCP Check"
 on:
   pull_request:
     paths:
@@ -103,13 +103,19 @@ jobs:
           bash -n infra/gcp/tests/test-bootstrap.sh
           bash infra/gcp/tests/test-bootstrap.sh
       - name: "🗃 Neon runtime"
-        run: bash infra/gcp/tests/test_migration_runtime.sh
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash infra/gcp/tests/test_migration_runtime.sh
       - name: "🧪 Testes"
         id: notify_observed_006
-        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
       - name: "🧩 Código"
         id: notify_observed_007
-        run: node --test infra/scripts/zip-patch-policy.test.cjs
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: node --test infra/scripts/zip-patch-policy.test.cjs
       # Successful push/PR validation is already visible in the Actions log.
       # Only keep the generated plans when useful for manual review or failures.
       - name: "📦 Testes"

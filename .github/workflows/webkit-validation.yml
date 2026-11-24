@@ -1,4 +1,4 @@
-name: "📱 CI · WebKit"
+name: "🔮 RV · 📱 CI · WebKit"
 run-name: "📱 CI · WebKit · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:
@@ -93,7 +93,9 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" psql --username=photointel --dbname=photointel --set=app_role=photointel_app --set=app_password=ci-webkit-app-only --set=database_name=photointel --set=ON_ERROR_STOP=1 < infra/oracle/provision-app-role.sql
       - name: "🧰 Build"
         id: notify_observed_009
-        run: npm exec --prefix apps/web -- playwright install --with-deps chromium webkit
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm exec --prefix apps/web -- playwright install --with-deps chromium webkit
       - name: "⚙ ️  Exercise all browser proj"
         id: notify_observed_010
         run: bash infra/scripts/run-e2e.sh

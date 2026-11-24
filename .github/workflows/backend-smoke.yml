@@ -1,4 +1,4 @@
-name: "🧪 CI · Backend smoke"
+name: "🔮 RV · 🧪 CI · Backend smoke"
 run-name: "🧪 CI · Backend smoke · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:
@@ -129,16 +129,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: "📦 Node 22"
-        uses: actions/setup-node@v7
+      - name: "🧪 Install and validate preview UI"
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
+          working-directory: apps/web
           node-version: '26'
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - name: "📦 Install web dependencies"
-        run: npm --prefix apps/web ci
-      - name: "🔎 TypeScript"
-        run: npm --prefix apps/web run typecheck
-      - name: "🧪 Preview audit UI"
-        run: npm --prefix apps/web test -- src/test/operations.test.tsx
+          package-manager: npm
+          script: |
+            npm run typecheck
+            npm test -- src/test/operations.test.tsx
 

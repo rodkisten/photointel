@@ -1,4 +1,4 @@
-name: "🧹 GitHub · Artifact cleanup"
+name: "🔮 RV · 🧹 GitHub · Artifact cleanup"
 run-name: "🧹 GitHub · Artifact cleanup · ${{ github.ref_name }}"
 on:
   workflow_dispatch:

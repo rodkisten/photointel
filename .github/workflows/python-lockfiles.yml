@@ -1,4 +1,4 @@
-name: "🐍 Python · Sync uv lockfile"
+name: "🔮 RV · 🐍 Python · Sync uv lockfile"
 run-name: "🐍 uv lock · ${{ inputs.target_branch || github.ref_name }}"
 
 on:

@@ -1,4 +1,4 @@
-name: "🤖 Dependency PR · Manual tests"
+name: "🔮 RV · 🤖 Dependency PR · Manual tests"
 run-name: "🤖 Manual tests · PR #${{ github.event.pull_request.number }}"
 on:
   pull_request_target:

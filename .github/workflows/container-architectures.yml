@@ -1,4 +1,4 @@
-name: "🐳 CI · Architectures"
+name: "🔮 RV · 🐳 CI · Architectures"
 run-name: "🐳 CI · Architectures · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:

@@ -1,4 +1,4 @@
-name: "TF · State Bootstrap"
+name: "🔮 RV · TF · State Bootstrap"
 run-name: "TF · State · ${{ inputs.mode }} · production"
 on:
   workflow_dispatch:

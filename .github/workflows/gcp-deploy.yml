@@ -1,4 +1,4 @@
-name: "☁️ GCP · API deploy"
+name: "🔮 RV · ☁️ GCP · API deploy"
 run-name: "☁️ GCP · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:
@@ -131,7 +131,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: {persist-credentials: false}
-      - run: bash -n infra/gcp/release.sh && python3 -m infra.gcp.manage render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
+      - uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash -n infra/gcp/release.sh && python3 -m infra.gcp.manage render --config infra/gcp/config.example.json --output "$RUNNER_TEMP/gcp-rendered"
   deploy:
     name: "🚀 ${{ inputs.action }}"
     # Production releases require an explicit workflow_dispatch.

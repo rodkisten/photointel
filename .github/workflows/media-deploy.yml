@@ -1,4 +1,4 @@
-name: "🎞️ Media · Build & Jobs"
+name: "🔮 RV · 🎞️ Media · Build & Jobs"
 run-name: "🎞️ Media · ${{ inputs.action }} · ${{ github.ref_name }}"
 
 on:
@@ -69,9 +69,11 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Workflow commit: $WORKFLOW_SHA; media image source commit: ${sha:-preserve Terraform release}"
       - name: "🧪 Validate media deployment commands (offline)"
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "Media: validation" python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            source scripts/ci/pretty-logs.sh
+            ci_run "Media: validation" python3 -m unittest infra.gcp.tests.test_media infra.gcp.tests.test_cloud_cli -v
       - name: "🧰 Node.js 22 for media validation"
         if: inputs.action == 'build' || inputs.action == 'build-and-deploy'
         uses: actions/setup-node@v7
@@ -150,9 +152,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IMAGE_SHA: ${{ steps.images.outputs.sha }}
           MEDIA_ACTION: ${{ inputs.action }}
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "Media: Terraform dispatch" python3 -m infra.terraform.dispatch_media
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            source scripts/ci/pretty-logs.sh
+            ci_run "Media: Terraform dispatch" python3 -m infra.terraform.dispatch_media
       - name: "🧹 Remove temporary production config"
         if: always()
         uses: ./.github/actions/gcp-config
