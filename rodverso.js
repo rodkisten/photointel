@@ -6,36 +6,37 @@
  * Requisitos:
  *   - Node.js >= 22, git, gh CLI autenticado (ou GH_TOKEN)
  *   - Dependências: yaml@2, semver@7
+ *   - Adicione "type": "module" no package.json (ou use extensão .mjs)
  *
  * Exemplos de uso:
  *
  *   1. Gerar o workflow do GitHub Actions (.github/workflows/monorepo--migrate.yml):
- *      node rodverso.mjs init-workflow              # Apenas imprime o YAML no stdout
- *      node rodverso.mjs init-workflow --apply      # Grava o arquivo no repositório
+ *      node rodverso.js init-workflow              # Apenas imprime o YAML no stdout
+ *      node rodverso.js init-workflow --apply      # Grava o arquivo no repositório
  *
  *   2. Auditar repositórios de origem (somente leitura: variáveis, secrets, tags, workflows):
- *      node rodverso.mjs scan repo-a owner/repo-b
+ *      node rodverso.js scan repo-a owner/repo-b
  *
  *   3. Simular a migração de código em um worktree isolado (dry-run completo):
- *      node rodverso.mjs plan repo-a owner/repo-b
+ *      node rodverso.js plan repo-a owner/repo-b
  *
  *   4. Executar a migração de código:
- *      node rodverso.mjs migrate repo-a --apply              # Cria branch local migration/rodverso/<uuid>
- *      node rodverso.mjs migrate repo-a --apply --push       # Faz push da branch para origin
- *      node rodverso.mjs migrate repo-a --apply --pr         # Faz push e abre Pull Request como draft
+ *      node rodverso.js migrate repo-a --apply              # Cria branch local migration/rodverso/<uuid>
+ *      node rodverso.js migrate repo-a --apply --push       # Faz push da branch para origin
+ *      node rodverso.js migrate repo-a --apply --pr         # Faz push e abre Pull Request como draft
  *
  *   5. Migrar recursos remotos (executados separadamente por segurança):
- *      node rodverso.mjs resources repo-a --apply
- *      node rodverso.mjs environments repo-a --apply --confirm-environments
- *      node rodverso.mjs releases repo-a --apply --confirm-releases
+ *      node rodverso.js resources repo-a --apply
+ *      node rodverso.js environments repo-a --apply --confirm-environments
+ *      node rodverso.js releases repo-a --apply --confirm-releases
  *
  *   6. Auditar dependências (package.json) do monorepo atual:
- *      node rodverso.mjs verify
+ *      node rodverso.js verify
  *
  *   7. Inspecionar, retomar ou reverter uma migração pelo UUID do relatório (.rodverso/reports/<uuid>.json):
- *      node rodverso.mjs status <uuid>
- *      node rodverso.mjs resume <uuid> --apply --pr
- *      node rodverso.mjs rollback <uuid> --apply --confirm-rollback
+ *      node rodverso.js status <uuid>
+ *      node rodverso.js resume <uuid> --apply --pr
+ *      node rodverso.js rollback <uuid> --apply --confirm-rollback
  */
 
 import fs from 'node:fs';
@@ -893,8 +894,9 @@ function transaction() {
 
 function initWorkflow() {
   const target = path.join(root, '.github/workflows/monorepo--migrate.yml');
-  const workflow = `name: '🪐🌎🌎🗺️ Rodverso · Migration'
-on: 
+  const scriptName = path.basename(process.argv[1] || 'rodverso.js');
+  const workflow = String.raw`name: '🪐🌎🌎🗺️ Rodverso · Migration'
+on:
   workflow_dispatch:
     inputs:
       mode:
@@ -928,9 +930,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/rodverso"
-          cp rodverso.mjs "$RUNNER_TEMP/rodverso/rodverso.mjs"
+          cp __SCRIPT__ "$RUNNER_TEMP/rodverso/__SCRIPT__"
           npm install --prefix "$RUNNER_TEMP/rodverso" --ignore-scripts --no-audit --no-fund yaml@2 semver@7
-          node --check "$RUNNER_TEMP/rodverso/rodverso.mjs"
+          node --check "$RUNNER_TEMP/rodverso/__SCRIPT__"
       - uses: actions/create-github-app-token@v2
         id: app
         with:
@@ -961,7 +963,7 @@ jobs:
             apply) cmd=migrate; extra=(--apply --pr);;
             *) exit 1;;
           esac
-          node "$RUNNER_TEMP/rodverso/rodverso.mjs" "$cmd" "${repos[@]}" ${extra[@]+"${extra[@]}"}
+          node "$RUNNER_TEMP/rodverso/__SCRIPT__" "$cmd" "${repos[@]}" ${extra[@]+"${extra[@]}"}
       - name: Report status
         if: always()
         run: |
@@ -972,6 +974,7 @@ jobs:
 
   const expr = (x) => `$` + `{{ ${x} }}`;
   const content = workflow
+    .replaceAll('__SCRIPT__', scriptName)
     .replaceAll('__APP_ID__', expr('vars.ROD_APP_ID'))
     .replaceAll('__APP_KEY__', expr('secrets.ROD_APP_PRIVATE_KEY'))
     .replaceAll('__OWNER__', expr('github.repository_owner'))
@@ -997,7 +1000,7 @@ function main() {
 
   if (command === 'help') {
     console.log(
-      'Usage: node rodverso.mjs init-workflow|scan|plan|migrate|verify|resources|environments|releases|status|resume|rollback [owner/repo ...] [--apply] [--push] [--pr]'
+      'Usage: node rodverso.js init-workflow|scan|plan|migrate|verify|resources|environments|releases|status|resume|rollback [owner/repo ...] [--apply] [--push] [--pr]'
     );
     return;
   }
@@ -1090,7 +1093,6 @@ function main() {
     run('git', ['add', '-A'], cwd);
     auditDependencies(cwd);
 
-    // Check only for unresolved merge conflicts, not legacy trailing whitespace
     const unmerged = run('git', ['diff', '--cached', '--name-only', '--diff-filter=U'], cwd);
     check(!unmerged, `Unmerged conflicts detected: ${unmerged}`);
 
