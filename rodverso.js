@@ -893,8 +893,8 @@ function transaction() {
 
 function initWorkflow() {
   const target = path.join(root, '.github/workflows/monorepo--migrate.yml');
-  const workflow = String.raw`name: 'Rodverso · Migration'
-on:
+  const workflow = `name: '🪐🌎🌎🗺️ Rodverso · Migration'
+on: 
   workflow_dispatch:
     inputs:
       mode:
