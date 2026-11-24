@@ -117,6 +117,13 @@ export async function ingestUserscriptError(request: Request, env: Env): Promise
   fingerprintEntry.lastAccepted = nowMs;
   ingestRate.set(`ip:${ip}`, ipEntry);
   ingestRate.set(fingerprintKey, fingerprintEntry);
+  if (ingestRate.size > 5_000) {
+    let removed = 0;
+    for (const key of ingestRate.keys()) {
+      ingestRate.delete(key);
+      if (++removed >= 2_500) break;
+    }
+  }
   const now = new Date().toISOString();
   const firstSeen = text(payload.firstSeen, 40) || now;
   const lastSeen = text(payload.lastSeen, 40) || now;
