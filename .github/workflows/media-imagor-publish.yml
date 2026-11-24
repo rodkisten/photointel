@@ -82,7 +82,9 @@ jobs:
       - name: "Verify reviewed immutable upstream image"
         env:
           IMAGOR_BASE_IMAGE: ${{ inputs.base_image }}
-        run: bash apps/media/imagor/verify-base-image.sh "$IMAGOR_BASE_IMAGE" --verify-remote
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash apps/media/imagor/verify-base-image.sh "$IMAGOR_BASE_IMAGE" --verify-remote
       - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-bootstrap/providers/photo-intelligence-bootstrap

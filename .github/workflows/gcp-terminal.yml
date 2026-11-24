@@ -54,7 +54,9 @@ jobs:
           confirm-project: photointel
           release-sha: ${{ github.sha }}
       - name: "🧪 Validate terminal configuration"
-        run: python3 -m infra.terminal.terminal plan
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m infra.terminal.terminal plan
       - name: "🛡️ Check bootstrap identity"
         if: inputs.action == 'provision' || inputs.action == 'build' || inputs.action == 'logs'
         env:

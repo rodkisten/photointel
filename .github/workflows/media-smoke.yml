@@ -39,7 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: "🧪 Test R2 fixture selector (offline)"
-        run: python3 -m unittest infra.scripts.test_media_smoke_fixture -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest infra.scripts.test_media_smoke_fixture -v
       - name: "🛡️ Require explicit paid-run authorization"
         env:
           TARGET: ${{ inputs.target }}

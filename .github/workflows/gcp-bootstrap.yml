@@ -103,7 +103,9 @@ jobs:
           region: "us-central1"
       - name: "🧪 Bootstrap"
         id: notify_observed_001
-        run: bash -n infra/gcp/bootstrap.sh
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash -n infra/gcp/bootstrap.sh
 
       - name: "🧪 Login"
         id: notify_observed_002

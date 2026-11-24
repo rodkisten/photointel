@@ -36,13 +36,15 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@v10.3.3
       - name: "🧪 Validate GPU deployment sources (offline)"
-        run: |
-          set -euo pipefail
-          source scripts/ci/pretty-logs.sh
-          ci_run "GPU Python syntax" uv run --no-project python -m compileall -q gpu/modal_app.py gpu/service.py gpu/pipelines
-          grep -q 'requires_proxy_auth=True' gpu/modal_app.py
-          grep -q 'min_containers=0' gpu/modal_app.py
-          grep -q 'max_containers=1' gpu/modal_app.py
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            set -euo pipefail
+            source scripts/ci/pretty-logs.sh
+            ci_run "GPU Python syntax" uv run --no-project python -m compileall -q gpu/modal_app.py gpu/service.py gpu/pipelines
+            grep -q 'requires_proxy_auth=True' gpu/modal_app.py
+            grep -q 'min_containers=0' gpu/modal_app.py
+            grep -q 'max_containers=1' gpu/modal_app.py
       - name: "🛡 Require explicit approval and existing Modal credentials"
         if: inputs.mode == 'deploy'
         env:
