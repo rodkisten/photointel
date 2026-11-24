@@ -11,32 +11,32 @@
  * Exemplos de uso:
  *
  *   1. Gerar o workflow do GitHub Actions (.github/workflows/monorepo--migrate.yml):
- *      node rodverso.js init-workflow              # Apenas imprime o YAML no stdout
- *      node rodverso.js init-workflow --apply      # Grava o arquivo no repositório
+ *      node rodverso.mjs init-workflow              # Apenas imprime o YAML no stdout
+ *      node rodverso.mjs init-workflow --apply      # Grava o arquivo no repositório
  *
  *   2. Auditar repositórios de origem (somente leitura: variáveis, secrets, tags, workflows):
- *      node rodverso.js scan repo-a owner/repo-b
+ *      node rodverso.mjs scan repo-a owner/repo-b
  *
  *   3. Simular a migração de código em um worktree isolado (dry-run completo):
- *      node rodverso.js plan repo-a owner/repo-b
+ *      node rodverso.mjs plan repo-a owner/repo-b
  *
  *   4. Executar a migração de código:
- *      node rodverso.js migrate repo-a --apply              # Cria branch local migration/rodverso/<uuid>
- *      node rodverso.js migrate repo-a --apply --push       # Faz push da branch para origin
- *      node rodverso.js migrate repo-a --apply --pr         # Faz push e abre Pull Request como draft
+ *      node rodverso.mjs migrate repo-a --apply              # Cria branch local migration/rodverso/<uuid>
+ *      node rodverso.mjs migrate repo-a --apply --push       # Faz push da branch para origin
+ *      node rodverso.mjs migrate repo-a --apply --pr         # Faz push e abre Pull Request como draft
  *
  *   5. Migrar recursos remotos (executados separadamente por segurança):
- *      node rodverso.js resources repo-a --apply
- *      node rodverso.js environments repo-a --apply --confirm-environments
- *      node rodverso.js releases repo-a --apply --confirm-releases
+ *      node rodverso.mjs resources repo-a --apply
+ *      node rodverso.mjs environments repo-a --apply --confirm-environments
+ *      node rodverso.mjs releases repo-a --apply --confirm-releases
  *
  *   6. Auditar dependências (package.json) do monorepo atual:
- *      node rodverso.js verify
+ *      node rodverso.mjs verify
  *
  *   7. Inspecionar, retomar ou reverter uma migração pelo UUID do relatório (.rodverso/reports/<uuid>.json):
- *      node rodverso.js status <uuid>
- *      node rodverso.js resume <uuid> --apply --pr
- *      node rodverso.js rollback <uuid> --apply --confirm-rollback
+ *      node rodverso.mjs status <uuid>
+ *      node rodverso.mjs resume <uuid> --apply --pr
+ *      node rodverso.mjs rollback <uuid> --apply --confirm-rollback
  */
 
 import fs from 'node:fs';
@@ -894,93 +894,87 @@ function transaction() {
 
 function initWorkflow() {
   const target = path.join(root, '.github/workflows/monorepo--migrate.yml');
-  const scriptName = path.basename(process.argv[1] || 'rodverso.js');
-  const workflow = String.raw`name: '🪐🌎🌎🗺️ Rodverso · Migration'
-on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        type: choice
-        options: [audit, plan, apply]
-        default: plan
-      repositories:
-        type: string
-        required: true
-        description: 'Space-separated owner/repo names'
-permissions:
-  contents: read
-concurrency:
-  group: rodverso-migration
-  cancel-in-progress: false
-jobs:
-  migration:
-    if: github.ref_name == github.event.repository.default_branch
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install trusted migration tooling
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/rodverso"
-          cp __SCRIPT__ "$RUNNER_TEMP/rodverso/__SCRIPT__"
-          npm install --prefix "$RUNNER_TEMP/rodverso" --ignore-scripts --no-audit --no-fund yaml@2 semver@7
-          node --check "$RUNNER_TEMP/rodverso/__SCRIPT__"
-      - uses: actions/create-github-app-token@v2
-        id: app
-        with:
-          app-id: __APP_ID__
-          private-key: __APP_KEY__
-          owner: __OWNER__
-      - name: Run migration
-        shell: bash
-        env:
-          GH_TOKEN: __TOKEN__
-          MODE: __MODE__
-          REPOSITORIES: __REPOS__
-          GIT_LFS_SKIP_SMUDGE: '1'
-        run: |
-          set -euo pipefail
-          git config user.name 'Rod Migration Bot'
-          git config user.email 'rod-migration-bot@users.noreply.github.com'
-          git config core.hooksPath /dev/null
-          gh auth setup-git
-          read -r -a repos <<< "$REPOSITORIES"
-          (( ${#repos[@]} > 0 ))
-          for repo in "${repos[@]}"; do
-            [[ "$repo" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]] || exit 1
-          done
-          case "$MODE" in
-            audit) cmd=scan; extra=();;
-            plan) cmd=plan; extra=();;
-            apply) cmd=migrate; extra=(--apply --pr);;
-            *) exit 1;;
-          esac
-          node "$RUNNER_TEMP/rodverso/__SCRIPT__" "$cmd" "${repos[@]}" ${extra[@]+"${extra[@]}"}
-      - name: Report status
-        if: always()
-        run: |
-          printf '## Rodverso migration\nMode: %s\n' "$MODE" >> "$GITHUB_STEP_SUMMARY"
-        env:
-          MODE: __MODE__
-`;
-
+  const scriptName = path.basename(process.argv[1] || 'rodverso.mjs');
   const expr = (x) => `$` + `{{ ${x} }}`;
-  const content = workflow
-    .replaceAll('__SCRIPT__', scriptName)
-    .replaceAll('__APP_ID__', expr('vars.ROD_APP_ID'))
-    .replaceAll('__APP_KEY__', expr('secrets.ROD_APP_PRIVATE_KEY'))
-    .replaceAll('__OWNER__', expr('github.repository_owner'))
-    .replaceAll('__TOKEN__', expr('steps.app.outputs.token'))
-    .replaceAll('__MODE__', expr('inputs.mode'))
-    .replaceAll('__REPOS__', expr('inputs.repositories'));
+
+  const content = [
+    `name: '🪐🌎🌎🗺️ Rodverso · Migration'`,
+    `on:`,
+    `  workflow_dispatch:`,
+    `    inputs:`,
+    `      mode:`,
+    `        type: choice`,
+    `        options: [audit, plan, apply]`,
+    `        default: plan`,
+    `      repositories:`,
+    `        type: string`,
+    `        required: true`,
+    `        description: 'Space-separated owner/repo names'`,
+    `permissions:`,
+    `  contents: read`,
+    `concurrency:`,
+    `  group: rodverso-migration`,
+    `  cancel-in-progress: false`,
+    `jobs:`,
+    `  migration:`,
+    `    if: github.ref_name == github.event.repository.default_branch`,
+    `    runs-on: ubuntu-latest`,
+    `    timeout-minutes: 45`,
+    `    steps:`,
+    `      - uses: actions/checkout@v4`,
+    `        with:`,
+    `          fetch-depth: 0`,
+    `          persist-credentials: false`,
+    `      - uses: actions/setup-node@v4`,
+    `        with:`,
+    `          node-version: '22'`,
+    `      - name: Install trusted migration tooling`,
+    `        shell: bash`,
+    `        run: |`,
+    `          set -euo pipefail`,
+    `          mkdir -p "$RUNNER_TEMP/rodverso"`,
+    `          cp ${scriptName} "$RUNNER_TEMP/rodverso/${scriptName}"`,
+    `          npm install --prefix "$RUNNER_TEMP/rodverso" --ignore-scripts --no-audit --no-fund yaml@2 semver@7`,
+    `          node --check "$RUNNER_TEMP/rodverso/${scriptName}"`,
+    `      - uses: actions/create-github-app-token@v2`,
+    `        id: app`,
+    `        with:`,
+    `          app-id: ${expr('vars.ROD_APP_ID')}`,
+    `          private-key: ${expr('secrets.ROD_APP_PRIVATE_KEY')}`,
+    `          owner: ${expr('github.repository_owner')}`,
+    `      - name: Run migration`,
+    `        shell: bash`,
+    `        env:`,
+    `          GH_TOKEN: ${expr('steps.app.outputs.token')}`,
+    `          MODE: ${expr('inputs.mode')}`,
+    `          REPOSITORIES: ${expr('inputs.repositories')}`,
+    `          GIT_LFS_SKIP_SMUDGE: '1'`,
+    `        run: |`,
+    `          set -euo pipefail`,
+    `          git config user.name 'Rod Migration Bot'`,
+    `          git config user.email 'rod-migration-bot@users.noreply.github.com'`,
+    `          git config core.hooksPath /dev/null`,
+    `          gh auth setup-git`,
+    `          read -r -a repos <<< "$REPOSITORIES"`,
+    '          (( ${#repos[@]} > 0 ))',
+    '          for repo in "${repos[@]}"; do',
+    `            [[ "$repo" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$ ]] || exit 1`,
+    `          done`,
+    `          case "$MODE" in`,
+    `            audit) cmd=scan; extra=();;`,
+    `            plan) cmd=plan; extra=();;`,
+    `            apply) cmd=migrate; extra=(--apply --pr);;`,
+    `            *) exit 1;;`,
+    `          esac`,
+    '          node "$RUNNER_TEMP/rodverso/' + scriptName + '" "$cmd" "${repos[@]}" ${extra[@]+"${extra[@]}"}',
+    `      - name: Report status`,
+    `        if: always()`,
+    `        run: |`,
+    `          printf '## Rodverso migration\\nMode: %s\\n' "$MODE" >> "$GITHUB_STEP_SUMMARY"`,
+    `        env:`,
+    `          MODE: ${expr('inputs.mode')}`,
+    ``,
+  ].join('\n');
 
   const doc = YAML.parseDocument(content);
   check(!doc.errors.length, 'Generated workflow is invalid YAML');
@@ -1000,7 +994,7 @@ function main() {
 
   if (command === 'help') {
     console.log(
-      'Usage: node rodverso.js init-workflow|scan|plan|migrate|verify|resources|environments|releases|status|resume|rollback [owner/repo ...] [--apply] [--push] [--pr]'
+      'Usage: node rodverso.mjs init-workflow|scan|plan|migrate|verify|resources|environments|releases|status|resume|rollback [owner/repo ...] [--apply] [--push] [--pr]'
     );
     return;
   }
