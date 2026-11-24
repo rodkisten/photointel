@@ -47,7 +47,9 @@ jobs:
       - name: "🧰 Gcloud"
         uses: google-github-actions/setup-gcloud@v3
       - name: "🧪 Test configuration reconciliation"
-        run: python3 -m unittest discover -s infra/gcp/tests -p test_cloudflare_setup.py -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest discover -s infra/gcp/tests -p test_cloudflare_setup.py -v
       - name: "🔎 Access, paths, private R2 and API audience"
         run: python3 -m infra.scripts.cloudflare_setup "$SETUP_MODE"
       - name: "⚙ Worker environment"
@@ -62,13 +64,19 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: "📦 Frontend dependencies"
         if: env.SETUP_MODE == 'apply'
-        run: npm --prefix apps/web ci
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web ci
       - name: "🏗 Frontend"
         if: env.SETUP_MODE == 'apply'
-        run: npm --prefix apps/web run build
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run build
       - name: "🧪 Worker and authentication"
         if: env.SETUP_MODE == 'apply'
-        run: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
       - name: "🚀 Worker, static assets, custom domain and quiet logs"
         if: env.SETUP_MODE == 'apply'
         run: |

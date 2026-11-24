@@ -45,7 +45,9 @@ jobs:
         if: matrix.root == 'cloudflare'
         env:
           TF_OFFLINE_FIXTURE: 'true'
-        run: python3 -m infra.terraform.cloudflare_release fixture
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m infra.terraform.cloudflare_release fixture
       - name: "TF · Validate"
         working-directory: infra/terraform/environments/${{ matrix.root }}
         run: |

@@ -52,19 +52,33 @@ jobs:
         with:
           persist-credentials: false
       - name: "Shell syntax"
-        run: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
       - name: "Diagnostics and exit code tests"
-        run: bash scripts/ci/test-pretty-logs.sh
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash scripts/ci/test-pretty-logs.sh
       - name: "Python and Node.js syntax highlighting"
-        run: python3 -m unittest scripts.ci.test_highlight_output -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest scripts.ci.test_highlight_output -v
       - name: "Context selection regression tests"
-        run: python3 -m unittest scripts.ci.test_select_context -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest scripts.ci.test_select_context -v
       - name: "Shared diagnostic catalog contract"
-        run: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
       - name: "Python diagnostic syntax"
-        run: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
       - name: "Python cloud_cli contract tests"
-        run: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
       - name: "Install Google Cloud CLI"
         uses: google-github-actions/setup-gcloud@v3
         with:

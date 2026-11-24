@@ -515,7 +515,9 @@ jobs:
       - name: "⏳ Aguardar MinIO e criar bucket privado"
         id: notify_observed_025
         continue-on-error: true
-        run: uv run python infra/scripts/init-private-bucket.py
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run python infra/scripts/init-private-bucket.py
 
       - name: "🧬 Aplicar migrations do banco (Alembic)"
         id: notify_observed_026
@@ -527,12 +529,16 @@ jobs:
       - name: "🗃️ Validar restore inicial do PostgreSQL"
         id: notify_observed_027
         continue-on-error: true
-        run: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
 
       - name: "💾 Validar ciclo de backup e restore"
         id: notify_observed_028
         continue-on-error: true
-        run: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run python infra/scripts/backup-restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
 
       - name: "🧪 Executar testes de integração (Pytest)"
         id: notify_observed_029
@@ -723,7 +729,9 @@ jobs:
       - name: "📄 Exportar dependências de runtime"
         id: notify_observed_043
         continue-on-error: true
-        run: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
 
       - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
         id: notify_observed_046

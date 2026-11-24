@@ -146,9 +146,11 @@ jobs:
             fi
           done
       - name: "🏗 Build static Photos and Manage"
-        run: |
-          npm --prefix apps/web run build
-          npm --prefix apps/manage run build
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            npm --prefix apps/web run build
+            npm --prefix apps/manage run build
       - name: "🔗 Enable preview URLs without enabling production workers.dev"
         if: steps.credentials.outputs.ready == 'true'
         shell: bash
