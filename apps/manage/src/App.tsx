@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import {
@@ -21,9 +21,8 @@ import {
   FolderGit2,
   Menu,
   GripVertical,
-  ChevronDown,
-  Globe2,
   TerminalSquare,
+  Bug,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -47,6 +46,7 @@ const NAV = [
   { id: 'workflows', to: '/workflows', label: 'Workflow Studio', icon: Workflow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
+  { id: 'errors', to: '/errors', label: 'Errors', icon: Bug },
   { id: 'terminal', to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'notifications', to: '/notifications', label: 'Notificações', icon: Bell },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
@@ -57,7 +57,7 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
-  { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
+  { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
@@ -73,6 +73,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   workflows: 'Editor visual de automações e pipelines',
   costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
+  errors: 'Stack traces e request/response dos Userscripts',
   notifications: 'Templates, agrupamento e limpeza automática do Telegram',
   config: 'Edição segura das configurações de produção',
   secrets: 'Versões e credenciais do Google Secret Manager',
@@ -91,6 +92,7 @@ function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';
+  if (pathname.startsWith('/errors')) return 'errors';
   if (pathname.startsWith('/notifications')) return 'notifications';
   if (pathname.startsWith('/environment')) return 'config';
   if (pathname.startsWith('/secrets')) return 'secrets';
@@ -103,8 +105,7 @@ export default function App() {
   const router = useRouter();
   const routerSearch = useRouterState({ select: state => state.location.searchStr });
   const [mobileMenu, setMobileMenu] = useState(false);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<string | null>(() => new URLSearchParams(window.location.search).get('project'));
+  const selectedProject = new URLSearchParams(routerSearch).get('project');
   const [navOrder, setNavOrder] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
     catch { return []; }
@@ -149,21 +150,24 @@ export default function App() {
   });
   const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
   const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
-  useEffect(() => {
-    setSelectedProject(new URLSearchParams(routerSearch).get('project'));
-  }, [routerSearch]);
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
     if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
-    setSelectedProject(repository);
-    setProjectMenuOpen(false);
     // Preserve the active route and unrelated query parameters.
     const url = new URL(window.location.href);
     url.searchParams.set('project', repository);
+    if (repository === 'rodkisten/userscripts-cf') url.pathname = '/errors';
     router.history.replace(url.pathname + url.search + url.hash);
     window.dispatchEvent(new Event('manage:project-changed'));
   };
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-  useEffect(() => { setSelectedRunId(null); }, [activeProject?.repository]);
+  const [selectedRun, setSelectedRun] = useState<{ repository: string; id: number } | null>(null);
+  const selectedRunId = selectedRun && selectedRun.repository === activeProject?.repository ? selectedRun.id : null;
+  const setSelectedRunId = (update: number | null | ((current: number | null) => number | null)) => {
+    setSelectedRun((current) => {
+      const currentId = current && current.repository === activeProject?.repository ? current.id : null;
+      const nextId = typeof update === 'function' ? update(currentId) : update;
+      return nextId === null || !activeProject?.repository ? null : { repository: activeProject.repository, id: nextId };
+    });
+  };
   const projectRunJobs = useQuery({
     queryKey: ['project-run-jobs', activeProject?.repository, selectedRunId],
     queryFn: () => api<{ repository: string; run_id: number; items: {
@@ -194,7 +198,6 @@ export default function App() {
   const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  useEffect(() => { setMobileMenu(false); setProjectMenuOpen(false); }, [pathname]);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -357,7 +360,7 @@ export default function App() {
             <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
           ) : isReadOnlyProject && tab === 'config' ? (
             <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
-          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' ? (
+          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
               <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>

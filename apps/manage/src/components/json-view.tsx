@@ -137,7 +137,7 @@ function PlainHighlight({ text, pattern }: { text: string; pattern: RegExp | nul
 function LogText({ text, pattern }: { text: string; pattern: RegExp | null }) {
   // Docker/BuildKit, CLI and GitHub Actions can emit ANSI escapes.
   // Never render escape sequences as markup; preserve readable text and highlight tokens.
-  const clean = text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
+  const clean = text.replace(new RegExp(String.fromCharCode(27) + String.raw`\[[0-?]*[ -/]*[@-~]`, 'g'), '');
   const tokens = /(#\d+(?:\s+\[[^\]\n]+\])?|\b(?:ERROR|FATAL|CRITICAL|FAILED|FAIL|WARN(?:ING)?|INFO|DEBUG|TRACE|SUCCESS|DONE|CACHED|exporting|extracting|pulling|pushing|building)\b|\b(?:sha256:)?[a-f0-9]{32,64}\b|\b\d{4}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b|\b(?:true|false|null)\b|\b[A-Za-z_][\w.-]*(?==))/gi;
   const nodes = [];
   let cursor = 0;

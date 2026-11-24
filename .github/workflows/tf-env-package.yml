@@ -1,4 +1,4 @@
-name: "TF · ENV package"
+name: "🔮 RV · TF · ENV package"
 run-name: "TF · ENV parser · ${{ github.ref_name }}"
 on:
   pull_request:

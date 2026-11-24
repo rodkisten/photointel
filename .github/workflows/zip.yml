@@ -1,4 +1,4 @@
-name: "📦 ZIP Patch"
+name: "🔮 RV · 📦 ZIP Patch"
 run-name: "📦 ZIP · ${{ inputs.zip_path || 'policy-check' }} · ${{ inputs.root_mode || 'auto' }}"
 
 on:

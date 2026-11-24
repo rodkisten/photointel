@@ -1,4 +1,4 @@
-name: "🧹 GCP · Artifact cleanup"
+name: "🔮 RV · 🧹 GCP · Artifact cleanup"
 run-name: "🧹 Artifact cleanup · ${{ inputs.apply && 'delete' || 'preview' }}"
 on:
   workflow_dispatch:
@@ -47,12 +47,14 @@ jobs:
         env:
           APPLY: ${{ inputs.apply }}
           CONFIRM: ${{ inputs.confirm_project }}
-        run: |
-          args=()
-          if [[ "$APPLY" == "true" ]]; then
-            args+=(--apply --confirm-project="$CONFIRM")
-          fi
-          python3 infra/gcp/prune_artifacts.py "${args[@]}"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            args=()
+            if [[ "$APPLY" == "true" ]]; then
+              args+=(--apply --confirm-project="$CONFIRM")
+            fi
+            python3 infra/gcp/prune_artifacts.py "${args[@]}"
       - name: "Storage cleanup note"
         run: |
           echo "Cloud Build source archives are expired by the Terraform-managed GCS lifecycle." >> "$GITHUB_STEP_SUMMARY"

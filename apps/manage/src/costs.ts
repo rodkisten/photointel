@@ -3,7 +3,6 @@ import type { Env, Identity } from './auth';
 import { estimateWorkflowJobs } from './cost-model';
 import { gcp, gh, provider } from './providers';
 
-type DataItem = Record<string, unknown>;
 type Source = {
   status: 'ok' | 'unconfigured' | 'unavailable';
   currency: string;

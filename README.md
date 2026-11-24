@@ -24,6 +24,76 @@ Status verificado: **Local development ready**. Consulte o
 externos. A validação local não aprova a biblioteca completa nem gastos cloud.
 
 
+
+## 🧩 GitHub-first ENV migration (PR #253)
+
+> **Estado:** migração em andamento. O contrato TypeScript está em `packages/env/src/index.ts` e `packages/env/src/deploy.ts`. A action `.github/actions/gcp-config/action.yml` **ainda executa Python** para preparar/renderizar o deploy; não trate a migração como concluída.
+
+A configuração de produção está migrando do Google Secret Manager para **GitHub Environment `production`**, com fallback legado. Para cada chave canônica em maiúsculas (por exemplo `DATABASE_URL`), o resolvedor `resolveConfigValue` aplica:
+
+1. `secrets.DATABASE_URL`
+2. `secrets.PHOTOINTEL_DATABASE_URL`
+3. `vars.DATABASE_URL`
+4. `vars.PHOTOINTEL_DATABASE_URL`
+5. Referência legada do Google Secret Manager, apenas se nenhuma entrada GitHub não vazia existir.
+
+A primeira entrada não vazia vence; os nomes canônicos sem prefixo têm prioridade dentro da mesma fonte. Secrets vencem Variables. **Não imprima valores resolvidos em logs, summaries ou job outputs.** Para credenciais de runtime do Cloud Run e credenciais de workflow ainda consumidas por `prepare_workflow_env.py`/`deploy_manage.py`, a renderização atual exige referências do Google Secret Manager e rejeita overrides diretos do GitHub até existir sincronização segura de versões no Secret Manager. Valores GitHub não são silenciosamente descartados. O contrato de resolução não implica que a action já leia automaticamente todos os secrets do GitHub: o workflow precisa fornecê-los explicitamente ao adaptador confiável.
+
+### Sintaxes aceitas pelo parser TypeScript
+
+```dotenv
+ENV__PUBLIC_REGION=us-central1
+CF__DOMAIN=photos.migos.club
+WF__DEPLOY__REGION=us-central1
+SECRET__DATABASE_URL=secret://photointel-database-url@latest
+WORKFLOW_SECRET__DEPLOY_TOKEN=photointel-deploy-token@2
+SECRETS__DATABASE_URL__NAME=photointel-database-url
+SECRETS__DATABASE_URL__VERSION=latest
+WORKFLOW_SECRETS__CLOUDFLARE_API_TOKEN__NAME=photointel-cloudflare-token
+WORKFLOW_SECRETS__CLOUDFLARE_API_TOKEN__VERSION=3
+ENV__MANAGE_TERMINAL_VMS=json:[{"id":"debian"}]
+```
+
+Referências `${KEY}`, `${KEY:-fallback}` e `$` são resolvidas com proteção contra ciclos. O parser aceita entradas JSON e dotenv; os formatos ainda não têm paridade integral com o Python.
+
+### Compatibilidade e segurança
+
+- `R2_ACCESS_KEY_ID` → `STORAGE_ACCESS_KEY`; `R2_SECRET_ACCESS_KEY` → `STORAGE_SECRET_KEY`. O nome canônico prevalece quando ambos existem.
+- `R2_ENDPOINT` não é um secret; configure `STORAGE_ENDPOINT`.
+- `normalizeSecretInventory` valida o inventário permitido e pode exigir as referências obrigatórias. A exigência deve considerar valores diretos do GitHub antes de obrigar uma referência GCP.
+- `validateWorkloadIdentity` valida identificadores WIF, mas **não autentica** nem busca valores secretos.
+- Preview deve excluir credenciais, configurações de terminal e tokens de produção.
+- GitHub Actions não transmite `GITHUB_ENV` automaticamente entre jobs ou workflows. Dados não sensíveis podem usar outputs; segredos devem ser recuperados pelo consumidor autorizado, nunca transportados como outputs.
+- `infra/gcp/gcp_env.py` e `infra/gcp/manage.py` permanecem legados até a paridade completa e substituição verificada.
+
+### Engine da action compartilhada
+
+A action `.github/actions/gcp-config` oferece `engine: python` (padrão compatível) e `engine: typescript` (opt-in). No modo TypeScript, `github-secrets-json` e `github-vars-json` recebem apenas chaves explicitamente autorizadas pelo workflow, que deve usar `environment: production` e nunca registrar o conteúdo. A action produz `infra/gcp/config.local.json` com permissões restritas e continua executando `infra.gcp.manage render` para artefatos de infraestrutura. A opção **não foi ativada em todos os consumidores**, e os testes end-to-end permanecem pendentes.
+
+### Sincronização dos lockfiles
+
+- `.github/workflows/python-lockfiles.yml` regenera `uv.lock` com Python 3.15 e valida o resultado com `uv lock --check`.
+- A sincronização usa a GitHub App Ploocky para gravar somente `uv.lock` na branch selecionada, com verificação otimista para não sobrescrever commits concorrentes.
+- O workflow roda automaticamente quando sua própria definição é alterada na branch de trabalho e também aceita execução manual por `workflow_dispatch` depois de integrado à `main`.
+- `.github/workflows/npm-lockfiles.yml` continua responsável pelos `package-lock.json`; não misture as duas rotinas.
+
+A primeira execução da migração atualizou as constraints de segurança e os pacotes `certifi`, `filelock`, `opentelemetry-api`, `pyasn1` e `setuptools`. O `uv lock --check` passou após a sincronização.
+
+### Critérios de conclusão
+
+- [x] Parser compartilhado e referências compactas/legadas
+- [x] Resolvedor GitHub Secrets/Variables → fallback GCP
+- [x] Aliases R2 e validação inicial do inventário
+- [x] Validação TypeScript de metadados WIF
+- [x] Testes unitários das regras de precedência
+- [x] Disponibilizar engine TypeScript opt-in na action compartilhada; consumidores continuam usando Python por padrão e precisam passar explicitamente valores GitHub
+- [x] Permitir valores diretos GitHub sem exigir referências GCP obrigatórias no renderizador TypeScript (a action ainda não os fornece)
+- [ ] Disponibilizar configuração normalizada a todos os workflows consumidores sem expor secrets
+- [x] Evitar execução de `infra.gcp.gcp_env` quando `engine: typescript`; `infra.gcp.manage render` ainda é necessário
+- [ ] Comparar renderizações Python/TypeScript e validar CI de ponta a ponta
+- [ ] Remover dependência operacional de GCP sem interromper o deploy
+
+
 ## Mapa técnico do projeto (implementação 2026)
 
 A arquitetura vigente usa **Cloudflare Worker único para a SPA e `/v1/*`**, **Manage Worker independente**, **Cloud Run Service e Jobs finitos**, **Neon + pgvector**, **R2 privado**, integração **iCloud opcional** e **Modal GPU opcional**. A documentação extensiva, com fluxogramas Mermaid, diagramas de sequência e rastreabilidade para os módulos de código, está em [docs/README.md](docs/README.md). Os principais diagramas estão em [arquitetura geral](docs/architecture/SYSTEM_OVERVIEW.md), [ingestão e recuperação](docs/architecture/INGESTION_AND_RECOVERY.md) e [infraestrutura e deploy](docs/architecture/INFRASTRUCTURE_AND_DEPLOY.md). O frontend principal usa React Router; o Manage usa TanStack Router. Guias de versões anteriores podem mencionar Pages e gates que já não representam o fluxo atual.

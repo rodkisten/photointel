@@ -1,4 +1,4 @@
-name: "🩺 GCP · Health"
+name: "🔮 RV · 🩺 GCP · Health"
 run-name: "🩺 GCP · Health · ${{ github.ref_name }}"
 
 on:
@@ -42,15 +42,19 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: "🩺 Cloud Run status + HTTP health"
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "GCP Cloud Run and HTTP health" python3 -m infra.gcp.diagnose_api_connectivity --project photointel
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            source scripts/ci/pretty-logs.sh
+            ci_run "GCP Cloud Run and HTTP health" python3 -m infra.gcp.diagnose_api_connectivity --project photointel
 
       - name: "🔍 Startup errors (sanitized)"
         if: ${{ always() && steps.config.outcome == 'success' }}
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "GCP startup diagnostics (sanitized)" python3 -m infra.gcp.diagnose_startup --project photointel
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            source scripts/ci/pretty-logs.sh
+            ci_run "GCP startup diagnostics (sanitized)" python3 -m infra.gcp.diagnose_startup --project photointel
 
       - name: "🧹 Config"
         if: ${{ always() && steps.checkout.outcome == 'success' }}

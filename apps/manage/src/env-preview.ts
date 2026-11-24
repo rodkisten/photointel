@@ -3,8 +3,6 @@ import { parseEnvironment, maskValue } from '@rodkisten/photointel/env';
 export type EnvironmentPreviewEntry = { key: string; value: string; secretName?: string };
 export type EnvironmentPreview = { entries: EnvironmentPreviewEntry[]; error: string };
 
-const SECRET_FIELD = /(?:SECRET|TOKEN|PASSWORD|PRIVATE|CREDENTIAL|API_KEY|SESSION|PEPPER|AUTH)/i;
-
 /** Never reveal short credentials in full; no confirmation or secret retrieval required. */
 export function maskEnvironmentValue(key: string, value: string): string {
   return maskValue(key, value);

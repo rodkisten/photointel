@@ -1,4 +1,4 @@
-name: "📱 Notify Validation"
+name: "🔮 RV · 📱 Notify Validation"
 run-name: "📱 Notify · ${{ github.event_name }}"
 
 on:
@@ -74,7 +74,9 @@ jobs:
       - name: "🐍 Python"
         run: uv python install 3.12
       - name: "📦 Dependencies"
-        run: uv sync --frozen --group ingest
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv sync --frozen --group ingest
       - name: "🧪 Notify! API and Actions"
         run: |
           uv run --no-sync pytest -q tests/test_job_notify.py tests/test_sentry_observability.py tests/test_job_observability.py

@@ -1,4 +1,4 @@
-name: "🧪 Terminal validation"
+name: "🔮 RV · 🧪 Terminal validation"
 on:
   workflow_dispatch:
   pull_request:
@@ -22,9 +22,11 @@ jobs:
         with:
           persist-credentials: false
       - name: "🧪 Offline lifecycle and configuration tests"
-        run: |
-          bash -n infra/terminal/startup.sh
-          python3 -m unittest discover -s infra/terminal -p 'test_*.py' -v
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            bash -n infra/terminal/startup.sh
+            python3 -m unittest discover -s infra/terminal -p 'test_*.py' -v
       - name: "🐳 Build and verify CLI tools without production credentials"
         run: |
           docker build -t photointel-terminal-test infra/terminal

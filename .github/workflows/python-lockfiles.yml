@@ -1,0 +1,87 @@
+name: "🔮 RV · 🐍 Python · Sync uv lockfile"
+run-name: "🐍 uv lock · ${{ inputs.target_branch || github.ref_name }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Branch to synchronize (leave empty for selected branch)"
+        required: false
+        type: string
+  push:
+    branches:
+      - refactor/unified-typescript-env-deploy
+    paths:
+      - ".github/workflows/python-lockfiles.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-lockfile-${{ inputs.target_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "🐍 Regenerate and verify uv.lock"
+    if: github.repository == 'rodkisten/photointel'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: "🔐 Authenticate Ploocky GitHub App"
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.BOT_APP_ID || vars.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: "📥 Checkout writable branch"
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.target_branch || github.ref_name }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: "🧰 Configure uv"
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.12.23"
+          enable-cache: true
+
+      - name: "🐍 Install project Python"
+        run: uv python install 3.15
+
+      - name: "🔄 Regenerate lockfile"
+        run: |
+          set -euo pipefail
+          uv lock
+          uv lock --check
+
+      - name: "💾 Commit only uv.lock when changed"
+        shell: bash
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git add -- uv.lock
+          if git diff --cached --quiet; then
+            echo "### 🐍 uv.lock already synchronized" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+          git commit -m "chore(deps): synchronize Python uv lockfile"
+          git fetch origin "$TARGET_BRANCH"
+          if [[ "$(git rev-parse HEAD^)" != "$(git rev-parse "origin/$TARGET_BRANCH")" ]]; then
+            echo "::error::Branch advanced during lockfile generation; rerun on latest commit."
+            exit 1
+          fi
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "### ✅ uv.lock synchronized" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: $TARGET_BRANCH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"

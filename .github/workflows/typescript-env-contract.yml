@@ -1,0 +1,37 @@
+name: "🔮 RV · 🧪 TypeScript environment contract"
+on:
+  pull_request:
+    paths:
+      - "packages/env/**"
+      - ".github/workflows/typescript-env-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/env/**"
+      - ".github/workflows/typescript-env-contract.yml"
+permissions:
+  contents: read
+jobs:
+  contract:
+    name: "🧩 Parse · Validate · Preview isolation"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "🧪 Run shared environment tests"
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          package-manager: npm
+          install: 'false'
+          cache: 'false'
+          script: npm --prefix packages/env test
+      - name: "📋 Publish results"
+        if: always()
+        run: |
+          {
+            echo "## 🧩 Environment contract"
+            echo
+            echo "- Parser: TypeScript"
+            echo "- VM schema: validated server-side"
+            echo "- Preview: private terminal configuration excluded"
+            echo "- Result: **${{ job.status }}**"
+          } >> "$GITHUB_STEP_SUMMARY"

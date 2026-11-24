@@ -1,4 +1,4 @@
-name: "🧹 Frontends · ESLint + Prettier Fix"
+name: "🔮 RV · 🧹 Frontends · ESLint + Prettier Fix"
 run-name: "🧹 Fix · ${{ inputs.target }} · ${{ inputs.mode }} · ${{ github.ref_name }}"
 
 on:
@@ -58,15 +58,21 @@ jobs:
             apps/manage/package-lock.json
 
       - name: "📦 Install shared Prettier"
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Web ESLint"
         if: inputs.target == 'web' || inputs.target == 'both'
-        run: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Manage ESLint"
         if: inputs.target == 'manage' || inputs.target == 'both'
-        run: npm --prefix apps/manage ci --ignore-scripts --no-audit --no-fund
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/manage ci --ignore-scripts --no-audit --no-fund
 
       - name: "🧹 ESLint --fix + Prettier --write"
         id: format

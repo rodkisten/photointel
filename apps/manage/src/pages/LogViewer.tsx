@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { RefreshCcw, Search } from 'lucide-react';
@@ -36,19 +36,18 @@ const TABS: Array<{ id: Source; label: string }> = [
 
 export function LogViewer() {
   const link = useSearch({ from: '/logs' });
+  const key = JSON.stringify([link.source, link.minutes, link.correlation, link.job, link.ray, link.event, link.entry, link.search, link.project]);
+  return <LogViewerContent key={key} />;
+}
+
+function LogViewerContent() {
+  const link = useSearch({ from: '/logs' });
   const navigate = useNavigate({ from: '/logs' });
   const [search, setSearch] = useState(() => primaryTerm(link));
   const [serverFilter, setServerFilter] = useState(() => primaryTerm(link));
   const [showStructured, setShowStructured] = useState(true);
   const source = link.source;
   const minutes = link.minutes;
-
-  // Back/forward and deep links always restore the selected provider and filters.
-  useEffect(() => {
-    const term = primaryTerm(link);
-    setSearch(term);
-    setServerFilter(term);
-  }, [link]);
 
   const updateLink = (next: LogLink) => {
     void navigate({ to: '/logs', search: { ...toLogSearch(next), ...(link.project ? { project: link.project } : {}) }, replace: true });

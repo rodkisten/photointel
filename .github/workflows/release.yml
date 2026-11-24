@@ -1,4 +1,4 @@
-name: "🚀 Release · Console"
+name: "🔮 RV · 🚀 Release · Console"
 run-name: "🚀 Release · ${{ inputs.action || 'check' }} · ${{ inputs.target || 'all' }} · ${{ inputs.source || 'main' }}"
 on:
   workflow_dispatch:

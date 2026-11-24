@@ -1,36 +1,41 @@
-/** Typed client generated from FastAPI's exported OpenAPI contract. */
-import createClient from 'openapi-fetch';
-import type { components, paths } from './schema';
+/** Shared transport for the Hey API-generated client. */
+import { client as api } from './hey-api/client.gen';
+import { searchV1SearchPost, assetDetailV1AssetsAssetIdGet } from './hey-api/sdk.gen';
+import type { components } from './schema';
 import type { AssetDetail, FilterNode, SearchPage, SearchRequest } from './types';
-import { API_BASE, ApiError } from './client';
-import { apiNetworkError, isRequestAbort } from './error';
+import { API_BASE } from './client';
+import { apiNetworkError, isRequestAbort, responseError } from './error';
 
-export const api = createClient<paths>({
+// Preserve error payloads before the SDK consumes response bodies.
+const errorResponses = new WeakMap<Response, Response>();
+
+api.setConfig({
   baseUrl: API_BASE || window.location.origin,
   credentials: 'include',
   cache: 'no-store',
   fetch: async (input) => {
     try {
-      return await globalThis.fetch(input);
+      const response = await globalThis.fetch(input);
+      if (!response.ok) errorResponses.set(response, response.clone());
+      return response;
     } catch (cause) {
       if (isRequestAbort(cause)) throw cause;
-      throw apiNetworkError(cause, input.method, input.url);
+      const request = new Request(input);
+      throw apiNetworkError(cause, request.method, request.url);
     }
   },
 });
 
-function fail(response: Response, body: unknown): never {
-  const error = body as { error?: { message?: string; code?: string } } | undefined;
-  const denied = [401, 403].includes(response.status);
-  throw new ApiError(
-    denied ? 'Acesso não autorizado. Entre novamente pelo Cloudflare Access.' :
-      error?.error?.message ?? 'Serviço indisponível. Tente novamente.',
-    response.status,
-    error?.error?.code ?? `HTTP_${response.status}`,
-    response.headers.get('X-Correlation-ID') ?? undefined,
-    { source: response.headers.get('X-PhotoIntel-Source') === 'cloudflare' ? 'cloudflare' : 'gcp',
-      rayId: response.headers.get('X-Cloudflare-Ray') ?? undefined },
-  );
+async function unwrap<T>(
+  result: { data?: T; error?: unknown; response?: Response },
+  path: string,
+  method: string,
+): Promise<T> {
+  if (!result.response || !result.response.ok || result.data === undefined) {
+    if (result.response) throw await responseError(errorResponses.get(result.response) ?? result.response, path, method);
+    throw apiNetworkError(result.error, method, path);
+  }
+  return result.data;
 }
 
 function completeFilter(node: FilterNode): components['schemas']['FilterNode'] {
@@ -44,21 +49,19 @@ function completeFilter(node: FilterNode): components['schemas']['FilterNode'] {
 }
 
 export async function searchAssets(input: SearchRequest): Promise<SearchPage> {
-  const { data, error, response } = await api.POST('/v1/search', {
+  const result = await searchV1SearchPost({
+    client: api,
     body: {
       ...input,
       minimum_similarity: input.minimum_similarity ?? 0,
       filter: input.filter ? completeFilter(input.filter) : undefined,
     },
   });
-  if (!data) fail(response, error);
-  return data;
+  return unwrap<SearchPage>(result, '/v1/search', 'POST');
 }
 
 export async function readAsset(id: string): Promise<AssetDetail> {
-  const { data, error, response } = await api.GET('/v1/assets/{asset_id}', {
-    params: { path: { asset_id: id } },
-  });
-  if (!data) fail(response, error);
-  return data;
+  const path = `/v1/assets/${encodeURIComponent(id)}`;
+  const result = await assetDetailV1AssetsAssetIdGet({ client: api, path: { asset_id: id } });
+  return unwrap<AssetDetail>(result, path, 'GET');
 }

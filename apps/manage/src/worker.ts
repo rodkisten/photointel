@@ -1,10 +1,11 @@
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
-import type { Env, Identity } from './auth';
+import type { Env } from './auth';
 import { api } from './api';
 import { terminalWebsocketRoute } from './features/terminal/ticket';
 import { captureManageError } from './sentry';
 import { manageAssetCachePolicy } from './asset-cache';
 import { githubHook, cloudBuildCallback, tick } from './deploy-router/service';
+import { ingestUserscriptError } from './userscript-errors';
 
 // --- CONFIGURATION & CONSTANTS ---
 
@@ -175,6 +176,12 @@ export default {
     const route = routeGroup(location.pathname);
     const method = request.method.toUpperCase();
     const correlationId = crypto.randomUUID();
+
+    // Userscript runtime telemetry is the single anonymous ingest route. All
+    // reads and Manage operations remain behind Cloudflare Access.
+    if (location.pathname === '/error/capture') {
+      return await ingestUserscriptError(request, env) || failure(404, 'NOT_FOUND', 'Route not found');
+    }
 
     // Closure to track cross-boundary incident data securely
     const report = (error: unknown, provider?: string): string | undefined => {

@@ -1,0 +1,52 @@
+name: "🔮 RV · 🧬 Hey API · Contract generation"
+on:
+  pull_request:
+    paths:
+      - "packages/contracts/openapi.json"
+      - "apps/web/openapi-ts.config.ts"
+      - "apps/web/src/api/**"
+      - "apps/web/src/api/client.ts"
+      - "apps/manage/src/api/**"
+      - "apps/manage/openapi-ts.config.ts"
+      - "apps/web/package.json"
+      - "apps/manage/package.json"
+      - "apps/web/package-lock.json"
+      - "apps/manage/package-lock.json"
+      - ".github/workflows/hey-api-contract.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hey-api-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  generate:
+    name: "🧬 Generate · ${{ matrix.app }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, manage]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      - name: "📦 Install locked dependencies"
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: "🧬 Generate Hey API SDK"
+        run: npm run generate:api
+      - name: "🧪 Typecheck generated SDK consumers"
+        run: npm run typecheck
+      - name: "🔍 Verify generated SDK"
+        run: |
+          test -d src/api/hey-api
+          test -n "$(find src/api/hey-api -type f -print -quit)"
+          echo "### 🧬 Hey API · ${{ matrix.app }}" >> "$GITHUB_STEP_SUMMARY"
+          find src/api/hey-api -type f | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"

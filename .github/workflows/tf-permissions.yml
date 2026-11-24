@@ -1,4 +1,4 @@
-name: "TF · Permissions"
+name: "🔮 RV · TF · Permissions"
 run-name: "🔐 TF IAM · ${{ inputs.mode }} · photointel"
 on:
   workflow_dispatch:

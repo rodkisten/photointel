@@ -16,7 +16,6 @@ type Run = { id: string; delivery_id: string; rule_id: string; rule_name: string
   provider: string; target: string; sha: string; state: string; provider_id: string | null;
   status_url: string | null; detail: string | null; created_at: string; updated_at: string };
 type RuleRow = Omit<DeployRule, 'enabled' | 'patterns'> & { enabled: number; patterns_json: string };
-type Delivery = { id: string; sha: string; changed_files: string; created_at: string };
 const SHA = /^[a-f0-9]{40}$/i;
 const UUID = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const FINISHED = new Set(['success', 'failed', 'cancelled']);
@@ -47,7 +46,7 @@ export async function getTree(env: Env): Promise<TreeEntry[]> {
 function validatedInput(raw: Record<string, unknown>): { name: string; provider: DeployRule['provider'];
   target: string; patterns: string[]; enabled: boolean } {
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
-  if (!name || name.length > 80 || /[\x00-\x1f]/.test(name))
+  if (!name || name.length > 80 || new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + ']').test(name))
     throw new ApiError(422, 'ROUTE_NAME', 'Nome de 1 a 80 caracteres obrigatório');
   const { provider, target } = validateTarget(raw.provider, raw.target);
   return { name, provider, target, patterns: validatePatterns(raw.patterns),
@@ -238,16 +237,6 @@ export async function tick(env: Env): Promise<void> {
     try { await pollCloudflare(env, database, run); }
     catch { console.error(JSON.stringify({ event: 'deploy_poll_failed', run_id: run.id })); }
   }
-}
-async function changedFiles(env: Env, before: string, after: string): Promise<string[]> {
-  if (!SHA.test(before) || /^0{40}$/.test(before))
-    throw new ApiError(422, 'BASE_SHA', 'Push inicial sem base verificável; execute manualmente as regras');
-  const response = (await gh(env, '/compare/' + before + '...' + after + '?per_page=300')) as {
-    files?: Array<{ filename?: string; previous_filename?: string }>; total_commits?: number };
-  if (!Array.isArray(response.files) || response.files.length >= 300)
-    throw new ApiError(422, 'DIFF_TRUNCATED', 'Diff do GitHub está incompleto ou muito grande; não executado');
-  return [...new Set(response.files.flatMap((file) => [file.filename, file.previous_filename])
-    .filter((x): x is string => typeof x === 'string' && x.length > 0))].slice(0, 500);
 }
 async function validSignature(request: Request, secret: string, body: string): Promise<boolean> {
   const signature = request.headers.get('X-Hub-Signature-256') || '';

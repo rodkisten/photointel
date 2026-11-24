@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Copy, ExternalLink, Search } from 'lucide-react';
 
 type Level = 'all' | 'error' | 'warning' | 'success';
-const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
+const ansi = new RegExp(String.fromCharCode(27) + String.raw`\[[0-9;]*[A-Za-z]`, 'g');
 const sensitive = /((?:authorization|token|password|secret|api[_-]?key)\s*[:=]\s*)(?:"[^"]+"|'[^']+'|\S+)/gi;
 const classify = (line: string): Exclude<Level, 'all'> | 'normal' => {
   if (/::error::|\b(error|failed|failure|fatal|traceback|permission denied)\b/i.test(line)) return 'error';

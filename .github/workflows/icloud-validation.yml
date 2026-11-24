@@ -1,4 +1,4 @@
-name: "🍎 iCloud Validation"
+name: "🔮 RV · 🍎 iCloud Validation"
 on:
   push:
     branches: [main]
