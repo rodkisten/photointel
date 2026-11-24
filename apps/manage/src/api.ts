@@ -29,6 +29,7 @@ import type {
   CloudRunExecution, CloudRunJob, CloudRunService, CloudSchedulerJob,
   CloudflareLogEvent, CloudflareWorkerDomain, CloudflareWorkerScript, GitHubWorkflowRun,
 } from './api-utils';
+import { userscriptErrorsRoute } from './userscript-errors';
 import type { Env, Identity } from './auth';
 import {
   WORKFLOW_INPUTS,
@@ -1781,6 +1782,7 @@ export async function api(
 
   // 1. Rotas modulares já extraídas (executadas sequencialmente sem prefixo rígido)
   const modularRoutes: RouteHandler[] = [
+    userscriptErrorsRoute,
     (req, e) => workflowStudioRoute(req, e),
     projectCatalogRoute,
     terminalFilesRoute,

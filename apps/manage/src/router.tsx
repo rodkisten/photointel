@@ -30,6 +30,7 @@ import { CloudRunJobsPage } from './pages/CloudRunJobs';
 import { OperationsPage } from './pages/Operations';
 import { Overview } from './pages/Overview';
 import { SystemInfo } from './pages/SystemInfo';
+import { UserscriptErrors } from './pages/UserscriptErrors';
 import { TerminalPage } from './features/terminal/TerminalPage';
 import type { Meta } from './types';
 
@@ -185,6 +186,8 @@ const logsRoute = createRoute({
   component: LogViewer,
 });
 
+const errorsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/errors', component: UserscriptErrors });
+
 const environmentRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/environment',
@@ -224,6 +227,7 @@ const routeTree = rootRoute.addChildren([
   cloudRunJobsRoute,
   runRoute,
   logsRoute,
+  errorsRoute,
   environmentRoute,
   secretsRoute,
   notificationsRoute,

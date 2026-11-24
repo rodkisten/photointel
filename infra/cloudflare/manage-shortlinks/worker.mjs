@@ -6,6 +6,11 @@ export default {
   async fetch(request, env) {
     const incoming = new URL(request.url);
     if (incoming.hostname !== 'manage.migos.club') return new Response('Not found', { status: 404 });
+    if (incoming.pathname === '/error/capture') {
+      if (request.method !== 'POST' && request.method !== 'OPTIONS') return new Response('Method not allowed', { status: 405 });
+      const target = new URL('/error/capture', 'https://photos-hooks.migos.club');
+      return fetch(new Request(target, request));
+    }
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 });
     const match = PR_PATH.exec(incoming.pathname);
     if (!match) {
