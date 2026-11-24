@@ -22,6 +22,7 @@ import {
   Menu,
   GripVertical,
   TerminalSquare,
+  Bug,
 } from 'lucide-react';
 
 import { Badge, Card } from './components/ui';
@@ -45,6 +46,7 @@ const NAV = [
   { id: 'workflows', to: '/workflows', label: 'Workflow Studio', icon: Workflow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
+  { id: 'errors', to: '/errors', label: 'Errors', icon: Bug },
   { id: 'terminal', to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { id: 'notifications', to: '/notifications', label: 'Notificações', icon: Bell },
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
@@ -55,7 +57,7 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
-  { label: 'Observabilidade', ids: ['costs', 'logs', 'notifications'] },
+  { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
 ] as const;
 
@@ -71,6 +73,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   workflows: 'Editor visual de automações e pipelines',
   costs: 'Faturas, consumo, cota e custos por execução',
   logs: 'Eventos investigáveis em cada provedor',
+  errors: 'Stack traces e request/response dos Userscripts',
   notifications: 'Templates, agrupamento e limpeza automática do Telegram',
   config: 'Edição segura das configurações de produção',
   secrets: 'Versões e credenciais do Google Secret Manager',
@@ -89,6 +92,7 @@ function sectionForPath(pathname: string): Tab {
   if (pathname.startsWith('/infrastructure')) return 'infrastructure';
   if (pathname.startsWith('/costs')) return 'costs';
   if (pathname.startsWith('/logs')) return 'logs';
+  if (pathname.startsWith('/errors')) return 'errors';
   if (pathname.startsWith('/notifications')) return 'notifications';
   if (pathname.startsWith('/environment')) return 'config';
   if (pathname.startsWith('/secrets')) return 'secrets';
@@ -151,6 +155,7 @@ export default function App() {
     // Preserve the active route and unrelated query parameters.
     const url = new URL(window.location.href);
     url.searchParams.set('project', repository);
+    if (repository === 'rodkisten/userscripts-cf') url.pathname = '/errors';
     router.history.replace(url.pathname + url.search + url.hash);
     window.dispatchEvent(new Event('manage:project-changed'));
   };
@@ -355,7 +360,7 @@ export default function App() {
             <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
           ) : isReadOnlyProject && tab === 'config' ? (
             <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
-          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' ? (
+          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
               <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>
