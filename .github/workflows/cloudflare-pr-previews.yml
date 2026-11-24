@@ -1,4 +1,4 @@
-name: "🧪 Cloudflare · PR Previews"
+name: "🔮 RV · 🧪 Cloudflare · PR Previews"
 run-name: "Cloudflare PR preview"
 on:
   workflow_dispatch:

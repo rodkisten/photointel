@@ -1,4 +1,4 @@
-name: "📱 GCP Terminal"
+name: "🔮 RV · 📱 GCP Terminal"
 run-name: "📱 Terminal · ${{ inputs.action || 'plan' }}"
 on:
   push:

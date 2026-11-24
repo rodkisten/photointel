@@ -1,4 +1,4 @@
-name: "☁️ GCP Check"
+name: "🔮 RV · ☁️ GCP Check"
 on:
   pull_request:
     paths:

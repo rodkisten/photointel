@@ -1,4 +1,4 @@
-name: "🎞️ Media · Imagor"
+name: "🔮 RV · 🎞️ Media · Imagor"
 run-name: "🎞️ Imagor · ${{ inputs.action }} · ${{ github.ref_name }}"
 on:
   workflow_dispatch:

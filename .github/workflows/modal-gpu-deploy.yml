@@ -1,4 +1,4 @@
-name: "🧠 GPU · Modal"
+name: "🔮 RV · 🧠 GPU · Modal"
 run-name: "🧠 Modal · ${{ inputs.mode }} · ${{ github.ref_name }}"
 
 on:

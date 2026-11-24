@@ -1,4 +1,4 @@
-name: "🧰 Bootstrap Check"
+name: "🔮 RV · 🧰 Bootstrap Check"
 on:
   workflow_dispatch:
     inputs:

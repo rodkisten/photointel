@@ -1,4 +1,4 @@
-name: "🎞️ Media · Build & Jobs"
+name: "🔮 RV · 🎞️ Media · Build & Jobs"
 run-name: "🎞️ Media · ${{ inputs.action }} · ${{ github.ref_name }}"
 
 on:

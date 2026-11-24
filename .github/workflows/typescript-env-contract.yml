@@ -1,4 +1,4 @@
-name: "🧪 TypeScript environment contract"
+name: "🔮 RV · 🧪 TypeScript environment contract"
 on:
   pull_request:
     paths:

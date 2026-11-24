@@ -1,4 +1,4 @@
-name: "🧾 Release · Manifest"
+name: "🔮 RV · 🧾 Release · Manifest"
 run-name: "🧾 Release · Manifest · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 on:
   workflow_dispatch:

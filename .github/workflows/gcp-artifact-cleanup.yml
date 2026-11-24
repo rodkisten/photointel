@@ -1,4 +1,4 @@
-name: "🧹 GCP · Artifact cleanup"
+name: "🔮 RV · 🧹 GCP · Artifact cleanup"
 run-name: "🧹 Artifact cleanup · ${{ inputs.apply && 'delete' || 'preview' }}"
 on:
   workflow_dispatch:

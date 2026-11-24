@@ -1,4 +1,4 @@
-name: "🩺 GCP · Health"
+name: "🔮 RV · 🩺 GCP · Health"
 run-name: "🩺 GCP · Health · ${{ github.ref_name }}"
 
 on:

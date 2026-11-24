@@ -1,4 +1,4 @@
-name: "🖥️ SSH"
+name: "🔮 RV · 🖥️ SSH"
 run-name: "🖥️ SSH · ${{ inputs.command || 'offline-check' }}${{ inputs.command == 'ssh' && format(' · {0} min', inputs.session_minutes) || '' }}"
 
 on:

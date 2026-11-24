@@ -1,4 +1,4 @@
-name: "☁️ GCP · API deploy"
+name: "🔮 RV · ☁️ GCP · API deploy"
 run-name: "☁️ GCP · ${{ inputs.action || 'offline-check' }}${{ inputs.action == 'migrate' && format(' · {0}', inputs.migration_mode || 'plan') || '' }}"
 
 on:

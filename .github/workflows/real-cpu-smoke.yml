@@ -1,4 +1,4 @@
-name: "🧠 CI · CPU models"
+name: "🔮 RV · 🧠 CI · CPU models"
 run-name: "🧠 CI · CPU models · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:

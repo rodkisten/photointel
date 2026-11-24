@@ -1,4 +1,4 @@
-name: "🧪 CI · Backend smoke"
+name: "🔮 RV · 🧪 CI · Backend smoke"
 run-name: "🧪 CI · Backend smoke · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:

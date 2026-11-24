@@ -1,4 +1,4 @@
-name: "🍎 iCloud Setup"
+name: "🔮 RV · 🍎 iCloud Setup"
 on:
   push:
     branches: [main]

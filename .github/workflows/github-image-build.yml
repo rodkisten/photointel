@@ -1,4 +1,4 @@
-name: "🐳 Media/GCP · Image build"
+name: "🔮 RV · 🐳 Media/GCP · Image build"
 run-name: "🐳 Image build · ${{ inputs.target }} · ${{ inputs.source_ref || 'main' }}"
 on:
   workflow_dispatch:

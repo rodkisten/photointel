@@ -1,4 +1,4 @@
-name: "🧬 Hey API · Contract generation"
+name: "🔮 RV · 🧬 Hey API · Contract generation"
 on:
   pull_request:
     paths:

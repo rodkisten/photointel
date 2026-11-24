@@ -1,4 +1,4 @@
-name: "📦 npm · Sync lockfiles"
+name: "🔮 RV · 📦 npm · Sync lockfiles"
 run-name: "📦 Lockfiles · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
 
 on:

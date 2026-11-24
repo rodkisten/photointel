@@ -1,4 +1,4 @@
-name: "TF · Validate"
+name: "🔮 RV · TF · Validate"
 run-name: "TF · Validate · ${{ github.ref_name }}"
 on:
   pull_request:

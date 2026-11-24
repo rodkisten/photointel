@@ -1,4 +1,4 @@
-name: "⚙️ Config · Cloud Run"
+name: "🔮 RV · ⚙️ Config · Cloud Run"
 run-name: "⚙️ Config · ${{ inputs.targets }} · ${{ github.ref_name }}"
 on:
   workflow_dispatch:

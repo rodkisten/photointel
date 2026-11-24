@@ -1,4 +1,4 @@
-name: "🧹 Frontends · ESLint + Prettier Fix"
+name: "🔮 RV · 🧹 Frontends · ESLint + Prettier Fix"
 run-name: "🧹 Fix · ${{ inputs.target }} · ${{ inputs.mode }} · ${{ github.ref_name }}"
 
 on:

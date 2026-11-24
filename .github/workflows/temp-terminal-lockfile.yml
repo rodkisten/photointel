@@ -1,4 +1,4 @@
-name: "🧰 Temporary · Sync Terminal lockfile"
+name: "🔮 RV · 🧰 Temporary · Sync Terminal lockfile"
 on:
   push:
     branches: [feat/manage-terminal-isolated]

@@ -1,4 +1,4 @@
-name: "🧪 CI · Pretty logs"
+name: "🔮 RV · 🧪 CI · Pretty logs"
 on:
   push:
     paths:

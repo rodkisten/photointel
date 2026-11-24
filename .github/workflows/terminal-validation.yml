@@ -1,4 +1,4 @@
-name: "🧪 Terminal validation"
+name: "🔮 RV · 🧪 Terminal validation"
 on:
   workflow_dispatch:
   pull_request:

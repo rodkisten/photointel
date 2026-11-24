@@ -1,4 +1,4 @@
-name: "🧱 Setup GCP"
+name: "🔮 RV · 🧱 Setup GCP"
 run-name: "🧱 GCP · ${{ inputs.mode || 'plan' }} · photointel"
 on:
   pull_request:

@@ -1,4 +1,4 @@
-name: "🧪 CI · Validate"
+name: "🔮 RV · 🧪 CI · Validate"
 run-name: "🧪 CI · ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }} · ${{ github.event_name }}"
 
 on:

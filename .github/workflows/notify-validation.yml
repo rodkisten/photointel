@@ -1,4 +1,4 @@
-name: "📱 Notify Validation"
+name: "🔮 RV · 📱 Notify Validation"
 run-name: "📱 Notify · ${{ github.event_name }}"
 
 on:
