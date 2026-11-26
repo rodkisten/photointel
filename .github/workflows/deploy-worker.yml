@@ -446,7 +446,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
     env:
       CONFIRM_PROJECT: photointel
     steps:
@@ -473,18 +472,10 @@ jobs:
         uses: ./.github/actions/gcp-config
         with:
           mode: prepare
+          engine: typescript
           config-env: ${{ vars.GCP_CONFIG_ENV }}
           confirm-project: photointel
           release-sha: ${{ github.sha }}
-
-      - name: "🔐 Autenticar no GCP via Workload Identity"
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ steps.config.outputs.service_account }}
-
-      - name: "🧰 Configurar Google Cloud SDK (gcloud)"
-        uses: google-github-actions/setup-gcloud@v3
 
       - name: "📦 Instalar dependências do frontend (manage)"
         run: |
