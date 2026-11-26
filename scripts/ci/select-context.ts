@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { affectedApps, changedFiles } from './affected.ts';
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ export function select(files:string[],scope='auto'){
     if(starts('infra/docker/','apps/api/','apps/web/')||f==='cloudbuild.yaml')set('containers');
     if(starts('apps/','gpu/','bridges/','packages/','infra/','scripts/','.github/')||['pyproject.toml','uv.lock'].includes(f))set('security');
   }
+  if(scope==='auto') for(const app of affectedApps(files)) set(app==='web'?'front_web':'front_manage');
   if(py.some(k=>flags[k]))set('python');
   return {...flags,frontend_matrix:[...(flags.front_web?['web']:[]),...(flags.front_manage?['manage']:[])]};
 }
@@ -36,11 +37,7 @@ function main(){
   const scope=process.env.SCOPE||'auto',base=process.env.BASE_SHA||'',head=process.env.HEAD_SHA||'';
   let files:string[]=[];
   if(scope==='auto'){
-    try{
-      if(!/^[a-f0-9]{40}$/.test(base)||/^0+$/.test(base)||!/^[a-f0-9]{40}$/.test(head))throw Error('Invalid diff');
-      const range=base+(process.env.EVENT_NAME==='pull_request'?'...':'..')+head;
-      files=execFileSync('git',['diff','--name-only','-z',range],{encoding:'utf8',timeout:60000}).split('\0').filter(Boolean);
-    }catch{files=['*'];}
+    files=changedFiles(base,head,process.env.EVENT_NAME==='pull_request');
   }
   const result=select(files,scope);
   if(!process.env.GITHUB_OUTPUT)throw Error('Missing GITHUB_OUTPUT');
