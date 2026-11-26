@@ -261,11 +261,18 @@ jobs:
           node-version: '26'
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: install
+      - uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: validate
+      - uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: build
 
   # ============================================================================
   # 4. Testes de Integração & E2E

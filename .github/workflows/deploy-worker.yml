@@ -25,6 +25,7 @@ on:
       - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
       - '.github/actions/frontend-source/**'
+      - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
 
   pull_request:
@@ -47,6 +48,7 @@ on:
       - '.github/actions/notify/**'
       - '.github/actions/gcp-config/**'
       - '.github/actions/frontend-source/**'
+      - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
 
   workflow_dispatch:
@@ -157,32 +159,19 @@ jobs:
           cache: npm
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
 
-      - name: "📦 Instalar dependências (${{ matrix.app }})"
-        working-directory: apps/${{ matrix.app }}
-        run: |
-          npm ci
+      - name: Install frontend
+        uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: install
 
-      - name: "🧹 Verificar lint · ESLint (${{ matrix.app }})"
-        if: matrix.app == 'web'
-        id: check_1
-        continue-on-error: true
-        working-directory: apps/${{ matrix.app }}
-        run: |
-          npm run lint
-
-      - name: "🔎 Verificar tipagem · TypeScript (${{ matrix.app }})"
+      - name: Validate frontend
         id: check_2
         continue-on-error: true
-        working-directory: apps/${{ matrix.app }}
-        run: |
-          npm run typecheck
-
-      - name: "🧪 Executar testes unitários (${{ matrix.app }})"
-        id: check_3
-        continue-on-error: true
-        working-directory: apps/${{ matrix.app }}
-        run: |
-          npm test
+        uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: validate
 
       - name: "📱 Executar testes de PWA (web)"
         if: matrix.app == 'web'
@@ -216,14 +205,15 @@ jobs:
           node scripts/ci/photos-browser-env.ts
           rm -f infra/gcp/config.local.json
 
-      - name: "🏗️ Gerar build de produção (${{ matrix.app }})"
+      - name: Build frontend
         id: check_5
         continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ matrix.app == 'web' && github.ref == 'refs/heads/main' && secrets.SENTRY_AUTH_TOKEN || '' }}
-        working-directory: apps/${{ matrix.app }}
-        run: |
-          npm run build
+        uses: ./.github/actions/frontend-build
+        with:
+          app: ${{ matrix.app }}
+          phase: build
 
       - name: "⚡ Executar testes do Cloudflare Worker"
         if: matrix.app == 'web'
