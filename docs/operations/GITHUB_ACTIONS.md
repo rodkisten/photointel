@@ -1,5 +1,7 @@
 # 🧭 GitHub Actions: catálogo e regras do Photo Intelligence
 
+> **Migration notice (2026-11-26):** the new frontend CI/CD contract is documented in [Rodverse CI/CD](CI_CD.md). This page retains historical GCP and operational context; where frontend instructions conflict, use the new guide after the migration is merged and validated.
+
 O quadro abaixo começou como auditoria de **13 workflows em 24/10/2026**, mas é um **recorte histórico**, não a lista completa da branch atual (04/11/2026). O repositório já inclui novos workflows para Manage, migração Neon, watchdog de previews, FCM, validações e previews. Para a lista efetiva, consulte [`.github/workflows/`](../../.github/workflows/) e os eventos `on:` de cada YAML. Nenhum teste de PR deve herdar segredos de produção.
 
 ## ⚙️ Fluxos adicionados após a auditoria de 24/10/2026
