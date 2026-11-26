@@ -150,15 +150,3 @@ jobs:
         if: always() && matrix.app == 'manage'
         run: rm -f infra/gcp/config.local.json
 
-      - name: "🔔 Notificar resultado final do deploy"
-        if: ${{ always() && steps.notify_observed_001.outcome == 'success' }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: end
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          outcome: ${{ job.status }}
-

@@ -29,6 +29,7 @@ on:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/_build.yml'
       - '.github/workflows/_deploy.yml'
+      - '.github/workflows/_report.yml'
 
   pull_request:
     paths:
@@ -54,6 +55,7 @@ on:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/_build.yml'
       - '.github/workflows/_deploy.yml'
+      - '.github/workflows/_report.yml'
 
   workflow_dispatch:
     inputs:
@@ -158,4 +160,16 @@ jobs:
     with:
       apps: ${{ github.event_name == 'workflow_dispatch' && needs.detect-changes.outputs.apps || '["web"]' }}
       sha: ${{ inputs.sha || '' }}
+    secrets: inherit
+
+  report:
+    needs: [detect-changes, preflight, deploy]
+    if: always()
+    uses: ./.github/workflows/_report.yml
+    with:
+      apps: ${{ needs.detect-changes.outputs.apps || '[]' }}
+      plan: ${{ needs.detect-changes.result }}
+      build: ${{ needs.preflight.result }}
+      deploy: ${{ needs.deploy.result }}
+      notify: ${{ github.ref == 'refs/heads/main' && needs.deploy.result != 'skipped' }}
     secrets: inherit
