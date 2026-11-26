@@ -40,9 +40,10 @@ export function createRunner(options:RunnerOptions) {
       if(!['discover','backfill','worker','maintenance','migrate'].includes(mode))throw new Error('Invalid job');
       return invoke(['run','jobs','describe','photointel-'+mode,'--region='+region(location),'--format=json']);
     },
-    listImages:(location:string,repository:string)=>{
+    listImages:(location:string,repository:string,kind:'api'|'media-image'|'media-video'='api')=>{
+      if(!['api','media-image','media-video'].includes(kind)) throw new Error('Invalid image kind');
       if(!/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(repository))throw new Error('Invalid repository');
-      return invoke(['artifacts','docker','images','list',region(location)+'-docker.pkg.dev/'+project+'/'+repository+'/api','--include-tags','--format=json']);
+      return invoke(['artifacts','docker','images','list',region(location)+'-docker.pkg.dev/'+project+'/'+repository+'/'+kind,'--include-tags','--format=json']);
     }
   };
 }
