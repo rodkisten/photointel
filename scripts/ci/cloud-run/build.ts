@@ -20,3 +20,9 @@ export function resolveReleaseImage(runner:ReturnType<typeof createRunner>, proj
   const digest=verifiedDockerDigest(result.stdout,sha);
   return {executed:true as const,digest,image:region+'-docker.pkg.dev/'+project+'/'+repository+'/api@'+digest};
 }
+
+export function submitAndVerifyRelease(runner:ReturnType<typeof createRunner>,project:string,region:string,repository:string,sha:string){
+  const submission=runner.submitApiBuild(region,repository,sha);
+  if(!submission.executed) return {executed:false as const};
+  return resolveReleaseImage(runner,project,region,repository,sha);
+}

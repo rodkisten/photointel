@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 export type RunnerOptions = { project:string; apply?:boolean; authorizeCharges?:boolean; confirmProject?:string; cwd?:string };
 export type Result = { executed:boolean; stdout:string };
@@ -22,6 +24,16 @@ export function createRunner(options:RunnerOptions) {
   }
   function region(value:string){if(!/^[a-z]+-[a-z]+[0-9]$/.test(value))throw new Error('Invalid region');return value;}
   return {
+    submitApiBuild:(location:string,repository:string,sha:string)=>{
+      if(!/^[a-f0-9]{40}$/.test(sha)||!/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(repository)) throw new Error('Invalid build metadata');
+      const root=resolve(cwd??process.cwd());
+      if(apply){
+        const head=spawnSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',timeout:10000});
+        if(head.status!==0||head.stdout.trim()!==sha||!existsSync(resolve(root,'release-manifest.json'))) throw new Error('Build requires matching HEAD and prepared release manifest');
+      }
+      const image=region(location)+'-docker.pkg.dev/'+project+'/'+repository+'/api:'+sha;
+      return invoke(['builds','submit',root,'--config',resolve(root,'infra/gcp/cloudbuild.yaml'),'--substitutions','_IMAGE_URI='+image+',_GIT_SHA='+sha,'--ignore-file',resolve(root,'infra/gcp/build.gcloudignore'),'--gcs-source-staging-dir','gs://'+project+'-photointel-build-source/source','--service-account','projects/'+project+'/serviceAccounts/photointel-builder@'+project+'.iam.gserviceaccount.com'],3600000);
+    },
     doctor:()=>[invoke(commands.version),invoke(commands.identity),invoke([...commands.project,project,'--format=json']),invoke(commands.services)],
     describeApi:(location:string)=>invoke(['run','services','describe','photointel-api','--region='+region(location),'--format=json']),
     describeJob:(location:string,mode:string)=>{
