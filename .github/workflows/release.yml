@@ -1,95 +1,189 @@
-name: "🔮 RV · 🚀 Release · Console"
-run-name: "🚀 Release · ${{ inputs.action || 'check' }} · ${{ inputs.target || 'all' }} · ${{ inputs.source || 'main' }}"
+name: "🔮 RV · Release"
+
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch' && format('🌐 Cloudflare · {0} · {1} · {2}', inputs.action, inputs.app, inputs.request_id || 'manual') || github.event_name == 'pull_request' && format('🌐 Cloudflare · PR #{0}', github.event.pull_request.number) || format('🌐 Cloudflare · Push · {0}', github.ref_name) }}
+
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/manage/**'
+      - 'apps/web/**'
+      - '.prettierrc.json'
+      - '.prettierignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'packages/contracts/**'
+      - 'packages/env/**'
+      - 'infra/cloudflare/**'
+      - 'scripts/ci/**'
+      - 'rodverse.config.ts'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'infra/scripts/cloudflare_setup.py'
+      - 'infra/scripts/diagnose_access.py'
+      - 'infra/scripts/deploy_manage.py'
+      - '.github/actions/notify/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/actions/frontend-source/**'
+      - '.github/actions/frontend-build/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/_build.yml'
+      - '.github/workflows/_deploy.yml'
+      - '.github/workflows/_report.yml'
+
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.prettierrc.json'
+      - '.prettierignore'
+      - 'apps/web/**'
+      - 'apps/manage/**'
+      - 'packages/contracts/**'
+      - 'packages/env/**'
+      - 'infra/cloudflare/**'
+      - 'scripts/ci/**'
+      - 'rodverse.config.ts'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'infra/scripts/cloudflare_setup.py'
+      - 'infra/scripts/diagnose_access.py'
+      - 'infra/scripts/deploy_manage.py'
+      - '.github/actions/notify/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/actions/frontend-source/**'
+      - '.github/actions/frontend-build/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/_build.yml'
+      - '.github/workflows/_deploy.yml'
+      - '.github/workflows/_report.yml'
+
   workflow_dispatch:
     inputs:
       action:
         description: "Ação"
         type: choice
-        options: [plan, build, deploy, build-and-deploy]
+        options: [build, build-and-deploy]
         default: build-and-deploy
-      target:
-        description: "Destino"
+      app:
+        description: "App"
         type: choice
-        options: [api, media, web, manage, all]
-        default: manage
-      source:
-        description: "Origem"
-        type: choice
-        options: [main, last]
-        default: main
+        options: [all, web, manage]
+        default: all
       sha:
         description: "SHA opcional"
         type: string
         default: ''
-      confirm:
-        description: "Confirmar"
-        type: boolean
-        default: true
-        
+      request_id:
+        description: "ID"
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      action:
+        type: string
+        default: build-and-deploy
+      app:
+        type: string
+        default: all
+      sha:
+        type: string
+        default: ''
+      request_id:
+        type: string
+        default: ''
+
 permissions:
   contents: read
-  actions: write
-  id-token: write
+
+env:
+  BASH_ENV: ${{ github.workspace }}/scripts/ci/pretty-logs.sh
+
+defaults:
+  run:
+    shell: bash -eo pipefail {0}
+
 concurrency:
-  group: photointel-release-console
-  cancel-in-progress: true
-  
+  # PR previews são descartáveis; deploys de produção devem concluir com segurança.
+  group: ${{ github.event_name == 'pull_request' && format('photointel-frontends-pr-{0}', github.event.pull_request.number) || 'photointel-frontends-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  release:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+  # ============================================================================
+  # 1. Detecção de Alterações & Seleção de Apps
+  # ============================================================================
+  detect-changes:
+    name: "🔍 Detectar alterações"
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    environment: production
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        target: ${{ inputs.target == 'all' && fromJSON('["api","media","web","manage"]') || fromJSON(format('["{0}"]', inputs.target)) }}
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.actor != 'renovate[bot]' &&
+           github.actor != 'dependabot[bot]' &&
+           github.event.pull_request.user.login != 'renovate[bot]' &&
+           github.event.pull_request.user.login != 'dependabot[bot]' &&
+           github.event.head_commit.author.username != 'renovate[bot]' &&
+           github.event.head_commit.author.username != 'dependabot[bot]' &&
+           !contains(github.event.head_commit.message, 'dependabot[bot]') &&
+           !contains(github.event.head_commit.message, 'renovate[bot]')) }}
+    outputs:
+      apps: ${{ steps.set-matrix.outputs.apps }}
     steps:
-      - uses: actions/checkout@v7
-        with: {persist-credentials: false, fetch-depth: 0}
+      - name: "📥 Baixar histórico completo do repositório"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
       - uses: actions/setup-node@v7
-        with: {node-version: '26'}
+        with:
+          node-version: '26'
 
-      - name: "🔐 Authenticate Ploocky GitHub App"
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.BOT_APP_ID || vars.BOT_APP_ID }}
-          private-key: ${{ secrets.BOT_PRIVATE_KEY }}
-          permission-contents: read
-          permission-actions: write
-        
-      - id: config
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: prepare
-          config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: photointel
-          release-sha: ${{ github.sha }}
-      - uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ steps.config.outputs.service_account }}
-      - uses: google-github-actions/setup-gcloud@v3
-      - name: "🚀 Executar"
+      - name: "🗳️ Planejar aplicações afetadas"
+        id: set-matrix
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          ACTION: ${{ inputs.action }}
-          TARGET: ${{ matrix.target }}
-          SOURCE: ${{ inputs.source }}
-          REQUESTED_SHA: ${{ inputs.sha }}
-          CONFIRM: ${{ inputs.confirm }}
-        run: |
-          source scripts/ci/pretty-logs.sh
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_APP: ${{ inputs.app || 'all' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/ci/plan.ts
 
-          export BOT_TOKEN="${{ steps.app-token.outputs.token }}"
-          
-          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
-          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
-      
-          ci_run "Release console" python3 -m infra.terraform.release_console
-      - if: always()
-        uses: ./.github/actions/gcp-config
-        with: {mode: cleanup}
+  # ============================================================================
+  # 2. Validação & Build (Preflight por App)
+  # ============================================================================
+  preflight:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.apps != '[]' }}
+    uses: ./.github/workflows/_build.yml
+    with:
+      apps: ${{ needs.detect-changes.outputs.apps }}
+      production: true
+      action: ${{ inputs.action || 'build-and-deploy' }}
+      sha: ${{ inputs.sha || '' }}
+    secrets: inherit
+
+  # ============================================================================
+  # 3. Deploy em Produção · Photos Web Worker (apps/web)
+  # ============================================================================
+  deploy:
+    needs: [detect-changes, preflight]
+    if: ${{ github.ref == 'refs/heads/main' && inputs.action != 'build' && needs.preflight.result == 'success' && (github.event_name == 'workflow_dispatch' || contains(fromJSON(needs.detect-changes.outputs.apps), 'web')) }}
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      apps: ${{ github.event_name == 'workflow_dispatch' && needs.detect-changes.outputs.apps || '["web"]' }}
+      sha: ${{ inputs.sha || '' }}
+    secrets: inherit
+
+  report:
+    needs: [detect-changes, preflight, deploy]
+    if: always()
+    uses: ./.github/workflows/_report.yml
+    with:
+      apps: ${{ needs.detect-changes.outputs.apps || '[]' }}
+      plan: ${{ needs.detect-changes.result }}
+      build: ${{ needs.preflight.result }}
+      deploy: ${{ needs.deploy.result }}
+      notify: ${{ github.ref == 'refs/heads/main' && needs.deploy.result != 'skipped' }}
+    secrets: inherit
