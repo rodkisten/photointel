@@ -185,18 +185,21 @@ jobs:
 
       - name: "🧹 Verificar lint · ESLint (${{ matrix.app }})"
         if: matrix.app == 'web'
+        id: check_1
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
         run: |
           npm run lint
 
       - name: "🔎 Verificar tipagem · TypeScript (${{ matrix.app }})"
+        id: check_2
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
         run: |
           npm run typecheck
 
       - name: "🧪 Executar testes unitários (${{ matrix.app }})"
+        id: check_3
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
         run: |
@@ -204,12 +207,15 @@ jobs:
 
       - name: "📱 Executar testes de PWA (web)"
         if: matrix.app == 'web'
+        id: check_4
         continue-on-error: true
         working-directory: apps/web
         run: |
           npm run test:pwa
 
       - name: "🏗️ Gerar build de produção (${{ matrix.app }})"
+        if: ${{ !(matrix.app == 'manage' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.action != 'build') }}
+        id: check_5
         continue-on-error: true
         working-directory: apps/${{ matrix.app }}
         run: |
@@ -217,6 +223,7 @@ jobs:
 
       - name: "⚡ Executar testes do Cloudflare Worker"
         if: matrix.app == 'web'
+        id: check_6
         continue-on-error: true
         run: |
           ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" \
@@ -224,6 +231,7 @@ jobs:
 
       - name: "🐍 Validar sintaxe do script de deploy (manage)"
         if: matrix.app == 'manage'
+        id: check_7
         continue-on-error: true
         run: |
           python3 -m py_compile infra/scripts/deploy_manage.py
@@ -484,8 +492,7 @@ jobs:
       - name: "🔎 Configurar Sentry browser DSN"
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage browser-env" \
-            python3 -m infra.scripts.deploy_manage browser-env
+          node --experimental-strip-types scripts/ci/manage-browser-env.ts
 
       - name: "🏗️ Gerar build de produção (manage)"
         run: |
