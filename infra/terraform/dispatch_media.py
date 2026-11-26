@@ -33,7 +33,7 @@ def auto_step(name: str):
 
 def main():
     repo = os.environ["GITHUB_REPOSITORY"]
-    if repo != "rodkisten/photointel":
+    if repo != "rodverse/rodverse":
         raise ValueError("Unexpected repository")
         
     sha = os.environ.get("IMAGE_SHA", "")

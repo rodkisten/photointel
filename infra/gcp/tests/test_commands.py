@@ -57,10 +57,10 @@ class CloudRunCommandsTests(unittest.TestCase):
             "photointel-sentry-build-token" in line
             and "photointel-deployer@" in line for line in commands
         ))
-        workflow = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
-        build = workflow.split('name: "🏗 Build do frontend"', 1)[1]
-        build = build.split('name: "📱 Build"', 1)[0]
+        build = (ROOT / ".github/workflows/_build.yml").read_text()
         self.assertIn("CONFIRM_PROJECT: photointel", build)
+        self.assertIn("inputs.production && github.ref == 'refs/heads/main'", build)
+        self.assertIn("secrets.SENTRY_AUTH_TOKEN", build)
 
     def test_default_plan_cannot_invoke_subprocess(self) -> None:
         with patch("subprocess.run", side_effect=AssertionError("network prohibited")):

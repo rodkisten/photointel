@@ -227,13 +227,18 @@ class WorkflowEnvTests(unittest.TestCase):
     def test_all_workflows_share_gcp_config_without_exposing_it_to_ci(self):
         for name in (
             "gcp-deploy.yml", "gcp-bootstrap.yml", "gcp-migrate.yml",
-            "deploy-worker.yml", "ssh.yml",
+            "ssh.yml",
         ):
             source = (ROOT / ".github/workflows" / name).read_text()
             self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", source)
             self.assertIn('name: "⚙ Env"', source)
-        worker = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
-        self.assertIn("python3 -m infra.scripts.prepare_workflow_env worker-deploy", worker)
+        worker = (ROOT / ".github/workflows/_deploy.yml").read_text()
+        self.assertIn("config-env: " + "$" + "{{ vars.GCP_CONFIG_ENV }}", worker)
+        self.assertIn("engine: typescript", worker)
+        self.assertIn("node scripts/ci/adapters/photos.ts", worker)
+        self.assertIn("environment: production", worker)
+        wrapper = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
+        self.assertIn("uses: ./.github/workflows/release.yml", wrapper)
         self.assertNotIn("wrangler pages", worker)
         self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
         for name in (
