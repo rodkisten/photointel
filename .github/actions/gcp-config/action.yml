@@ -1,6 +1,10 @@
 name: "🧩 [GCP CONFIG] Prepare / clean"
 description: "Reuse the production Environment GCP_CONFIG_ENV parser and securely remove temporary deployment files."
 inputs:
+  renderer:
+    description: 'Cloud Run renderer: parity, native or legacy (explicit rollback)'
+    required: false
+    default: parity
   target:
     description: "Configuration consumer: cloudflare or cloud-run"
     required: false
@@ -49,7 +53,12 @@ runs:
         MODE: ${{ inputs.mode }}
         ENGINE: ${{ inputs.engine }}
         TARGET: ${{ inputs.target }}
+        RENDERER: ${{ inputs.renderer }}
       run: |
+        case "$RENDERER" in
+          parity|native|legacy) ;;
+          *) echo "::error::Unsupported renderer" >&2; exit 2 ;;
+        esac
         case "$TARGET" in
           cloudflare|cloud-run) ;;
           *) echo "::error::Unsupported configuration target" >&2; exit 2 ;;
@@ -122,6 +131,7 @@ runs:
         CONFIRM_PROJECT: ${{ inputs.confirm-project }}
         RELEASE_SHA: ${{ inputs.release-sha }}
         CONFIG_TARGET: ${{ inputs.target }}
+        CONFIG_RENDERER: ${{ inputs.renderer }}
         PHOTOINTEL_GITHUB_SECRETS_JSON: ${{ inputs.github-secrets-json }}
         PHOTOINTEL_GITHUB_VARS_JSON: ${{ inputs.github-vars-json }}
       run: |
@@ -130,11 +140,17 @@ runs:
         node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
         # Cloudflare adapters consume config.local.json directly.
         if [[ "$CONFIG_TARGET" == cloud-run ]]; then
-          python3 -m infra.gcp.manage render
-          native_dir=$(mktemp -d)
-          trap 'rm -rf "$native_dir"' EXIT
-          node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json "$native_dir"
-          node scripts/ci/cloud-run/compare.ts infra/gcp/rendered "$native_dir"
+          case "$CONFIG_RENDERER" in
+            legacy) python3 -m infra.gcp.manage render ;;
+            native) node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json infra/gcp/rendered ;;
+            parity)
+              native_dir=$(mktemp -d)
+              trap 'rm -rf "$native_dir"' EXIT
+              python3 -m infra.gcp.manage render --output "$native_dir/legacy"
+              node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json infra/gcp/rendered
+              node scripts/ci/cloud-run/compare.ts "$native_dir/legacy" infra/gcp/rendered
+              ;;
+          esac
         fi
         node --input-type=module -e '
           import {appendFileSync} from "node:fs";

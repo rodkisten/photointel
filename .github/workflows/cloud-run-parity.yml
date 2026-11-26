@@ -22,5 +22,9 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
+      - name: Typecheck renderer
+        run: |
+          npm install --prefix "$RUNNER_TEMP/renderer-types" --no-save --package-lock=false typescript@6 @types/node@24
+          "$RUNNER_TEMP/renderer-types/node_modules/.bin/tsc" --noEmit --strict --target esnext --module nodenext --typeRoots "$RUNNER_TEMP/renderer-types/node_modules/@types" --types node --skipLibCheck scripts/ci/cloud-run/render.ts scripts/ci/cloud-run/compare.ts
       - name: Compare offline manifests
         run: PYTHONPATH=. python scripts/ci/cloud-run/parity.py
