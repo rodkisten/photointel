@@ -26,6 +26,8 @@ type ErrorPayload = {
 };
 
 function sanitize(value: string): string {
+  // Strip unsafe control characters while preserving tabs and line breaks.
+  // eslint-disable-next-line no-control-regex
   return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
     .replace(/(Bearer\s+)[\w.~-]+/gi, '$1[REDACTED]')
     .replace(/([?&](?:token|access_token|key|api_key|secret|password|authorization|session)=)[^&#\s]+/gi, '$1[REDACTED]')
@@ -156,6 +158,7 @@ type ErrorRow = {
 };
 
 export async function userscriptErrorsRoute(request: Request, env: Env, _identity: Identity): Promise<Response | null> {
+  void _identity; // Authentication is enforced by the caller.
   const url = new URL(request.url);
   if (url.pathname !== '/api/userscript-errors') return null;
   if (request.method !== 'GET') throw new ApiError(405, 'METHOD', 'Método não permitido');
