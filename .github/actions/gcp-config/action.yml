@@ -131,6 +131,10 @@ runs:
         # Cloudflare adapters consume config.local.json directly.
         if [[ "$CONFIG_TARGET" == cloud-run ]]; then
           python3 -m infra.gcp.manage render
+          native_dir=$(mktemp -d)
+          trap 'rm -rf "$native_dir"' EXIT
+          node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json "$native_dir"
+          node scripts/ci/cloud-run/compare.ts infra/gcp/rendered "$native_dir"
         fi
         node --input-type=module -e '
           import {appendFileSync} from "node:fs";

@@ -1,5 +1,6 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 type Reference = {name: string; version: string};
 type Config = {
@@ -72,6 +73,8 @@ export function render(c:Config, directory:string){
   const docs=[['api',service(c)],...modes.map(mode=>[mode,job(c,mode)])] as const;
   for(const [name,doc] of docs) writeFileSync(join(directory,'photointel-'+name+'.json'),JSON.stringify(doc,null,2)+'\n',{mode:0o600});
 }
-const [,,input,output]=process.argv;
-if(!input||!output) throw new Error('Usage: node render.ts validated-config.json output-directory');
-render(JSON.parse(readFileSync(input,'utf8')),output);
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const [,,input,output]=process.argv;
+  if(!input||!output) throw new Error('Usage: node render.ts validated-config.json output-directory');
+  render(JSON.parse(readFileSync(input,'utf8')),output);
+}
