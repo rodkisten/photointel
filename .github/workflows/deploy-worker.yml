@@ -325,28 +325,6 @@ jobs:
       - name: "🧰 Configurar Google Cloud SDK (gcloud)"
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: "⚙️ Gerar variáveis de ambiente do Worker"
-        id: worker_env
-        env:
-          WORKFLOW_SECRET_SOURCE: github
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CONFIRM_PROJECT: photointel
-        run: |
-          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" \
-            python3 -m infra.scripts.prepare_workflow_env worker
-
-      - name: "🔎 Diagnosticar domínio e audience do Cloudflare Access"
-        continue-on-error: true
-        env:
-          WORKFLOW_SECRET_SOURCE: github
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CONFIRM_PROJECT: photointel
-        run: |
-          ci_run "Cloudflare: python3 -m infra.scripts.diagnose_access" \
-            python3 -m infra.scripts.diagnose_access
-
       - name: "🧰 Configurar Node.js 26"
         id: notify_observed_002
         uses: actions/setup-node@v7
@@ -375,8 +353,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CONFIRM_PROJECT: photointel
         run: |
-          ci_run "Cloudflare: python3 -m infra.scripts.prepare_workflow_env worker" \
-            python3 -m infra.scripts.prepare_workflow_env worker-deploy
+          node scripts/ci/adapters/photos.ts
 
       - name: "📱 Notificar etapa 3/3 · Publicação"
         if: ${{ always() && (steps.notify_observed_006.outcome == 'success' || steps.notify_observed_006.outcome == 'failure' || steps.notify_observed_006.outcome == 'cancelled') }}
