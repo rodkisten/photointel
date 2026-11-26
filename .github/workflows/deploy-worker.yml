@@ -244,6 +244,10 @@ jobs:
           fi
           echo "✅ Sem falhas." >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Seal production artifact
+        if: success() && github.ref == 'refs/heads/main' && inputs.action != 'build' && (matrix.app == 'web' || github.event_name == 'workflow_dispatch')
+        run: node scripts/ci/frontend-artifact.ts seal ${{ matrix.app }}
+
       - name: "📦 Publicar artefato Photos"
         if: success() && matrix.app == 'web' && github.ref == 'refs/heads/main' && inputs.action != 'build'
         uses: actions/upload-artifact@v4
@@ -252,6 +256,7 @@ jobs:
           path: apps/web/dist/
           if-no-files-found: error
           retention-days: 7
+          include-hidden-files: true
           overwrite: true
 
       - name: "📦 Publicar artefato Manage"
@@ -262,6 +267,7 @@ jobs:
           path: apps/manage/dist/
           if-no-files-found: error
           retention-days: 7
+          include-hidden-files: true
           overwrite: true
 
   # ============================================================================
@@ -346,6 +352,14 @@ jobs:
         with:
           name: ${{ matrix.app }}-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
           path: apps/${{ matrix.app }}/dist
+
+      - name: Reconstruct public build configuration
+        run: node scripts/ci/${{ matrix.app == 'web' && 'photos' || 'manage' }}-browser-env.ts
+
+      - name: Verify artifact provenance
+        run: |
+          node scripts/ci/frontend-artifact.ts verify ${{ matrix.app }}
+          rm -f apps/${{ matrix.app }}/dist/.rodverse-artifact.json
 
       - name: "📄 Copiar regras de headers para dist/_headers"
         if: matrix.app == 'web'
