@@ -106,3 +106,5 @@ The curated Deploys view now exposes release.yml and maintenance.yml. The provid
 The legacy Terraform release console dispatches release.yml in rodverse/rodverse and checks the requested publication job after a successful run. Last-published source selection requires the actual Worker source binding; workflow head SHA is not a safe substitute for a historical source SHA. The Python console remains until API/media build and Terraform dispatch parity is established.
 
 Native catalog.ts now supports API and paired media inventories, full SHA tags, newest common source selection and Git ancestry checks. It rejects dry-run inventory as evidence. The Python console is not switched to this module yet; parity and integration remain migration gates.
+
+Native dispatch.ts provides a main-only confirmed frontend dispatch using gh, unique request IDs, bounded polling and explicit job verification. It never retries a POST automatically. It is not yet wired into the production console; validate against a real authorized dispatch before switching consumers.
