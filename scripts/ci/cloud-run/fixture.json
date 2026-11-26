@@ -1,0 +1,70 @@
+{
+  "project_id": "photointel",
+  "region": "us-central1",
+  "repository": "photointel",
+  "image": "us-central1-docker.pkg.dev/photointel/photointel/api:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "release_git_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "frontend_origin": "https://photos.example.org",
+  "api_origin": "https://api.example.org",
+  "storage_endpoint": "https://storage.example.org",
+  "access_team_domain": "fixture.cloudflareaccess.com",
+  "access_audience": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "access_allowed_emails": [
+    "one@example.org",
+    "two@example.org"
+  ],
+  "storage_bucket": "fixture-bucket",
+  "api_max_instances": 3,
+  "api_concurrency": 20,
+  "api_timeout_seconds": 60,
+  "job_task_count": 4,
+  "job_parallelism": 2,
+  "job_max_jobs": 100,
+  "job_deadline_seconds": 300,
+  "job_timeout_seconds": 600,
+  "database_catalog_limit": 1000,
+  "database_profile": "limited",
+  "secrets": {
+    "DATABASE_URL": {
+      "name": "database-url",
+      "version": "1"
+    },
+    "MIGRATION_DATABASE_URL": {
+      "name": "migration-database-url",
+      "version": "1"
+    },
+    "STORAGE_ACCESS_KEY": {
+      "name": "storage-access-key",
+      "version": "1"
+    },
+    "STORAGE_SECRET_KEY": {
+      "name": "storage-secret-key",
+      "version": "1"
+    },
+    "BRIDGE_TOKEN_PEPPER": {
+      "name": "bridge-token-pepper",
+      "version": "1"
+    },
+    "BRIDGE_ENROLLMENT_SECRET": {
+      "name": "bridge-enrollment-secret",
+      "version": "1"
+    },
+    "ICLOUD_SESSION_KEY": {
+      "name": "icloud-session-key",
+      "version": "1"
+    },
+    "NOTIFY_DEVICE_ID": {
+      "name": "notify-device-id",
+      "version": "1"
+    },
+    "NOTIFY_TOKEN": {
+      "name": "notify-token",
+      "version": "1"
+    },
+    "SENTRY_API_TOKEN": {
+      "name": "sentry-api-token",
+      "version": "1"
+    }
+  },
+  "extra_environment": {}
+}
