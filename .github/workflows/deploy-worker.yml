@@ -107,44 +107,18 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: "🗳️ Selecionar aplicações afetadas"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+
+      - name: "🗳️ Planejar aplicações afetadas"
         id: set-matrix
         env:
           EVENT_NAME: ${{ github.event_name }}
           REQUESTED_APP: ${{ inputs.app || 'all' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            case "$REQUESTED_APP" in
-              all) apps='["web","manage"]' ;;
-              web|manage) apps="$(jq -cn --arg app "$REQUESTED_APP" '[$app]')" ;;
-              *) echo '::error::App inválido'; exit 1 ;;
-            esac
-          else
-            if [[ "$EVENT_NAME" == "pull_request" ]]; then
-              base="$(git merge-base "$BASE_SHA" HEAD)"
-            elif [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
-              base="$BEFORE_SHA"
-            else
-              base=""
-            fi
-            if [[ -z "$base" ]]; then
-              apps='["web","manage"]'
-            else
-              files="$(git diff --name-only "$base" HEAD)"
-              global='^(package(-lock)?\.json|\.prettier(rc\.json|ignore)|packages/|infra/|\.github/(actions/(gcp-config|frontend-source)/|workflows/deploy-worker\.yml))'
-              if grep -Eq "$global" <<< "$files"; then
-                apps='["web","manage"]'
-              else
-                apps='[]'
-                if grep -q '^apps/web/' <<< "$files"; then apps="$(jq -c '. + ["web"]' <<< "$apps")"; fi
-                if grep -q '^apps/manage/' <<< "$files"; then apps="$(jq -c '. + ["manage"]' <<< "$apps")"; fi
-              fi
-            fi
-          fi
-          echo "apps=$apps" >> "$GITHUB_OUTPUT"
-          echo "Selected: $apps"
+        run: node scripts/ci/plan.ts
 
   # ============================================================================
   # 2. Validação & Build (Preflight por App)
