@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { selectRelease,executeRelease } from './release-console.ts';
+const head='a'.repeat(40),old='b'.repeat(40);
+const base={action:'plan',target:'media',source:'main',head} as const;
+assert.equal(selectRelease(base).sha,head);
+assert.equal(selectRelease({...base,source:'last'},[new Map([[old,'2026']]),new Map([[old,'2026']])]).sha,old);
+assert.throws(()=>selectRelease({...base,source:'last'},[]));
+assert.throws(()=>selectRelease({...base,requested:'latest'}));
+assert.equal(selectRelease({...base,action:'build-and-deploy'}).deploy,true);
+await assert.rejects(executeRelease('.', {...base,requested:'invalid'}));
