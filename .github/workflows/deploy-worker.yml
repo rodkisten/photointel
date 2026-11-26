@@ -475,15 +475,13 @@ jobs:
           cache: npm
           cache-dependency-path: apps/manage/package-lock.json
 
-      - name: "⚙️ Preparar configuração de produção (GCP)"
-        id: config
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: prepare
-          engine: typescript
-          config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: photointel
-          release-sha: ${{ github.sha }}
+      - name: "🟦 Renderizar configuração TypeScript"
+        env:
+          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          umask 077
+          node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
 
       - name: "📦 Instalar dependências do frontend (manage)"
         run: |
@@ -520,8 +518,6 @@ jobs:
           ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" \
             python3 -m infra.scripts.deploy_manage apply
 
-      - name: "🧹 Limpar configuração temporária (GCP)"
+      - name: "🧹 Limpar configuração temporária"
         if: always()
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: cleanup
+        run: rm -f infra/gcp/config.local.json
