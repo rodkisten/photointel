@@ -108,3 +108,5 @@ The legacy Terraform release console dispatches release.yml in rodverse/rodverse
 Native catalog.ts now supports API and paired media inventories, full SHA tags, newest common source selection and Git ancestry checks. It rejects dry-run inventory as evidence. The Python console is not switched to this module yet; parity and integration remain migration gates.
 
 Native dispatch.ts provides a main-only confirmed frontend dispatch using gh, unique request IDs, bounded polling and explicit job verification. It never retries a POST automatically. It is not yet wired into the production console; validate against a real authorized dispatch before switching consumers.
+
+Native CLI media-build now submits the paired media Cloud Build configuration and verifies both immutable digests for the selected SHA. It defaults to dry-run; real submission requires the existing explicit project/charge authorization. The legacy console still owns pre-build media validation and Terraform/database gates; do not switch production callers until those checks are integrated.

@@ -33,3 +33,16 @@ export function buildRelease(root:string,project:string,region:string,repository
   const operation=()=>submitAndVerifyRelease(runner,project,region,repository,sha);
   return apply?withReleaseManifest(root,sha,operation):operation();
 }
+
+export function buildMediaRelease(root:string,project:string,region:string,repository:string,sha:string,apply=false,authorizeCharges=false,confirmProject?:string){
+  const runner=createRunner({project,cwd:root,apply,authorizeCharges,confirmProject});
+  const submission=runner.submitMediaBuild(region,repository,sha);
+  if(!submission.executed) return {executed:false as const};
+  const images=['media-image','media-video'] as const;
+  return {executed:true as const,images:images.map(kind=>{
+    const result=runner.listImages(region,repository,kind);
+    if(!result.executed) throw new Error('Registry verification unavailable');
+    const digest=verifiedDockerDigest(result.stdout,sha);
+    return {kind,digest,image:region+'-docker.pkg.dev/'+project+'/'+repository+'/'+kind+'@'+digest};
+  })};
+}
