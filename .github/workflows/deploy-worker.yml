@@ -27,6 +27,7 @@ on:
       - '.github/actions/frontend-source/**'
       - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
+      - '.github/workflows/_build.yml'
 
   pull_request:
     paths:
@@ -50,6 +51,7 @@ on:
       - '.github/actions/frontend-source/**'
       - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
+      - '.github/workflows/_build.yml'
 
   workflow_dispatch:
     inputs:
@@ -130,145 +132,15 @@ jobs:
   # 2. Validação & Build (Preflight por App)
   # ============================================================================
   preflight:
-    name: "🧪 Build & Test · ${{ matrix.app }}"
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.apps != '[]' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: ${{ github.ref == 'refs/heads/main' && (matrix.app == 'web' || github.event_name == 'workflow_dispatch') && 'production' || '' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        app: ${{ fromJson(needs.detect-changes.outputs.apps) }}
-    steps:
-      - name: "📥 Baixar código"
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: "📌 Resolver SHA de origem"
-        uses: ./.github/actions/frontend-source
-        with:
-          sha: ${{ inputs.sha }}
-
-      - name: "🧰 Configurar Node.js 26 (${{ matrix.app }})"
-        uses: actions/setup-node@v7
-        with:
-          node-version: '26'
-          cache: npm
-          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
-
-      - name: Install frontend
-        uses: ./.github/actions/frontend-build
-        with:
-          app: ${{ matrix.app }}
-          phase: install
-
-      - name: Validate frontend
-        id: check_2
-        continue-on-error: true
-        uses: ./.github/actions/frontend-build
-        with:
-          app: ${{ matrix.app }}
-          phase: validate
-
-      - name: "📱 Executar testes de PWA (web)"
-        if: matrix.app == 'web'
-        id: check_4
-        continue-on-error: true
-        working-directory: apps/web
-        run: |
-          npm run test:pwa
-
-      - name: "🔎 Configurar Sentry browser DSN"
-        if: matrix.app == 'manage' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-        env:
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
-          CONFIRM_PROJECT: photointel
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          umask 077
-          node packages/env/src/deploy.ts render-config infra/gcp/config.local.json
-          node scripts/ci/manage-browser-env.ts
-          rm -f infra/gcp/config.local.json
-
-      - name: "⚙️ Configurar build público Photos"
-        if: matrix.app == 'web' && github.ref == 'refs/heads/main'
-        env:
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
-          CONFIRM_PROJECT: photointel
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          umask 077
-          node packages/env/src/deploy.ts render-config infra/gcp/config.local.json
-          node scripts/ci/photos-browser-env.ts
-          rm -f infra/gcp/config.local.json
-
-      - name: Build frontend
-        id: check_5
-        continue-on-error: true
-        env:
-          SENTRY_AUTH_TOKEN: ${{ matrix.app == 'web' && github.ref == 'refs/heads/main' && secrets.SENTRY_AUTH_TOKEN || '' }}
-        uses: ./.github/actions/frontend-build
-        with:
-          app: ${{ matrix.app }}
-          phase: build
-
-      - name: "⚡ Executar testes do Cloudflare Worker"
-        if: matrix.app == 'web'
-        id: check_6
-        continue-on-error: true
-        run: |
-          ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" \
-            node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
-
-      - name: "🟦 Validar sintaxe do publicador Manage"
-        if: matrix.app == 'manage'
-        id: check_7
-        continue-on-error: true
-        run: node --check scripts/ci/adapters/manage.ts
-
-      - name: "📋 Consolidar resultado · ${{ matrix.app }}"
-        if: ${{ always() }}
-        env:
-          STEP_RESULTS: ${{ toJSON(steps) }}
-        run: |
-          failures=$(jq -c '[to_entries[] | select(.value.outcome == "failure") | .key]' <<< "$STEP_RESULTS")
-          count=$(jq 'length' <<< "$failures")
-          echo "### Verificações · ${{ matrix.app }}" >> "$GITHUB_STEP_SUMMARY"
-          if (( count > 0 )); then
-            jq -r '.[] | "- ❌ " + .' <<< "$failures" >> "$GITHUB_STEP_SUMMARY"
-            echo "::error::$count verificação(ões) falharam."
-            exit 1
-          fi
-          echo "✅ Sem falhas." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Seal production artifact
-        if: success() && github.ref == 'refs/heads/main' && inputs.action != 'build' && (matrix.app == 'web' || github.event_name == 'workflow_dispatch')
-        run: node scripts/ci/frontend-artifact.ts seal ${{ matrix.app }}
-
-      - name: "📦 Publicar artefato Photos"
-        if: success() && matrix.app == 'web' && github.ref == 'refs/heads/main' && inputs.action != 'build'
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
-          path: apps/web/dist/
-          if-no-files-found: error
-          retention-days: 7
-          include-hidden-files: true
-          overwrite: true
-
-      - name: "📦 Publicar artefato Manage"
-        if: success() && matrix.app == 'manage' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.action != 'build'
-        uses: actions/upload-artifact@v4
-        with:
-          name: manage-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
-          path: apps/manage/dist/
-          if-no-files-found: error
-          retention-days: 7
-          include-hidden-files: true
-          overwrite: true
+    uses: ./.github/workflows/_build.yml
+    with:
+      apps: ${{ needs.detect-changes.outputs.apps }}
+      production: true
+      action: ${{ inputs.action || 'build-and-deploy' }}
+      sha: ${{ inputs.sha || '' }}
+    secrets: inherit
 
   # ============================================================================
   # 3. Deploy em Produção · Photos Web Worker (apps/web)
