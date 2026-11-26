@@ -22,7 +22,7 @@ export function environment(c: Config, mode: Mode) {
     APP_ENV:'production', AUTH_MODE:'cloudflare', EXECUTION_PLATFORM:'cloud_run', VERIFICATION_GATES_ENFORCED:'true',
     RELEASE_GIT_SHA:c.release_git_sha, RELEASE_BRANCH:c.release_branch ?? 'main', FRONTEND_ORIGIN:c.frontend_origin,
     API_ORIGIN:c.api_origin, ACCESS_TEAM_DOMAIN:c.access_team_domain, ACCESS_AUDIENCE:c.access_audience,
-    ACCESS_ALLOWED_EMAILS:JSON.stringify(c.access_allowed_emails), STORAGE_BACKEND:'r2', STORAGE_ENDPOINT:c.storage_endpoint,
+    ACCESS_ALLOWED_EMAILS:'['+c.access_allowed_emails.map(email=>JSON.stringify(email)).join(', ')+']', STORAGE_BACKEND:'r2', STORAGE_ENDPOINT:c.storage_endpoint,
     STORAGE_BUCKET:c.storage_bucket, STORAGE_REGION:'auto', GPU_ENABLED:String(c.enable_gpu ?? false),
     ICLOUD_ENABLED:String(c.enable_icloud ?? false), INFERENCE_BACKEND:'modal', APPLE_NATIVE_WRITE_ENABLED:'false',
     AUTO_DELETE_ENABLED:'false', INITIAL_IMPORT_LIMIT:'100', INGESTION_IMPORT_LIMIT:'100',
