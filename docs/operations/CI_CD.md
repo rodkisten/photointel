@@ -110,3 +110,5 @@ Native catalog.ts now supports API and paired media inventories, full SHA tags, 
 Native dispatch.ts provides a main-only confirmed frontend dispatch using gh, unique request IDs, bounded polling and explicit job verification. It never retries a POST automatically. It is not yet wired into the production console; validate against a real authorized dispatch before switching consumers.
 
 Native CLI media-build now submits the paired media Cloud Build configuration and verifies both immutable digests for the selected SHA. It defaults to dry-run; real submission requires the existing explicit project/charge authorization. The legacy console still owns pre-build media validation and Terraform/database gates; do not switch production callers until those checks are integrated.
+
+Native terraform.ts validates dispatch inputs and preserves the existing read-only Neon/Alembic gate for API apply. Historical API apply is rejected until source-specific schema verification exists. Terraform remains the mutation owner; the module is not yet the production entrypoint. The database verifier intentionally retains Python application migration dependencies.
