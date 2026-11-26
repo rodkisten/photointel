@@ -68,7 +68,25 @@ export function job(c:Config,mode:typeof modes[number]){
     }]}}
   }}}};
 }
+const protectedEnvironment = new Set(["APP_ENV","AUTH_MODE","GPU_ENABLED","ICLOUD_ENABLED","INFERENCE_BACKEND","APPLE_NATIVE_WRITE_ENABLED","AUTO_DELETE_ENABLED","DATABASE_URL","MIGRATION_DATABASE_URL","ACCESS_ALLOWED_EMAILS","INITIAL_IMPORT_LIMIT","INGESTION_IMPORT_LIMIT","STORAGE_BACKEND","GCP_PROJECT_ID","GCP_REGION","GCP_JOB_DISPATCH_ENABLED","NOTIFY_JOB_EVENTS_ENABLED","TELEGRAM_JOB_EVENTS_ENABLED","EXECUTION_PLATFORM","VERIFICATION_GATES_ENFORCED","TEMP_DIRECTORY","ICLOUD_SESSION_DIRECTORY","ICLOUD_DOWNLOAD_DIRECTORY","RELEASE_GIT_SHA","RELEASE_BRANCH"]);
 export function validate(c:Config): void {
+  if(!/^[A-Za-z0-9_./-]{1,100}$/.test(c.release_branch ?? 'main')) throw new Error('Invalid release branch');
+  if(!c.secrets || typeof c.secrets!=='object' || Array.isArray(c.secrets)) throw new Error('Invalid secret inventory');
+  for(const [name,ref] of Object.entries(c.secrets)){
+    if(!allowedSecrets.has(name)||!ref||typeof ref!=='object'||Object.keys(ref).sort().join(',')!=='name,version'||typeof ref.name!=='string'||typeof ref.version!=='string'||!/^[a-z][a-z0-9-]{0,254}$/.test(ref.name)||!/^[1-9][0-9]{0,9}$/.test(ref.version)) throw new Error('Invalid secret reference');
+  }
+  const extra=c.extra_environment ?? {};
+  if(typeof extra!=='object'||Array.isArray(extra)) throw new Error('Invalid extra environment');
+  for(const [key,value] of Object.entries(extra)){
+    if(!/^[A-Z][A-Z0-9_]{0,99}$/.test(key)||typeof value!=='string'||value.length>8192||((protectedEnvironment.has(key)||allowedSecrets.has(key))&&key!=='TELEGRAM_NOTIFICATION_API_TOKEN')) throw new Error('Invalid extra environment');
+    if(/PASSWORD|CREDENTIAL|SECRET|TOKEN|PRIVATE_KEY/.test(key)&&!['ACCESS_BRIDGE_SERVICE_TOKENS','TELEGRAM_NOTIFICATION_API_TOKEN'].includes(key)) throw new Error('Credentials require Secret Manager');
+  }
+  if('TELEGRAM_NOTIFICATION_API_TOKEN' in extra && (!extra.TELEGRAM_NOTIFICATION_API_TOKEN||/[\r\n\x00]/.test(extra.TELEGRAM_NOTIFICATION_API_TOKEN))) throw new Error('Invalid Telegram token');
+  if('ACCESS_BRIDGE_SERVICE_TOKENS' in extra){
+    let ids:unknown;
+    try { ids=JSON.parse(extra.ACCESS_BRIDGE_SERVICE_TOKENS); } catch { throw new Error('Invalid Bridge identifiers'); }
+    if(!Array.isArray(ids)||ids.length<1||ids.length>100||ids.some(id=>typeof id!=='string'||!/^[A-Za-z0-9_.-]{1,255}$/.test(id))) throw new Error('Invalid Bridge identifiers');
+  }
   if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(c.project_id) || !/^[a-z]+-[a-z]+[0-9]$/.test(c.region)) throw new Error('Invalid project or region');
   if (!/^[a-f0-9]{40}$/.test(c.release_git_sha)) throw new Error('Invalid release SHA');
   const prefix=c.region+'-docker.pkg.dev/'+c.project_id+'/';
