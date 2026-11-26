@@ -1,3 +1,4 @@
+import { withReleaseManifest } from './manifest.ts';
 import { createRunner } from './runner.ts';
 export function verifiedDockerDigest(listing:string, sha:string):string {
   if(!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid release SHA');
@@ -25,4 +26,10 @@ export function submitAndVerifyRelease(runner:ReturnType<typeof createRunner>,pr
   const submission=runner.submitApiBuild(region,repository,sha);
   if(!submission.executed) return {executed:false as const};
   return resolveReleaseImage(runner,project,region,repository,sha);
+}
+
+export function buildRelease(root:string,project:string,region:string,repository:string,sha:string,apply=false,authorizeCharges=false,confirmProject?:string){
+  const runner=createRunner({project,cwd:root,apply,authorizeCharges,confirmProject});
+  const operation=()=>submitAndVerifyRelease(runner,project,region,repository,sha);
+  return apply?withReleaseManifest(root,sha,operation):operation();
 }
