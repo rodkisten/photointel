@@ -203,12 +203,11 @@ jobs:
           ci_run "Cloudflare: node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs" \
             node --test infra/cloudflare/cloud-run-proxy/worker.test.mjs
 
-      - name: "🐍 Validar sintaxe do script de deploy (manage)"
+      - name: "🟦 Validar sintaxe do publicador Manage"
         if: matrix.app == 'manage'
         id: check_7
         continue-on-error: true
-        run: |
-          python3 -m py_compile infra/scripts/deploy_manage.py
+        run: node --check scripts/ci/adapters/manage.ts
 
       - name: "📋 Consolidar resultado · ${{ matrix.app }}"
         if: ${{ always() }}
@@ -489,8 +488,7 @@ jobs:
           MANAGE_TERMINAL_GATEWAY_SECRET: ${{ secrets.MANAGE_TERMINAL_GATEWAY_SECRET }}
           MANAGE_MODAL_BILLING_TOKEN: ${{ secrets.MANAGE_MODAL_BILLING_TOKEN }}
         run: |
-          ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" \
-            python3 -m infra.scripts.deploy_manage apply
+          node scripts/ci/adapters/manage.ts
 
       - name: "🧹 Limpar configuração temporária"
         if: always()
