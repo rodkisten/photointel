@@ -68,7 +68,29 @@ export function job(c:Config,mode:typeof modes[number]){
     }]}}
   }}}};
 }
+export function validate(c:Config): void {
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(c.project_id) || !/^[a-z]+-[a-z]+[0-9]$/.test(c.region)) throw new Error('Invalid project or region');
+  if (!/^[a-f0-9]{40}$/.test(c.release_git_sha)) throw new Error('Invalid release SHA');
+  const prefix=c.region+'-docker.pkg.dev/'+c.project_id+'/';
+  if (!c.image.startsWith(prefix) || !/^[a-z][a-z0-9-]{0,61}[a-z0-9]\/api(?::[a-f0-9]{40}|@sha256:[a-f0-9]{64})$/.test(c.image.slice(prefix.length))) throw new Error('Invalid immutable image');
+  if (!c.image.includes('@') && !c.image.endsWith(':'+c.release_git_sha)) throw new Error('Image SHA mismatch');
+  for(const value of [c.frontend_origin,c.api_origin,c.storage_endpoint]){
+    const u=new URL(value);
+    if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!=='/') throw new Error('Invalid HTTPS origin');
+  }
+  if(!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(c.access_team_domain)||!c.access_audience||c.access_audience.length>256) throw new Error('Invalid Access identity');
+  if(!Array.isArray(c.access_allowed_emails)||c.access_allowed_emails.length<1||c.access_allowed_emails.length>100||c.access_allowed_emails.some(e=>typeof e!=='string'||!/^\S+@\S+$/.test(e))) throw new Error('Invalid Access allowlist');
+  if(!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(c.storage_bucket)) throw new Error('Invalid storage bucket');
+  const limits: Array<[number,number,number]>=[[c.api_max_instances,1,30],[c.api_concurrency,1,80],[c.api_timeout_seconds,10,3600],[c.job_task_count,1,32],[c.job_parallelism,1,32],[c.job_max_jobs,1,10000],[c.job_deadline_seconds,30,82800],[c.job_timeout_seconds,60,86400],[c.database_catalog_limit,100,10000000]];
+  if(limits.some(([v,min,max])=>!Number.isInteger(v)||v<min||v>max)||c.job_parallelism>c.job_task_count||c.job_deadline_seconds+60>c.job_timeout_seconds) throw new Error('Invalid execution limits');
+  if(!['limited','full'].includes(c.database_profile)||(c.database_profile==='limited'&&c.database_catalog_limit>10000)) throw new Error('Invalid database profile');
+  for(const key of ['DATABASE_URL','MIGRATION_DATABASE_URL','STORAGE_ACCESS_KEY','STORAGE_SECRET_KEY','BRIDGE_TOKEN_PEPPER','BRIDGE_ENROLLMENT_SECRET','ICLOUD_SESSION_KEY']) if(!c.secrets[key]) throw new Error('Missing secret reference: '+key);
+  for(const flag of [c.enable_gpu,c.enable_icloud]) if(flag!==undefined&&typeof flag!=='boolean') throw new Error('Invalid feature flag');
+  if(c.enable_icloud&&(!c.icloud_account||!c.icloud_library)) throw new Error('Missing iCloud metadata');
+  if(c.enable_gpu&&(!c.secrets.MODAL_TOKEN||!c.secrets.MODAL_PROXY_KEY||!c.secrets.MODAL_PROXY_SECRET||!c.extra_environment?.MODAL_ENDPOINT?.startsWith('https://'))) throw new Error('Missing GPU configuration');
+}
 export function render(c:Config, directory:string){
+  validate(c);
   mkdirSync(directory,{recursive:true,mode:0o700});
   const docs=[['api',service(c)],...modes.map(mode=>[mode,job(c,mode)])] as const;
   for(const [name,doc] of docs) writeFileSync(join(directory,'photointel-'+name+'.json'),JSON.stringify(doc,null,2)+'\n',{mode:0o600});
