@@ -320,6 +320,8 @@ jobs:
         uses: ./.github/actions/gcp-config
         with:
           mode: prepare
+          engine: typescript
+          target: cloudflare
           config-env: ${{ vars.GCP_CONFIG_ENV }}
           confirm-project: photointel
           release-sha: ${{ github.sha }}

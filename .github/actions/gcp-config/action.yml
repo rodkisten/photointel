@@ -1,6 +1,10 @@
 name: "🧩 [GCP CONFIG] Prepare / clean"
 description: "Reuse the production Environment GCP_CONFIG_ENV parser and securely remove temporary deployment files."
 inputs:
+  target:
+    description: "Configuration consumer: cloudflare or cloud-run"
+    required: false
+    default: cloud-run
   engine:
     description: "Configuration engine: legacy Python or TypeScript (opt-in during parity migration)"
     required: false
@@ -44,7 +48,12 @@ runs:
       env:
         MODE: ${{ inputs.mode }}
         ENGINE: ${{ inputs.engine }}
+        TARGET: ${{ inputs.target }}
       run: |
+        case "$TARGET" in
+          cloudflare|cloud-run) ;;
+          *) echo "::error::Unsupported configuration target" >&2; exit 2 ;;
+        esac
         case "$ENGINE" in
           python|typescript) ;;
           *) echo "::error::Unsupported configuration engine" >&2; exit 2 ;;
@@ -112,15 +121,17 @@ runs:
         GCP_CONFIG_ENV: ${{ inputs.config-env }}
         CONFIRM_PROJECT: ${{ inputs.confirm-project }}
         RELEASE_SHA: ${{ inputs.release-sha }}
+        CONFIG_TARGET: ${{ inputs.target }}
         PHOTOINTEL_GITHUB_SECRETS_JSON: ${{ inputs.github-secrets-json }}
         PHOTOINTEL_GITHUB_VARS_JSON: ${{ inputs.github-vars-json }}
       run: |
         set -euo pipefail
         umask 077
         node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
-        # Legacy renderer remains necessary until the generated deployment artifacts
-        # are fully migrated. Do not run the legacy configuration parser twice.
-        python3 -m infra.gcp.manage render
+        # Cloudflare adapters consume config.local.json directly.
+        if [[ "$CONFIG_TARGET" == cloud-run ]]; then
+          python3 -m infra.gcp.manage render
+        fi
         node --input-type=module -e '
           import {appendFileSync} from "node:fs";
           import {parseEnvironment} from "./packages/env/src/index.ts";

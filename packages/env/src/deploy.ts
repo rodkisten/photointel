@@ -269,6 +269,10 @@ export function renderDeployConfiguration(
   return {
     ...structured,
     project_id: project, region, repository,
+    ...Object.fromEntries(['frontend_origin', 'access_team_domain', 'access_audience', 'worker_name', 'worker_domain'].flatMap(key => {
+      const value = structured[key] ?? entries[key.toUpperCase()] ?? entries[key];
+      return typeof value === 'string' && value ? [[key, value]] : [];
+    })),
     extra_environment: mergedRuntime,
     cloudflare_environment: config.cloudflare,
     workflows: config.workflows,
