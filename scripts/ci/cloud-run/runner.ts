@@ -17,7 +17,7 @@ export function createRunner(options:RunnerOptions) {
       cwd, shell:false, encoding:'utf8', timeout, killSignal:'SIGKILL', maxBuffer:8*1024*1024, stdio:['ignore','pipe','pipe'],
       env:{...process.env,CLOUDSDK_CORE_DISABLE_PROMPTS:'1'}
     });
-    if(result.error||result.status!==0) throw new Error('gcloud operation failed: '+(result.error?.code??result.status??result.signal??'unknown'));
+    if(result.error||result.status!==0) throw new Error('gcloud operation failed: '+((result.error as NodeJS.ErrnoException | undefined)?.code??result.status??result.signal??'unknown'));
     return {executed:true,stdout:result.stdout};
   }
   function region(value:string){if(!/^[a-z]+-[a-z]+[0-9]$/.test(value))throw new Error('Invalid region');return value;}
