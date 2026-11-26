@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
+import { publishWorker } from './cloudflare.ts';
 import { resolve } from 'node:path';
 import { validateTerminal } from '../../../packages/env/src/deploy.ts';
 
@@ -61,16 +61,5 @@ const secrets: Record<string,string>={GITHUB_API_TOKEN:github,CLOUDFLARE_API_TOK
 const mapping={MANAGE_GITHUB_WEBHOOK_SECRET:'GITHUB_WEBHOOK_SECRET',MANAGE_GCP_BUILD_RELEASE_URL:'GCP_BUILD_WEBHOOK_RELEASE_URL',MANAGE_GCP_BUILD_PROVISION_URL:'GCP_BUILD_WEBHOOK_PROVISION_URL',MANAGE_GCP_BUILD_CALLBACK_SECRET:'GCP_BUILD_CALLBACK_SECRET',MANAGE_XRELAY_NOTIFICATION_URL:'XRELAY_NOTIFICATION_URL',MANAGE_XRELAY_NOTIFICATION_TOKEN:'XRELAY_NOTIFICATION_TOKEN',MANAGE_MODAL_BILLING_TOKEN:'MODAL_BILLING_TOKEN',MANAGE_SENTRY_API_TOKEN:'SENTRY_API_TOKEN'};
 for(const [key,binding] of Object.entries(mapping)) if(refs[key]||process.env[key]) secrets[binding]=secret(key);
 if(extra.MANAGE_TERMINAL_GATEWAY_URL||extra.MANAGE_TERMINAL_VMS||refs.MANAGE_TERMINAL_GATEWAY_SECRET||process.env.MANAGE_TERMINAL_GATEWAY_SECRET){if(!extra.MANAGE_TERMINAL_VMS||extra.MANAGE_TERMINAL_GATEWAY_URL!=='https://photointel-ssh.migos.club')throw new Error('Incomplete terminal config');const v=secret('MANAGE_TERMINAL_GATEWAY_SECRET');if(v.length<32)throw new Error('Invalid terminal secret');secrets.MANAGE_TERMINAL_GATEWAY_SECRET=v;}
-const file=resolve(cwd,'.manage-deploy-'+process.pid+'.json');
-const env={PATH:process.env.PATH,HOME:process.env.HOME,CI:'true',WRANGLER_SEND_METRICS:'false',CLOUDFLARE_ACCOUNT_ID:account,CLOUDFLARE_API_TOKEN:deploy};
-function run(args:string[],input?:string){const p=spawnSync('npx',['--yes','wrangler@4',...args],{cwd,env,input,encoding:'utf8',timeout:300000});if(p.status!==0)throw new Error('Wrangler operation failed: '+args.slice(0,2).join(' '));}
-const tag='release-'+(process.env.GITHUB_RUN_ID||'local')+'-'+(process.env.GITHUB_RUN_ATTEMPT||'1');
-if(!/^[a-z0-9-]{1,63}$/i.test(tag))throw new Error('Invalid release tag');
-try{
-writeFileSync(file,JSON.stringify({name,main:'src/worker.ts',compatibility_date:'2026-11-01',workers_dev:false,preview_urls:false,observability:{enabled:true,logs:{enabled:true,invocation_logs:false}},assets:{directory:'./dist',binding:'ASSETS',run_worker_first:true,not_found_handling:'single-page-application'},routes:[],keep_vars:true,d1_databases:[{binding:'DEPLOY_DB',database_name:name,database_id:db[0].uuid,migrations_dir:'./migrations'}],vars}),{mode:0o600,flag:'wx'});
-run(['d1','migrations','apply','DEPLOY_DB','--remote','--config',file]);
-run(['versions','upload','--config',file,'--tag',tag,'--keep-vars']);
-run(['versions','deploy','--config',file,'--version-tag',tag,'--yes']);
-for(const [key,value] of Object.entries(secrets))run(['secret','put',key,'--name',name,'--config',file],value+'\n');
+await publishWorker({cwd,account,token:deploy,config:{name,main:'src/worker.ts',compatibility_date:'2026-11-01',workers_dev:false,preview_urls:false,observability:{enabled:true,logs:{enabled:true,invocation_logs:false}},assets:{directory:'./dist',binding:'ASSETS',run_worker_first:true,not_found_handling:'single-page-application'},routes:[],keep_vars:true,d1_databases:[{binding:'DEPLOY_DB',database_name:name,database_id:db[0].uuid,migrations_dir:'./migrations'}],vars},migrationBinding:'DEPLOY_DB',secrets});
 console.log('Manage published: https://'+domain);
-}finally{if(existsSync(file))unlinkSync(file);}
