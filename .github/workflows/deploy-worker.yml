@@ -16,6 +16,8 @@ on:
       - 'packages/contracts/**'
       - 'packages/env/**'
       - 'infra/cloudflare/**'
+      - 'scripts/ci/**'
+      - 'rodverse.config.ts'
       - 'infra/scripts/prepare_workflow_env.py'
       - 'infra/scripts/cloudflare_setup.py'
       - 'infra/scripts/diagnose_access.py'
@@ -36,6 +38,8 @@ on:
       - 'packages/contracts/**'
       - 'packages/env/**'
       - 'infra/cloudflare/**'
+      - 'scripts/ci/**'
+      - 'rodverse.config.ts'
       - 'infra/scripts/prepare_workflow_env.py'
       - 'infra/scripts/cloudflare_setup.py'
       - 'infra/scripts/diagnose_access.py'
@@ -254,19 +258,21 @@ jobs:
         if: success() && matrix.app == 'web' && github.ref == 'refs/heads/main' && inputs.action != 'build'
         uses: actions/upload-artifact@v4
         with:
-          name: web-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_attempt }}
+          name: web-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
           path: apps/web/dist/
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
 
       - name: "📦 Publicar artefato Manage"
         if: success() && matrix.app == 'manage' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.action != 'build'
         uses: actions/upload-artifact@v4
         with:
-          name: manage-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_attempt }}
+          name: manage-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
           path: apps/manage/dist/
           if-no-files-found: error
           retention-days: 7
+          overwrite: true
 
   # ============================================================================
   # 3. Deploy em Produção · Photos Web Worker (apps/web)
@@ -337,7 +343,7 @@ jobs:
         id: notify_observed_004
         uses: actions/download-artifact@v4
         with:
-          name: web-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_attempt }}
+          name: web-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
           path: apps/web/dist
 
       - name: "📄 Copiar regras de headers para dist/_headers"
@@ -441,7 +447,7 @@ jobs:
       - name: "📦 Recuperar artefato validado"
         uses: actions/download-artifact@v4
         with:
-          name: manage-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_attempt }}
+          name: manage-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
           path: apps/manage/dist
 
       - name: "🚀 Publicar Manage Worker, Access e domínio"
