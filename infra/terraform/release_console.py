@@ -55,20 +55,17 @@ def last_frontend(app: str) -> str:
     saved = [binding.get("text", "") for binding in settings.get("bindings", []) if binding.get("name") == key and binding.get("type") == "plain_text"]
     if len(saved) == 1 and SHA.fullmatch(saved[0]):
         return saved[0]
-    # Bootstrap compatibility: old publications predate historical-source input.
-    runs = gh("api", "repos/rodkisten/photointel/actions/workflows/deploy-worker.yml/runs?branch=main&status=success&per_page=100")
-    expected = "🌐 Publish Photos Worker" if app == "web" else "🧰 Publish Manage Worker"
-    for run in runs["workflow_runs"]:
-        jobs = gh("api", f"repos/rodkisten/photointel/actions/runs/{run['id']}/jobs?per_page=100")
-        if any(job["name"] == expected and job["conclusion"] == "success" for job in jobs["jobs"]):
-            return run["head_sha"]
-    raise RuntimeError("No published frontend release found. Choose main.")
+    # A successful workflow does not prove which historical source was published.
+    raise RuntimeError("No verified frontend source binding found. Choose main.")
 
 
 def frontend_dispatch(app: str, sha: str, action: str) -> None:
     request = f"release-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}-{app}"
     title = f"🌐 Cloudflare · {action} · {app} · {request}"
-    endpoint = "repos/rodkisten/photointel/actions/workflows/deploy-worker.yml"
+    repository = os.environ.get("GITHUB_REPOSITORY", "rodverse/rodverse")
+    if repository != "rodverse/rodverse":
+        raise ValueError("Unexpected release repository")
+    endpoint = f"repos/{repository}/actions/workflows/release.yml"
     
     with auto_step(f"Disparando Deploy Frontend ({app})"):
         gh("api", "--method", "POST", endpoint + "/dispatches", "--input", "-", payload={
@@ -85,10 +82,15 @@ def frontend_dispatch(app: str, sha: str, action: str) -> None:
                     run = matches[0]
                     logger.info(f"🔗 URL: {run['html_url']}")
             else:
-                run = gh("api", f"repos/rodkisten/photointel/actions/runs/{run['id']}")
+                run = gh("api", f"repos/{repository}/actions/runs/{run['id']}")
                 if run["status"] == "completed":
                     if run["conclusion"] != "success":
                         raise RuntimeError("Frontend failed: " + run["html_url"])
+                    if action != "build":
+                        jobs = gh("api", f"repos/{repository}/actions/runs/{run['id']}/jobs?per_page=100")
+                        expected = f"🚀 Publish · {app}"
+                        if not any(job["name"].split(" / ")[-1] == expected and job["conclusion"] == "success" for job in jobs["jobs"]):
+                            raise RuntimeError("Publication not confirmed: " + run["html_url"])
                     return
             time.sleep(15)
         raise RuntimeError("Frontend timed out; inspect the linked run before retrying")
