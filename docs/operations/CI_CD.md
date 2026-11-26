@@ -96,3 +96,7 @@ If a workflow is absent, check YAML syntax, reusable workflow permissions, trigg
 - Cross-workflow artifact reuse, production maintenance consolidation and final legacy deletion remain pending.
 
 No production deployment or merge is implied by this document.
+
+## Manage integration
+
+The curated Deploys view now exposes release.yml and maintenance.yml. The provider supplies explicit dispatch choices for both, and retains the legacy frontend dispatch schema. Worker configuration reconciliation selects release.yml with app=web and action=build-and-deploy. Existing Manage-specific reconciliation and Terraform release console remain legacy consumers pending migration.

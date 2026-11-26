@@ -55,7 +55,7 @@ describe('automatic configuration impact planner', () => {
     const after = { ...before, workflows: { worker: { name: 'photointel-new' } } };
     const plan = planConfigChange(JSON.stringify(before), JSON.stringify(after));
     expect(plan.targets).toEqual(['worker']);
-    expect(plan.workflows.map((x) => x.file)).toEqual(['deploy-worker.yml']);
+    expect(plan.workflows.map((x) => x.file)).toEqual(['release.yml']);
   });
 
   it('does not run workflows for whitespace and JSON formatting changes', () => {

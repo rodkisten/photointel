@@ -119,7 +119,7 @@ export function Deploys() {
   // Curated entry points reduce clutter without disabling recovery workflows.
   const primaryWorkflows = new Set([
     'release.yml', 'ci.yml', 'tf-production.yml', 'tf-validate.yml',
-    'deploy-worker.yml', 'media-deploy.yml', 'modal-gpu-deploy.yml',
+    'maintenance.yml', 'media-deploy.yml', 'modal-gpu-deploy.yml',
     'gcp-health.yml', 'gcp-migrate.yml', 'gcp-artifact-cleanup.yml',
   ]);
   const filteredWorkflows = (workflows.data?.items || [])
