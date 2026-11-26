@@ -28,6 +28,7 @@ on:
       - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/_build.yml'
+      - '.github/workflows/_deploy.yml'
 
   pull_request:
     paths:
@@ -52,6 +53,7 @@ on:
       - '.github/actions/frontend-build/**'
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/_build.yml'
+      - '.github/workflows/_deploy.yml'
 
   workflow_dispatch:
     inputs:
@@ -146,152 +148,14 @@ jobs:
   # 3. Deploy em Produção · Photos Web Worker (apps/web)
   # ============================================================================
   deploy:
-    name: "🚀 Publish · ${{ matrix.app }}"
     needs: [detect-changes, preflight]
     if: ${{ github.ref == 'refs/heads/main' && inputs.action != 'build' && needs.preflight.result == 'success' && (github.event_name == 'workflow_dispatch' || contains(fromJSON(needs.detect-changes.outputs.apps), 'web')) }}
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 25
     permissions:
       contents: read
       actions: read
       id-token: write
-    strategy:
-      fail-fast: false
-      matrix:
-        app: ${{ fromJSON(github.event_name == 'workflow_dispatch' && needs.detect-changes.outputs.apps || '["web"]') }}
-    env:
-      CONFIRM_PROJECT: photointel
-    steps:
-      - name: "📥 Baixar código"
-        id: notify_observed_001
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: "📌 Resolver SHA de origem"
-        uses: ./.github/actions/frontend-source
-        with:
-          sha: ${{ inputs.sha }}
-
-      - name: "🧰 Configurar Node.js 26"
-        uses: actions/setup-node@v7
-        with:
-          node-version: '26'
-          cache: npm
-          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
-
-      - name: "⚙️ Preparar configuração de produção (GCP)"
-        if: matrix.app == 'web'
-        id: config
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: prepare
-          engine: typescript
-          target: cloudflare
-          config-env: ${{ vars.GCP_CONFIG_ENV }}
-          confirm-project: photointel
-          release-sha: ${{ github.sha }}
-
-      - name: "🔐 Autenticar no GCP via Workload Identity"
-        if: matrix.app == 'web'
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
-          service_account: ${{ steps.config.outputs.service_account }}
-
-      - name: "🧰 Configurar Google Cloud SDK (gcloud)"
-        if: matrix.app == 'web'
-        uses: google-github-actions/setup-gcloud@v3
-
-      - name: "🟦 Renderizar configuração TypeScript"
-        if: matrix.app == 'manage'
-        env:
-          GCP_CONFIG_ENV: ${{ vars.GCP_CONFIG_ENV }}
-          RELEASE_SHA: ${{ github.sha }}
-        run: |
-          umask 077
-          node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
-
-      - name: "📦 Instalar dependências do frontend (manage)"
-        if: matrix.app == 'manage'
-        run: |
-          npm --prefix apps/manage ci
-
-      - name: "📦 Recuperar artefato validado"
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.app }}-${{ env.PHOTOINTEL_BUILD_SHA }}-${{ github.run_id }}
-          path: apps/${{ matrix.app }}/dist
-
-      - name: Reconstruct public build configuration
-        run: node scripts/ci/${{ matrix.app == 'web' && 'photos' || 'manage' }}-browser-env.ts
-
-      - name: Verify artifact provenance
-        run: |
-          node scripts/ci/frontend-artifact.ts verify ${{ matrix.app }}
-          rm -f apps/${{ matrix.app }}/dist/.rodverse-artifact.json
-
-      - name: "📄 Copiar regras de headers para dist/_headers"
-        if: matrix.app == 'web'
-        id: notify_observed_005
-        run: |
-          cp infra/cloudflare/worker-headers apps/web/dist/_headers
-
-      - name: "🚀 Publicar Photos Worker no Cloudflare"
-        if: matrix.app == 'web'
-        id: notify_observed_006
-        env:
-          WORKFLOW_SECRET_SOURCE: github
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CONFIRM_PROJECT: photointel
-        run: |
-          node scripts/ci/adapters/photos.ts
-
-      - name: "🚀 Publicar Manage Worker, Access e domínio"
-        if: matrix.app == 'manage'
-        env:
-          WORKFLOW_SECRET_SOURCE: github
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          MANAGE_GITHUB_API_TOKEN: ${{ secrets.MANAGE_GITHUB_API_TOKEN }}
-          MANAGE_CLOUDFLARE_API_TOKEN: ${{ secrets.MANAGE_CLOUDFLARE_API_TOKEN }}
-          MANAGE_SENTRY_API_TOKEN: ${{ secrets.MANAGE_SENTRY_API_TOKEN }}
-          MANAGE_GITHUB_WEBHOOK_SECRET: ${{ secrets.MANAGE_GITHUB_WEBHOOK_SECRET }}
-          MANAGE_GCP_BUILD_RELEASE_URL: ${{ secrets.MANAGE_GCP_BUILD_RELEASE_URL }}
-          MANAGE_GCP_BUILD_PROVISION_URL: ${{ secrets.MANAGE_GCP_BUILD_PROVISION_URL }}
-          MANAGE_GCP_BUILD_CALLBACK_SECRET: ${{ secrets.MANAGE_GCP_BUILD_CALLBACK_SECRET }}
-          MANAGE_XRELAY_NOTIFICATION_URL: ${{ secrets.MANAGE_XRELAY_NOTIFICATION_URL }}
-          MANAGE_XRELAY_NOTIFICATION_TOKEN: ${{ secrets.MANAGE_XRELAY_NOTIFICATION_TOKEN }}
-          MANAGE_TERMINAL_GATEWAY_SECRET: ${{ secrets.MANAGE_TERMINAL_GATEWAY_SECRET }}
-          MANAGE_MODAL_BILLING_TOKEN: ${{ secrets.MANAGE_MODAL_BILLING_TOKEN }}
-        run: |
-          node scripts/ci/adapters/manage.ts
-
-      - name: "🧹 Limpar configuração temporária (GCP)"
-        if: always() && matrix.app == 'web'
-        uses: ./.github/actions/gcp-config
-        with:
-          mode: cleanup
-
-      - name: "🧹 Limpar configuração temporária"
-        if: always() && matrix.app == 'manage'
-        run: rm -f infra/gcp/config.local.json
-
-      - name: "🔔 Notificar resultado final do deploy"
-        if: ${{ always() && steps.notify_observed_001.outcome == 'success' }}
-        continue-on-error: true
-        uses: ./.github/actions/notify
-        with:
-          action: end
-          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
-          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
-          workflow: ${{ github.workflow }}
-          job: ${{ github.job }}
-          outcome: ${{ job.status }}
-
-  # ============================================================================
-  # 4. Deploy em Produção · Manage Worker (apps/manage)
-  # ============================================================================
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      apps: ${{ github.event_name == 'workflow_dispatch' && needs.detect-changes.outputs.apps || '["web"]' }}
+      sha: ${{ inputs.sha || '' }}
+    secrets: inherit
