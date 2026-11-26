@@ -736,9 +736,8 @@ jobs:
       - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
         id: notify_observed_046
         continue-on-error: true
-        uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact --no-banner /repo
 
       - name: "📋 Consolidar falhas · security"
         if: ${{ always() }}
