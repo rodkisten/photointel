@@ -266,13 +266,43 @@ export function renderDeployConfiguration(
     .map(([key, item]) => [key, item.value]));
   const mergedRuntime = {...config.runtime, ...directRuntime};
   validateTerminal(mergedRuntime);
+  const metadata: Record<string, unknown> = {};
+  const strings = ['frontend_origin','api_origin','access_team_domain','access_audience','storage_endpoint','storage_bucket','worker_name','worker_domain','release_branch','database_profile','icloud_account','icloud_library'];
+  const integers = ['api_max_instances','api_concurrency','api_timeout_seconds','job_task_count','job_parallelism','job_max_jobs','job_deadline_seconds','job_timeout_seconds','database_catalog_limit'];
+  const lookup = (key: string): unknown => structured[key] ?? entries[key.toUpperCase()] ?? entries[key];
+  for (const key of strings) {
+    const value = lookup(key);
+    if (value !== undefined) {
+      if (typeof value !== 'string') throw new Error('Invalid string metadata: ' + key);
+      metadata[key] = value;
+    }
+  }
+  for (const key of integers) {
+    const value = lookup(key);
+    if (value === undefined) continue;
+    const rawValue = typeof value === 'string' ? value.replace(/^json:/, '') : value;
+    const number = typeof rawValue === 'number' ? rawValue : typeof rawValue === 'string' && /^-?[0-9]+$/.test(rawValue) ? Number(rawValue) : NaN;
+    if (!Number.isSafeInteger(number)) throw new Error('Invalid integer metadata: ' + key);
+    metadata[key] = number;
+  }
+  for (const key of ['enable_gpu','enable_icloud']) {
+    const value = lookup(key);
+    if (value === undefined) continue;
+    const val = typeof value === 'string' ? value.replace(/^json:/, '') : value;
+    if (val !== true && val !== false && val !== 'true' && val !== 'false') throw new Error('Invalid boolean metadata: ' + key);
+    metadata[key] = val === true || val === 'true';
+  }
+  const emails = lookup('access_allowed_emails');
+  if (emails !== undefined) {
+    const value: unknown = typeof emails === 'string' ? JSON.parse(emails.replace(/^json:/, '')) : emails;
+    if (!Array.isArray(value) || value.some(email => typeof email !== 'string')) throw new Error('Invalid Access email metadata');
+    metadata.access_allowed_emails = value;
+  }
+  const publicStructured = Object.fromEntries(Object.entries(structured).filter(([key]) => !/^GCP_(?:BOOTSTRAP_|DEPLOY_|WORKLOAD_IDENTITY_)/i.test(key)));
   return {
-    ...structured,
+    ...publicStructured,
     project_id: project, region, repository,
-    ...Object.fromEntries(['frontend_origin', 'access_team_domain', 'access_audience', 'worker_name', 'worker_domain'].flatMap(key => {
-      const value = structured[key] ?? entries[key.toUpperCase()] ?? entries[key];
-      return typeof value === 'string' && value ? [[key, value]] : [];
-    })),
+    ...metadata,
     extra_environment: mergedRuntime,
     cloudflare_environment: config.cloudflare,
     workflows: config.workflows,
