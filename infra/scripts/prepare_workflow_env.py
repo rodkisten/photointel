@@ -190,6 +190,11 @@ def explain_secret_access_failure(key: str, name: str, version: str, stderr: byt
 
 
 def secret_value(config: dict, key: str) -> str:
+    if os.environ.get("WORKFLOW_SECRET_SOURCE") == "github":
+        value = os.environ.get(key, "")
+        if not value or len(value) > 4096 or any(c in value for c in ("\r", "\n", "\x00")):
+            raise WorkflowEnvironmentError(f"Missing or invalid GitHub Actions secret {key}")
+        return value
     references = config.get("workflow_secrets") or {}
     ref = references.get(key)
     if not isinstance(ref, dict) or set(ref) != {"name", "version"}:

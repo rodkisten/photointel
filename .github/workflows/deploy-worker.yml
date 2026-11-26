@@ -503,6 +503,21 @@ jobs:
 
       - name: "🚀 Publicar Manage Worker, Access e domínio"
         if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          WORKFLOW_SECRET_SOURCE: github
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MANAGE_GITHUB_API_TOKEN: ${{ secrets.MANAGE_GITHUB_API_TOKEN }}
+          MANAGE_CLOUDFLARE_API_TOKEN: ${{ secrets.MANAGE_CLOUDFLARE_API_TOKEN }}
+          MANAGE_SENTRY_API_TOKEN: ${{ secrets.MANAGE_SENTRY_API_TOKEN }}
+          MANAGE_GITHUB_WEBHOOK_SECRET: ${{ secrets.MANAGE_GITHUB_WEBHOOK_SECRET }}
+          MANAGE_GCP_BUILD_RELEASE_URL: ${{ secrets.MANAGE_GCP_BUILD_RELEASE_URL }}
+          MANAGE_GCP_BUILD_PROVISION_URL: ${{ secrets.MANAGE_GCP_BUILD_PROVISION_URL }}
+          MANAGE_GCP_BUILD_CALLBACK_SECRET: ${{ secrets.MANAGE_GCP_BUILD_CALLBACK_SECRET }}
+          MANAGE_XRELAY_NOTIFICATION_URL: ${{ secrets.MANAGE_XRELAY_NOTIFICATION_URL }}
+          MANAGE_XRELAY_NOTIFICATION_TOKEN: ${{ secrets.MANAGE_XRELAY_NOTIFICATION_TOKEN }}
+          MANAGE_TERMINAL_GATEWAY_SECRET: ${{ secrets.MANAGE_TERMINAL_GATEWAY_SECRET }}
+          MANAGE_MODAL_BILLING_TOKEN: ${{ secrets.MANAGE_MODAL_BILLING_TOKEN }}
         run: |
           ci_run "Cloudflare: python3 -m infra.scripts.deploy_manage apply" \
             python3 -m infra.scripts.deploy_manage apply
