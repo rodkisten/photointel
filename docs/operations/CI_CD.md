@@ -158,3 +158,5 @@ Native media release candidate: media-release.ts preserves existing digest mappi
 Preview artifact reuse skips static builds, not Worker dependency resolution: Manage needs its lockfile dependencies for Wrangler bundling. Install with lifecycle scripts disabled in reuse mode. Log diagnostics assert the actual localized completion message. Security audit findings remain blocking until individually reviewed.
 
 Security audit triage: the historical scan reported 23 findings (JWT fixture, generic API key matches in tests/docs/vendor code, and GCP API key matches in historical browser assets). These are candidates for individual verification, not approved exceptions. Confirm credential restrictions and rotate any real exposed credential before considering exact fingerprint exceptions. CI retains full-history blocking scans and independently audits exported Python runtime dependencies; summaries expose only rule counts, never matched values.
+
+See [historical secret scan triage](SECURITY_TRIAGE.md) for evidence and closure requirements.
