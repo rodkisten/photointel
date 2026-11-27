@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {latestId,validateMetadata} from './saved-plan.ts';
+const prefix='gs://bucket/terraform-reviewed-plans/gcp/';
+assert.equal(latestId(prefix+'9007199254740993/manifest.json\n'+prefix+'9007199254740992/manifest.json',prefix),'9007199254740993');
+assert.throws(()=>latestId('unrelated',prefix));
+const now=Date.now(), expected={scope:'gcp',sha:'a'.repeat(40)};
+const metadata={...expected,run_id:'42',created_at:new Date(now).toISOString(),plan_sha256:'b'.repeat(64)};
+validateMetadata(metadata,expected,'42',now);
+assert.throws(()=>validateMetadata(metadata,expected,'43',now));
+assert.throws(()=>validateMetadata({...metadata,sha:'bad'},expected,'42',now));
+assert.throws(()=>validateMetadata(metadata,expected,'42',now+86400001));
+assert.throws(()=>validateMetadata({...metadata,created_at:'invalid'},expected,'42',now));
+assert.throws(()=>validateMetadata({...metadata,plan_sha256:'bad'},expected,'42',now));
+console.log('Saved plan offline contracts passed');
