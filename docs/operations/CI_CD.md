@@ -125,3 +125,6 @@ Authenticated verification: engine=verify checks the active downstream workflow 
 
 ## Legacy removal inventory
 The old Python CI selector and its regression suite are retired; ci-pretty-logs now exercises the TypeScript selector. Remaining Python consumers include release console, GCP bootstrap/deploy/validation, media deploy, Terraform API/Cloudflare release adapters, configuration preparation, diagnostics and notification tooling. Keep application migration and runtime Python. Remove each orchestration module only after its callers and regression contracts migrate. Authenticated verification remains required before switching the release engine.
+
+## Workflow consolidation
+`maintenance.yml` now owns native Cloud Run typechecking, offline parity, release rehearsal and manual synthetic planning. The standalone `cloud-run-parity.yml` is removed; its checks run as part of Maintenance. Existing production and privileged workflows are unchanged. Update any external required-check references to the new Maintenance job before merging.
