@@ -38,7 +38,7 @@ export function buildMediaRelease(root:string,project:string,region:string,repos
   const runner=createRunner({project,cwd:root,apply,authorizeCharges,confirmProject});
   const submission=runner.submitMediaBuild(region,repository,sha);
   if(!submission.executed) return {executed:false as const};
-  const images=['media-image','media-video'] as const;
+  const images=['media-image','media-video','media-imagor'] as const;
   return {executed:true as const,images:images.map(kind=>{
     const result=runner.listImages(region,repository,kind);
     if(!result.executed) throw new Error('Registry verification unavailable');

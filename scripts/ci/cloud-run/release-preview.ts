@@ -1,0 +1,11 @@
+import { parseArgs } from 'node:util';
+import { spawnSync } from 'node:child_process';
+import { selectRelease,type Selection } from './release-console.ts';
+import { validateSource } from './catalog.ts';
+const {values}=parseArgs({strict:true,options:{target:{type:'string'},action:{type:'string'},sha:{type:'string'}}});
+const head=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000});
+if(head.status!==0) throw new Error('Cannot resolve local HEAD');
+const selection={target:values.target,action:values.action??'plan',source:'main',head:head.stdout.trim(),requested:values.sha} as Selection;
+const plan=selectRelease(selection);
+validateSource(process.cwd(),plan.sha,selection.head);
+console.log(JSON.stringify({mode:'offline-preview',target:selection.target,...plan,remoteOperations:false},null,2));
