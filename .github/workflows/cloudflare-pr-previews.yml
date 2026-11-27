@@ -7,8 +7,13 @@ on:
         description: "Número do PR aberto para publicar o preview"
         required: true
         type: number
+  workflow_call:
+    inputs:
+      reuse_build:
+        type: boolean
+        default: false
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    types: [closed]
 permissions:
   contents: read
 concurrency:
@@ -131,6 +136,7 @@ jobs:
           echo "No GCP Workload Identity Federation or Secret Manager access is used by this preview." >> "$GITHUB_STEP_SUMMARY"
           echo "Production deployment configuration is not rendered into preview builds." >> "$GITHUB_STEP_SUMMARY"
       - name: "📦 Install both apps"
+        if: inputs.reuse_build != true
         id: install
         run: |
           set -euo pipefail
@@ -148,11 +154,32 @@ jobs:
             fi
           done
       - name: "🏗 Build static Photos and Manage"
+        if: inputs.reuse_build != true
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
           command: |
             npm --prefix apps/web run build
             npm --prefix apps/manage run build
+      - name: Download Photos preview artifact
+        if: inputs.reuse_build == true
+        uses: actions/download-artifact@v4
+        with:
+          name: preview-web-${{ github.sha }}-${{ github.run_id }}
+          path: apps/web/dist
+      - name: Download Manage preview artifact
+        if: inputs.reuse_build == true
+        uses: actions/download-artifact@v4
+        with:
+          name: preview-manage-${{ github.sha }}-${{ github.run_id }}
+          path: apps/manage/dist
+      - name: Verify preview artifacts
+        if: inputs.reuse_build == true
+        env:
+          PHOTOINTEL_BUILD_SHA: ${{ github.sha }}
+        run: |
+          node scripts/ci/frontend-artifact.ts verify web
+          node scripts/ci/frontend-artifact.ts verify manage
+          rm apps/web/dist/.rodverse-artifact.json apps/manage/dist/.rodverse-artifact.json
       - name: "🔗 Enable preview URLs without enabling production workers.dev"
         if: steps.credentials.outputs.ready == 'true'
         shell: bash

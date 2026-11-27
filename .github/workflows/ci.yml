@@ -248,8 +248,9 @@ jobs:
     if: needs.changes.outputs.front_web == 'true' || needs.changes.outputs.front_manage == 'true'
     uses: ./.github/workflows/_build.yml
     with:
-      apps: ${{ needs.changes.outputs.frontend_matrix }}
+      apps: ${{ github.event_name == 'pull_request' && '["web","manage"]' || needs.changes.outputs.frontend_matrix }}
       production: false
+      preview: ${{ github.event_name == 'pull_request' }}
 
   # ============================================================================
   # 4. Testes de Integração & E2E
@@ -1407,3 +1408,15 @@ jobs:
           if failed:
               raise SystemExit(f"Required checks did not pass: {failed}")
           PY
+
+  publish-preview:
+    needs: frontend
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.frontend.result == 'success'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: ./.github/workflows/cloudflare-pr-previews.yml
+    with:
+      reuse_build: true
+    secrets: inherit
