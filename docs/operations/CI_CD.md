@@ -152,3 +152,5 @@ Native saved-plan candidate: scripts/ci/cloud-run/saved-plan.ts preserves the pr
 Saved-plan compatibility checks cover every persisted context field, future timestamps and rejection of incomplete uploads without a manifest. Production remains on the legacy implementation until a private storage round-trip is validated.
 
 Native plan review candidate: plan-review.ts checks saved plans for both scopes, blocks destruction and replacement, rejects unknown actions and incomplete plans, and never prints resource values. Maintenance runs offline checks. Production remains on the legacy review until parity is validated.
+
+Native media release candidate: media-release.ts preserves existing digest mappings for unchanged source SHA and renders declarative adoption imports, refusing missing managed Jobs or unknown execution settings. No provider calls or mutations are implemented yet. Maintenance checks offline contracts; Python remains authoritative for inventory and verification.

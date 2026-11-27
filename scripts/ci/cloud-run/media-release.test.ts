@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { releaseSettings, adoptionImports } from './media-release.ts';
+const sha='a'.repeat(40), next='b'.repeat(40), images={image:'digest'};
+const outputs={media_release:{value:{source_sha:sha,bucket:'photointel',images}}};
+assert.deepEqual(releaseSettings(outputs,'','').media_image_digests,images);
+assert.deepEqual(releaseSettings(outputs,next,'').media_image_digests,{});
+assert.throws(()=>releaseSettings(outputs,'bad',''));
+const job={spec:{template:{spec:{template:{spec:{containers:[{env:[{name:'R2_BUCKET'}]}]}}}}}};
+const address='google_cloud_run_v2_job.media["image"]';
+assert.equal(adoptionImports([],{image:job,video:null},'photointel','us-central1')[0].to,address);
+assert.deepEqual(adoptionImports([address],{image:job,video:null},'photointel','us-central1'),[]);
+assert.throws(()=>adoptionImports([address],{image:null,video:null},'photointel','us-central1'));
+assert.throws(()=>adoptionImports([],{image:{},video:null},'photointel','us-central1'));
+console.log('Media adoption contracts passed');
