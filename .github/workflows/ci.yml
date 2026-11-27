@@ -546,6 +546,12 @@ jobs:
         with:
           command: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
 
+      - name: "🔍 Audit runtime Python dependencies"
+        id: runtime_dependency_audit
+        if: steps.notify_observed_043.outcome == 'success'
+        continue-on-error: true
+        run: uvx pip-audit --requirement /tmp/runtime-requirements.txt
+
       - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
         id: notify_observed_046
         continue-on-error: true
@@ -556,6 +562,15 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" -v "$report_dir:/report" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact=100 --no-banner --report-format json --report-path /report/findings.json /repo || status=$?
           if [ -f "$report_dir/findings.json" ]; then
             jq -r '.[] | [.RuleID, .File, (.StartLine|tostring), .Commit] | @tsv' "$report_dir/findings.json"
+            {
+              echo "### Secret scan · findings by rule"
+              echo
+              echo '| Rule | Findings |'
+              echo '| --- | ---: |'
+              jq -r 'group_by(.RuleID)[] | "| " + .[0].RuleID + " | " + (length|tostring) + " |"' "$report_dir/findings.json"
+              echo
+              echo "Historical findings remain blocking until verified or remediated."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$status"
 
