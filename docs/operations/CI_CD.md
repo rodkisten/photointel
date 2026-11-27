@@ -128,3 +128,5 @@ The old Python CI selector and its regression suite are retired; ci-pretty-logs 
 
 ## Workflow consolidation
 `maintenance.yml` now owns native Cloud Run typechecking, offline parity, release rehearsal and manual synthetic planning. The standalone `cloud-run-parity.yml` is removed; its checks run as part of Maintenance. Existing production and privileged workflows are unchanged. Update any external required-check references to the new Maintenance job before merging.
+
+CI consolidation: terminal-validation, notify-validation, tf-env-package and hey-api-contract are now jobs in ci.yml. Their commands are retained. They use conservative existing CI planner flags (security for terminal, python/security for notify, frontend matrix for ENV/SDK). Manual scope all runs every migrated job. External required check names and direct dispatch callers must migrate to CI.
