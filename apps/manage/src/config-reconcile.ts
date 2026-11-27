@@ -321,7 +321,7 @@ export function planConfigChange(before: string, after: string): ConfigPlan {
     });
   }
   if (targets.has('worker'))
-    workflows.push({ file: 'release.yml', label: 'Cloudflare · frontend e Worker', inputs: { app: 'web', action: 'build-and-deploy' } });
+    workflows.push({ file: 'frontend-release.yml', label: 'Cloudflare · frontend e Worker', inputs: { app: 'web', action: 'build-and-deploy' } });
   if (targets.has('manage'))
     workflows.push({
       file: 'manage-deploy.yml',

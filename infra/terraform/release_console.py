@@ -65,7 +65,7 @@ def frontend_dispatch(app: str, sha: str, action: str) -> None:
     repository = os.environ.get("GITHUB_REPOSITORY", "rodverse/rodverse")
     if repository != "rodverse/rodverse":
         raise ValueError("Unexpected release repository")
-    endpoint = f"repos/{repository}/actions/workflows/release.yml"
+    endpoint = f"repos/{repository}/actions/workflows/frontend-release.yml"
     
     with auto_step(f"Disparando Deploy Frontend ({app})"):
         gh("api", "--method", "POST", endpoint + "/dispatches", "--input", "-", payload={

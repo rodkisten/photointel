@@ -27,7 +27,7 @@ permissions:
   id-token: write
 jobs:
   release:
-    uses: ./.github/workflows/release.yml
+    uses: ./.github/workflows/frontend-release.yml
     with:
       action: ${{ inputs.action }}
       app: ${{ inputs.app }}

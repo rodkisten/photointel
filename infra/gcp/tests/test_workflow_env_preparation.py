@@ -238,7 +238,7 @@ class WorkflowEnvTests(unittest.TestCase):
         self.assertIn("node scripts/ci/adapters/photos.ts", worker)
         self.assertIn("environment: production", worker)
         wrapper = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
-        self.assertIn("uses: ./.github/workflows/release.yml", wrapper)
+        self.assertIn("uses: ./.github/workflows/frontend-release.yml", wrapper)
         self.assertNotIn("wrangler pages", worker)
         self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
         for name in (

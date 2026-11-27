@@ -7,7 +7,7 @@ type Run={id:number;display_title:string;status:string;conclusion:string|null};
 type Job={name:string;conclusion:string|null};
 type Api=(path:string,payload?:unknown)=>unknown;
 const repo='repos/rodverse/rodverse';
-const endpoint=repo+'/actions/workflows/release.yml';
+const endpoint=repo+'/actions/workflows/frontend-release.yml';
 export const ghApi:Api=(path,payload)=>{
   const args=['api',path];
   if(payload!==undefined) args.push('--method','POST','--input','-');
