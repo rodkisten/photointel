@@ -41,7 +41,7 @@ assert_contains "$tmp/terraform-lock-diagnosis" '/terraform/language/state/locki
 echo 'PASS: Terraform state lock diagnosis'
 : > "$GITHUB_STEP_SUMMARY"
 ci_run "Success" bash -c 'echo complete' >"$tmp/success" 2>&1
-assert_contains "$tmp/success" "completed in"
+assert_contains "$tmp/success" "concluído em"
 assert_contains "$tmp/success" '::group::📄 Raw output · Success'
 [[ ! -s "$GITHUB_STEP_SUMMARY" ]] || { echo 'Success generated a failure summary' >&2; exit 1; }
 echo 'PASS: success and no failure summary'

@@ -154,3 +154,5 @@ Saved-plan compatibility checks cover every persisted context field, future time
 Native plan review candidate: plan-review.ts checks saved plans for both scopes, blocks destruction and replacement, rejects unknown actions and incomplete plans, and never prints resource values. Maintenance runs offline checks. Production remains on the legacy review until parity is validated.
 
 Native media release candidate: media-release.ts preserves existing digest mappings for unchanged source SHA and renders declarative adoption imports, refusing missing managed Jobs or unknown execution settings. No provider calls or mutations are implemented yet. Maintenance checks offline contracts; Python remains authoritative for inventory and verification.
+
+Preview artifact reuse skips static builds, not Worker dependency resolution: Manage needs its lockfile dependencies for Wrangler bundling. Install with lifecycle scripts disabled in reuse mode. Log diagnostics assert the actual localized completion message. Security audit findings remain blocking until individually reviewed.
