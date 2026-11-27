@@ -72,10 +72,12 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      id-token: write
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    outputs:
+      photos: ${{ steps.photos.outputs.url }}
+      manage: ${{ steps.manage.outputs.url }}
     steps:
       - name: "🔎 Validate manually selected PR"
         if: github.event_name == 'workflow_dispatch'
@@ -170,6 +172,7 @@ jobs:
             echo "✅ Preview URLs enabled for $worker; production workers.dev disabled"
           done
       - name: "🖼 Photos static preview, no production API"
+        id: photos
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/web
         run: |
@@ -179,9 +182,11 @@ jobs:
             exit 1
           }
           url="$(node ../../scripts/parse-wrangler-preview.mjs "$RUNNER_TEMP/photos-preview-output.txt")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "### Photos Preview" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
       - name: "🛡 Manage · Wrangler native preview"
+        id: manage
         if: steps.credentials.outputs.ready == 'true'
         working-directory: apps/manage
         run: |
@@ -201,6 +206,7 @@ jobs:
             exit 1
           fi
           pr="${{ inputs.pr_number || github.event.pull_request.number }}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
           printf '%s' "$url" > "$RUNNER_TEMP/manage-preview-url.txt" 
           npx --yes wrangler@4.135.0 kv key put "pr:$pr" --namespace-id 24ed6613990448e1b923d36dcaf1a3d7 --remote --path "$RUNNER_TEMP/manage-preview-url.txt"
           echo "- [x] 🔗 https://manage.migos.club/$pr/" >> "$GITHUB_STEP_SUMMARY"
@@ -261,3 +267,29 @@ jobs:
           npx --yes wrangler@4.135.0 kv key delete "pr:${{ github.event.pull_request.number }}" --namespace-id 24ed6613990448e1b923d36dcaf1a3d7 --remote 
           npx --yes wrangler@4.135.0 preview delete --config apps/manage/wrangler.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation
           npx --yes wrangler@4.135.0 preview delete --config apps/web/wrangler.preview.jsonc --name "pr-${{ inputs.pr_number || github.event.pull_request.number }}" --skip-confirmation
+
+  comment:
+    needs: previews
+    if: needs.previews.result == 'success' && needs.previews.outputs.photos != '' && needs.previews.outputs.manage != ''
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          PHOTOS: ${{ needs.previews.outputs.photos }}
+          MANAGE: ${{ needs.previews.outputs.manage }}
+        with:
+          script: |
+            const issue_number = Number(process.env.PR_NUMBER);
+            if (!Number.isSafeInteger(issue_number) || issue_number < 1) throw new Error('Invalid PR');
+            const valid = value => { const url = new URL(value); if (url.protocol !== 'https:' || !url.hostname.endsWith('.workers.dev') || url.username || url.password) throw new Error('Invalid preview URL'); return url.href; };
+            const marker = '<!-- rodverse-preview -->';
+            const body = [marker, '### 🧪 Rodverse preview', '- [Photos](' + valid(process.env.PHOTOS) + ')', '- [Manage](https://manage.migos.club/' + issue_number + '/)', '- [Native Manage](' + valid(process.env.MANAGE) + ')', '- [Run logs](https://github.com/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID + ')'].join('\n');
+            const args = {...context.repo, issue_number};
+            const comments = await github.paginate(github.rest.issues.listComments, args);
+            const existing = comments.find(c => c.user.login === 'github-actions[bot]' && c.body.startsWith(marker));
+            if (existing) await github.rest.issues.updateComment({...context.repo, comment_id: existing.id, body});
+            else await github.rest.issues.createComment({...args, body});

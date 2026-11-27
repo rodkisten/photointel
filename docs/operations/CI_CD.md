@@ -140,3 +140,5 @@ CI consolidation: iCloud contracts and log diagnostics are central CI jobs; comp
 Removed the legacy deploy-worker dispatch wrapper. Use frontend-release.yml with the same inputs. Updated Manage dispatch catalog, bot manual checks, GCP validation paths and offline notification/configuration tests to reference consolidated workflows. Historical documentation may still mention retired names; external dispatch scripts must migrate.
 
 Artifact cleanup uses gcp-artifact-cleanup.yml with target github/gcp, apply=false by default. GitHub deletion requires confirmation rodverse/rodverse, protects active runs, release manifests/provenance and artifacts younger than seven days. GCP retains its existing production environment and project confirmation. The old artifact-cleanup.yml is retired. No deletion was executed.
+
+Frontend release no longer runs on PRs: CI validates and cloudflare-pr-previews publishes native previews. A separate comment job updates one bot-owned marker comment with both links. Preview publishing no longer requests GCP OIDC. Production push and manual release remain unchanged. Preview build duplication with CI is still pending artifact handoff.
