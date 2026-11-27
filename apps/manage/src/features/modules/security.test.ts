@@ -8,10 +8,11 @@ describe('module CSP', () => {
     expect(csp).toContain('frame-src https://sandbox.migos.club/modules/sandbox/');
     expect(csp).not.toContain("'unsafe-eval'");
     expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
-    expect(csp).not.toContain('pr12.');
+    expect(csp).not.toContain('pr14.');
     expect(csp).not.toContain('localhost');
   });
   it('does not enable telemetry connections in the isolated preview policy', () => {
     expect(moduleContentSecurityPolicy(false)).not.toContain('sentry.io');
+    expect(moduleContentSecurityPolicy(false)).toContain('https://pr14.sandbox.migos.club/modules/sandbox/');
   });
 });

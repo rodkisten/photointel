@@ -2,7 +2,7 @@
 
 Approved: only reviewed releases execute in Manage's realm; Federation and Shadow DOM are not security isolation. Implemented experimental Sandbox path; local tests verified, production Access/CORS smoke pending.
 
-Manage validates business manifest origin, immutable SHA path, module identity and contract before registering a remote. Runtime also rejects a different React instance. Production catalog never permits PR preview origins. Identity is public metadata, and no privileged API clients/tokens are passed to this browser-only module. Authenticated backend authorization remains independent.
+Manage validates business manifest origin, immutable SHA path, module identity and contract before registering a remote. Runtime also rejects a different React instance. Production catalog never permits PR preview origins. Native Workers previews have no production APIs; their server sidecar permits only the explicit Sandbox #14 pairing, with synthetic identity and empty API adapters. Client hostname detection alone does not grant the preview policy: a valid JSON sidecar with the exact reviewed origin is required. Identity is public metadata, and no privileged API clients/tokens are passed to this browser-only module. Authenticated backend authorization remains independent.
 
 Shadow DOM contains Tailwind Preflight and module styling. Radix menus are nonmodal when embedded and stay within the styled module boundary. This prevents accidental CSS/interaction leakage, not malicious remote execution.
 

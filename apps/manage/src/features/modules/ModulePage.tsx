@@ -3,10 +3,18 @@ import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { RodModuleContext, RodModuleManifest } from '@rodverse/module-sdk';
 import { parseModuleManifest } from '@rodverse/module-sdk';
+import { isIsolatedModulePreview } from './preview-policy';
 import { api } from '../../lib/client';
 import type { Meta } from '../../types';
 import { useProject } from '../../context/ProjectContext';
-import { allowedOrigins, channels, development, fetchManifest, loadSandbox, type RemoteApp } from './runtime';
+import {
+  productionPolicy,
+  readPreviewPolicy,
+  type ModulePolicy,
+  fetchManifest,
+  loadSandbox,
+  type RemoteApp,
+} from './runtime';
 
 class ModuleBoundary extends React.Component<
   React.PropsWithChildren<{ fallback: (error: string) => React.ReactNode }>,
@@ -26,23 +34,27 @@ interface Selection {
   pinned?: RodModuleManifest;
   previous?: RodModuleManifest;
 }
-const initial = (): Selection => ({ enabled: false, channel: 'production' });
-function readSelection(key: string): Selection {
+const initial = (policy: ModulePolicy): Selection => ({
+  enabled: false,
+  channel: Object.keys(policy.channels)[0],
+});
+function readSelection(key: string, policy: ModulePolicy): Selection {
   try {
     const saved = JSON.parse(localStorage.getItem(key) || 'null');
-    if (!saved || typeof saved.enabled !== 'boolean' || !channels[saved.channel]) return initial();
+    if (!saved || typeof saved.enabled !== 'boolean' || !policy.channels[saved.channel])
+      return initial(policy);
     for (const item of [saved.pinned, saved.previous].filter(Boolean)) {
       parseModuleManifest(
         item,
         item.entry.replace('mf-manifest.json', 'rod-module.json'),
-        allowedOrigins,
-        development,
+        policy.allowedOrigins,
+        policy.development,
       );
-      if (item.id !== 'sandbox' || item.name !== 'rod_sandbox') return initial();
+      if (item.id !== 'sandbox' || item.name !== 'rod_sandbox') return initial(policy);
     }
     return saved;
   } catch {
-    return initial();
+    return initial(policy);
   }
 }
 function ModuleMount({
@@ -100,15 +112,31 @@ function ModuleMount({
 export function ModulePage() {
   const location = useLocation();
   const { project } = useProject();
-  const { data: meta } = useQuery({ queryKey: ['meta'], queryFn: () => api<Meta>('/meta'), retry: false });
+  const isolated = isIsolatedModulePreview(window.location.hostname);
+  const previewPolicy = useQuery({
+    queryKey: ['module-preview-policy'],
+    queryFn: ({ signal }) => readPreviewPolicy(signal),
+    enabled: isolated,
+    retry: false,
+  });
+  const policy = isolated ? previewPolicy.data : productionPolicy;
+  const { data: meta } = useQuery({
+    queryKey: ['meta'],
+    queryFn: () => api<Meta>('/meta'),
+    enabled: !isolated,
+    retry: false,
+  });
   const search = new URLSearchParams(location.searchStr);
   const workspace = search.get('workspace') || project?.id || 'default-workspace';
   if (!/^[a-zA-Z0-9_-]{1,128}$/.test(workspace)) return <p role="alert">Workspace inválido.</p>;
-  if (!meta?.email) return <p role="status">Aguardando identidade do Manage…</p>;
+  if (previewPolicy.error) return <p role="alert">{String(previewPolicy.error)}</p>;
+  if (!policy) return <p role="status">Verificando host isolado…</p>;
+  if (!isolated && !meta?.email) return <p role="status">Aguardando identidade do Manage…</p>;
   return (
     <WorkspaceModules
-      key={`${meta.email}:${workspace}`}
-      identity={meta.email}
+      key={`${isolated ? 'isolated-preview' : meta!.email}:${workspace}`}
+      identity={isolated ? 'isolated-preview' : meta!.email}
+      policy={policy}
       workspace={workspace}
       mount={location.pathname.startsWith('/sandbox')}
     />
@@ -118,13 +146,15 @@ function WorkspaceModules({
   workspace,
   mount,
   identity,
+  policy,
 }: {
   workspace: string;
   mount: boolean;
   identity: string;
+  policy: ModulePolicy;
 }) {
   const key = `rodverse:modules:v1:${identity}:${workspace}`;
-  const [selection, setSelection] = useState<Selection>(() => readSelection(key));
+  const [selection, setSelection] = useState<Selection>(() => readSelection(key, policy));
   const [App, setApp] = useState<RemoteApp | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState(selection.enabled ? 'Carregando' : 'Desabilitado');
@@ -136,8 +166,9 @@ function WorkspaceModules({
       fetchManifest(
         selection.pinned
           ? selection.pinned.entry.replace('mf-manifest.json', 'rod-module.json')
-          : channels[selection.channel],
+          : policy.channels[selection.channel],
         signal,
+        policy,
       ),
     enabled: selection.enabled,
     retry: 1,
@@ -154,7 +185,7 @@ function WorkspaceModules({
   useEffect(() => {
     if (!mount || !selection.enabled || !manifest.data) return;
     const controller = new AbortController();
-    loadSandbox(manifest.data, controller.signal, attempt > 0)
+    loadSandbox(manifest.data, controller.signal, attempt > 0, policy)
       .then((component) => {
         if (controller.signal.aborted) return;
         setApp(() => component);
@@ -168,7 +199,7 @@ function WorkspaceModules({
         }
       });
     return () => controller.abort();
-  }, [mount, selection.enabled, manifest.data, attempt]);
+  }, [mount, selection.enabled, manifest.data, attempt, policy]);
   function change(next: Selection) {
     localStorage.setItem(key, JSON.stringify(next));
     // Federation runtime caches module identities. Version changes use a fresh session.
@@ -212,12 +243,16 @@ function WorkspaceModules({
             value={selection.channel}
             onChange={(event) => change({ enabled: selection.enabled, channel: event.target.value })}
           >
-            {Object.keys(channels).map((channel) => (
+            {Object.keys(policy.channels).map((channel) => (
               <option key={channel}>{channel}</option>
             ))}
           </select>
         </label>
-        <span>Preview de PR: host isolado obrigatório</span>
+        <span>
+          {policy.isolated
+            ? 'Preview isolado · sem APIs privilegiadas'
+            : 'Preview de PR: host isolado obrigatório'}
+        </span>
         <a
           className="underline"
           href={manifest.data?.standaloneUrl || 'https://sandbox.migos.club'}

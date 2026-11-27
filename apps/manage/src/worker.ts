@@ -1,4 +1,4 @@
-import { moduleContentSecurityPolicy } from './features/modules/security';
+import { ISOLATED_SANDBOX_ORIGIN, moduleContentSecurityPolicy } from './features/modules/security';
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
@@ -101,6 +101,12 @@ async function handlePreview(request: Request, env: Env, location: URL): Promise
 
   if (!location.hostname.endsWith(CONFIG.PREVIEW_DOMAIN)) {
     return failure(403, 'PREVIEW_HOST', 'Preview hostname required');
+  }
+  if (path === '/module-host.json' && (method === 'GET' || method === 'HEAD')) {
+    const response = new Response(JSON.stringify({ mode: 'isolated-preview', sandboxOrigin: ISOLATED_SANDBOX_ORIGIN }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+    return applySecurityHeaders(response, true);
   }
   if (path.startsWith('/api/') || path.startsWith('/hooks/') || path.startsWith('/__')) {
     return failure(404, 'PREVIEW_DISABLED', 'Preview route unavailable');
