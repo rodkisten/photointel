@@ -1,7 +1,8 @@
 import { validateSource,newestCommon,type Catalog } from './catalog.ts';
 import { dispatchFrontend } from './dispatch.ts';
 import { dispatchTerraform } from './terraform.ts';
-import { buildRelease } from './build.ts';
+import { buildRelease,buildMediaRelease } from './build.ts';
+import { withSource,mediaPreflight } from './worktree.ts';
 import { createRunner } from './runner.ts';
 import { verifiedDockerDigest } from './build.ts';
 export type Selection={action:'plan'|'build'|'deploy'|'build-and-deploy';target:'api'|'media'|'web'|'manage';source:'main'|'last';head:string;requested?:string};
@@ -24,9 +25,12 @@ export async function executeRelease(root:string,s:Selection,catalogs:Catalog[]=
     await dispatchFrontend(s.target,plan.sha,plan.deploy?'build-and-deploy':'build');
     return plan;
   }
-  // Media preflight remains in the legacy console until equivalent checks are ported.
-  if(s.target==='media'&&plan.build) throw new Error('Native media preflight is not yet enabled');
-  if(plan.build) buildRelease(root,'photointel','us-central1','photointel',plan.sha,true,true,'photointel');
+  if(plan.build) withSource(root,plan.sha,s.head,source=>{
+    if(s.target==='media'){
+      mediaPreflight(source);
+      buildMediaRelease(source,'photointel','us-central1','photointel',plan.sha,true,true,'photointel');
+    }else buildRelease(source,'photointel','us-central1','photointel',plan.sha,true,true,'photointel');
+  });
   if(plan.deploy){
     const runner=createRunner({project:'photointel',apply:true,authorizeCharges:true,confirmProject:'photointel',cwd:root});
     const kinds=s.target==='api'?['api'] as const:['media-image','media-video'] as const;
