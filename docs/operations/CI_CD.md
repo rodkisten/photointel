@@ -148,3 +148,5 @@ Automatic frontend PR previews now run as a reusable workflow in CI after the fr
 Infrastructure cleanup: removed permanently disabled preview-watchdog and unreachable push-check from manual-only gcp-deploy. Terraform production requires explicit authorization for import as well as apply before checkout/authentication; bucket extraction uses jq rather than inline Python. Existing saved-plan review, provider identities, state ownership and Python release contracts remain intact pending native parity.
 
 Native saved-plan candidate: scripts/ci/cloud-run/saved-plan.ts preserves the private GCS object layout, manifest fields, numeric latest-run selection, SHA/config binding and 24-hour expiry. It rejects invalid/future timestamps and malformed digests. Production remains on Python until cross-language and authenticated storage parity are verified.
+
+Saved-plan compatibility checks cover every persisted context field, future timestamps and rejection of incomplete uploads without a manifest. Production remains on the legacy implementation until a private storage round-trip is validated.
