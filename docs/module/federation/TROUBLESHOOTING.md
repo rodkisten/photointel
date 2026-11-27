@@ -14,3 +14,5 @@ Version changes require a reload. A rollback candidate also requires the old imm
 A Worker error with an empty message can be CSP. `worker-src` must include both the blob bootstrap and reviewed artifact path: module worker imports can be checked against the worker directive. WASM requires `wasm-unsafe-eval`, not unrestricted JavaScript `unsafe-eval`.
 
 WebKit did not launch on this machine because GTK4, Graphene, Harfbuzz ICU, Manette, Hyphen and GLES libraries are missing. Chromium mobile viewport checks are not a substitute for an actual iPhone Safari session.
+
+Live paired preview: open https://pr-262-photointel-manage.kisten.workers.dev/modules, select the preview channel and enable Sandbox, then open it in Manage. This native origin blocks production APIs and uses synthetic identity. The production host never offers this PR channel. The friendly short URL returned 503 during validation; use the verified native URL. The paired preview and independent rollback passed Chromium browser smoke without mocked host/remote APIs.
