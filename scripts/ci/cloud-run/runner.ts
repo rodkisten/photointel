@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-export type RunnerOptions = { project:string; apply?:boolean; authorizeCharges?:boolean; confirmProject?:string; cwd?:string };
+export type RunnerOptions = { project:string; readOnly?:boolean; apply?:boolean; authorizeCharges?:boolean; confirmProject?:string; cwd?:string };
 export type Result = { executed:boolean; stdout:string };
 const commands = {
   version: ['version'],
@@ -13,8 +13,8 @@ export function createRunner(options:RunnerOptions) {
   const {project,apply=false,cwd}=options;
   if(!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) throw new Error('Invalid project');
   if(apply&&(!options.authorizeCharges||options.confirmProject!==project)) throw new Error('Apply requires explicit project and charge authorization');
-  function invoke(args:readonly string[], timeout=60000):Result {
-    if(!apply) return {executed:false,stdout:''};
+  function invoke(args:readonly string[], timeout=60000,read=false):Result {
+    if(!apply&&!(read&&options.readOnly)) return {executed:false,stdout:''};
     const result=spawnSync('gcloud',[...args,'--project='+project,'--quiet'],{
       cwd, shell:false, encoding:'utf8', timeout, killSignal:'SIGKILL', maxBuffer:8*1024*1024, stdio:['ignore','pipe','pipe'],
       env:{...process.env,CLOUDSDK_CORE_DISABLE_PROMPTS:'1'}
@@ -53,7 +53,7 @@ export function createRunner(options:RunnerOptions) {
     listImages:(location:string,repository:string,kind:'api'|'media-image'|'media-video'|'media-imagor'='api')=>{
       if(!['api','media-image','media-video','media-imagor'].includes(kind)) throw new Error('Invalid image kind');
       if(!/^[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(repository))throw new Error('Invalid repository');
-      return invoke(['artifacts','docker','images','list',region(location)+'-docker.pkg.dev/'+project+'/'+repository+'/'+kind,'--include-tags','--format=json']);
+      return invoke(['artifacts','docker','images','list',region(location)+'-docker.pkg.dev/'+project+'/'+repository+'/'+kind,'--include-tags','--format=json'],60000,true);
     }
   };
 }

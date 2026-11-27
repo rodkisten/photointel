@@ -25,12 +25,12 @@ on:
       engine:
         description: "Motor do console"
         type: choice
-        options: [legacy, preview]
+        options: [legacy, preview, verify]
         default: legacy
       confirm:
         description: "Confirmar"
         type: boolean
-        default: true
+        default: false
         
 permissions:
   contents: read
@@ -94,8 +94,14 @@ jobs:
           service_account: ${{ steps.config.outputs.service_account }}
       - uses: google-github-actions/setup-gcloud@v3
         if: inputs.engine != 'preview'
+      - name: Authenticated read-only verification
+        if: inputs.engine == 'verify'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET: ${{ matrix.target }}
+        run: node scripts/ci/cloud-run/release-verify.ts
       - name: "🚀 Executar"
-        if: inputs.engine != 'preview'
+        if: inputs.engine == 'legacy'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ACTION: ${{ inputs.action }}
