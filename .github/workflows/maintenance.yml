@@ -59,6 +59,7 @@ jobs:
           node scripts/ci/cloud-run/saved-plan.test.ts
           node scripts/ci/cloud-run/plan-review.test.ts
           node scripts/ci/cloud-run/media-release.test.ts
+          node scripts/ci/cloud-run/media-prepare.test.ts
       - name: Verify CLI help and fail-closed apply
         run: |
           node scripts/ci/cloud-run/index.ts --help
