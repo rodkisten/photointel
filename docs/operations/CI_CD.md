@@ -150,3 +150,5 @@ Infrastructure cleanup: removed permanently disabled preview-watchdog and unreac
 Native saved-plan candidate: scripts/ci/cloud-run/saved-plan.ts preserves the private GCS object layout, manifest fields, numeric latest-run selection, SHA/config binding and 24-hour expiry. It rejects invalid/future timestamps and malformed digests. Production remains on Python until cross-language and authenticated storage parity are verified.
 
 Saved-plan compatibility checks cover every persisted context field, future timestamps and rejection of incomplete uploads without a manifest. Production remains on the legacy implementation until a private storage round-trip is validated.
+
+Native plan review candidate: plan-review.ts checks saved plans for both scopes, blocks destruction and replacement, rejects unknown actions and incomplete plans, and never prints resource values. Maintenance runs offline checks. Production remains on the legacy review until parity is validated.
