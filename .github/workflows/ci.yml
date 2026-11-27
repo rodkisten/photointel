@@ -698,3 +698,115 @@ jobs:
           test -n "$(find src/api/hey-api -type f -print -quit)"
           echo "### 🧬 Hey API · ${{ matrix.app }}" >> "$GITHUB_STEP_SUMMARY"
           find src/api/hey-api -type f | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+
+  backend-smoke:
+    needs: changes
+    if: needs.changes.outputs.py_api == 'true' || needs.changes.outputs.integration == 'true'
+    name: "🐍 Unit + iCloud integration"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: local
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧰 Python and uv"
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - name: "🐍 Python 3.12"
+        run: uv python install 3.12
+      - name: "📦 Sync locked dependencies"
+        run: uv sync --frozen --group ingest
+      - name: "🔎 Ruff"
+        run: >
+          uv run ruff check
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/telegram_notify.py
+          tests/test_telegram_notify.py
+          apps/api/src/photointel/services/jobs.py
+          apps/api/src/photointel/services/discovery.py
+          apps/api/src/photointel/services/preview_repair.py
+          tests/test_auto_preview_repair.py
+          apps/api/src/photointel/routers/preview_audit.py
+          apps/api/src/photointel/routers/catalog.py
+          apps/api/src/photointel/services/media.py
+          apps/api/src/photointel/services/ingestion.py
+          apps/api/src/photointel/storage.py
+          tests/test_download_integrity_v11.py
+          tests/test_foundation_storage.py
+          tests/test_responsive_media.py
+          tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
+          apps/api/src/photointel/serializers.py
+          apps/api/src/photointel/routers/operations.py
+          tests/test_backend_contention.py
+          tests/integration/test_discovery_pipeline_v11.py
+      - name: "🧪 Worker, sessions and correlation"
+        run: >
+          uv run pytest -q
+          tests/test_backend_contention.py
+          tests/test_session_store.py
+          tests/test_icloud_web_auth.py
+          tests/test_job_observability.py
+          tests/test_telegram_notify.py
+          tests/test_responsive_media.py
+          tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
+          tests/test_foundation_storage.py
+          tests/test_download_integrity_v11.py
+          tests/test_auto_preview_repair.py
+      - name: "🗄️ Enable PostgreSQL extensions"
+        run: >
+          PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
+          -d photointel
+          -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+      - name: "🧪 iCloud lease integration"
+        run: >
+          uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
+          -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit or expired_icloud_media_url_is_refreshed_once or refresh_refuses_changed_icloud_representation'
+      - name: "🗃 Prepare isolated integration schema"
+        run: uv run alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "🛠 Automatic preview repair integration"
+        run: uv run pytest -q tests/integration/test_api.py -k automatic_preview_repair
+
+  preview-audit:
+    needs: changes
+    if: needs.changes.outputs.py_api == 'true' || needs.changes.outputs.front_web == 'true'
+    name: "🌐 Preview audit UI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧪 Install and validate preview UI"
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          working-directory: apps/web
+          node-version: '26'
+          package-manager: npm
+          script: |
+            npm run typecheck
+            npm test -- src/test/operations.test.tsx
