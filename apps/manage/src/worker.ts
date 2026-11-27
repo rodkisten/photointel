@@ -1,3 +1,4 @@
+import { ISOLATED_SANDBOX_ORIGIN, moduleContentSecurityPolicy } from './features/modules/security';
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
@@ -33,8 +34,8 @@ const SECURITY_POLICIES = {
   DENY: 'DENY',
   NO_REFERRER: 'no-referrer',
   NO_INDEX: 'noindex, nofollow, noarchive',
-  CSP_PREVIEW: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
-  CSP_PROD: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.sentry.io; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
+  CSP_PREVIEW: moduleContentSecurityPolicy(false),
+  CSP_PROD: moduleContentSecurityPolicy(true),
 };
 
 interface WorkerContext {
@@ -100,6 +101,12 @@ async function handlePreview(request: Request, env: Env, location: URL): Promise
 
   if (!location.hostname.endsWith(CONFIG.PREVIEW_DOMAIN)) {
     return failure(403, 'PREVIEW_HOST', 'Preview hostname required');
+  }
+  if (path === '/module-host.json' && (method === 'GET' || method === 'HEAD')) {
+    const response = new Response(JSON.stringify({ mode: 'isolated-preview', sandboxOrigin: ISOLATED_SANDBOX_ORIGIN }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+    return applySecurityHeaders(response, true);
   }
   if (path.startsWith('/api/') || path.startsWith('/hooks/') || path.startsWith('/__')) {
     return failure(404, 'PREVIEW_DISABLED', 'Preview route unavailable');

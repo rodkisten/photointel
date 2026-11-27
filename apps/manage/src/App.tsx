@@ -28,6 +28,7 @@ import {
 import { Badge, Card } from './components/ui';
 import { ProjectPicker } from './components/ProjectPicker';
 import { ProjectProvider, type ManageProject } from './context/ProjectContext';
+import { isIsolatedModulePreview } from './features/modules/preview-policy';
 import { ProjectEnvironment } from './pages/ProjectEnvironment';
 import { IssueBanner, Spinner } from './components/shared';
 import { api } from './lib/client';
@@ -52,16 +53,18 @@ const NAV = [
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
   { id: 'icloud', to: '/icloud', label: 'iCloud', icon: Apple },
+  { id: 'modules', to: '/modules', label: 'Módulos', icon: Code2 },
   { id: 'settings', to: '/system', label: 'Sistema', icon: Settings2 },
 ] as const;
 
 const NAV_GROUPS = [
   { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
-  { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
+  { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'modules', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  modules: 'Registry de aplicações federadas',
   jobs: 'Dispare jobs e acompanhe logs de execução',
   terminal: 'Acesse suas VMs e GitHub Codespaces',
   operations: 'Cron, pausas e execuções dos serviços',
@@ -82,6 +85,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox')) return 'modules';
   if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
@@ -138,6 +142,7 @@ export default function App() {
   };
   const projectCatalog = useQuery({
     queryKey: ['projects'],
+    enabled: !isIsolatedModulePreview(window.location.hostname),
     queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
     retry: false,
   });
@@ -198,6 +203,7 @@ export default function App() {
   const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
+  const isolatedModule = tab === 'modules' && isIsolatedModulePreview(window.location.hostname);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -209,6 +215,7 @@ export default function App() {
   } = useQuery({
     queryKey: ['meta'],
     queryFn: () => api<Meta>('/meta'),
+    enabled: !isolatedModule,
     retry: false,
   });
 
@@ -350,7 +357,7 @@ export default function App() {
             {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-carbon-600" />}
           </div>
 
-          {isPending ? (
+          {isolatedModule ? <Outlet /> : isPending ? (
             <Card className="flex items-center justify-center bg-carbon-950 p-12">
               <Spinner />
             </Card>
@@ -360,7 +367,7 @@ export default function App() {
             <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
           ) : isReadOnlyProject && tab === 'config' ? (
             <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
-          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' ? (
+          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' && tab !== 'modules' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
               <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>

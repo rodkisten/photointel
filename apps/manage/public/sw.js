@@ -95,7 +95,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || BLOCKED.test(url.pathname)) return;
   // sw.js must always be fetched from the network so upgrades are discovered.
-  if (url.pathname === '/sw.js') return;
+  if (url.pathname === '/sw.js' || url.pathname === '/rod-module.json' || url.pathname.startsWith('/modules/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

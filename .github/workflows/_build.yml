@@ -120,6 +120,12 @@ jobs:
         continue-on-error: true
         run: node --check scripts/ci/adapters/manage.ts
 
+      - name: Validate Rod Module SDK contract
+        if: matrix.app == 'manage'
+        id: module_contract
+        continue-on-error: true
+        run: npm --prefix packages/rod-module-sdk test
+
       - name: "📋 Consolidar resultado · ${{ matrix.app }}"
         if: ${{ always() }}
         env:

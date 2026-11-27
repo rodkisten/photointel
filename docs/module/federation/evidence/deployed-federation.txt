@@ -1,0 +1,1 @@
+PASS LIVE deployed Manage native preview + LIVE deployed Sandbox; zero privileged API requests, real compilation/preview logs, no browser errors
