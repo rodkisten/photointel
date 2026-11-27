@@ -5,8 +5,8 @@ on:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/highlight_output.py'
       - 'scripts/ci/test_highlight_output.py'
-      - 'scripts/ci/select_context.py'
-      - 'scripts/ci/test_select_context.py'
+      - 'scripts/ci/select-context.ts'
+      - 'scripts/ci/select-context.test.ts'
       - '.github/workflows/ci.yml'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
@@ -21,8 +21,8 @@ on:
       - 'scripts/ci/pretty-logs.sh'
       - 'scripts/ci/highlight_output.py'
       - 'scripts/ci/test_highlight_output.py'
-      - 'scripts/ci/select_context.py'
-      - 'scripts/ci/test_select_context.py'
+      - 'scripts/ci/select-context.ts'
+      - 'scripts/ci/select-context.test.ts'
       - '.github/workflows/ci.yml'
       - 'scripts/ci/gcloud_diagnostics.py'
       - 'apps/manage/src/gcp-diagnostic-catalog.json'
@@ -63,10 +63,13 @@ jobs:
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
           command: python3 -m unittest scripts.ci.test_highlight_output -v
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
       - name: "Context selection regression tests"
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
-          command: python3 -m unittest scripts.ci.test_select_context -v
+          command: node scripts/ci/select-context.test.ts
       - name: "Shared diagnostic catalog contract"
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
