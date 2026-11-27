@@ -1,0 +1,32 @@
+name: Frontend build
+description: Shared frontend install, validation and build phases
+inputs:
+  app:
+    description: Workspace app
+    required: true
+  phase:
+    description: install, validate, or build
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        APP: ${{ inputs.app }}
+        PHASE: ${{ inputs.phase }}
+      run: |
+        case "$APP" in web|manage) ;; *) exit 2 ;; esac
+        case "$PHASE" in
+          install) npm --prefix "apps/$APP" ci ;;
+          validate)
+            status=0
+            for task in lint typecheck test; do
+              echo "::group::$APP · $task"
+              npm --prefix "apps/$APP" run "$task" || status=1
+              echo "::endgroup::"
+            done
+            exit "$status"
+            ;;
+          build) npm --prefix "apps/$APP" run build ;;
+          *) exit 2 ;;
+        esac

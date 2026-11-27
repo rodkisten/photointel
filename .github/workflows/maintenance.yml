@@ -1,0 +1,46 @@
+name: "🔮 RV · Maintenance"
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Offline maintenance operation
+        type: choice
+        options: [validate, render, jobs-plan, scheduler-plan]
+        default: validate
+permissions:
+  contents: read
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - name: Validate native tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/renderer-types" --no-save --package-lock=false typescript@6 @types/node@24
+          "$RUNNER_TEMP/renderer-types/node_modules/.bin/tsc" --noEmit --allowImportingTsExtensions --strict --target esnext --module nodenext --typeRoots "$RUNNER_TEMP/renderer-types/node_modules/@types" --types node --skipLibCheck scripts/ci/cloud-run/*.ts
+          node scripts/ci/cloud-run/build.test.ts
+          node scripts/ci/cloud-run/jobs.test.ts
+      - name: Prepare synthetic configuration
+        if: inputs.operation != 'validate'
+        run: |
+          node --input-type=module -e 'import {readFileSync,writeFileSync} from "node:fs"; const c=JSON.parse(readFileSync("scripts/ci/cloud-run/fixture.json","utf8")); Object.assign(c,{scheduler_timezone:"UTC",discovery_schedule:"0 * * * *",worker_schedule:"*/15 * * * *",maintenance_schedule:"0 3 * * *",auto_resume_schedules:false}); writeFileSync(process.env.RUNNER_TEMP+"/maintenance.json",JSON.stringify(c),{mode:0o600});'
+      - name: Execute offline operation
+        if: inputs.operation != 'validate'
+        env:
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$OPERATION" in render|jobs-plan|scheduler-plan) ;; *) exit 2 ;; esac
+          node scripts/ci/cloud-run/index.ts "$OPERATION" --config "$RUNNER_TEMP/maintenance.json" --output "$RUNNER_TEMP/rendered"
+      - name: Report
+        if: always()
+        env:
+          OPERATION: ${{ inputs.operation }}
+          RESULT: ${{ job.status }}
+        run: |
+          printf '### Maintenance\n\n- Operation: %s\n- Result: %s\n- Mode: synthetic configuration, offline only\n' "$OPERATION" "$RESULT" >> "$GITHUB_STEP_SUMMARY"

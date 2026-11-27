@@ -22,10 +22,15 @@ on:
         description: "SHA opcional"
         type: string
         default: ''
+      engine:
+        description: "Motor do console"
+        type: choice
+        options: [legacy, preview, verify]
+        default: legacy
       confirm:
         description: "Confirmar"
         type: boolean
-        default: true
+        default: false
         
 permissions:
   contents: read
@@ -33,7 +38,7 @@ permissions:
   id-token: write
 concurrency:
   group: photointel-release-console
-  cancel-in-progress: true
+  cancel-in-progress: false
   
 jobs:
   release:
@@ -52,7 +57,20 @@ jobs:
       - uses: actions/setup-node@v7
         with: {node-version: '26'}
 
+      - name: Native offline preview
+        if: inputs.engine == 'preview'
+        env:
+          TARGET: ${{ matrix.target }}
+          ACTION: ${{ inputs.action }}
+          SOURCE: ${{ inputs.source }}
+          REQUESTED_SHA: ${{ inputs.sha }}
+        run: |
+          if [[ "$SOURCE" != main ]]; then echo 'Preview requires main or explicit SHA'; exit 1; fi
+          args=(--target "$TARGET" --action "$ACTION")
+          if [[ -n "$REQUESTED_SHA" ]]; then args+=(--sha "$REQUESTED_SHA"); fi
+          node scripts/ci/cloud-run/release-preview.ts "${args[@]}"
       - name: "🔐 Authenticate Ploocky GitHub App"
+        if: inputs.engine != 'preview'
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
@@ -61,7 +79,8 @@ jobs:
           permission-contents: read
           permission-actions: write
         
-      - id: config
+      - if: inputs.engine != 'preview'
+        id: config
         uses: ./.github/actions/gcp-config
         with:
           mode: prepare
@@ -69,11 +88,20 @@ jobs:
           confirm-project: photointel
           release-sha: ${{ github.sha }}
       - uses: google-github-actions/auth@v3
+        if: inputs.engine != 'preview'
         with:
           workload_identity_provider: ${{ steps.config.outputs.workload_identity_provider }}
           service_account: ${{ steps.config.outputs.service_account }}
       - uses: google-github-actions/setup-gcloud@v3
+        if: inputs.engine != 'preview'
+      - name: Authenticated read-only verification
+        if: inputs.engine == 'verify'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET: ${{ matrix.target }}
+        run: node scripts/ci/cloud-run/release-verify.ts
       - name: "🚀 Executar"
+        if: inputs.engine == 'legacy'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ACTION: ${{ inputs.action }}
@@ -90,6 +118,6 @@ jobs:
           git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
       
           ci_run "Release console" python3 -m infra.terraform.release_console
-      - if: always()
+      - if: always() && inputs.engine != 'preview'
         uses: ./.github/actions/gcp-config
         with: {mode: cleanup}

@@ -181,7 +181,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     if len(gh_token.strip()) < 20:
         raise SetupError("MANAGE_GITHUB_API_TOKEN secret is absent or invalid")
     cf_token = (secret_value(config, "MANAGE_CLOUDFLARE_API_TOKEN")
-                if "MANAGE_CLOUDFLARE_API_TOKEN" in config.get("workflow_secrets", {})
+                if os.environ.get("WORKFLOW_SECRET_SOURCE") == "github" or "MANAGE_CLOUDFLARE_API_TOKEN" in config.get("workflow_secrets", {})
                 else secret_value(config, "CLOUDFLARE_API_TOKEN"))
     cf_account = secret_value(config, "CLOUDFLARE_ACCOUNT_ID")
     if not re.fullmatch(r"[a-fA-F0-9]{32}", cf_account) or len(cf_token) < 20:
@@ -190,7 +190,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
     # Test the exact version-pinned runtime tokens at deploy time (not the
     # GitHub connector's own identity). Continue publishing diagnostic UI even
     # when the provider denies the token, so the operator can inspect it.
-    pat_version = str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"])
+    pat_version = ("github-actions" if os.environ.get("WORKFLOW_SECRET_SOURCE") == "github" else str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"]))
     gh_base = "https://api.github.com/repos/rodkisten/photointel"
     cf_base = "https://api.cloudflare.com/client/v4/accounts/" + cf_account + "/workers/scripts"
     # Read the already-existing deployment credential only for comparison. It
@@ -332,7 +332,7 @@ def publish(config: dict, *, apply: bool) -> dict[str, object]:
             # Non-secret evidence of which pinned version last populated the
             # runtime GITHUB_API_TOKEN. Does not reveal any token material.
             "GITHUB_TOKEN_SECRET_VERSION":
-                str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"]),
+                ("github-actions" if os.environ.get("WORKFLOW_SECRET_SOURCE") == "github" else str(config["workflow_secrets"]["MANAGE_GITHUB_API_TOKEN"]["version"])),
             "GCP_PROJECT_ID": "photointel",
             "GCP_REGION": config.get("region", "us-central1"),
             **({"GCP_CLOUDBUILD_ALLOWED_TRIGGERS": build_triggers} if build_triggers else {}),

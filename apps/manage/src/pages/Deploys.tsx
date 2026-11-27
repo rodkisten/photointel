@@ -118,8 +118,8 @@ export function Deploys() {
   const missingRequired = Object.entries(fieldDefinitions).some(([key, field]) => field.required && !(inputs[key] ?? field.default).trim());
   // Curated entry points reduce clutter without disabling recovery workflows.
   const primaryWorkflows = new Set([
-    'release.yml', 'ci.yml', 'tf-production.yml', 'tf-validate.yml',
-    'deploy-worker.yml', 'media-deploy.yml', 'modal-gpu-deploy.yml',
+    'release.yml', 'frontend-release.yml', 'ci.yml', 'tf-production.yml', 'tf-validate.yml',
+    'maintenance.yml', 'media-deploy.yml', 'modal-gpu-deploy.yml',
     'gcp-health.yml', 'gcp-migrate.yml', 'gcp-artifact-cleanup.yml',
   ]);
   const filteredWorkflows = (workflows.data?.items || [])

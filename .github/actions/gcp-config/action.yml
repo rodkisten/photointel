@@ -1,6 +1,14 @@
 name: "🧩 [GCP CONFIG] Prepare / clean"
 description: "Reuse the production Environment GCP_CONFIG_ENV parser and securely remove temporary deployment files."
 inputs:
+  renderer:
+    description: 'Cloud Run renderer: parity, native or legacy (explicit rollback)'
+    required: false
+    default: parity
+  target:
+    description: "Configuration consumer: cloudflare or cloud-run"
+    required: false
+    default: cloud-run
   engine:
     description: "Configuration engine: legacy Python or TypeScript (opt-in during parity migration)"
     required: false
@@ -44,7 +52,17 @@ runs:
       env:
         MODE: ${{ inputs.mode }}
         ENGINE: ${{ inputs.engine }}
+        TARGET: ${{ inputs.target }}
+        RENDERER: ${{ inputs.renderer }}
       run: |
+        case "$RENDERER" in
+          parity|native|legacy) ;;
+          *) echo "::error::Unsupported renderer" >&2; exit 2 ;;
+        esac
+        case "$TARGET" in
+          cloudflare|cloud-run) ;;
+          *) echo "::error::Unsupported configuration target" >&2; exit 2 ;;
+        esac
         case "$ENGINE" in
           python|typescript) ;;
           *) echo "::error::Unsupported configuration engine" >&2; exit 2 ;;
@@ -112,15 +130,28 @@ runs:
         GCP_CONFIG_ENV: ${{ inputs.config-env }}
         CONFIRM_PROJECT: ${{ inputs.confirm-project }}
         RELEASE_SHA: ${{ inputs.release-sha }}
+        CONFIG_TARGET: ${{ inputs.target }}
+        CONFIG_RENDERER: ${{ inputs.renderer }}
         PHOTOINTEL_GITHUB_SECRETS_JSON: ${{ inputs.github-secrets-json }}
         PHOTOINTEL_GITHUB_VARS_JSON: ${{ inputs.github-vars-json }}
       run: |
         set -euo pipefail
         umask 077
         node --experimental-strip-types packages/env/src/deploy.ts render-config infra/gcp/config.local.json
-        # Legacy renderer remains necessary until the generated deployment artifacts
-        # are fully migrated. Do not run the legacy configuration parser twice.
-        python3 -m infra.gcp.manage render
+        # Cloudflare adapters consume config.local.json directly.
+        if [[ "$CONFIG_TARGET" == cloud-run ]]; then
+          case "$CONFIG_RENDERER" in
+            legacy) python3 -m infra.gcp.manage render ;;
+            native) node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json infra/gcp/rendered ;;
+            parity)
+              native_dir=$(mktemp -d)
+              trap 'rm -rf "$native_dir"' EXIT
+              python3 -m infra.gcp.manage render --output "$native_dir/legacy"
+              node scripts/ci/cloud-run/render.ts infra/gcp/config.local.json infra/gcp/rendered
+              node scripts/ci/cloud-run/compare.ts "$native_dir/legacy" infra/gcp/rendered
+              ;;
+          esac
+        fi
         node --input-type=module -e '
           import {appendFileSync} from "node:fs";
           import {parseEnvironment} from "./packages/env/src/index.ts";

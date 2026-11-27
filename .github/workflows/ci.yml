@@ -34,6 +34,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: validate-${{ github.ref }}
@@ -60,82 +61,33 @@ jobs:
            !contains(github.event.head_commit.message, 'dependabot[bot]') &&
            !contains(github.event.head_commit.message, 'renovate[bot]')) }}
     outputs:
-      # Flags de nível de Job (gerais)
       python: ${{ steps.scope.outputs.python }}
       integration: ${{ steps.scope.outputs.integration }}
       containers: ${{ steps.scope.outputs.containers }}
       security: ${{ steps.scope.outputs.security }}
-
-      # Flags granulares de nível de Step (Python)
-      py_api: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_api == 'true' }}
-      py_manage: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_manage == 'true' }}
-      py_gpu: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_gpu == 'true' }}
-      py_bridges: ${{ inputs.scope == 'all' || inputs.scope == 'python' || steps.paths.outputs.py_bridges == 'true' }}
-
-      # Flags de nível de Job (Frontend separado em Web e Manage)
-      front_web: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || inputs.scope == 'frontend-web' || steps.paths.outputs.front_web == 'true' }}
-      front_manage: ${{ inputs.scope == 'all' || inputs.scope == 'frontend' || inputs.scope == 'frontend-manage' || steps.paths.outputs.front_manage == 'true' }}
-
+      py_api: ${{ steps.scope.outputs.py_api }}
+      py_manage: ${{ steps.scope.outputs.py_manage }}
+      py_gpu: ${{ steps.scope.outputs.py_gpu }}
+      py_bridges: ${{ steps.scope.outputs.py_bridges }}
+      front_web: ${{ steps.scope.outputs.front_web }}
+      front_manage: ${{ steps.scope.outputs.front_manage }}
+      frontend_matrix: ${{ steps.scope.outputs.frontend_matrix }}
     steps:
-      - name: "📥 Baixar repositório"
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           fetch-depth: 0
-
-      - name: "🧭 Selecionar jobs afetados"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - name: "🧭 Select affected jobs"
         id: scope
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           SCOPE: ${{ inputs.scope || 'auto' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-        run: python3 -m scripts.ci.select_context
-
-      - name: "🔍 Mapear sub-apps e pacotes alterados"
-        id: paths
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            py_api:
-              - 'apps/api/**'
-              - 'tests/api/**'
-              - 'packages/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/ci.yml'
-            py_manage:
-              - 'apps/manage/**'
-              - 'tests/manage/**'
-              - 'packages/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/ci.yml'
-            py_gpu:
-              - 'gpu/**'
-              - 'tests/gpu/**'
-              - 'packages/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/ci.yml'
-            py_bridges:
-              - 'bridges/**'
-              - 'tests/bridges/**'
-              - 'packages/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - '.github/workflows/ci.yml'
-            front_web:
-              - 'apps/web/**'
-              - 'packages/ui/**'
-              - 'packages/shared/**'
-              - '.github/workflows/ci.yml'
-            front_manage:
-              - 'apps/manage/**'
-              - 'packages/ui/**'
-              - 'packages/shared/**'
-              - '.github/workflows/ci.yml'
+        run: node scripts/ci/select-context.ts
 
   # ============================================================================
   # 2. Backend & Workers (Python)
@@ -288,156 +240,13 @@ jobs:
   # ============================================================================
   # 3A. Frontend: Web (apps/web)
   # ============================================================================
-  frontend-web:
-    name: "🌐 Front: web · lint, types, tests, build"
+  frontend:
     needs: changes
-    if: needs.changes.outputs.front_web == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: "📥 Baixar código"
-        id: web_checkout
-        continue-on-error: true
-        uses: actions/checkout@v7
-
-      - name: "🧰 Configurar Node.js 26"
-        id: web_setup_node
-        continue-on-error: true
-        uses: actions/setup-node@v7
-        with:
-          node-version: '26'
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-
-      - name: "📦 Instalar dependências (npm ci)"
-        id: web_install
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web ci" npm --prefix apps/web ci
-
-      - name: "🧹 Verificar lint (ESLint)"
-        id: web_lint
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web run lint" npm --prefix apps/web run lint
-
-      - name: "🔎 Verificar tipagem (TypeScript)"
-        id: web_typecheck
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web run typecheck" npm --prefix apps/web run typecheck
-
-      - name: "🧪 Executar testes"
-        id: web_test
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web test" npm --prefix apps/web test
-
-      - name: "🏗️ Gerar build de produção"
-        id: web_build
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/web run build" npm --prefix apps/web run build
-
-      - name: "📋 Consolidar falhas · front: web"
-        if: ${{ always() }}
-        env:
-          STEP_RESULTS: ${{ toJSON(steps) }}
-        run: |
-          printf '%s' "$STEP_RESULTS" | jq -r '
-            to_entries[]
-            | select(.value.outcome == "failure")
-            | "::error title=Etapa falhou::" + .key
-          '
-          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
-          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
-          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$count" -gt 0 ]; then
-            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
-
-  # ============================================================================
-  # 3B. Frontend: Manage (apps/manage)
-  # ============================================================================
-  frontend-manage:
-    name: "🛠️ Front: manage · lint, types, tests, build"
-    needs: changes
-    if: needs.changes.outputs.front_manage == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: "📥 Baixar código"
-        id: manage_checkout
-        continue-on-error: true
-        uses: actions/checkout@v7
-
-      - name: "🧰 Configurar Node.js 26"
-        id: manage_setup_node
-        continue-on-error: true
-        uses: actions/setup-node@v7
-        with:
-          node-version: '26'
-          cache: npm
-          cache-dependency-path: apps/manage/package-lock.json
-
-      - name: "📦 Instalar dependências (npm ci)"
-        id: manage_install
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/manage ci" npm --prefix apps/manage ci
-
-      - name: "🧹 Verificar lint (ESLint)"
-        id: manage_lint
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/manage run lint" npm --prefix apps/manage run lint
-
-      - name: "🔎 Verificar tipagem (TypeScript)"
-        id: manage_typecheck
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/manage run typecheck" npm --prefix apps/manage run typecheck
-
-      - name: "🧪 Executar testes"
-        id: manage_test
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/manage test" npm --prefix apps/manage test
-
-      - name: "🏗️ Gerar build de produção"
-        id: manage_build
-        continue-on-error: true
-        run: |
-          source scripts/ci/pretty-logs.sh
-          ci_run "npm --prefix apps/manage run build" npm --prefix apps/manage run build
-
-      - name: "📋 Consolidar falhas · front: manage"
-        if: ${{ always() }}
-        env:
-          STEP_RESULTS: ${{ toJSON(steps) }}
-        run: |
-          printf '%s' "$STEP_RESULTS" | jq -r '
-            to_entries[]
-            | select(.value.outcome == "failure")
-            | "::error title=Etapa falhou::" + .key
-          '
-          count=$(printf '%s' "$STEP_RESULTS" | jq '[.[] | select(.outcome == "failure")] | length')
-          echo "### Resultado das verificações" >> "$GITHUB_STEP_SUMMARY"
-          echo "Etapas com falha: $count" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$count" -gt 0 ]; then
-            printf '%s' "$STEP_RESULTS" | jq -r 'to_entries[] | select(.value.outcome == "failure") | "- ❌ " + .key' >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+    if: needs.changes.outputs.front_web == 'true' || needs.changes.outputs.front_manage == 'true'
+    uses: ./.github/workflows/_build.yml
+    with:
+      apps: ${{ needs.changes.outputs.frontend_matrix }}
+      production: false
 
   # ============================================================================
   # 4. Testes de Integração & E2E
@@ -736,9 +545,15 @@ jobs:
       - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
         id: notify_observed_046
         continue-on-error: true
-        uses: gitleaks/gitleaks-action@v3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          report_dir=$(mktemp -d)
+          trap 'rm -rf "$report_dir"' EXIT
+          status=0
+          docker run --rm -v "$PWD:/repo:ro" -v "$report_dir:/report" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact=100 --no-banner --report-format json --report-path /report/findings.json /repo || status=$?
+          if [ -f "$report_dir/findings.json" ]; then
+            jq -r '.[] | [.RuleID, .File, (.StartLine|tostring), .Commit] | @tsv' "$report_dir/findings.json"
+          fi
+          exit "$status"
 
       - name: "📋 Consolidar falhas · security"
         if: ${{ always() }}

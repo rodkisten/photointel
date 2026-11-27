@@ -73,7 +73,10 @@ export const WORKFLOW_INPUTS: WorkflowInputsMap = {
   },
   'cloudflare-setup.yml': { mode: ['plan', 'apply'] },
   'gcp-health.yml': {},
-  'deploy-worker.yml': {},
+  'release.yml': { action: ['plan', 'build', 'deploy', 'build-and-deploy'], target: ['api', 'media', 'web', 'manage', 'all'], source: ['main', 'last'], sha: [], engine: ['legacy', 'preview', 'verify'], confirm: ['false', 'true'] },
+  'frontend-release.yml': { action: ['build', 'build-and-deploy'], app: ['all', 'web', 'manage'], sha: [], request_id: [] },
+  'maintenance.yml': { operation: ['validate', 'render', 'jobs-plan', 'scheduler-plan'] },
+  'deploy-worker.yml': { action: ['build', 'build-and-deploy'], app: ['all', 'web', 'manage'], sha: [], request_id: [] },
   'gcp-migrate.yml': {
     migration_mode: ['plan', 'apply', 'diagnose'],
     migration_database: ['unselected', 'initial-empty', 'existing-with-backup'],

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { parseCatalog,newestCommon,loadCatalogs,validateSource } from './catalog.ts';
+import { createRunner } from './runner.ts';
+const a='a'.repeat(40),b='b'.repeat(40),c='c'.repeat(40);
+const x=parseCatalog(JSON.stringify([{tags:[a,'latest'],uploadTime:'2026-01-01T00:00:00Z'},{tags:[b,c],uploadTime:'2026-02-01T00:00:00Z'}]));
+const y=parseCatalog(JSON.stringify([{tags:[a],uploadTime:'2026-03-01T00:00:00Z'},{tags:[b],uploadTime:'2026-02-01T00:00:00Z'}]));
+assert.equal(newestCommon([x,y]),b);
+assert.equal(x.has('latest'),false);
+assert.throws(()=>newestCommon([x,new Map()]));
+assert.throws(()=>parseCatalog('{}'));
+assert.throws(()=>validateSource('.', 'main',a));
+assert.throws(()=>loadCatalogs(createRunner({project:'photointel'}),'us-central1','photointel','media'));

@@ -1,0 +1,73 @@
+name: Release report
+on:
+  workflow_call:
+    inputs:
+      apps:
+        type: string
+        default: '[]'
+      plan:
+        type: string
+        required: true
+      build:
+        type: string
+        required: true
+      deploy:
+        type: string
+        required: true
+      notify:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summarize release
+        id: summary
+        shell: bash
+        env:
+          APPS: ${{ inputs.apps }}
+          PLAN: ${{ inputs.plan }}
+          BUILD: ${{ inputs.build }}
+          DEPLOY: ${{ inputs.deploy }}
+        run: |
+          set -euo pipefail
+          for state in "$PLAN" "$BUILD" "$DEPLOY"; do
+            case "$state" in success|failure|cancelled|skipped) ;; *) exit 2 ;; esac
+          done
+          apps=$(jq -er 'if type=="array" and all(.[]; .=="web" or .=="manage") then join(", ") else error("invalid apps") end' <<< "$APPS")
+          outcome=success
+          if [[ "$PLAN" == failure || "$BUILD" == failure || "$DEPLOY" == failure ]]; then outcome=failure
+          elif [[ "$PLAN" == cancelled || "$BUILD" == cancelled || "$DEPLOY" == cancelled ]]; then outcome=cancelled
+          elif [[ "$DEPLOY" == skipped ]]; then outcome=skipped; fi
+          {
+            echo '### 🔮 Release summary'
+            echo
+            echo "Apps: ${apps:-none}"
+            echo
+            echo '| Phase | Result |'
+            echo '| --- | --- |'
+            echo "| Plan | $PLAN |"
+            echo "| Build | $BUILD |"
+            echo "| Deploy | $DEPLOY |"
+            echo
+            echo "[Execution logs](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        if: inputs.notify && github.ref == 'refs/heads/main'
+        with:
+          persist-credentials: false
+      - name: Notify aggregate result
+        if: inputs.notify && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: ./.github/actions/notify
+        with:
+          action: end
+          device-id: ${{ secrets.NOTIFY_DEVICE_ID }}
+          token: ${{ secrets.NOTIFY_DEVICE_TOKEN }}
+          workflow: ${{ github.workflow }}
+          job: Release
+          outcome: ${{ steps.summary.outputs.outcome }}

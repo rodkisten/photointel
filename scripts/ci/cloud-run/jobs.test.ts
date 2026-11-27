@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { planJobs,planScheduler } from './jobs.ts';
+const p='photointel',r='us-central1';
+const jobs=planJobs(p,r,'/tmp/rendered');
+assert.equal(jobs.length,15);
+assert.ok(jobs.every(a=>!a.join(' ').includes('photointel-migrate')));
+assert.throws(()=>planJobs(p,r,'/tmp/rendered',true));
+const schedules={discover:'0 * * * *',worker:'*/5 * * * *',maintenance:'0 0 * * *'};
+const plan=planScheduler(p,r,'UTC',schedules,new Set(['photointel-worker']));
+assert.equal(plan.filter(a=>a[2]==='pause').length,2);
+assert.equal(plan.filter(a=>a[2]==='resume').length,0);
+assert.equal(plan.filter(a=>a[2]==='update').length,1);
+console.log('Job ownership and scheduler planning passed');

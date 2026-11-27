@@ -1,0 +1,52 @@
+name: "🔮 RV · Cloud Run renderer parity"
+on:
+  pull_request:
+    paths:
+      - 'scripts/ci/cloud-run/**'
+      - 'infra/gcp/manage.py'
+      - '.github/workflows/cloud-run-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Typecheck renderer
+        run: |
+          npm install --prefix "$RUNNER_TEMP/renderer-types" --no-save --package-lock=false typescript@6 @types/node@24
+          "$RUNNER_TEMP/renderer-types/node_modules/.bin/tsc" --noEmit --allowImportingTsExtensions --strict --target esnext --module nodenext --typeRoots "$RUNNER_TEMP/renderer-types/node_modules/@types" --types node --skipLibCheck scripts/ci/cloud-run/render.ts scripts/ci/cloud-run/compare.ts scripts/ci/cloud-run/runner.ts scripts/ci/cloud-run/build.ts scripts/ci/cloud-run/build.test.ts scripts/ci/cloud-run/manifest.ts scripts/ci/cloud-run/jobs.ts scripts/ci/cloud-run/jobs.test.ts scripts/ci/cloud-run/index.ts scripts/ci/cloud-run/catalog.ts scripts/ci/cloud-run/catalog.test.ts scripts/ci/cloud-run/dispatch.ts scripts/ci/cloud-run/dispatch.test.ts scripts/ci/cloud-run/terraform.ts scripts/ci/cloud-run/release-console.ts scripts/ci/cloud-run/release-console.test.ts scripts/ci/cloud-run/worktree.ts scripts/ci/cloud-run/release-preview.ts scripts/ci/cloud-run/release-verify.ts
+      - name: Offline release console rehearsal
+        run: |
+          for target in api media web manage; do
+            for action in plan build deploy build-and-deploy; do
+              node scripts/ci/cloud-run/release-preview.ts --target "$target" --action "$action"
+            done
+          done
+          if node scripts/ci/cloud-run/release-preview.ts --target invalid; then exit 1; fi
+      - name: Verify native release selection
+        run: node scripts/ci/cloud-run/release-console.test.ts
+      - name: Verify dispatch contract
+        run: node scripts/ci/cloud-run/dispatch.test.ts
+      - name: Verify release catalog contract
+        run: node scripts/ci/cloud-run/catalog.test.ts
+      - name: Verify registry digest contract
+        run: node scripts/ci/cloud-run/build.test.ts
+      - name: Verify job ownership and scheduler planning
+        run: node scripts/ci/cloud-run/jobs.test.ts
+      - name: Verify CLI help and fail-closed apply
+        run: |
+          node scripts/ci/cloud-run/index.ts --help
+          if node scripts/ci/cloud-run/index.ts jobs-plan --apply; then exit 1; fi
+      - name: Compare offline manifests
+        run: PYTHONPATH=. python scripts/ci/cloud-run/parity.py

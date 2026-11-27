@@ -11,11 +11,11 @@ from infra.terraform import dispatch_media as dispatch
 class MediaTerraformTests(unittest.TestCase):
     def test_dispatch_waits_for_its_own_terraform_run(self):
         environment = {
-            "GITHUB_REPOSITORY": "rodkisten/photointel", "GITHUB_SHA": "d" * 40,
+            "GITHUB_REPOSITORY": "rodverse/rodverse", "GITHUB_SHA": "d" * 40,
             "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2", "IMAGE_SHA": "b" * 40,
             "MEDIA_ACTION": "jobs-deploy",
         }
-        run = {"id": 123, "display_title": "TF · apply · gcp · media-42-2", "html_url": "https://github.com/rodkisten/photointel/actions/runs/123"}
+        run = {"id": 123, "display_title": "TF · apply · gcp · media-42-2", "html_url": "https://github.com/rodverse/rodverse/actions/runs/123"}
         with patch.dict(dispatch.os.environ, environment, clear=True), patch.object(dispatch, "gh", side_effect=[
             None, {"workflow_runs": [run]}, {**run, "status": "completed", "conclusion": "success"},
         ]) as gh, patch.object(dispatch.time, "sleep"):

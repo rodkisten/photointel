@@ -22,7 +22,7 @@ SPEC.loader.exec_module(notify)
 
 WORKFLOWS = (
     "bootstrap-validation.yml", "ci.yml", "compose-validation.yml",
-    "container-architectures.yml", "deploy-worker.yml", "gcp-bootstrap.yml",
+    "container-architectures.yml", "deploy-worker.yml", "_report.yml", "gcp-bootstrap.yml",
     "gcp-deploy.yml", "gcp-validation.yml", "real-cpu-smoke.yml",
     "release-manifest.yml", "ssh.yml", "webkit-validation.yml", "zip.yml",
 )
@@ -159,7 +159,7 @@ class NotifyOfflineTests(unittest.TestCase):
         self.assertIn('mode != "migrate"', management)
 
     def test_only_strategic_workflows_send_notify(self):
-        strategic = {"gcp-deploy.yml", "gcp-bootstrap.yml", "deploy-worker.yml", "zip.yml"}
+        strategic = {"gcp-deploy.yml", "gcp-bootstrap.yml", "_report.yml", "zip.yml"}
         for name in WORKFLOWS:
             source = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             self.assertEqual("uses: ./.github/actions/notify" in source, name in strategic, name)
