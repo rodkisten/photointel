@@ -72,20 +72,19 @@ export const WORKFLOW_INPUTS: WorkflowInputsMap = {
     migration_backup_prefix: [],
   },
   'cloudflare-setup.yml': { mode: ['plan', 'apply'] },
-  'gcp-health.yml': {},
+  'gcp-health.yml': { operation: ['health', 'cpu', 'media'], target: ['image', 'video', 'all'], image_input: [], video_input: [], confirm: ['false', 'true'] },
+  'ci.yml': { scope: ['all', 'auto', 'python', 'frontend', 'frontend-web', 'frontend-manage', 'integration', 'containers', 'security', 'bootstrap', 'compose', 'icloud', 'diagnostics'], upload_artifacts: ['false', 'true'] },
+  'npm-lockfiles.yml': { operation: ['npm', 'python', 'security'], package_path: [], target_branch: [] },
   'release.yml': { action: ['plan', 'build', 'deploy', 'build-and-deploy'], target: ['api', 'media', 'web', 'manage', 'all'], source: ['main', 'last'], sha: [], engine: ['legacy', 'preview', 'verify'], confirm: ['false', 'true'] },
   'frontend-release.yml': { action: ['build', 'build-and-deploy'], app: ['all', 'web', 'manage'], sha: [], request_id: [] },
   'maintenance.yml': { operation: ['validate', 'render', 'jobs-plan', 'scheduler-plan'] },
-  'deploy-worker.yml': { action: ['build', 'build-and-deploy'], app: ['all', 'web', 'manage'], sha: [], request_id: [] },
   'gcp-migrate.yml': {
     migration_mode: ['plan', 'apply', 'diagnose'],
     migration_database: ['unselected', 'initial-empty', 'existing-with-backup'],
     migration_backup_prefix: [],
   },
   'gcp-validation.yml': {},
-  'icloud-validation.yml': {},
   'icloud-setup.yml': {},
-  'backend-smoke.yml': {},
 };
 
 // --- FAULT CLASSIFICATION ---

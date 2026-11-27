@@ -18,7 +18,7 @@ on:
       - infra/scripts/prepare_workflow_env.py
       - infra/scripts/cloudflare_setup.py
       - infra/cloudflare/cloud-run-proxy/**
-      - .github/workflows/deploy-worker.yml
+      - .github/workflows/frontend-release.yml
   push:
     branches: [main]
     paths:
@@ -38,7 +38,7 @@ on:
       - infra/scripts/prepare_workflow_env.py
       - infra/scripts/cloudflare_setup.py
       - infra/cloudflare/cloud-run-proxy/**
-      - .github/workflows/deploy-worker.yml
+      - .github/workflows/frontend-release.yml
   workflow_dispatch:
     inputs:
       upload_evidence:

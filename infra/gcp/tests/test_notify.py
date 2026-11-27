@@ -21,9 +21,9 @@ notify = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(notify)
 
 WORKFLOWS = (
-    "bootstrap-validation.yml", "ci.yml", "compose-validation.yml",
-    "container-architectures.yml", "deploy-worker.yml", "_report.yml", "gcp-bootstrap.yml",
-    "gcp-deploy.yml", "gcp-validation.yml", "real-cpu-smoke.yml",
+    "ci.yml", "gcp-health.yml",
+    "container-architectures.yml", "frontend-release.yml", "_report.yml", "gcp-bootstrap.yml",
+    "gcp-deploy.yml", "gcp-validation.yml",
     "release-manifest.yml", "ssh.yml", "webkit-validation.yml", "zip.yml",
 )
 
