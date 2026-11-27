@@ -18,7 +18,7 @@ Manage is the central user experience, not a central implementation. Code/Shell,
 | [uai](https://github.com/rodkisten/uai/blob/main/README.md) | shadcn registry; source installation is not runtime federation. Documented hostname status requires verification. |
 | [Userscripts RFC 138](https://github.com/rodkisten/userscripts-cf/pull/138) | Lazy module strategy; documentation only. Studio can federate; GM/Shadow DOM runtime stays independent. |
 | [Shared CI](https://github.com/rodkisten/github) and [PR 11](https://github.com/rodkisten/github/pull/11) | Reusable pipelines and action bundle fix; GHCR central pipeline not established by audit. |
-| RodSandbox | Approved standalone + remote direction; repository not resolved by connector searches. Locate exact owner/name, inspect main and active PRs before modifying. No assumed APIs. |
+| RodSandbox | Approved standalone + remote direction; [repository](https://github.com/rodkisten/rodsandbox) resolved; main is Next.js 16.2.6 + React 19.2.4, CodeMirror 6, xterm, IndexedDB/LightningFS, isomorphic-git, esbuild and node-pty dependencies. [PR #12](https://github.com/rodkisten/rodsandbox/pull/12) proposes Vite/Cloudflare migration; implementation pending. |
 
 Main Rodverse audit observed commit 8a7af87a059ab887c24ee0d0c6c6a52fcf90c540; open PRs #261 and #257 concern CI, not federation. Do not overwrite concurrent work.
 
@@ -43,6 +43,12 @@ flowchart TD
 ```
 
 Code owns editor/AST and proposed canonical Workflow Studio; orb owns registry, workflow execution, events and orchestration. Compare both branches and choose existing reusable implementation before moving code. Manage owns navigation, workspace selection, module registry and composition. uai owns semantic UI primitives. RodSandbox owns workspace files, terminal, resource inventory, process/container lifecycle, volumes and private port forwarding. github owns reusable CI. rodlog owns log formatting; rodtui CLI presentation. Preserve PhotoIntel and Jardim independent production infrastructure.
+
+## RodSandbox migration alignment (2026-11-27)
+
+Main [package.json](https://github.com/rodkisten/rodsandbox/blob/main/package.json) still declares Next.js and pnpm 8; README describes the CDN route rather than the complete sandbox. Do not mistake package dependencies for functioning file operations or terminal access. [PR #12 migration contract](https://github.com/rodkisten/rodsandbox/blob/refs/pull/12/head/docs/vite-cloudflare-migration.md) explicitly chooses React 19/Vite/TanStack Router, pnpm workspaces without Turborepo, Elysia and native Cloudflare handlers, esbuild WASM, import maps, TypeScript workers, CodeMirror 6 and UAI. It is stacked on #11; confirm predecessor merge and retarget/reconcile before changing the branch.
+
+Extend that migration with standalone and federated entrypoints after extracting Next-specific routing/API dependencies. Preserve browser-first compilation, IndexedDB filesystem, declaration workers and preview isolation. Linux terminal/filesystem access goes through authenticated isolated remote gateway, not Workers host shell or paid Cloudflare containers. Browser workspace is not the same as VPS filesystem: expose provider capabilities explicitly, synchronize only on request and handle conflicts. Preserve existing CDN routes and audit server-only dependencies. No new Runtime repo. Avoid a second migration PR competing with #12. The official Vite federation guide explicitly supports Vite 5–8; validate exact installed versions together.
 
 ## Integration contract (proposed, not exported yet)
 
@@ -111,7 +117,7 @@ Ports: localhost on iPhone is iPhone, not VPS. Bind service appropriately inside
 
 ## Implementation order / acceptance
 
-1. Resolve RodSandbox repository, inspect all active PR heads and federation workflow artifacts; confirm Manage deployed hostname and existing route inventory.
+1. Inspect RodSandbox migration PR and predecessor merge status, inspect all active PR heads and federation workflow artifacts; confirm Manage deployed hostname and existing route inventory.
 2. ADR and compatibility spike: one shared contract, Shell as first remote; local standalone and actual Manage host must both work. Preserve /touch, WASM, existing deploys.
 3. Compare Code/orb workflow builders and extract one implementation; no new competing editor. Integrate uai primitives.
 4. RodSandbox standalone and federated root, file operations, terminal/provider adapters; inventory existing capabilities first.
@@ -123,4 +129,4 @@ Acceptance: typecheck host/remotes; unit tests only for meaningful contracts/par
 
 ## Audit limits
 
-No live deployments, CI artifacts, VPS or RodSandbox code verified in this increment. Search index is default-branch only. Architecture and contract sketches are proposals; exact package versions, DNS, routes, APIs and security behavior remain subject to implementation review.
+No live deployments, CI artifacts, VPS or RodSandbox runtime implementation verified in this increment; package metadata and migration specification inspected. Search index is default-branch only. Architecture and contract sketches are proposals; exact package versions, DNS, routes, APIs and security behavior remain subject to implementation review.
