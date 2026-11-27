@@ -1,0 +1,6 @@
+PASS standalone editor, worker compilation, sandboxed preview
+PASS real Federation, singleton guard, workers, WASM, preview logs
+PASS Radix portal contained; host input CSS and pointer events preserved
+PASS production CSP template and opaque preview origin isolation
+PASS unmount terminates workers; persistence namespaced by identity/workspace
+PASS no browser exceptions; remote assets resolve to SHA origin; no host PTY probe

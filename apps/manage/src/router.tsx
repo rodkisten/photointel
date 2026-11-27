@@ -10,6 +10,8 @@ import {
 } from '@tanstack/react-router';
 
 import App from './App';
+import { lazyRouteComponent } from '@tanstack/react-router';
+const ModulePage = lazyRouteComponent(() => import('./features/modules/ModulePage'), 'ModulePage');
 import { Card } from './components/ui';
 import { IssueBanner, Spinner } from './components/shared';
 import { RunDetail } from './components/runs';
@@ -214,8 +216,13 @@ const systemRoute = createRoute({
   component: SystemPage,
 });
 
+const modulesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/modules', component: ModulePage });
+const sandboxRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sandbox/$', component: ModulePage });
+const sandboxIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sandbox', component: ModulePage });
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  modulesRoute, sandboxRoute, sandboxIndexRoute,
   deploysRoute,
   infrastructureRoute,
   triggersRoute,

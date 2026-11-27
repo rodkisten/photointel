@@ -1,3 +1,4 @@
+import { moduleContentSecurityPolicy } from './features/modules/security';
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
@@ -33,8 +34,8 @@ const SECURITY_POLICIES = {
   DENY: 'DENY',
   NO_REFERRER: 'no-referrer',
   NO_INDEX: 'noindex, nofollow, noarchive',
-  CSP_PREVIEW: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
-  CSP_PROD: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.sentry.io; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
+  CSP_PREVIEW: moduleContentSecurityPolicy(false),
+  CSP_PROD: moduleContentSecurityPolicy(true),
 };
 
 interface WorkerContext {

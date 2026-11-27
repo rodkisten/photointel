@@ -76,7 +76,7 @@ test('Manage never intercepts API, auth, hooks, diagnostics or cross-origin requ
   const env = setup();
   await env.trigger('install');
   const before = env.requests;
-  for (const path of ['/api/settings', '/auth/login', '/hooks/github', '/__diagnostics', '/cdn-cgi/access/login']) {
+  for (const path of ['/rod-module.json', '/modules/sandbox/pinned/mf-manifest.json', '/api/settings', '/auth/login', '/hooks/github', '/__diagnostics', '/cdn-cgi/access/login']) {
     assert.equal(await env.trigger('fetch', {
       request: { method: 'GET', mode: 'navigate', url: 'https://photos-manage.migos.club' + path },
     }), undefined, path);

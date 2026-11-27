@@ -1,0 +1,3 @@
+# Incremental migration: applications retain existing npm lockfiles/CI for now.
+packages:
+  - packages/rod-module-sdk

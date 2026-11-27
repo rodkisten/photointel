@@ -52,16 +52,18 @@ const NAV = [
   { id: 'config', to: '/environment', label: 'Ambiente', icon: Code2 },
   { id: 'secrets', to: '/secrets', label: 'Secrets', icon: KeyRound },
   { id: 'icloud', to: '/icloud', label: 'iCloud', icon: Apple },
+  { id: 'modules', to: '/modules', label: 'Módulos', icon: Code2 },
   { id: 'settings', to: '/system', label: 'Sistema', icon: Settings2 },
 ] as const;
 
 const NAV_GROUPS = [
   { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
-  { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'settings'] },
+  { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'modules', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  modules: 'Registry de aplicações federadas',
   jobs: 'Dispare jobs e acompanhe logs de execução',
   terminal: 'Acesse suas VMs e GitHub Codespaces',
   operations: 'Cron, pausas e execuções dos serviços',
@@ -82,6 +84,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
+  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox')) return 'modules';
   if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
