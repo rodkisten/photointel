@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { select } from './select-context.ts';
+import { changedFiles } from './affected.ts';
+assert.deepEqual(select([], 'all').frontend_matrix,['web','manage']);
+assert.deepEqual(select(['apps/api/main.py'],'frontend-web').frontend_matrix,['web']);
+assert.deepEqual(select(['apps/web/src/app.tsx']).frontend_matrix,['web']);
+assert.deepEqual(select(['apps/manage/src/index.tsx']).frontend_matrix,['manage']);
+assert.equal(select(['gpu/worker.py']).py_gpu,true);
+assert.equal(select(['apps/api/src/main.py']).integration,true);
+assert.equal(select(['apps/api/src/main.py']).containers,true);
+assert.equal(select(['docs/readme.md']).security,false);
+assert.deepEqual(select(['scripts/ci/highlight_output.py']),select([],'all'));
+assert.deepEqual(changedFiles('0'.repeat(40),'HEAD',false),['*']);
+assert.throws(()=>select([],'invalid'));

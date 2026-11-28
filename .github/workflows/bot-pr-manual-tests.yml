@@ -34,23 +34,19 @@ jobs:
             for (const path of paths) {
               if (path.startsWith('infra/terraform/')) wanted.add('tf-validate.yml');
               if (path.startsWith('apps/web/') || path.startsWith('apps/manage/') ||
-                  path.startsWith('infra/cloudflare/')) wanted.add('deploy-worker.yml');
-              if (path.startsWith('apps/api/') || path.startsWith('tests/')) wanted.add('backend-smoke.yml');
+                  path.startsWith('infra/cloudflare/')) wanted.add('frontend-release.yml');
               if (path.startsWith('infra/gcp/')) wanted.add('gcp-validation.yml');
-              if (path.startsWith('packages/env/')) wanted.add('tf-env-package.yml');
               // Never recommend production migrations/bootstrap/deploy for a dependency PR.
               // CI covers Python, GPU and integration tests without production credentials.
-              if (path.startsWith('scripts/ci/')) wanted.add('ci-pretty-logs.yml');
               if (path.startsWith('.github/workflows/')) {
                 const workflow = path.split('/').pop();
-                if (['ci.yml', 'ci-pretty-logs.yml', 'tf-validate.yml',
-                     'backend-smoke.yml', 'gcp-validation.yml', 'tf-env-package.yml'].includes(workflow))
+                if (['ci.yml', 'tf-validate.yml',
+                     'gcp-validation.yml'].includes(workflow))
                   wanted.add(workflow);
               }
             }
             const safeChecks = new Set(['ci.yml', 'ci-pretty-logs.yml',
-              'tf-validate.yml', 'backend-smoke.yml', 'gcp-validation.yml',
-              'tf-env-package.yml']);
+              'tf-validate.yml', 'gcp-validation.yml']);
             const available = workflows.filter(w =>
               safeChecks.has(w.path.split('/').pop()) &&
               wanted.has(w.path.split('/').pop()) && w.state === 'active'

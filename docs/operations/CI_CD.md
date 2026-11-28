@@ -122,3 +122,43 @@ Offline rehearsal: `node scripts/ci/cloud-run/release-preview.ts --target media 
 Compatibility correction: preserve the original release.yml operator console (api/media/web/manage/all, source, action, SHA and confirmation). Frontend orchestration moves to frontend-release.yml; deploy-worker.yml remains its compatibility wrapper. The console exposes engine=preview for offline selection rehearsal, skipping cloud authentication and mutation. Legacy remains the default. Preview is not authenticated execution.
 
 Authenticated verification: engine=verify checks the active downstream workflow using GitHub App credentials and inventories Artifact Registry for API/Media using read-only runner mode. No dispatch or build occurs. Manage exposes the separate console and frontend contracts. Confirmation defaults to false. Native mutation remains disabled pending verification.
+
+## Legacy removal inventory
+The old Python CI selector and its regression suite are retired; ci-pretty-logs now exercises the TypeScript selector. Remaining Python consumers include release console, GCP bootstrap/deploy/validation, media deploy, Terraform API/Cloudflare release adapters, configuration preparation, diagnostics and notification tooling. Keep application migration and runtime Python. Remove each orchestration module only after its callers and regression contracts migrate. Authenticated verification remains required before switching the release engine.
+
+## Workflow consolidation
+`maintenance.yml` now owns native Cloud Run typechecking, offline parity, release rehearsal and manual synthetic planning. The standalone `cloud-run-parity.yml` is removed; its checks run as part of Maintenance. Existing production and privileged workflows are unchanged. Update any external required-check references to the new Maintenance job before merging.
+
+CI consolidation: terminal-validation, notify-validation, tf-env-package and hey-api-contract are now jobs in ci.yml. Their commands are retained. They use conservative existing CI planner flags (security for terminal, python/security for notify, frontend matrix for ENV/SDK). Manual scope all runs every migrated job. External required check names and direct dispatch callers must migrate to CI.
+
+Dependency operations now share npm-lockfiles.yml (display name Dependencies), retaining its existing dispatch filename for compatibility. Manual operation npm/python/security selects the updater. Python security refresh audits both runtime and GPU before committing only uv.lock to the selected branch, never unconditionally to main. Removed python-lockfiles.yml, python-security-lock.yml, security-lock-refresh.yml and temp-terminal-lockfile.yml. Automatic npm sync is restricted to manifest/lockfile changes. External callers must migrate to the retained dispatch endpoint.
+
+Health consolidation: backend-smoke moves to CI as isolated PostgreSQL and preview-audit jobs. gcp-health.yml retains its dispatch filename and now accepts operation health/cpu/media. CPU download requires confirm=true; Media remains main-only, production environment, explicit paid execution confirmation and job-scoped OIDC. Removed backend-smoke.yml, real-cpu-smoke.yml and media-smoke.yml. Existing callers must use the new operation input. No remote smoke was executed during migration.
+
+CI consolidation: iCloud contracts and log diagnostics are central CI jobs; compose and bootstrap remain explicit manual scopes to avoid redundant heavy runs. Bootstrap retains its evidence and optional artifact input. WebKit remains a separate manual workflow for now; browser E2E removal requires review of its unique coverage. Existing direct dispatch callers must migrate to ci.yml scope inputs.
+
+Removed the legacy deploy-worker dispatch wrapper. Use frontend-release.yml with the same inputs. Updated Manage dispatch catalog, bot manual checks, GCP validation paths and offline notification/configuration tests to reference consolidated workflows. Historical documentation may still mention retired names; external dispatch scripts must migrate.
+
+Artifact cleanup uses gcp-artifact-cleanup.yml with target github/gcp, apply=false by default. GitHub deletion requires confirmation rodverse/rodverse, protects active runs, release manifests/provenance and artifacts younger than seven days. GCP retains its existing production environment and project confirmation. The old artifact-cleanup.yml is retired. No deletion was executed.
+
+Frontend release no longer runs on PRs: CI validates and cloudflare-pr-previews publishes native previews. A separate comment job updates one bot-owned marker comment with both links. Preview publishing no longer requests GCP OIDC. Production push and manual release remain unchanged. Preview build duplication with CI is still pending artifact handoff.
+
+Automatic frontend PR previews now run as a reusable workflow in CI after the frontend matrix. Both apps are built when either frontend is affected, sealed and uploaded as preview-only artifacts with SHA and run ID, verified before publication, and retained for two days. Backend-only PRs no longer rebuild previews. Manual preview dispatch retains standalone build; closed PR cleanup remains separate. Production artifact names and configuration remain separate. Preview publication depends on frontend success, not unrelated backend/security jobs.
+
+Infrastructure cleanup: removed permanently disabled preview-watchdog and unreachable push-check from manual-only gcp-deploy. Terraform production requires explicit authorization for import as well as apply before checkout/authentication; bucket extraction uses jq rather than inline Python. Existing saved-plan review, provider identities, state ownership and Python release contracts remain intact pending native parity.
+
+Native saved-plan candidate: scripts/ci/cloud-run/saved-plan.ts preserves the private GCS object layout, manifest fields, numeric latest-run selection, SHA/config binding and 24-hour expiry. It rejects invalid/future timestamps and malformed digests. Production remains on Python until cross-language and authenticated storage parity are verified.
+
+Saved-plan compatibility checks cover every persisted context field, future timestamps and rejection of incomplete uploads without a manifest. Production remains on the legacy implementation until a private storage round-trip is validated.
+
+Native plan review candidate: plan-review.ts checks saved plans for both scopes, blocks destruction and replacement, rejects unknown actions and incomplete plans, and never prints resource values. Maintenance runs offline checks. Production remains on the legacy review until parity is validated.
+
+Native media release candidate: media-release.ts preserves existing digest mappings for unchanged source SHA and renders declarative adoption imports, refusing missing managed Jobs or unknown execution settings. No provider calls or mutations are implemented yet. Maintenance checks offline contracts; Python remains authoritative for inventory and verification.
+
+Preview artifact reuse skips static builds, not Worker dependency resolution: Manage needs its lockfile dependencies for Wrangler bundling. Install with lifecycle scripts disabled in reuse mode. Log diagnostics assert the actual localized completion message. Security audit findings remain blocking until individually reviewed.
+
+Security audit triage: the historical scan reported 23 findings (JWT fixture, generic API key matches in tests/docs/vendor code, and GCP API key matches in historical browser assets). These are candidates for individual verification, not approved exceptions. Confirm credential restrictions and rotate any real exposed credential before considering exact fingerprint exceptions. CI retains full-history blocking scans and independently audits exported Python runtime dependencies; summaries expose only rule counts, never matched values.
+
+See [historical secret scan triage](SECURITY_TRIAGE.md) for evidence and closure requirements.
+
+Native media preparation CLI: `node scripts/ci/cloud-run/media-prepare.ts` reads Terraform outputs/state and Cloud Run inventory, verifies source ancestry, and reports only SHA/import count. `--write-local` explicitly writes generated Terraform files with exclusive creation and private permissions; it refuses existing files. Fixed photointel/us-central1 target. No remote writes. Authenticated execution and post-apply verification remain pending; legacy production workflow is unchanged.

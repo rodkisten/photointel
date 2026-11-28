@@ -30,7 +30,10 @@ on:
         type: choice
         required: true
         default: all
-        options: [all, auto, python, frontend, frontend-web, frontend-manage, integration, containers, security]
+        options: [all, auto, python, frontend, frontend-web, frontend-manage, integration, containers, security, bootstrap, compose, icloud, diagnostics]
+      upload_artifacts:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -84,7 +87,7 @@ jobs:
         id: scope
         env:
           EVENT_NAME: ${{ github.event_name }}
-          SCOPE: ${{ inputs.scope || 'auto' }}
+          SCOPE: ${{ contains(fromJSON('["bootstrap","compose","icloud","diagnostics"]'), inputs.scope) && 'auto' || inputs.scope || 'auto' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
         run: node scripts/ci/select-context.ts
@@ -245,8 +248,9 @@ jobs:
     if: needs.changes.outputs.front_web == 'true' || needs.changes.outputs.front_manage == 'true'
     uses: ./.github/workflows/_build.yml
     with:
-      apps: ${{ needs.changes.outputs.frontend_matrix }}
+      apps: ${{ github.event_name == 'pull_request' && '["web","manage"]' || needs.changes.outputs.frontend_matrix }}
       production: false
+      preview: ${{ github.event_name == 'pull_request' }}
 
   # ============================================================================
   # 4. Testes de Integração & E2E
@@ -542,6 +546,12 @@ jobs:
         with:
           command: uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/runtime-requirements.txt
 
+      - name: "🔍 Audit runtime Python dependencies"
+        id: runtime_dependency_audit
+        if: steps.notify_observed_043.outcome == 'success'
+        continue-on-error: true
+        run: uvx pip-audit --requirement /tmp/runtime-requirements.txt
+
       - name: "🕵️ Varrer vazamento de segredos (Gitleaks)"
         id: notify_observed_046
         continue-on-error: true
@@ -552,6 +562,15 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" -v "$report_dir:/report" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact=100 --no-banner --report-format json --report-path /report/findings.json /repo || status=$?
           if [ -f "$report_dir/findings.json" ]; then
             jq -r '.[] | [.RuleID, .File, (.StartLine|tostring), .Commit] | @tsv' "$report_dir/findings.json"
+            {
+              echo "### Secret scan · findings by rule"
+              echo
+              echo '| Rule | Findings |'
+              echo '| --- | ---: |'
+              jq -r 'group_by(.RuleID)[] | "| " + .[0].RuleID + " | " + (length|tostring) + " |"' "$report_dir/findings.json"
+              echo
+              echo "Historical findings remain blocking until verified or remediated."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$status"
 
@@ -573,3 +592,846 @@ jobs:
             exit 1
           fi
           echo "✅ Nenhuma falha registrada." >> "$GITHUB_STEP_SUMMARY"
+
+  terminal:
+    needs: changes
+    if: needs.changes.outputs.security == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧪 Offline lifecycle and configuration tests"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            bash -n infra/terminal/startup.sh
+            python3 -m unittest discover -s infra/terminal -p 'test_*.py' -v
+      - name: "🐳 Build and verify CLI tools without production credentials"
+        run: |
+          docker build -t photointel-terminal-test infra/terminal
+          docker run --rm --entrypoint bash photointel-terminal-test -ec '
+            test "$(id -un)" = rod
+            test "$(id -u)" = 1000
+            test "$(id -g)" = 1000
+            test -w /home/rod
+            for tool in gcloud jq awk ssh sshd git tmux rsync python3 psql sqlite3 rg fzf; do
+              command -v "$tool"
+            done
+            gcloud version
+          '
+
+  notify-tests:
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.security == 'true'
+    name: "📱 API + Actions tests"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      NOTIFY_JOB_EVENTS_ENABLED: 'false'
+      NOTIFY_DEVICE_ID: ''
+      NOTIFY_TOKEN: ''
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🐍 UV"
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - name: "🐍 Python"
+        run: uv python install 3.12
+      - name: "📦 Dependencies"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv sync --frozen --group ingest
+      - name: "🧪 Notify! API and Actions"
+        run: |
+          uv run --no-sync pytest -q tests/test_job_notify.py tests/test_sentry_observability.py tests/test_job_observability.py
+          python3 -m unittest discover -s infra/gcp/tests -p test_notify.py -v
+          python3 -m unittest discover -s infra/gcp/tests -p test_telegram_action.py -v
+      - name: "🔍 Lint"
+        run: >-
+          uv run --no-sync ruff check
+          apps/api/src/photointel/services/job_notify.py
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/task_runner.py
+          apps/api/src/photointel/routers/operations.py
+          tests/test_job_notify.py
+          tests/test_sentry_observability.py
+          apps/api/src/photointel/sentry_observability.py
+          apps/api/src/photointel/routers/observability.py
+      - name: "🧬 Typecheck Sentry"
+        run: >-
+          uv run --no-sync mypy
+          apps/api/src/photointel/sentry_observability.py
+          apps/api/src/photointel/routers/observability.py
+          apps/api/src/photointel/services/worker.py
+
+  env-contract:
+    needs: changes
+    if: needs.changes.outputs.frontend_matrix != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: "26"}
+      - name: "TF · Test shared ENV parser"
+        run: node --experimental-strip-types --test packages/env/tests/*.test.mts
+
+  sdk-contract:
+    needs: changes
+    if: needs.changes.outputs.frontend_matrix != '[]'
+    name: "🧬 Generate · ${{ matrix.app }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, manage]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      - name: "📦 Install locked dependencies"
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: "🧬 Generate Hey API SDK"
+        run: npm run generate:api
+      - name: "🧪 Typecheck generated SDK consumers"
+        run: npm run typecheck
+      - name: "🔍 Verify generated SDK"
+        run: |
+          test -d src/api/hey-api
+          test -n "$(find src/api/hey-api -type f -print -quit)"
+          echo "### 🧬 Hey API · ${{ matrix.app }}" >> "$GITHUB_STEP_SUMMARY"
+          find src/api/hey-api -type f | sort | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY"
+
+  backend-smoke:
+    needs: changes
+    if: needs.changes.outputs.py_api == 'true' || needs.changes.outputs.integration == 'true'
+    name: "🐍 Unit + iCloud integration"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: local
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧰 Python and uv"
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - name: "🐍 Python 3.12"
+        run: uv python install 3.12
+      - name: "📦 Sync locked dependencies"
+        run: uv sync --frozen --group ingest
+      - name: "🔎 Ruff"
+        run: >
+          uv run ruff check
+          apps/api/src/photointel/services/worker.py
+          apps/api/src/photointel/services/telegram_notify.py
+          tests/test_telegram_notify.py
+          apps/api/src/photointel/services/jobs.py
+          apps/api/src/photointel/services/discovery.py
+          apps/api/src/photointel/services/preview_repair.py
+          tests/test_auto_preview_repair.py
+          apps/api/src/photointel/routers/preview_audit.py
+          apps/api/src/photointel/routers/catalog.py
+          apps/api/src/photointel/services/media.py
+          apps/api/src/photointel/services/ingestion.py
+          apps/api/src/photointel/storage.py
+          tests/test_download_integrity_v11.py
+          tests/test_foundation_storage.py
+          tests/test_responsive_media.py
+          tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
+          apps/api/src/photointel/serializers.py
+          apps/api/src/photointel/routers/operations.py
+          tests/test_backend_contention.py
+          tests/integration/test_discovery_pipeline_v11.py
+      - name: "🧪 Worker, sessions and correlation"
+        run: >
+          uv run pytest -q
+          tests/test_backend_contention.py
+          tests/test_session_store.py
+          tests/test_icloud_web_auth.py
+          tests/test_job_observability.py
+          tests/test_telegram_notify.py
+          tests/test_responsive_media.py
+          tests/test_private_media_streaming.py
+          tests/test_media_url_versions.py
+          tests/test_foundation_storage.py
+          tests/test_download_integrity_v11.py
+          tests/test_auto_preview_repair.py
+      - name: "🗄️ Enable PostgreSQL extensions"
+        run: >
+          PGPASSWORD=ci-only psql -h 127.0.0.1 -U photointel
+          -d photointel
+          -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+          -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+      - name: "🧪 iCloud lease integration"
+        run: >
+          uv run pytest -q tests/integration/test_discovery_pipeline_v11.py
+          -k 'contention_does_not_consume_manifest_attempts or catalog_preview_audit or expired_icloud_media_url_is_refreshed_once or refresh_refuses_changed_icloud_representation'
+      - name: "🗃 Prepare isolated integration schema"
+        run: uv run alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "🛠 Automatic preview repair integration"
+        run: uv run pytest -q tests/integration/test_api.py -k automatic_preview_repair
+
+  preview-audit:
+    needs: changes
+    if: needs.changes.outputs.py_api == 'true' || needs.changes.outputs.front_web == 'true'
+    name: "🌐 Preview audit UI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: "📥 Checkout"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧪 Install and validate preview UI"
+        uses: rodkisten/github/execute@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          working-directory: apps/web
+          node-version: '26'
+          package-manager: npm
+          script: |
+            npm run typecheck
+            npm test -- src/test/operations.test.tsx
+
+  icloud-contract:
+    needs: changes
+    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'icloud') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.security == 'true')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+      - name: "Unit contracts without credentials"
+        run: python3 -m unittest discover -s infra/gcp/tests -p test_icloud_setup.py -v
+      # The legacy terminal-only installer downloads a mutable, unversioned
+      # upstream archive; its pinned hash can change without any code change.
+      # Test that network installation only when explicitly dispatched, not
+      # during browser-based Apple authentication pull requests.
+      - name: "Verify official gcloud archive and isolated Linux installation"
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import subprocess
+          import tempfile
+          from pathlib import Path
+          from unittest.mock import patch
+          spec = importlib.util.spec_from_file_location("icloud_terminal", "infra/scripts/icloud_terminal.py")
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          with tempfile.TemporaryDirectory() as temporary:
+              with patch.object(module.shutil, "which", return_value=None), patch.object(
+                  module.Path, "home", return_value=Path(temporary)
+              ), patch.object(module, "_known_sdk_binaries", return_value=()):
+
+                  executable = module.ensure_gcloud()
+              result = subprocess.run([executable, "--version"], capture_output=True, text=True, check=True)
+              assert module.SDK_VERSION in result.stdout
+          print("Official SDK checksum, safe extraction and executable verified; no credentials used.")
+          PY
+
+  log-diagnostics:
+    needs: changes
+    if: (github.event_name == 'workflow_dispatch' && inputs.scope == 'diagnostics') || (github.event_name != 'workflow_dispatch' && needs.changes.outputs.security == 'true')
+    name: "🧪 Validate log diagnostics and gcloud CLI"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "Shell syntax"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash -n scripts/ci/pretty-logs.sh scripts/ci/test-pretty-logs.sh
+      - name: "Diagnostics and exit code tests"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: bash scripts/ci/test-pretty-logs.sh
+      - name: "Python and Node.js syntax highlighting"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest scripts.ci.test_highlight_output -v
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - name: "Context selection regression tests"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: node scripts/ci/select-context.test.ts
+      - name: "Shared diagnostic catalog contract"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest scripts.ci.test_diagnostic_catalog -v
+      - name: "Python diagnostic syntax"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m py_compile scripts/ci/gcloud_diagnostics.py
+      - name: "Python cloud_cli contract tests"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest discover -s infra/gcp/tests -p 'test_cloud_cli.py' -v
+      - name: "Install Google Cloud CLI"
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: 'beta'
+      - name: "Validate real gcloud CLI output (no credentials)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          source scripts/ci/pretty-logs.sh
+          ci_run "gcloud CLI version" gcloud --version
+          ci_run "gcloud CLI command discovery" gcloud help run
+          ci_run "gcloud CLI diagnostics" gcloud help iam
+          ci_run "PhotoIntel Python CLI bridge" python3 -m infra.gcp.cloud_cli --project photointel -- run services list --help
+          echo "GCloud CLI validated without authentication or deployment."
+
+  compose-check:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'compose'
+    name: "🐳 Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      COMPOSE_PROJECT_NAME: photointel-compose-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_PARALLEL_LIMIT: '1'
+    steps:
+      - name: "📥 Código"
+        id: notify_observed_001
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: "🧰 Setup"
+        id: notify_observed_002
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: '0.12.23'
+          enable-cache: true
+
+      - name: "🧰 Setup"
+        id: notify_observed_003
+        run: uv python install 3.12
+
+      - name: "🧰 Setup"
+        id: notify_observed_004
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: "🧰 Setup"
+        id: notify_observed_005
+        run: |
+          make setup
+          git diff --exit-code -- uv.lock apps/web/package-lock.json
+          python3 infra/scripts/validate-compose.py --phase configuration
+
+      - name: "🧰 Setup"
+        id: builder
+        uses: docker/setup-buildx-action@v4
+
+      - name: "🧰 Código"
+        id: notify_observed_006
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/minio.Dockerfile
+          tags: photointel-minio:local
+          load: true
+          push: false
+          cache-from: type=gha,scope=photointel-minio
+          cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
+
+      - name: "⚙ ️  Start the actual documen"
+        id: notify_observed_007
+        env:
+          BUILDX_BUILDER: ${{ steps.builder.outputs.name }}
+        run: |
+          make dev
+          uv run python infra/scripts/validate-compose.py --phase startup --expected-assets 0
+
+      - name: "🗃 Neon"
+        id: notify_observed_008
+        run: |
+          make migrate
+          make seed ASSETS=16
+          uv run python infra/scripts/validate-compose.py --phase seeded --expected-assets 16
+
+      - name: "🗃 ️  Verify repeat import doe"
+        id: notify_observed_009
+        run: |
+          make seed ASSETS=16
+          uv run python infra/scripts/validate-compose.py --phase repeated --expected-assets 16 --compare seeded
+
+      - name: "🧹 Limpeza"
+        id: notify_observed_010
+        env:
+          BUILDX_BUILDER: ${{ steps.builder.outputs.name }}
+        run: |
+          make stop
+          make dev
+          uv run python infra/scripts/validate-compose.py --phase restarted --expected-assets 16 --compare seeded
+
+      - name: "⚙ ️  Capture health and allow"
+        id: notify_observed_011
+        if: always()
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 infra/scripts/validate-compose.py --phase final-health
+
+      - name: "🧹 Limpeza"
+        id: notify_observed_012
+        if: always()
+        run: |
+          if test -f .env; then
+            bash infra/scripts/compose.sh down --remove-orphans
+          fi
+
+      - name: "📦 Artefatos"
+        id: notify_observed_013
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: developer-compose-validation
+          path: reports/compose-validation/
+          if-no-files-found: warn
+          retention-days: 14
+
+  bootstrap-check:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'bootstrap'
+    name: "🧰 Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: photointel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+asyncpg://photointel:ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: s3
+      STORAGE_ENDPOINT: http://127.0.0.1:9000
+      STORAGE_BUCKET: photointel-ci-private
+      STORAGE_REGION: us-east-1
+      STORAGE_ACCESS_KEY: ci-access
+      STORAGE_SECRET_KEY: ci-only-not-a-production-secret
+      TEMP_DIRECTORY: /tmp/photointel-ci-processing
+      ICLOUD_ENABLED: 'false'
+      GPU_ENABLED: 'false'
+      INFERENCE_BACKEND: test
+      UV_CACHE_DIR: /tmp/photointel-uv-cache
+      npm_config_cache: /tmp/photointel-npm-cache
+    steps:
+      - name: "📥 Código"
+        id: notify_observed_001
+        uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - name: "🧰 Config"
+        id: notify_observed_002
+        uses: astral-sh/setup-uv@v10.3.3
+        with: {version: '0.12.23'}
+      - name: "🧰 Config"
+        id: notify_observed_003
+        uses: actions/setup-node@v7
+        with: {node-version: '26'}
+      - name: "🧰 Setup"
+        id: notify_observed_004
+        run: mkdir -p reports packages/contracts
+      - name: "🧰 Setup"
+        id: python_install
+        continue-on-error: true
+        run: |
+          uv python install 3.12
+          if test -s uv.lock; then
+            uv sync --frozen --group ingest
+          else
+            uv sync --group ingest
+          fi
+      - name: "🧪 Código"
+        id: notify_observed_005
+        if: steps.python_install.outcome == 'success'
+        run: |
+          mkdir -p reports/tools
+          cp .venv/bin/ruff reports/tools/ruff
+          uv run --no-sync ruff --version > reports/tools/ruff-version.txt
+          sha256sum reports/tools/ruff > reports/tools/ruff.sha256
+      - name: "📦 Lint"
+        id: notify_observed_006
+        if: steps.python_install.outcome == 'success' && inputs.upload_artifacts == true
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-tools
+          path: reports/tools/
+          if-no-files-found: error
+          retention-days: 3
+      - name: "⚙ ️  Resolve missing or place"
+        id: node_install
+        continue-on-error: true
+        run: |
+          if ! node - <<'JS'
+          const fs = require('node:fs');
+          const file = 'apps/web/package-lock.json';
+          if (!fs.existsSync(file)) process.exit(1);
+          const manifest = JSON.parse(fs.readFileSync('apps/web/package.json', 'utf8'));
+          const lock = JSON.parse(fs.readFileSync(file, 'utf8')).packages?.[''];
+          if (!lock?.dependencies) process.exit(1);
+          const ordered = value => JSON.stringify(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b)));
+          for (const kind of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+            if (ordered(manifest[kind]) !== ordered(lock[kind])) process.exit(1);
+          }
+          JS
+          then
+            npm --prefix apps/web install --package-lock-only --ignore-scripts
+          fi
+          npm --prefix apps/web ci
+      - name: "🔐 Setup"
+        id: icloud_help
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync icloudpd --help > reports/icloudpd-help.txt
+          uv run --no-sync python - <<'PY'
+          import importlib.metadata
+          import json
+          from pathlib import Path
+          distribution = importlib.metadata.distribution("icloudpd")
+          Path("reports/icloudpd-installed.json").write_text(json.dumps({
+              "version": distribution.version,
+              "authentication_attempted": False,
+          }, indent=2) + "\n")
+          PY
+      - name: "⚙ ️  Generate OpenAPI from th"
+        id: openapi
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync python - <<'PY'
+          import json
+          from pathlib import Path
+          from photointel.main import app
+          schema = app.openapi()
+          if not schema.get("paths"):
+              raise SystemExit("OpenAPI has no paths")
+          Path("packages/contracts/openapi.json").write_text(
+              json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+          )
+          PY
+      - name: "🧪 Testes"
+        id: contracts
+        if: steps.openapi.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run generate:api
+      - name: "🧪 Lint"
+        id: python_lint
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync ruff check . --output-format=github
+      - name: "🧪 Testes"
+        id: python_types
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync mypy apps/api/src gpu bridges
+      - name: "🧪 Testes"
+        id: python_tests
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync pytest -m 'not integration and not gpu and not e2e' --junitxml=reports/unit.xml
+      - name: "🧪 Jobs"
+        id: worker_smoke
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync python tests/worker_core_smoke.py > reports/worker-core-smoke.txt
+      - name: "🧪 Lint"
+        id: web_lint
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run lint
+      - name: "🧪 Testes"
+        id: web_types
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run typecheck
+      - name: "🧪 Testes"
+        id: web_tests
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web test -- --reporter=default --reporter=junit --outputFile=../../reports/frontend-unit.xml
+      - name: "🏗 ️  Frontend production buil"
+        id: web_build
+        if: steps.node_install.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: npm --prefix apps/web run build
+      - name: "🧰 Código"
+        id: notify_observed_007
+        if: steps.python_install.outcome == 'success'
+        uses: docker/setup-buildx-action@v4
+      - name: "🧰 Código"
+        id: minio_build
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: infra/docker/minio.Dockerfile
+          tags: photointel-minio:ci
+          load: true
+          push: false
+          cache-from: type=gha,scope=photointel-minio
+          cache-to: type=gha,mode=max,scope=photointel-minio,ignore-error=true
+      - name: "⚙ ️  Start real private objec"
+        id: storage
+        if: steps.minio_build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker run -d --name photointel-ci-minio -p 127.0.0.1:9000:9000 -e MINIO_ROOT_USER=ci-access -e MINIO_ROOT_PASSWORD=ci-only-not-a-production-secret photointel-minio:ci server /data
+          uv run --no-sync python infra/scripts/init-private-bucket.py
+      - name: "🗃 Neon"
+        id: migrate
+        if: steps.storage.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "🗃 ️  Verify real dump and res"
+        id: restore
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync python infra/scripts/restore-ci.py --postgres-container "${{ job.services.postgres.id }}"
+      - name: "🗃 Neon"
+        id: app_role
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql --username=photointel --dbname=photointel --set=app_role=photointel_app --set=app_password=ci-app-only --set=database_name=photointel --set=ON_ERROR_STOP=1 < infra/oracle/provision-app-role.sql
+      - name: "🗃 Testes"
+        id: integration
+        if: steps.app_role.outcome == 'success'
+        continue-on-error: true
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: uv run --no-sync pytest -m integration --junitxml=reports/integration.xml
+        env:
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+      - name: "⚙ ️  Browser E2E on real API "
+        id: e2e
+        if: steps.app_role.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm exec --prefix apps/web -- playwright install --with-deps chromium
+          bash infra/scripts/run-e2e.sh
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: ../../reports/browser.xml
+          DATABASE_URL: postgresql+asyncpg://photointel_app:ci-app-only@127.0.0.1:5432/photointel
+          APP_ENV: test
+          INFERENCE_BACKEND: test
+          FRONTEND_ORIGIN: http://127.0.0.1:4173
+          API_ORIGIN: http://127.0.0.1:8000
+          GPU_ENABLED: 'true'
+          JOYTAG_MODEL_REVISION: '1111111111111111111111111111111111111111'
+          SIGLIP_MODEL_REVISION: '2222222222222222222222222222222222222222'
+      - name: "⚙ ️  Measure synthetic metada"
+        id: benchmark
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv run --no-sync python -m photointel.cli benchmark --assets 10000 --timeout-seconds 600 --output reports/benchmark-10000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 100000 --timeout-seconds 600 --output reports/benchmark-100000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 176000 --timeout-seconds 600 --output reports/benchmark-176000.json
+          uv run --no-sync python -m photointel.cli benchmark --assets 10000 --vectors 10000 --timeout-seconds 600 --output reports/benchmark-vectors-10000.json
+      - name: "🏗 Validação"
+        id: api_build
+        if: steps.python_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          docker build -f infra/docker/api.Dockerfile -t photointel-api:bootstrap .
+          docker run --rm --entrypoint python photointel-api:bootstrap -c 'import cv2, pillow_heif, psycopg; print("native runtime imports passed")'
+      - name: "📦 Dependency security reports"
+        id: security
+        if: steps.python_install.outcome == 'success' && steps.node_install.outcome == 'success'
+        continue-on-error: true
+        run: |
+          uv export --frozen --no-dev --group ingest --no-emit-project --no-emit-package photointel-icloudpd-source > /tmp/photointel-runtime-requirements.txt
+          uvx pip-audit -r /tmp/photointel-runtime-requirements.txt --disable-pip --format=json --output reports/python-audit.json &
+          audit_process_id=$!
+          npm --prefix apps/web audit --json > reports/npm-audit.json &
+          npm_audit_process_id=$!
+          audit_status=0
+          wait "$audit_process_id" || audit_status=1
+          wait "$npm_audit_process_id" || audit_status=1
+          uv export --frozen --no-dev --group gpu --no-emit-project > /tmp/photointel-gpu-requirements.txt
+          uvx pip-audit -r /tmp/photointel-gpu-requirements.txt --disable-pip --format=json --output reports/gpu-python-audit.json || audit_status=1
+          exit "$audit_status"
+      - name: "📦 Capture public model and Ap"
+        id: references
+        if: always()
+        continue-on-error: true
+        run: python3 infra/scripts/fetch-public-references.py --output reports/public-references
+      - name: "📥 Código"
+        id: evidence
+        if: always()
+        env:
+          WORKER_SMOKE_OUTCOME: ${{ steps.worker_smoke.outcome }}
+          ICLOUD_HELP_OUTCOME: ${{ steps.icloud_help.outcome }}
+          CHECK_OUTCOMES: >-
+            {"python_install":"${{ steps.python_install.outcome }}","node_install":"${{ steps.node_install.outcome }}","openapi":"${{ steps.openapi.outcome }}","contracts":"${{ steps.contracts.outcome }}","python_lint":"${{ steps.python_lint.outcome }}","python_types":"${{ steps.python_types.outcome }}","python_tests":"${{ steps.python_tests.outcome }}","web_lint":"${{ steps.web_lint.outcome }}","web_types":"${{ steps.web_types.outcome }}","web_tests":"${{ steps.web_tests.outcome }}","web_build":"${{ steps.web_build.outcome }}","minio_build":"${{ steps.minio_build.outcome }}","storage":"${{ steps.storage.outcome }}","migrate":"${{ steps.migrate.outcome }}","restore":"${{ steps.restore.outcome }}","app_role":"${{ steps.app_role.outcome }}","integration":"${{ steps.integration.outcome }}","e2e":"${{ steps.e2e.outcome }}","benchmark":"${{ steps.benchmark.outcome }}","api_build":"${{ steps.api_build.outcome }}","security":"${{ steps.security.outcome }}"}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+          checks = json.loads(os.environ["CHECK_OUTCOMES"])
+          checks["icloud_help"] = os.environ["ICLOUD_HELP_OUTCOME"]
+          checks["worker_smoke"] = os.environ["WORKER_SMOKE_OUTCOME"]
+          result = {"executed_at": datetime.now(UTC).isoformat(),
+              "commit": os.environ["GITHUB_SHA"], "checks": checks,
+              "scope": "synthetic local services; no production deploy, Apple account or real GPU"}
+          Path("reports").mkdir(exist_ok=True)
+          Path("reports/validation.json").write_text(json.dumps(result, indent=2) + "\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("| Check | Actual outcome |\n|---|---|\n")
+              for name, outcome in checks.items():
+                  summary.write(f"| {name} | {outcome} |\n")
+          PY
+      - name: "📦 Artefatos"
+        id: notify_observed_008
+        if: always() && inputs.upload_artifacts == true
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: generated-locks-contracts
+          if-no-files-found: warn
+          retention-days: 3
+          path: |
+            uv.lock
+            apps/web/package-lock.json
+            packages/contracts/openapi.json
+            apps/web/src/api/schema.d.ts
+      - name: "📦 Validação"
+        id: notify_observed_009
+        if: always() && inputs.upload_artifacts == true
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-evidence
+          if-no-files-found: warn
+          retention-days: 3
+          path: |
+            reports/
+            apps/web/test-results/
+            apps/web/playwright-report/
+      - name: "📦 Artifact upload summary"
+        if: always()
+        env:
+          UPLOAD_REQUESTED: ${{ inputs.upload_artifacts }}
+          TOOLS_UPLOAD: ${{ steps.notify_observed_006.outcome }}
+          CONTRACTS_UPLOAD: ${{ steps.notify_observed_008.outcome }}
+          EVIDENCE_UPLOAD: ${{ steps.notify_observed_009.outcome }}
+        run: |
+          {
+            echo '### Optional artifact uploads'
+            echo
+            echo "Requested: ${UPLOAD_REQUESTED:-false}; retention: 3 days."
+            echo "Tools: $TOOLS_UPLOAD; contracts: $CONTRACTS_UPLOAD; evidence: $EVIDENCE_UPLOAD."
+            echo 'Validation results remain in this run summary and logs.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$TOOLS_UPLOAD $CONTRACTS_UPLOAD $EVIDENCE_UPLOAD" == *failure* ]]; then
+            echo '::warning::Optional artifact upload failed. Check GitHub Actions storage quota; tests still determine validation status.'
+          fi
+      - name: "🧪 Testes"
+        id: notify_observed_010
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          checks = json.loads(Path("reports/validation.json").read_text())["checks"]
+          failed = {name: value for name, value in checks.items() if value != "success"}
+          if failed:
+              raise SystemExit(f"Required checks did not pass: {failed}")
+          PY
+
+  publish-preview:
+    needs: frontend
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.frontend.result == 'success'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: ./.github/workflows/cloudflare-pr-previews.yml
+    with:
+      reuse_build: true
+    secrets: inherit

@@ -5,6 +5,9 @@ on:
       apps:
         required: true
         type: string
+      preview:
+        type: boolean
+        default: false
       production:
         type: boolean
         default: false
@@ -167,3 +170,16 @@ jobs:
           include-hidden-files: true
           overwrite: true
 
+
+      - name: Seal preview artifact
+        if: success() && inputs.preview && !inputs.production && github.event_name == 'pull_request'
+        run: node scripts/ci/frontend-artifact.ts seal ${{ matrix.app }}
+      - name: Upload preview artifact
+        if: success() && inputs.preview && !inputs.production && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ matrix.app }}-${{ github.sha }}-${{ github.run_id }}
+          path: apps/${{ matrix.app }}/dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 2

@@ -41,7 +41,11 @@ function NotFound() {
     <Card className="space-y-3 p-6">
       <h2 className="text-lg font-semibold text-carbon-100">Página não encontrada</h2>
       <p className="text-sm text-carbon-400">Esta rota não existe no Manage.</p>
-      <Link to="/" search={{ project: new URLSearchParams(window.location.search).get("project") || undefined }} className="text-sm text-carbon-200 underline underline-offset-4">
+      <Link
+        to="/"
+        search={{ project: new URLSearchParams(window.location.search).get('project') || undefined }}
+        className="text-sm text-carbon-200 underline underline-offset-4"
+      >
         Voltar à visão geral
       </Link>
     </Card>
@@ -60,7 +64,9 @@ function RunPage() {
   const project = new URLSearchParams(window.location.search).get('project') || undefined;
   const id = Number(runId);
   if (!Number.isSafeInteger(id) || id <= 0) return <NotFound />;
-  return <RunDetail id={id} onBack={() => void navigate({ to: '/deploys', search: project ? { project } : {} })} />;
+  return (
+    <RunDetail id={id} onBack={() => void navigate({ to: '/deploys', search: project ? { project } : {} })} />
+  );
 }
 
 function SystemPage() {
@@ -165,15 +171,35 @@ const triggersRoute = createRoute({
   component: DeployTriggers,
 });
 
-const workflowStudioRoute = createRoute({ getParentRoute: () => rootRoute, path: '/workflows', component: WorkflowStudio });
+const workflowStudioRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workflows',
+  component: WorkflowStudio,
+});
 
-const projectsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/projects', component: ProjectsPage });
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects',
+  component: ProjectsPage,
+});
 
-const operationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/operations', component: OperationsPage });
+const operationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/operations',
+  component: OperationsPage,
+});
 
-const cloudRunJobsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/jobs', component: CloudRunJobsPage });
+const cloudRunJobsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/jobs',
+  component: CloudRunJobsPage,
+});
 
-const terminalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/terminal', component: TerminalPage });
+const terminalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/terminal',
+  component: TerminalPage,
+});
 
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -188,7 +214,11 @@ const logsRoute = createRoute({
   component: LogViewer,
 });
 
-const errorsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/errors', component: UserscriptErrors });
+const errorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/errors',
+  component: UserscriptErrors,
+});
 
 const environmentRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -196,7 +226,11 @@ const environmentRoute = createRoute({
   component: ConfigEditor,
 });
 
-const notificationsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/notifications', component: NotificationsPage });
+const notificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/notifications',
+  component: NotificationsPage,
+});
 
 const secretsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -216,13 +250,27 @@ const systemRoute = createRoute({
   component: SystemPage,
 });
 
-const modulesRoute = createRoute({ getParentRoute: () => rootRoute, path: '/modules', component: ModulePage });
-const sandboxRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sandbox/$', component: ModulePage });
-const sandboxIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/sandbox', component: ModulePage });
+const modulesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/modules',
+  component: ModulePage,
+});
+const sandboxRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sandbox/$',
+  component: ModulePage,
+});
+const sandboxIndexRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sandbox',
+  component: ModulePage,
+});
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
-  modulesRoute, sandboxRoute, sandboxIndexRoute,
+  modulesRoute,
+  sandboxRoute,
+  sandboxIndexRoute,
   deploysRoute,
   infrastructureRoute,
   triggersRoute,

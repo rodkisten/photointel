@@ -58,6 +58,11 @@ jobs:
       # Shared confirmation guard for scripts that read config.local.json.
       CONFIRM_PROJECT: photointel
     steps:
+      - name: Require explicit authorization for state mutation
+        if: inputs.action == 'apply' || inputs.action == 'import'
+        env:
+          APPROVED: ${{ inputs.authorize_apply }}
+        run: test "$APPROVED" = true || { echo "::error::State mutation requires authorization"; exit 1; }
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -102,7 +107,7 @@ jobs:
           IMAGE_SHA: ${{ inputs.image_sha }}
         run: |
           set -euo pipefail
-          bucket="$(python3 -c 'import json; print(json.load(open("infra/gcp/config.local.json"))["storage_bucket"])')"
+          bucket="$(jq -er '.storage_bucket | select(type == "string" and length > 0)' infra/gcp/config.local.json)"
           python3 -m infra.terraform.media_release prepare --image-sha "$IMAGE_SHA" --bucket "$bucket"
       - name: "TF · Inventory API and processing Jobs"
         env:

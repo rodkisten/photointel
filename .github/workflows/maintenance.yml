@@ -1,5 +1,11 @@
 name: "🔮 RV · Maintenance"
 on:
+  pull_request:
+    paths:
+      - 'scripts/ci/cloud-run/**'
+      - 'infra/gcp/manage.py'
+      - '.github/workflows/maintenance.yml'
+      - '.github/workflows/cloud-run-parity.yml'
   workflow_dispatch:
     inputs:
       operation:
@@ -9,10 +15,13 @@ on:
         default: validate
 permissions:
   contents: read
+concurrency:
+  group: maintenance-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   maintenance:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -20,18 +29,49 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '26'
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - name: Validate native tooling
         run: |
           npm install --prefix "$RUNNER_TEMP/renderer-types" --no-save --package-lock=false typescript@6 @types/node@24
           "$RUNNER_TEMP/renderer-types/node_modules/.bin/tsc" --noEmit --allowImportingTsExtensions --strict --target esnext --module nodenext --typeRoots "$RUNNER_TEMP/renderer-types/node_modules/@types" --types node --skipLibCheck scripts/ci/cloud-run/*.ts
-          node scripts/ci/cloud-run/build.test.ts
-          node scripts/ci/cloud-run/jobs.test.ts
+      - name: Offline release console rehearsal
+        run: |
+          for target in api media web manage; do
+            for action in plan build deploy build-and-deploy; do
+              node scripts/ci/cloud-run/release-preview.ts --target "$target" --action "$action"
+            done
+          done
+          if node scripts/ci/cloud-run/release-preview.ts --target invalid; then exit 1; fi
+      - name: Verify native release selection
+        run: node scripts/ci/cloud-run/release-console.test.ts
+      - name: Verify dispatch contract
+        run: node scripts/ci/cloud-run/dispatch.test.ts
+      - name: Verify release catalog contract
+        run: node scripts/ci/cloud-run/catalog.test.ts
+      - name: Verify registry digest contract
+        run: node scripts/ci/cloud-run/build.test.ts
+      - name: Verify job ownership and scheduler planning
+        run: node scripts/ci/cloud-run/jobs.test.ts
+      - name: Saved plan offline contracts
+        run: |
+          node scripts/ci/cloud-run/saved-plan.test.ts
+          node scripts/ci/cloud-run/plan-review.test.ts
+          node scripts/ci/cloud-run/media-release.test.ts
+          node scripts/ci/cloud-run/media-prepare.test.ts
+      - name: Verify CLI help and fail-closed apply
+        run: |
+          node scripts/ci/cloud-run/index.ts --help
+          if node scripts/ci/cloud-run/index.ts jobs-plan --apply; then exit 1; fi
+      - name: Compare offline manifests
+        run: PYTHONPATH=. python scripts/ci/cloud-run/parity.py
       - name: Prepare synthetic configuration
-        if: inputs.operation != 'validate'
+        if: github.event_name == 'workflow_dispatch' && inputs.operation != 'validate'
         run: |
           node --input-type=module -e 'import {readFileSync,writeFileSync} from "node:fs"; const c=JSON.parse(readFileSync("scripts/ci/cloud-run/fixture.json","utf8")); Object.assign(c,{scheduler_timezone:"UTC",discovery_schedule:"0 * * * *",worker_schedule:"*/15 * * * *",maintenance_schedule:"0 3 * * *",auto_resume_schedules:false}); writeFileSync(process.env.RUNNER_TEMP+"/maintenance.json",JSON.stringify(c),{mode:0o600});'
       - name: Execute offline operation
-        if: inputs.operation != 'validate'
+        if: github.event_name == 'workflow_dispatch' && inputs.operation != 'validate'
         env:
           OPERATION: ${{ inputs.operation }}
         run: |

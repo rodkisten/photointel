@@ -1,15 +1,34 @@
-name: "🔮 RV · 🩺 GCP · Health"
+name: "🔮 RV · 🩺 Health & Smoke"
 run-name: "🩺 GCP · Health · ${{ github.ref_name }}"
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [health, cpu, media]
+        default: health
+      target:
+        type: choice
+        options: [image, video, all]
+        default: all
+      image_input:
+        type: string
+        required: false
+      video_input:
+        type: string
+        required: false
+      confirm:
+        description: Authorize paid Cloud Run execution or CPU model download
+        type: boolean
+        default: false
 
 permissions: {contents: read}
 
 jobs:
   diagnose:
     name: "🩺 API + Neon + R2"
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'health'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
@@ -61,3 +80,188 @@ jobs:
         uses: ./.github/actions/gcp-config
         with:
           mode: cleanup
+
+  real-cpu:
+    name: "🧠 Smoke"
+    if: inputs.operation == 'cpu' && inputs.confirm == true
+    concurrency:
+      group: real-cpu-model-validation
+      cancel-in-progress: false
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: photointel
+          POSTGRES_PASSWORD: isolated-cpu-ci-only
+          POSTGRES_DB: photointel
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U photointel -d photointel"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+asyncpg://photointel:isolated-cpu-ci-only@127.0.0.1:5432/photointel
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_DIRECTORY: /tmp/photointel-real-cpu-media
+      TEMP_DIRECTORY: /tmp/photointel-real-cpu-processing
+      MODEL_CACHE_DIRECTORY: /tmp/photointel-real-cpu-models
+      ICLOUD_ENABLED: 'false'
+      GPU_ENABLED: 'true'
+      INFERENCE_BACKEND: cpu
+      BATCH_SIZE: '1'
+      GPU_MAX_ASSETS_PER_RUN: '1'
+      GPU_HOURLY_COST_ESTIMATE: '0'
+      GPU_MAX_COST_PER_RUN: '0'
+      GPU_DAILY_BUDGET: '0'
+      GPU_MONTHLY_BUDGET: '0'
+      MAX_GPU_CONCURRENCY: '1'
+      CUDA_VISIBLE_DEVICES: ''
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      HF_HUB_DISABLE_PROGRESS_BARS: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+      UV_CACHE_DIR: /tmp/photointel-real-cpu-uv
+    steps:
+      - name: "📥 Código"
+        id: notify_observed_001
+        uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - name: "🧰 Config"
+        id: notify_observed_002
+        uses: astral-sh/setup-uv@v10.3.3
+        with: {version: '0.12.23'}
+      - name: "🧰 Setup"
+        id: notify_observed_003
+        run: |
+          uv python install 3.12
+          uv sync --frozen --no-dev
+          mkdir -p reports/real-cpu
+      - name: "🧰 Setup"
+        id: notify_observed_004
+        run: |
+          uv export --frozen --group gpu --no-dev --no-hashes --no-annotate --no-header --no-emit-project --output-file reports/real-cpu/all.requirements.txt
+          uv run --no-sync python infra/scripts/real-cpu-smoke.py prepare --export reports/real-cpu/all.requirements.txt
+      - name: "🧰 Setup"
+        id: notify_observed_005
+        run: |
+          uv pip install --no-deps --index-url https://download.pytorch.org/whl/cpu --requirement reports/real-cpu/cpu-wheels.requirements.txt
+          uv pip install --no-deps --requirement reports/real-cpu/cpu-dependencies.requirements.txt
+          uv pip check
+      - name: "🧰 Setup"
+        id: notify_observed_006
+        uses: actions/cache@v6
+        with:
+          path: /tmp/photointel-real-cpu-models
+          key: cpu-public-models-v1-${{ runner.os }}-${{ hashFiles('packages/configuration/model-pins.json') }}
+      - name: "🗃 Neon"
+        id: notify_observed_007
+        run: uv run --no-sync alembic -c infra/migrations/alembic.ini upgrade head
+      - name: "⚙ ️  Ingest one procedural fi"
+        id: notify_observed_008
+        env:
+          GPU_ENABLED: 'false'
+        run: uv run --no-sync python -m photointel.cli seed --synthetic-assets 1 > reports/real-cpu/seed.json
+      - name: "🧪 Testes"
+        id: notify_observed_009
+        run: uv run --no-sync python infra/scripts/real-cpu-smoke.py run
+      - name: "📦 Artefatos"
+        id: notify_observed_010
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: real-cpu-model-validation
+          path: reports/real-cpu/
+          if-no-files-found: warn
+          retention-days: 7
+
+  media-smoke:
+    if: github.ref == 'refs/heads/main' && inputs.operation == 'media'
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: media-smoke-production
+      cancel-in-progress: false
+    name: "🧪 Media smoke · ${{ inputs.target }}"
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "🧪 Test R2 fixture selector (offline)"
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: python3 -m unittest infra.scripts.test_media_smoke_fixture -v
+      - name: "🛡️ Require explicit paid-run authorization"
+        env:
+          TARGET: ${{ inputs.target }}
+          CONFIRM: ${{ inputs.confirm }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRM" == true ]] || { echo "::error::Execution charges not authorized"; exit 1; }
+          [[ "$TARGET" =~ ^(image|video|all)$ ]] || { echo "::error::Invalid target"; exit 1; }
+      - name: "🔐 Authenticate to GCP"
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/799387180206/locations/global/workloadIdentityPools/github-actions/providers/photo-intelligence
+          service_account: photointel-deployer@photointel.iam.gserviceaccount.com
+      - name: "🧰 Setup gcloud"
+        uses: google-github-actions/setup-gcloud@v3
+      - name: "🎲 Pick compatible R2 fixtures"
+        id: fixture
+        env:
+          TARGET: ${{ inputs.target }}
+          IMAGE_KEY: ${{ inputs.image_input }}
+          VIDEO_KEY: ${{ inputs.video_input }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only fetch Cloudflare credentials when a fixture path was omitted.
+          if { [[ "$TARGET" == image || "$TARGET" == all ]] && [[ -z "$IMAGE_KEY" ]]; } ||
+             { [[ "$TARGET" == video || "$TARGET" == all ]] && [[ -z "$VIDEO_KEY" ]]; }; then
+            CLOUDFLARE_API_TOKEN="$(gcloud secrets versions access latest --secret=photointel-pages-token --project=photointel)"
+            CLOUDFLARE_ACCOUNT_ID="$(gcloud secrets versions access latest --secret=photointel-cloudflare-account --project=photointel)"
+            echo "::add-mask::$CLOUDFLARE_API_TOKEN"
+            export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+          fi
+          if [[ "$TARGET" == image || "$TARGET" == all ]]; then
+            python3 infra/scripts/media_smoke_fixture.py --kind image --key "$IMAGE_KEY"
+          fi
+          if [[ "$TARGET" == video || "$TARGET" == all ]]; then
+            python3 infra/scripts/media_smoke_fixture.py --kind video --key "$VIDEO_KEY"
+          fi
+      - name: "🎞️ Execute and verify selected Jobs"
+        env:
+          TARGET: ${{ inputs.target }}
+          IMAGE_KEY: ${{ steps.fixture.outputs.image_key }}
+          VIDEO_KEY: ${{ steps.fixture.outputs.video_key }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_job() {
+            local kind="$1" input="$2"
+            local output="derived/smoke/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/${kind}.${3}"
+            echo "::group::🧪 ${kind} execution"
+            gcloud run jobs execute "photointel-media-${kind}" \
+              --project photointel --region us-central1 \
+              --update-env-vars "MEDIA_INPUT_KEY=${input},MEDIA_OUTPUT_KEY=${output}" \
+              --wait --quiet
+            echo "::endgroup::"
+            echo "### ${kind}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Input: \`${input}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Expected output: \`${output}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Cloud Run execution completed; R2 output existence requires separate verification." >> "$GITHUB_STEP_SUMMARY"
+          }
+          if [[ "$TARGET" == image || "$TARGET" == all ]]; then
+            run_job image "$IMAGE_KEY" webp
+          fi
+          if [[ "$TARGET" == video || "$TARGET" == all ]]; then
+            run_job video "$VIDEO_KEY" mp4
+          fi

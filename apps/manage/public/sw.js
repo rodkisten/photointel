@@ -48,9 +48,7 @@ self.addEventListener('activate', (event) => {
         (key) => key.startsWith('photointel-manage-assets-') && key !== ASSET_CACHE,
       );
       const expired = [
-        ...keys.filter(
-          (key) => key.startsWith('photointel-manage-shell-') && key !== SHELL_CACHE,
-        ),
+        ...keys.filter((key) => key.startsWith('photointel-manage-shell-') && key !== SHELL_CACHE),
         ...oldAssets.slice(0, -2),
       ];
       await Promise.all(expired.map((key) => caches.delete(key)));
@@ -95,7 +93,12 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || BLOCKED.test(url.pathname)) return;
   // sw.js must always be fetched from the network so upgrades are discovered.
-  if (url.pathname === '/sw.js' || url.pathname === '/rod-module.json' || url.pathname.startsWith('/modules/')) return;
+  if (
+    url.pathname === '/sw.js' ||
+    url.pathname === '/rod-module.json' ||
+    url.pathname.startsWith('/modules/')
+  )
+    return;
 
   if (request.mode === 'navigate') {
     event.respondWith(

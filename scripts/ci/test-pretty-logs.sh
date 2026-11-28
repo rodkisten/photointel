@@ -36,12 +36,12 @@ test_case "Secret" "Secret Manager resource" "Secret Manager: secrets/photointel
 # Verify its classifier directly, preserving the original regression coverage.
 printf '%s\n' 'Error acquiring the state lock' >"$tmp/terraform-lock.log"
 ci_help terraform "$tmp/terraform-lock.log" >"$tmp/terraform-lock-diagnosis"
-assert_contains "$tmp/terraform-lock-diagnosis" 'Terraform state is locked'
+assert_contains "$tmp/terraform-lock-diagnosis" 'O state do Terraform está travado'
 assert_contains "$tmp/terraform-lock-diagnosis" '/terraform/language/state/locking'
 echo 'PASS: Terraform state lock diagnosis'
 : > "$GITHUB_STEP_SUMMARY"
 ci_run "Success" bash -c 'echo complete' >"$tmp/success" 2>&1
-assert_contains "$tmp/success" "completed in"
+assert_contains "$tmp/success" "concluído em"
 assert_contains "$tmp/success" '::group::📄 Raw output · Success'
 [[ ! -s "$GITHUB_STEP_SUMMARY" ]] || { echo 'Success generated a failure summary' >&2; exit 1; }
 echo 'PASS: success and no failure summary'
