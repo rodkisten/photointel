@@ -1,0 +1,9 @@
+PASS deployed Code standalone loads without exceptions
+PASS live Manage loads real SHA Code remote with singleton/CSP and updates host URL without losing Studio
+PASS draft URL reopen, mobile width, real SPA unmount; zero privileged Manage API calls; no browser exceptions
+CURRENT POINTER 968ff62417a70f0d7dc08e6d217a60694669b7c8 https://pr-29.preview.shell.migos.club/modules/code/968ff62417a70f0d7dc08e6d217a60694669b7c8/mf-manifest.json
+LOADED ENTRIES [
+  'https://pr-29.preview.shell.migos.club/modules/code/968ff62417a70f0d7dc08e6d217a60694669b7c8/remoteEntry.js',
+  'https://pr-29.preview.shell.migos.club/modules/code/968ff62417a70f0d7dc08e6d217a60694669b7c8/remoteEntry.js'
+]
+HOST https://pr-263-photointel-manage.kisten.workers.dev/code

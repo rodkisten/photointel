@@ -1,0 +1,4 @@
+Chromium desktop 1440x1000, real public GitHub metadata, no registry mocks.
+PASS real public GitHub action manifests resolved at commit SHA, declared ports rendered
+PASS drag output to input proposes CST patch while keeping existing values
+PASS applied and exported YAML preserves original comment and input while adding the connection

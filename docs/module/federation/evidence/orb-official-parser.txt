@@ -1,0 +1,22 @@
+{
+  "official": {
+    "valid": true,
+    "diagnostics": []
+  },
+  "invalid": {
+    "valid": false,
+    "diagnostics": [
+      {
+        "message": "workflow.yml (Line: 4, Col: 5): Unexpected value 'nonexistent'",
+        "severity": "error",
+        "source": "github-actions"
+      },
+      {
+        "message": "workflow.yml (Line: 4, Col: 5): There's not enough info to determine what you meant. Add one of these properties: cancel-timeout-minutes, container, continue-on-error, defaults, env, environment, outputs, runs-on, secrets, services, snapshot, steps, timeout-minutes, uses, with",
+        "severity": "error",
+        "source": "github-actions"
+      }
+    ]
+  },
+  "wasmRuntime": "initialized"
+}

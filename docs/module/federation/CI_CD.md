@@ -1,6 +1,6 @@
 # Module build, publication and retention
 
-Approved: independent app deployments and one preview per PR. Implemented in Sandbox and Code; actual CI/deployment results are recorded in [STATUS](STATUS.md).
+Approved: independent app deployments and one preview per PR. Implemented and published on Sandbox/Code previews, including live Code rollback; exact CI/deployment results are recorded in [STATUS](STATUS.md).
 
 Code uses the existing Shell `shell-flow-wasm.yml` build and preview/deploy workflows, plus shared setup/reporting actions from `rodkisten/github`. The separate prototype Federation workflow was removed. CI checks out the exact published head SHA, builds/tests the core, typechecks Studio/app and builds standalone plus official Federation artifacts. Existing Shell/WASM checks are preserved.
 

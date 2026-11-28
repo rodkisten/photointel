@@ -1,0 +1,6 @@
+PASS retained previous SHA loaded 11796e1fd135255eefbce942b71886fb19998dc8
+PASS independent update 968ff62417a70f0d7dc08e6d217a60694669b7c8
+PASS real rollback restored prior Code bundle without host rebuild
+PASS forward restore 968ff62417a70f0d7dc08e6d217a60694669b7c8
+PASS Sandbox real compiler/worker/WASM/preview after Code in the same host runtime
+PASS no browser exceptions or privileged Manage API calls
