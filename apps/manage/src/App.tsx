@@ -58,7 +58,20 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
+  {
+    label: 'Operação',
+    ids: [
+      'overview',
+      'operations',
+      'jobs',
+      'deploy',
+      'infrastructure',
+      'triggers',
+      'workflows',
+      'terminal',
+      'projects',
+    ],
+  },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'modules', 'settings'] },
 ] as const;
@@ -107,56 +120,87 @@ function sectionForPath(pathname: string): Tab {
 
 export default function App() {
   const router = useRouter();
-  const routerSearch = useRouterState({ select: state => state.location.searchStr });
+  const routerSearch = useRouterState({ select: (state) => state.location.searchStr });
   const [mobileMenu, setMobileMenu] = useState(false);
   const selectedProject = new URLSearchParams(routerSearch).get('project');
   const [navOrder, setNavOrder] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[]; }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem('photointel-manage-nav-v1') || '[]') as string[];
+    } catch {
+      return [];
+    }
   });
   const [dragged, setDragged] = useState<string | null>(null);
   const [editNav, setEditNav] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
     try {
       const parsed: unknown = JSON.parse(localStorage.getItem('photointel-manage-pinned-v1') || 'null');
-      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string').slice(0, 4) : ['overview', 'deploy', 'costs', 'settings'];
-    } catch { return ['overview', 'deploy', 'costs', 'settings']; }
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string').slice(0, 4)
+        : ['overview', 'deploy', 'costs', 'settings'];
+    } catch {
+      return ['overview', 'deploy', 'costs', 'settings'];
+    }
   });
   const orderedNav = [...NAV].sort((a, b) => {
-    const rank = (id: string) => { const index = navOrder.indexOf(id); return index < 0 ? NAV.findIndex(x => x.id === id) + NAV.length : index; };
+    const rank = (id: string) => {
+      const index = navOrder.indexOf(id);
+      return index < 0 ? NAV.findIndex((x) => x.id === id) + NAV.length : index;
+    };
     return rank(a.id) - rank(b.id);
   });
   const reorder = (from: string, to: string) => {
-    const ids: string[] = orderedNav.map(item => item.id);
+    const ids: string[] = orderedNav.map((item) => item.id);
     ids.splice(ids.indexOf(from), 1);
     ids.splice(ids.indexOf(to), 0, from);
     setNavOrder(ids);
     localStorage.setItem('photointel-manage-nav-v1', JSON.stringify(ids));
   };
-  const pinned = pinnedIds.map(id => orderedNav.find(item => item.id === id)).filter((item): item is (typeof NAV)[number] => Boolean(item));
+  const pinned = pinnedIds
+    .map((id) => orderedNav.find((item) => item.id === id))
+    .filter((item): item is (typeof NAV)[number] => Boolean(item));
   const togglePin = (id: string) => {
-    const next = pinnedIds.includes(id) ? pinnedIds.filter(value => value !== id) :
-      pinnedIds.length < 4 ? [...pinnedIds, id] : [...pinnedIds.slice(1), id];
+    const next = pinnedIds.includes(id)
+      ? pinnedIds.filter((value) => value !== id)
+      : pinnedIds.length < 4
+        ? [...pinnedIds, id]
+        : [...pinnedIds.slice(1), id];
     setPinnedIds(next);
     localStorage.setItem('photointel-manage-pinned-v1', JSON.stringify(next));
   };
   const projectCatalog = useQuery({
     queryKey: ['projects'],
     enabled: !isIsolatedModulePreview(window.location.hostname),
-    queryFn: () => api<{ items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[]; global: { enabled: boolean; reason?: string } }>('/projects'),
+    queryFn: () =>
+      api<{
+        items: { id: string; name: string; repository: string; enabled: boolean; status?: string }[];
+        global: { enabled: boolean; reason?: string };
+      }>('/projects'),
     retry: false,
   });
   const availableProjects = projectCatalog.data?.items ?? [];
   const resolvedProject = useQuery({
     queryKey: ['project-resolve', selectedProject],
     queryFn: () => api<ManageProject>('/projects/resolve?repository=' + encodeURIComponent(selectedProject!)),
-    enabled: Boolean(selectedProject && !availableProjects.some(item => item.id === selectedProject || item.repository === selectedProject)),
+    enabled: Boolean(
+      selectedProject &&
+      !availableProjects.some((item) => item.id === selectedProject || item.repository === selectedProject),
+    ),
     retry: false,
   });
-  const activeProject = (selectedProject ? availableProjects.find(item => item.id === selectedProject || item.repository === selectedProject) ?? resolvedProject.data : availableProjects[0]);
-  const invalidProject = Boolean(selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject);
+  const activeProject = selectedProject
+    ? (availableProjects.find((item) => item.id === selectedProject || item.repository === selectedProject) ??
+      resolvedProject.data)
+    : availableProjects[0];
+  const invalidProject = Boolean(
+    selectedProject && projectCatalog.isSuccess && resolvedProject.isError && !activeProject,
+  );
   const chooseProject = (repository: string, catalogProject?: ManageProject) => {
-    if (!availableProjects.some(project => project.id === repository || project.repository === repository) && catalogProject?.repository !== repository) return;
+    if (
+      !availableProjects.some((project) => project.id === repository || project.repository === repository) &&
+      catalogProject?.repository !== repository
+    )
+      return;
     // Preserve the active route and unrelated query parameters.
     const url = new URL(window.location.href);
     url.searchParams.set('project', repository);
@@ -165,37 +209,69 @@ export default function App() {
     window.dispatchEvent(new Event('manage:project-changed'));
   };
   const [selectedRun, setSelectedRun] = useState<{ repository: string; id: number } | null>(null);
-  const selectedRunId = selectedRun && selectedRun.repository === activeProject?.repository ? selectedRun.id : null;
+  const selectedRunId =
+    selectedRun && selectedRun.repository === activeProject?.repository ? selectedRun.id : null;
   const setSelectedRunId = (update: number | null | ((current: number | null) => number | null)) => {
     setSelectedRun((current) => {
       const currentId = current && current.repository === activeProject?.repository ? current.id : null;
       const nextId = typeof update === 'function' ? update(currentId) : update;
-      return nextId === null || !activeProject?.repository ? null : { repository: activeProject.repository, id: nextId };
+      return nextId === null || !activeProject?.repository
+        ? null
+        : { repository: activeProject.repository, id: nextId };
     });
   };
   const projectRunJobs = useQuery({
     queryKey: ['project-run-jobs', activeProject?.repository, selectedRunId],
-    queryFn: () => api<{ repository: string; run_id: number; items: {
-      id: number; name: string; status: string; conclusion: string | null;
-      html_url: string; started_at: string | null; completed_at: string | null;
-      steps: { name: string; status: string; conclusion: string | null; number: number }[];
-    }[] }>('/projects/runs/' + selectedRunId + '/jobs?repository=' + encodeURIComponent(activeProject!.repository)),
+    queryFn: () =>
+      api<{
+        repository: string;
+        run_id: number;
+        items: {
+          id: number;
+          name: string;
+          status: string;
+          conclusion: string | null;
+          html_url: string;
+          started_at: string | null;
+          completed_at: string | null;
+          steps: { name: string; status: string; conclusion: string | null; number: number }[];
+        }[];
+      }>(
+        '/projects/runs/' +
+          selectedRunId +
+          '/jobs?repository=' +
+          encodeURIComponent(activeProject!.repository),
+      ),
     enabled: Boolean(selectedRunId && activeProject && !activeProject.enabled),
     retry: false,
     staleTime: 15_000,
   });
   const projectRuns = useQuery({
     queryKey: ['project-runs', activeProject?.repository],
-    queryFn: () => api<{ repository: string; items: { id: number; name: string; status: string; conclusion: string | null; html_url: string; created_at: string }[] }>(
-      '/projects/runs?repository=' + encodeURIComponent(activeProject!.repository)),
+    queryFn: () =>
+      api<{
+        repository: string;
+        items: {
+          id: number;
+          name: string;
+          status: string;
+          conclusion: string | null;
+          html_url: string;
+          created_at: string;
+        }[];
+      }>('/projects/runs?repository=' + encodeURIComponent(activeProject!.repository)),
     enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
     retry: false,
     staleTime: 30_000,
   });
   const projectWorkflows = useQuery({
     queryKey: ['project-workflows', activeProject?.repository],
-    queryFn: () => api<{ repository: string; total: number; items: { id: number; name: string; path: string; state: string }[] }>(
-      '/projects/workflows?repository=' + encodeURIComponent(activeProject!.repository)),
+    queryFn: () =>
+      api<{
+        repository: string;
+        total: number;
+        items: { id: number; name: string; path: string; state: string }[];
+      }>('/projects/workflows?repository=' + encodeURIComponent(activeProject!.repository)),
     enabled: Boolean(activeProject && !activeProject.enabled && activeProject.status !== 'unavailable'),
     retry: false,
     staleTime: 60_000,
@@ -220,231 +296,450 @@ export default function App() {
   });
 
   return (
-    <ProjectProvider value={{ project: activeProject ?? null, projects: availableProjects, isLoading: projectCatalog.isPending || (Boolean(selectedProject) && resolvedProject.isPending && !activeProject), isReadOnly: Boolean(isReadOnlyProject || invalidProject), selectProject: chooseProject }}>
-    <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
-      <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link to="/" search={{ project: activeProject?.repository }} aria-label="Ir para a home do Manage" className="flex items-center gap-3 text-left">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
-              <Blocks size={20} />
-            </div>
-            <div>
-              <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">Rod Manage</p>
-              <p className="text-[11px] font-medium tracking-wider text-carbon-500">PROJECT CONTROL CENTER</p>
-              <p className="mt-1 font-mono text-[10px] text-carbon-400">
-                Publicado: {import.meta.env.VITE_MANAGE_RELEASE
-                  ? <a className="text-emerald-400 underline underline-offset-2"
-                      href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
-                      title={import.meta.env.VITE_MANAGE_RELEASE} target="_blank" rel="noreferrer">
+    <ProjectProvider
+      value={{
+        project: activeProject ?? null,
+        projects: availableProjects,
+        isLoading:
+          projectCatalog.isPending ||
+          (Boolean(selectedProject) && resolvedProject.isPending && !activeProject),
+        isReadOnly: Boolean(isReadOnlyProject || invalidProject),
+        selectProject: chooseProject,
+      }}
+    >
+      <div className="min-h-screen bg-carbon-950 text-carbon-200 selection:bg-carbon-800">
+        <header className="sticky top-0 z-20 border-b border-carbon-800 bg-carbon-950/95 backdrop-blur-xl">
+          <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6">
+            <Link
+              to="/"
+              search={{ project: activeProject?.repository }}
+              aria-label="Ir para a home do Manage"
+              className="flex items-center gap-3 text-left"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-carbon-200 text-carbon-900 shadow-sm">
+                <Blocks size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold leading-tight tracking-tight text-carbon-100">
+                  Rod Manage
+                </p>
+                <p className="text-[11px] font-medium tracking-wider text-carbon-500">
+                  PROJECT CONTROL CENTER
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-carbon-400">
+                  Publicado:{' '}
+                  {import.meta.env.VITE_MANAGE_RELEASE ? (
+                    <a
+                      className="text-emerald-400 underline underline-offset-2"
+                      href={
+                        'https://github.com/rodkisten/photointel/commit/' +
+                        import.meta.env.VITE_MANAGE_RELEASE
+                      }
+                      title={import.meta.env.VITE_MANAGE_RELEASE}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 10)}
                     </a>
-                  : <span className="text-amber-400">indisponível</span>}
-              </p>
-            </div>
-          </Link>
+                  ) : (
+                    <span className="text-amber-400">indisponível</span>
+                  )}
+                </p>
+              </div>
+            </Link>
 
-          <div className="flex items-center gap-3 text-xs text-carbon-400">
-            <a
-              href="https://photos.migos.club/"
-              className="inline-flex items-center gap-1 rounded-lg border border-carbon-800 px-2.5 py-2 text-xs text-carbon-300 hover:bg-carbon-900"
-              aria-label="Abrir PhotoIntel"
-            >
-              <Images size={16} />
-              <span className="hidden sm:inline">Fotos</span>
-            </a>
-            <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>
-            <Shield size={17} className={meta ? 'text-emerald-400' : 'text-carbon-600'} />
-            <Badge tone="neutral">Production</Badge>
+            <div className="flex items-center gap-3 text-xs text-carbon-400">
+              <a
+                href="https://photos.migos.club/"
+                className="inline-flex items-center gap-1 rounded-lg border border-carbon-800 px-2.5 py-2 text-xs text-carbon-300 hover:bg-carbon-900"
+                aria-label="Abrir PhotoIntel"
+              >
+                <Images size={16} />
+                <span className="hidden sm:inline">Fotos</span>
+              </a>
+              <span className="hidden max-w-44 truncate sm:inline">{meta?.email}</span>
+              <Shield size={17} className={meta ? 'text-emerald-400' : 'text-carbon-600'} />
+              <Badge tone="neutral">Production</Badge>
+            </div>
           </div>
+        </header>
+        <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
+          <ProjectPicker selected={selectedProject || 'rodkisten/photointel'} onSelect={chooseProject} />
         </div>
-      </header>
-
-      <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6">
-        <ProjectPicker selected={selectedProject || 'rodkisten/photointel'} onSelect={chooseProject} />
-      </div>
-      {isReadOnlyProject && tab === 'overview' && (
-        <section className="mx-auto max-w-6xl px-4 pt-4 sm:px-6" aria-label="Workflows do projeto selecionado">
-          <details className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4" aria-label="Atividade do repositório selecionado">
-            <summary className="cursor-pointer text-sm font-medium text-carbon-200">{activeProject?.repository} · Atividade GitHub (somente leitura) · Expandir</summary>
-            <div className="mt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-carbon-100">{activeProject?.repository} · Somente leitura</p>
-                <p className="mt-1 text-xs text-carbon-400">As páginas operacionais abaixo continuam vinculadas ao projeto principal. Nenhuma ação será redirecionada.</p>
-              </div>
-              <a className="text-xs text-carbon-300 underline" href={`https://github.com/${activeProject?.repository}/actions`}
-                target="_blank" rel="noopener noreferrer">Abrir GitHub Actions</a>
-            </div>
-            {projectWorkflows.isPending && <p className="mt-3 text-xs text-carbon-400">Carregando workflows…</p>}
-            {projectWorkflows.isError && <p className="mt-3 text-xs text-amber-400">Não foi possível consultar workflows com as credenciais atuais.</p>}
-            {projectRuns.isError && <p className="mt-3 text-xs text-amber-400">Execuções indisponíveis para este repositório.</p>}
-            {projectRuns.data && (
-              <div className="mt-3 space-y-1">
-                <p className="text-xs font-semibold text-carbon-300">Execuções recentes</p>
-                {projectRuns.data.items.length === 0 && <p className="text-xs text-carbon-500">Nenhuma execução recente.</p>}
-                {projectRuns.data.items.map(run => (
-                  <button key={run.id} type="button" onClick={() => setSelectedRunId(id => id === run.id ? null : run.id)}
-                    aria-expanded={selectedRunId === run.id}
-                    className="flex w-full items-center justify-between gap-2 border-t border-carbon-800 py-2 text-left text-xs hover:text-carbon-100">
-                    <span className="min-w-0 truncate text-carbon-200">{run.name}</span>
-                    <span className="shrink-0 text-carbon-500">{run.conclusion || run.status}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {selectedRunId && (
-              <div className="mt-3 rounded-lg border border-carbon-800 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-carbon-200">Jobs da execução #{selectedRunId}</p>
-                  <a className="text-xs text-carbon-400 underline" target="_blank" rel="noopener noreferrer"
-                    href={`https://github.com/${activeProject?.repository}/actions/runs/${selectedRunId}`}>Logs completos no GitHub</a>
+        {isReadOnlyProject && tab === 'overview' && (
+          <section
+            className="mx-auto max-w-6xl px-4 pt-4 sm:px-6"
+            aria-label="Workflows do projeto selecionado"
+          >
+            <details
+              className="rounded-xl border border-amber-500/30 bg-carbon-900 p-4"
+              aria-label="Atividade do repositório selecionado"
+            >
+              <summary className="cursor-pointer text-sm font-medium text-carbon-200">
+                {activeProject?.repository} · Atividade GitHub (somente leitura) · Expandir
+              </summary>
+              <div className="mt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-carbon-100">
+                      {activeProject?.repository} · Somente leitura
+                    </p>
+                    <p className="mt-1 text-xs text-carbon-400">
+                      As páginas operacionais abaixo continuam vinculadas ao projeto principal. Nenhuma ação
+                      será redirecionada.
+                    </p>
+                  </div>
+                  <a
+                    className="text-xs text-carbon-300 underline"
+                    href={`https://github.com/${activeProject?.repository}/actions`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Abrir GitHub Actions
+                  </a>
                 </div>
-                {projectRunJobs.isPending && <p className="mt-2 text-xs text-carbon-500">Carregando jobs…</p>}
-                {projectRunJobs.isError && <p className="mt-2 text-xs text-amber-400">Não foi possível carregar os jobs.</p>}
-                {projectRunJobs.data?.items.map(job => (
-                  <div key={job.id} className="mt-2 border-t border-carbon-800 pt-2 text-xs">
-                    <a href={job.html_url} target="_blank" rel="noopener noreferrer"
-                      className="font-medium text-carbon-200 underline">{job.name}</a>
-                    <span className="ml-2 text-carbon-500">{job.conclusion || job.status}</span>
-                    <ul className="mt-1 space-y-1 pl-3 text-carbon-400">
-                      {job.steps.map(step => <li key={step.number}>{step.number}. {step.name} · {step.conclusion || step.status}</li>)}
-                    </ul>
+                {projectWorkflows.isPending && (
+                  <p className="mt-3 text-xs text-carbon-400">Carregando workflows…</p>
+                )}
+                {projectWorkflows.isError && (
+                  <p className="mt-3 text-xs text-amber-400">
+                    Não foi possível consultar workflows com as credenciais atuais.
+                  </p>
+                )}
+                {projectRuns.isError && (
+                  <p className="mt-3 text-xs text-amber-400">
+                    Execuções indisponíveis para este repositório.
+                  </p>
+                )}
+                {projectRuns.data && (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs font-semibold text-carbon-300">Execuções recentes</p>
+                    {projectRuns.data.items.length === 0 && (
+                      <p className="text-xs text-carbon-500">Nenhuma execução recente.</p>
+                    )}
+                    {projectRuns.data.items.map((run) => (
+                      <button
+                        key={run.id}
+                        type="button"
+                        onClick={() => setSelectedRunId((id) => (id === run.id ? null : run.id))}
+                        aria-expanded={selectedRunId === run.id}
+                        className="flex w-full items-center justify-between gap-2 border-t border-carbon-800 py-2 text-left text-xs hover:text-carbon-100"
+                      >
+                        <span className="min-w-0 truncate text-carbon-200">{run.name}</span>
+                        <span className="shrink-0 text-carbon-500">{run.conclusion || run.status}</span>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-            {projectWorkflows.data && (
-              <div className="mt-3 space-y-1">
-                <p className="text-xs text-carbon-500">{projectWorkflows.data.total} workflows encontrados</p>
-                {projectWorkflows.data.items.map(workflow => (
-                  <div key={workflow.id} className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs">
-                    <span className="min-w-0 truncate text-carbon-200">{workflow.name}</span>
-                    <span className="shrink-0 text-carbon-500">{workflow.state}</span>
+                )}
+                {selectedRunId && (
+                  <div className="mt-3 rounded-lg border border-carbon-800 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-carbon-200">
+                        Jobs da execução #{selectedRunId}
+                      </p>
+                      <a
+                        className="text-xs text-carbon-400 underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href={`https://github.com/${activeProject?.repository}/actions/runs/${selectedRunId}`}
+                      >
+                        Logs completos no GitHub
+                      </a>
+                    </div>
+                    {projectRunJobs.isPending && (
+                      <p className="mt-2 text-xs text-carbon-500">Carregando jobs…</p>
+                    )}
+                    {projectRunJobs.isError && (
+                      <p className="mt-2 text-xs text-amber-400">Não foi possível carregar os jobs.</p>
+                    )}
+                    {projectRunJobs.data?.items.map((job) => (
+                      <div key={job.id} className="mt-2 border-t border-carbon-800 pt-2 text-xs">
+                        <a
+                          href={job.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-carbon-200 underline"
+                        >
+                          {job.name}
+                        </a>
+                        <span className="ml-2 text-carbon-500">{job.conclusion || job.status}</span>
+                        <ul className="mt-1 space-y-1 pl-3 text-carbon-400">
+                          {job.steps.map((step) => (
+                            <li key={step.number}>
+                              {step.number}. {step.name} · {step.conclusion || step.status}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                {projectWorkflows.data && (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs text-carbon-500">
+                      {projectWorkflows.data.total} workflows encontrados
+                    </p>
+                    {projectWorkflows.data.items.map((workflow) => (
+                      <div
+                        key={workflow.id}
+                        className="flex items-center justify-between gap-2 border-t border-carbon-800 py-2 text-xs"
+                      >
+                        <span className="min-w-0 truncate text-carbon-200">{workflow.name}</span>
+                        <span className="shrink-0 text-carbon-500">{workflow.state}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            </details>
+          </section>
+        )}
+        <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
+          <aside className="hidden w-48 shrink-0 md:block">
+            <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.label} className="space-y-1">
+                  <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-carbon-500">
+                    {group.label}
+                  </p>
+                  {orderedNav
+                    .filter((item) => (group.ids as readonly string[]).includes(item.id))
+                    .map((item) => (
+                      <Link
+                        key={item.id}
+                        to={item.to}
+                        search={{ project: activeProject?.repository }}
+                        preload="intent"
+                        aria-current={tab === item.id ? 'page' : undefined}
+                        className={cn(
+                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          tab === item.id
+                            ? 'bg-carbon-800 text-carbon-100'
+                            : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200',
+                        )}
+                      >
+                        <item.icon size={17} />
+                        {item.label}
+                      </Link>
+                    ))}
+                </div>
+              ))}
+            </nav>
+          </aside>
+
+          <main className="min-w-0 flex-1 space-y-6">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium tracking-wider text-carbon-500 uppercase">
+                  {activeProject?.enabled ? 'PRODUCTION' : 'GITHUB PROJECT'} /{' '}
+                  {activeProject?.repository || meta?.project || 'photointel'}
+                </p>
+                <h1 className="text-2xl font-semibold tracking-tight text-carbon-100 sm:text-3xl">
+                  {pageTitle}
+                </h1>
+                <p className="text-sm text-carbon-400">{pageDescription}</p>
+              </div>
+              {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-carbon-600" />}
+            </div>
+
+            {isolatedModule ? (
+              <Outlet />
+            ) : isPending ? (
+              <Card className="flex items-center justify-center bg-carbon-950 p-12">
+                <Spinner />
+              </Card>
+            ) : error ? (
+              <IssueBanner error={error} />
+            ) : invalidProject ? (
+              <Card className="space-y-3 border-amber-500/30 p-5" role="alert">
+                <h2 className="font-semibold">Projeto não autorizado ou indisponível</h2>
+                <p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p>
+              </Card>
+            ) : isReadOnlyProject && tab === 'config' ? (
+              <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
+            ) : isReadOnlyProject &&
+              tab !== 'overview' &&
+              tab !== 'workflows' &&
+              tab !== 'projects' &&
+              tab !== 'errors' &&
+              tab !== 'modules' ? (
+              <Card className="space-y-3 border-amber-500/30 p-5" role="status">
+                <h2 className="font-semibold text-carbon-100">
+                  Integração específica deste projeto ainda indisponível
+                </h2>
+                <p className="text-sm text-carbon-400">
+                  O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do
+                  PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.
+                </p>
+                <p className="text-xs text-carbon-500">
+                  A conexão de variáveis, deploys, logs e terminal precisa ser implementada por projeto no
+                  servidor antes de habilitar operações aqui.
+                </p>
+              </Card>
+            ) : (
+              <Outlet />
             )}
-            </div>
-          </details>
-        </section>
-      )}
-      <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 pb-28 sm:px-6 md:py-8 md:pb-10">
-        <aside className="hidden w-48 shrink-0 md:block">
-          <nav aria-label="Navegação principal" className="sticky top-24 space-y-5">
-            {NAV_GROUPS.map(group => <div key={group.label} className="space-y-1">
-              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-carbon-500">{group.label}</p>
-              {orderedNav.filter(item => (group.ids as readonly string[]).includes(item.id)).map(item => <Link
-                key={item.id} to={item.to} search={{ project: activeProject?.repository }} preload="intent" aria-current={tab === item.id ? 'page' : undefined}
-                className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                  tab === item.id ? 'bg-carbon-800 text-carbon-100' : 'text-carbon-400 hover:bg-carbon-900 hover:text-carbon-200')}>
-                <item.icon size={17} />{item.label}
-              </Link>)}
-            </div>)}
-          </nav>
-        </aside>
 
-        <main className="min-w-0 flex-1 space-y-6">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-[11px] font-medium tracking-wider text-carbon-500 uppercase">
-                {activeProject?.enabled ? 'PRODUCTION' : 'GITHUB PROJECT'} / {activeProject?.repository || meta?.project || 'photointel'}
-              </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-carbon-100 sm:text-3xl">
-                {pageTitle}
-              </h1>
-              <p className="text-sm text-carbon-400">{pageDescription}</p>
-            </div>
-            {currentNav && !isViewingRun && <currentNav.icon size={20} className="mt-3 text-carbon-600" />}
-          </div>
-
-          {isolatedModule ? <Outlet /> : isPending ? (
-            <Card className="flex items-center justify-center bg-carbon-950 p-12">
-              <Spinner />
-            </Card>
-          ) : error ? (
-            <IssueBanner error={error} />
-          ) : invalidProject ? (
-            <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
-          ) : isReadOnlyProject && tab === 'config' ? (
-            <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
-          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' && tab !== 'modules' ? (
-            <Card className="space-y-3 border-amber-500/30 p-5" role="status">
-              <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
-              <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>
-              <p className="text-xs text-carbon-500">A conexão de variáveis, deploys, logs e terminal precisa ser implementada por projeto no servidor antes de habilitar operações aqui.</p>
-            </Card>
-          ) : (
-            <Outlet />
-          )}
-
-          <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
-            <span>Rod Manage · Operações auditáveis · Cloudflare Access</span>
-            <span className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
-              <span>Publicado:</span>
-              {import.meta.env.VITE_MANAGE_RELEASE
-                ? <a className="text-emerald-400 underline underline-offset-2"
-                    href={'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE}
-                    target="_blank" rel="noreferrer" title={import.meta.env.VITE_MANAGE_RELEASE}>
+            <footer className="border-t border-carbon-800/60 pt-5 text-xs text-carbon-500">
+              <span>Rod Manage · Operações auditáveis · Cloudflare Access</span>
+              <span className="mt-2 flex flex-wrap items-center gap-2 font-mono text-[11px]">
+                <span>Publicado:</span>
+                {import.meta.env.VITE_MANAGE_RELEASE ? (
+                  <a
+                    className="text-emerald-400 underline underline-offset-2"
+                    href={
+                      'https://github.com/rodkisten/photointel/commit/' + import.meta.env.VITE_MANAGE_RELEASE
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    title={import.meta.env.VITE_MANAGE_RELEASE}
+                  >
                     {import.meta.env.VITE_MANAGE_RELEASE.slice(0, 12)}
                   </a>
-                : <span className="text-amber-400">SHA indisponível</span>}
-            </span>
-          </footer>
-        </main>
-      </div>
-
-      {mobileMenu && <button type="button" aria-label="Fechar menu" onClick={() => setMobileMenu(false)}
-        className="fixed inset-0 z-[50] bg-black/60 md:hidden" />}
-      {mobileMenu && <div role="dialog" aria-label="Menu de navegação"
-        className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[61] max-h-[65dvh] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl md:hidden">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-carbon-100">Navegação</p>
-          <button type="button" onClick={() => setEditNav(value => !value)}
-            className="rounded-lg border border-carbon-700 px-3 py-1.5 text-xs text-carbon-300">
-            {editNav ? 'Concluir' : 'Organizar'}
-          </button>
+                ) : (
+                  <span className="text-amber-400">SHA indisponível</span>
+                )}
+              </span>
+            </footer>
+          </main>
         </div>
-        {NAV_GROUPS.map(group => <section key={group.label} className="mb-3">
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-carbon-500">{group.label}</p>
-          {orderedNav.filter(item => (group.ids as readonly string[]).includes(item.id)).map(item =>
-            <div key={item.id} draggable={editNav} onDragStart={() => setDragged(item.id)}
-              onDragOver={event => { if (editNav) event.preventDefault(); }}
-              onDrop={() => { if (editNav && dragged && dragged !== item.id) reorder(dragged, item.id); setDragged(null); }}
-              className="flex min-h-11 items-center gap-2 rounded-lg hover:bg-carbon-900">
-              {editNav && <GripVertical size={16} className="ml-1 text-carbon-500" />}
-              <Link to={item.to} search={{ project: activeProject?.repository }} onClick={() => setMobileMenu(false)}
-                className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-sm text-carbon-200">
-                <item.icon size={17} />{item.label}
+        {mobileMenu && (
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setMobileMenu(false)}
+            className="fixed inset-0 z-[50] bg-black/60 md:hidden"
+          />
+        )}
+        {mobileMenu && (
+          <div
+            role="dialog"
+            aria-label="Menu de navegação"
+            className="fixed inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] z-[61] max-h-[65dvh] overflow-y-auto overscroll-contain rounded-xl border border-carbon-700 bg-carbon-950 p-3 shadow-2xl md:hidden"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-carbon-100">Navegação</p>
+              <button
+                type="button"
+                onClick={() => setEditNav((value) => !value)}
+                className="rounded-lg border border-carbon-700 px-3 py-1.5 text-xs text-carbon-300"
+              >
+                {editNav ? 'Concluir' : 'Organizar'}
+              </button>
+            </div>
+            {NAV_GROUPS.map((group) => (
+              <section key={group.label} className="mb-3">
+                <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-carbon-500">
+                  {group.label}
+                </p>
+                {orderedNav
+                  .filter((item) => (group.ids as readonly string[]).includes(item.id))
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      draggable={editNav}
+                      onDragStart={() => setDragged(item.id)}
+                      onDragOver={(event) => {
+                        if (editNav) event.preventDefault();
+                      }}
+                      onDrop={() => {
+                        if (editNav && dragged && dragged !== item.id) reorder(dragged, item.id);
+                        setDragged(null);
+                      }}
+                      className="flex min-h-11 items-center gap-2 rounded-lg hover:bg-carbon-900"
+                    >
+                      {editNav && <GripVertical size={16} className="ml-1 text-carbon-500" />}
+                      <Link
+                        to={item.to}
+                        search={{ project: activeProject?.repository }}
+                        onClick={() => setMobileMenu(false)}
+                        className="flex min-w-0 flex-1 items-center gap-3 px-2 py-2 text-sm text-carbon-200"
+                      >
+                        <item.icon size={17} />
+                        {item.label}
+                      </Link>
+                      {editNav && (
+                        <button
+                          type="button"
+                          aria-label={
+                            pinnedIds.includes(item.id) ? 'Desafixar ' + item.label : 'Fixar ' + item.label
+                          }
+                          onClick={() => togglePin(item.id)}
+                          className="rounded-lg px-3 py-2 text-xs text-carbon-300"
+                        >
+                          {pinnedIds.includes(item.id) ? '★' : '☆'}
+                        </button>
+                      )}
+                      {editNav && (
+                        <button
+                          type="button"
+                          aria-label={'Mover ' + item.label + ' para cima'}
+                          onClick={() => {
+                            const index = orderedNav.findIndex((x) => x.id === item.id);
+                            if (index > 0) reorder(item.id, orderedNav[index - 1].id);
+                          }}
+                          className="rounded-lg px-2 py-2 text-sm"
+                        >
+                          ↑
+                        </button>
+                      )}
+                      {editNav && (
+                        <button
+                          type="button"
+                          aria-label={'Mover ' + item.label + ' para baixo'}
+                          onClick={() => {
+                            const index = orderedNav.findIndex((x) => x.id === item.id);
+                            if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id);
+                          }}
+                          className="rounded-lg px-2 py-2 text-sm"
+                        >
+                          ↓
+                        </button>
+                      )}
+                    </div>
+                  ))}
+              </section>
+            ))}
+            {editNav && (
+              <p className="text-xs text-carbon-500">
+                Marque até quatro favoritos para a barra inferior. Use as setas para organizar no iPhone.
+              </p>
+            )}
+          </div>
+        )}
+        <nav
+          aria-label="Navegação principal mobile"
+          className="fixed inset-x-0 bottom-0 z-[60] border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden"
+        >
+          <div className="flex items-center justify-around gap-1">
+            {pinned.map((item) => (
+              <Link
+                key={item.id}
+                to={item.to}
+                search={{ project: activeProject?.repository }}
+                aria-current={tab === item.id ? 'page' : undefined}
+                className={cn(
+                  'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]',
+                  tab === item.id ? 'bg-carbon-800 text-white' : 'text-carbon-400',
+                )}
+              >
+                <item.icon size={20} />
+                <span className="truncate">{item.label}</span>
               </Link>
-              {editNav && <button type="button" aria-label={pinnedIds.includes(item.id) ? 'Desafixar ' + item.label : 'Fixar ' + item.label}
-                onClick={() => togglePin(item.id)} className="rounded-lg px-3 py-2 text-xs text-carbon-300">
-                {pinnedIds.includes(item.id) ? '★' : '☆'}
-              </button>}
-              {editNav && <button type="button" aria-label={'Mover ' + item.label + ' para cima'}
-                onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index > 0) reorder(item.id, orderedNav[index - 1].id); }}
-                className="rounded-lg px-2 py-2 text-sm">↑</button>}
-              {editNav && <button type="button" aria-label={'Mover ' + item.label + ' para baixo'}
-                onClick={() => { const index = orderedNav.findIndex(x => x.id === item.id); if (index < orderedNav.length - 1) reorder(item.id, orderedNav[index + 1].id); }}
-                className="rounded-lg px-2 py-2 text-sm">↓</button>}
-            </div>)}
-        </section>)}
-        {editNav && <p className="text-xs text-carbon-500">Marque até quatro favoritos para a barra inferior. Use as setas para organizar no iPhone.</p>}
-      </div>}
-      <nav aria-label="Navegação principal mobile"
-        className="fixed inset-x-0 bottom-0 z-[60] border-t border-carbon-800 bg-carbon-950/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl md:hidden">
-        <div className="flex items-center justify-around gap-1">
-          {pinned.map(item => <Link key={item.id} to={item.to} search={{ project: activeProject?.repository }} aria-current={tab === item.id ? 'page' : undefined}
-            className={cn("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px]", tab === item.id ? "bg-carbon-800 text-white" : "text-carbon-400")}>
-            <item.icon size={20} /><span className="truncate">{item.label}</span>
-          </Link>)}
-          <button type="button" aria-expanded={mobileMenu} aria-label="Mais páginas e organizar menu"
-            onClick={() => setMobileMenu(value => !value)}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] text-carbon-300">
-            <Menu size={20} /><span>Mais</span>
-          </button>
-        </div>
-      </nav>   </div>
+            ))}
+            <button
+              type="button"
+              aria-expanded={mobileMenu}
+              aria-label="Mais páginas e organizar menu"
+              onClick={() => setMobileMenu((value) => !value)}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[10px] text-carbon-300"
+            >
+              <Menu size={20} />
+              <span>Mais</span>
+            </button>
+          </div>
+        </nav>{' '}
+      </div>
     </ProjectProvider>
   );
-  
 }
