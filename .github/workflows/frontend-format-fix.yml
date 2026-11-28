@@ -95,6 +95,15 @@ jobs:
           BASE_REF: ${{ inputs.base_ref }}
         run: bash scripts/format-changed-frontends.sh
 
+      - name: "🎨 Validate universal formatting"
+        uses: rodkisten/github/actions/format@main
+        with:
+          mode: check
+          scope: ${{ inputs.mode }}
+          base: ${{ inputs.base_ref || 'origin/main' }}
+          lint: 'false'
+          results-file: ${{ runner.temp }}/rod-format-results.json
+
       - name: "💾 Commit and push fixes"
         if: steps.format.outputs.has_files == 'true'
         env:
