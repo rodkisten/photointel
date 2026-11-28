@@ -274,65 +274,68 @@ function WorkspaceModules({
         <h1 className="text-lg font-semibold">Módulos · {policy.module.label}</h1>
         <span className="text-xs">Experimental · {workspace}</span>
       </header>
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label>
-          <input
-            type="checkbox"
-            checked={selection.enabled}
-            onChange={(event) => change({ ...selection, enabled: event.target.checked })}
-          />{' '}
-          Habilitar
-        </label>
-        <label>
-          Canal{' '}
-          <select
-            className="rounded bg-neutral-900 p-2 text-base"
-            value={selection.channel}
-            onChange={(event) => change({ enabled: selection.enabled, channel: event.target.value })}
+      <details open={!mount || !selection.enabled}>
+        <summary className="cursor-pointer text-sm">Configuração e diagnóstico</summary>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label>
+            <input
+              type="checkbox"
+              checked={selection.enabled}
+              onChange={(event) => change({ ...selection, enabled: event.target.checked })}
+            />{' '}
+            Habilitar
+          </label>
+          <label>
+            Canal{' '}
+            <select
+              className="rounded bg-neutral-900 p-2 text-base"
+              value={selection.channel}
+              onChange={(event) => change({ enabled: selection.enabled, channel: event.target.value })}
+            >
+              {Object.keys(policy.channels).map((channel) => (
+                <option key={channel}>{channel}</option>
+              ))}
+            </select>
+          </label>
+          <span>
+            {policy.isolated
+              ? 'Preview isolado · sem APIs privilegiadas'
+              : 'Preview de PR: host isolado obrigatório'}
+          </span>
+          <a
+            className="underline"
+            href={manifest.data?.standaloneUrl || policy.module.origin + policy.module.standalone}
+            target="_blank"
+            rel="noreferrer"
           >
-            {Object.keys(policy.channels).map((channel) => (
-              <option key={channel}>{channel}</option>
-            ))}
-          </select>
-        </label>
-        <span>
-          {policy.isolated
-            ? 'Preview isolado · sem APIs privilegiadas'
-            : 'Preview de PR: host isolado obrigatório'}
-        </span>
-        <a
-          className="underline"
-          href={manifest.data?.standaloneUrl || policy.module.origin + policy.module.standalone}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Abrir standalone
-        </a>
-        <a className="underline" href={`${policy.module.route}?workspace=${encodeURIComponent(workspace)}`}>
-          Abrir no Manage
-        </a>
-        {selection.pinned && (
-          <button onClick={() => change({ ...selection, previous: selection.pinned, pinned: undefined })}>
-            Buscar release atual
-          </button>
-        )}
-        {selection.previous && (
-          <button
-            onClick={() => change({ ...selection, pinned: selection.previous, previous: selection.pinned })}
-          >
-            Rollback
-          </button>
-        )}
-      </div>
-      <p className="text-xs text-neutral-400">
-        Preferências locais por workspace. Releases confiáveis e contrato v1; sem credenciais do host.
-      </p>
-      {manifest.data && (
-        <div className="break-all text-xs">
-          v{manifest.data.version} · SHA {manifest.data.gitSha}
-          <p>Capabilities: {manifest.data.capabilities.join(', ')}</p>
+            Abrir standalone
+          </a>
+          <a className="underline" href={`${policy.module.route}?workspace=${encodeURIComponent(workspace)}`}>
+            Abrir no Manage
+          </a>
+          {selection.pinned && (
+            <button onClick={() => change({ ...selection, previous: selection.pinned, pinned: undefined })}>
+              Buscar release atual
+            </button>
+          )}
+          {selection.previous && (
+            <button
+              onClick={() => change({ ...selection, pinned: selection.previous, previous: selection.pinned })}
+            >
+              Rollback
+            </button>
+          )}
         </div>
-      )}
+        <p className="text-xs text-neutral-400">
+          Preferências locais por workspace. Releases confiáveis e contrato v1; sem credenciais do host.
+        </p>
+        {manifest.data && (
+          <div className="break-all text-xs">
+            v{manifest.data.version} · SHA {manifest.data.gitSha}
+            <p>Capabilities: {manifest.data.capabilities.join(', ')}</p>
+          </div>
+        )}
+      </details>
       <p role="status" className="text-sm">
         {manifest.isPending && selection.enabled ? 'Consultando manifest…' : status}
       </p>

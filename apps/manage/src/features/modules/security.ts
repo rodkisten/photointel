@@ -1,6 +1,6 @@
 // Only reviewed origins. PR code is available solely on the API-less preview host.
 export const ISOLATED_SANDBOX_ORIGIN = 'https://sandbox.migos.club';
-export const ISOLATED_CODE_ORIGIN = 'https://pr-28.preview.shell.migos.club';
+export const ISOLATED_CODE_ORIGIN = 'https://pr-29.preview.shell.migos.club';
 const sandbox = 'https://sandbox.migos.club';
 const code = 'https://shell.migos.club';
 export function moduleContentSecurityPolicy(production: boolean): string {

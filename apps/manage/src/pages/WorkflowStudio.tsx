@@ -124,7 +124,8 @@ export function WorkflowStudio() {
   };
   const active = nodes.find((node) => node.id === selected);
   return <div className="space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-semibold text-carbon-100">Workflow Studio</h1><p className="text-xs text-carbon-400">Visual editor · no deployments are executed</p></div><Button size="sm" variant="outline" onClick={download}>Export JSON</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-xl font-semibold text-carbon-100">Diagramas legados</h1><p className="text-xs text-carbon-400">Formato próprio do Manage · sem execução. Workflows GitHub Actions estão no Code.</p></div><Button size="sm" variant="outline" onClick={download}>Export JSON</Button></div>
+    <a className="text-sm underline" href="/code">Abrir Workflow Studio no Code</a>
     <div className="flex flex-wrap gap-2">
       <Select aria-label="Saved workflows" className="max-w-72" value={flowId || ''} onChange={(event) => { const item = saved.find((entry) => entry.id === event.target.value); if (item) load(item); }}>
         <option value="">Novo diagrama</option>

@@ -1,6 +1,6 @@
 # Rodverse — Module Federation architecture
 
-Status: approved product direction (2026-11-27). Experimental Sandbox/Manage implementation and local browser validation now exist; production rollout remains pending. See [implementation status/evidence](STATUS.md), [exported contracts](CONTRACTS.md), [registry](MODULE_REGISTRY.md) and [migration decisions](MIGRATION.md). RodSandbox #12 merged during implementation; its follow-up is [#14](https://github.com/rodkisten/rodsandbox/pull/14). The architecture below records approved direction and original audit; proposed sketches are superseded by those implementation documents where stated.
+Status: approved architecture, with Sandbox/Manage and Code/Studio implementations. [STATUS](STATUS.md) separates implemented, verified and pending work; [CONTRACTS](CONTRACTS.md), [MODULE_REGISTRY](MODULE_REGISTRY.md), [MIGRATION](MIGRATION.md) and [CI/CD](CI_CD.md) describe the current implementation. Rodverse #262, RodSandbox #14 and Shell #28 have merged; Code consolidation continues in [Shell #29](https://github.com/rodkisten/shell/pull/29) and the existing [orb #5](https://github.com/rodkisten/orb/pull/5). The architecture and original audit below remain historical evidence; implementation documents supersede proposed sketches and old status rows.
 
 ## Decision
 

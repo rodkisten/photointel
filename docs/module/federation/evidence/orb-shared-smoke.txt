@@ -1,0 +1,3 @@
+PASS orb renders the shared package with its host adapters and a CST graph
+PASS orb draft database retained; draft reopens from URL
+PASS no browser exceptions; no privileged dispatch exercised

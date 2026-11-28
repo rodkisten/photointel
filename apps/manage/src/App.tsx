@@ -44,7 +44,8 @@ const NAV = [
   { id: 'operations', to: '/operations', label: 'Operações', icon: Timer },
   { id: 'infrastructure', to: '/infrastructure', label: 'GCP', icon: ServerCog },
   { id: 'triggers', to: '/triggers', label: 'Gatilhos', icon: GitPullRequestArrow },
-  { id: 'workflows', to: '/workflows', label: 'Workflow Studio', icon: Workflow },
+  { id: 'code', to: '/code', label: 'Code', icon: Code2 },
+  { id: 'workflows', to: '/workflows', label: 'Diagramas', icon: Workflow },
   { id: 'costs', to: '/costs', label: 'Custos', icon: Wallet },
   { id: 'logs', to: '/logs', label: 'Logs', icon: Logs },
   { id: 'errors', to: '/errors', label: 'Errors', icon: Bug },
@@ -58,12 +59,13 @@ const NAV = [
 ] as const;
 
 const NAV_GROUPS = [
-  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'workflows', 'terminal', 'projects'] },
+  { label: 'Operação', ids: ['overview', 'operations', 'jobs', 'deploy', 'infrastructure', 'triggers', 'code', 'workflows', 'terminal', 'projects'] },
   { label: 'Observabilidade', ids: ['costs', 'logs', 'errors', 'notifications'] },
   { label: 'Configuração', ids: ['config', 'secrets', 'icloud', 'modules', 'settings'] },
 ] as const;
 
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  code: 'Workflow Studio · GitHub Actions',
   modules: 'Registry de aplicações federadas',
   jobs: 'Dispare jobs e acompanhe logs de execução',
   terminal: 'Acesse suas VMs e GitHub Codespaces',
@@ -85,7 +87,8 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
-  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox') || pathname.startsWith('/code')) return 'modules';
+  if (pathname.startsWith('/code')) return 'code';
+  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox')) return 'modules';
   if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';
@@ -203,7 +206,7 @@ export default function App() {
   const isReadOnlyProject = Boolean(activeProject && !activeProject.enabled);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const tab = sectionForPath(pathname);
-  const isolatedModule = tab === 'modules' && isIsolatedModulePreview(window.location.hostname);
+  const isolatedModule = (tab === 'modules' || tab === 'code') && isIsolatedModulePreview(window.location.hostname);
   const isViewingRun = /^\/deploys\/[^/]+\/?$/.test(pathname);
   const currentNav = NAV.find((item) => item.id === tab);
   const pageTitle = isViewingRun ? 'Detalhes da execução' : currentNav?.label;
@@ -367,7 +370,7 @@ export default function App() {
             <Card className="space-y-3 border-amber-500/30 p-5" role="alert"><h2 className="font-semibold">Projeto não autorizado ou indisponível</h2><p className="text-sm">Selecione um projeto válido no catálogo para continuar.</p></Card>
           ) : isReadOnlyProject && tab === 'config' ? (
             <ProjectEnvironment key={activeProject!.repository} repository={activeProject!.repository} />
-          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' && tab !== 'modules' ? (
+          ) : isReadOnlyProject && tab !== 'overview' && tab !== 'workflows' && tab !== 'projects' && tab !== 'errors' && tab !== 'modules' && tab !== 'code' ? (
             <Card className="space-y-3 border-amber-500/30 p-5" role="status">
               <h2 className="font-semibold text-carbon-100">Integração específica deste projeto ainda indisponível</h2>
               <p className="text-sm text-carbon-400">O projeto selecionado é {activeProject?.repository}. Esta tela ainda usa integrações do PhotoIntel e foi bloqueada para não mostrar ou alterar dados de outro repositório.</p>

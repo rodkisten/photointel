@@ -20,7 +20,7 @@ describe('per-module trusted release policy', () => {
     const request = vi.fn();
     vi.stubGlobal('fetch', request);
     for (const path of [
-      'https://pr-28.preview.shell.migos.club/workflow/rod-module.json',
+      'https://pr-29.preview.shell.migos.club/workflow/rod-module.json',
       'https://sandbox.migos.club/rod-module.json',
       `https://shell.migos.club/modules/sandbox/${sha}/rod-module.json`,
     ])

@@ -1,14 +1,29 @@
-# Current checkpoint — 2026-11-28
+# Current block — 2026-11-28
 
-PR #262 and RodSandbox #14 are merged. This increment builds on updated main in `feat/workflow-studio-consolidation`; Shell #28 and orb #5 remain the existing implementation PRs.
+## Repository state
 
-Implemented in this checkpoint: Code is a second independently identified trusted module; registry selection/pins are scoped per module, identity and workspace; `/code` is lazy mounted; host navigation preserves a module lifetime while URL state changes. Production policy allows reviewed Shell release artifacts only; the fixed PR #28 origin is available solely on the API-less native preview host. The SDK context does not expose a privileged workflow client.
+Rodverse #262 and Sandbox #14 are merged. Shell #28 merged while this block was in progress; continuation is [Shell #29](https://github.com/rodkisten/shell/pull/29). Existing [orb #5](https://github.com/rodkisten/orb/pull/5) was reconciled with current main, including concurrent MCP APIs; its lockfile conflict was regenerated from main without dropping those dependencies. Manage uses `feat/workflow-studio-consolidation` from current main.
 
-Shell now owns the extracted orb CST/editor feature packages. orb is being converted to consume their versioned archives and keeps its existing authorization/orchestration APIs. The Shell editor imports legacy drafts without deleting their originals. The Manage diagram editor still owns a separate persisted graph format; removing it requires explicit data/parity migration, which has not been verified.
+## Implemented
 
-Verified locally so far: Manage typecheck, build and tests; Shell core/Studio/app typechecks, six CST tests, Shell Go/WASM/frontend and standalone/federated builds; orb typecheck, web build and existing API tests before final archive refresh. The first real Code smoke is still in progress. No preview deployment or Safari success is claimed for this checkpoint.
+- Canonical orb CST/editor extracted to Shell `workflow-core` / `workflow-studio`. orb consumes integrity-locked versioned packages and retains authorization/orchestration, database names and host adapters. No editor/parser source fork remains there.
+- Existing Shell action ports, editable inputs and output wiring use conservative CST patches and review. Legacy drafts retain original storage and unknown source fields. Six core tests cover comments, unrelated bytes/fields, wiring, invalid connections, key serialization and migration.
+- Same Code feature standalone and `rod_code/App`; official Vite Federation, React/DOM 19.2.4 singletons, Shadow DOM styles and container queries. Scoped navigation/query/store/DB/request/lifecycle adapters. No privileged workflow transport is provided by Manage yet.
+- Manage Code module policy/identity/SHA pin separate from Sandbox; `/code` route and navigation, compact registry, stable scope during URL changes, strict Code #29 preview pairing on the API-less native host. Existing Sandbox storage compatibility retained.
+- Exact-head SHA artifacts/manifests, worker CORS/CORP/MIME/cache handling, same-lane prior artifact retention and post-deploy verifier in the single Shell preview pipeline. Prototype demo host/contracts/remote and duplicate Federation workflow removed after real Manage integration passed.
+- Manage legacy non-executable diagrams labelled separately; persisted graph data/API preserved pending an explicit migration. See MIGRATION for limits.
 
-Pending next: real standalone/federated and orb smoke, final package refresh, deployed SHA/CORS/cache checks, prototype host retirement after parity. Remote builds/GHCR/VPS, private Ports, authorized API adapters and Userscripts integration remain pending.
+## Verified locally
+
+- Manage typecheck/build, 127 Vitest tests and 3 service-worker tests; lint has no errors (existing warnings remain). Policy tests reject PR/cross-module origins and swapped identities.
+- Shell Go/WASM/frontend build; core/Studio/app typechecks, standalone/remote bundles; 6 Vitest CST tests. Lint has no errors and two existing warnings.
+- orb workspace typecheck/web build, 3 existing API tests and Wrangler API dry-run including current main's MCP dependencies.
+- Real Chromium at 390 px: Code standalone and actual dynamic Manage remote, singleton guard, YAML/demo graph/step ports, mounted navigation, local draft reopen, scoped CSS/DB, no horizontal overflow, real SPA unmount and no browser exceptions. Only Manage identity/catalog endpoints were stubbed locally; remote/feature/parser were real. orb's same package opened YAML, rendered its CST graph and reopened drafts using its original DB names without browser exceptions.
+- Evidence: `evidence/code-local-smoke.txt` and `evidence/orb-shared-smoke.txt`. Public action-port network/drag smoke is tracked separately when completed.
+
+## Pending / limits
+
+Preview deployment and live SHA/header/integration checks are in progress; no new deployment is claimed yet. Production Access identity/dispatch and physical iPhone Safari remain unverified. Chromium mobile emulation is not Safari. Package registry publishing, private API adapters, server-side module administration, complete theme propagation, legacy diagram migration, remaining Shell/orb/Userscripts remotes, remote builds/GHCR/VPS and private Ports remain pending. No production merge/activation is performed by this block.
 
 ---
 
