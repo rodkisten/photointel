@@ -54,7 +54,8 @@ export const PROVIDER_CONFIG = {
 
 export const PATTERNS = {
   REPOSITORY: /^[\w-]+\/[\w.-]+$/,
-  WIF_AUDIENCE: /^\/\/iam.googleapis.com\/projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[\w-]+\/providers\/[\w-]+$/,
+  WIF_AUDIENCE:
+    /^\/\/iam.googleapis.com\/projects\/[0-9]+\/locations\/global\/workloadIdentityPools\/[\w-]+\/providers\/[\w-]+$/,
   SERVICE_ACCOUNT: /^[a-z][\w-]{2,70}@[a-z][\w-]{4,60}\.iam\.gserviceaccount\.com$/,
   REGION: /^[a-z]{2,20}-[a-z0-9-]{2,40}[0-9]$/,
   SECRET_VERSION: /^\d{1,10}$/,
@@ -72,11 +73,46 @@ export const WORKFLOW_INPUTS: WorkflowInputsMap = {
     migration_backup_prefix: [],
   },
   'cloudflare-setup.yml': { mode: ['plan', 'apply'] },
-  'gcp-health.yml': { operation: ['health', 'cpu', 'media'], target: ['image', 'video', 'all'], image_input: [], video_input: [], confirm: ['false', 'true'] },
-  'ci.yml': { scope: ['all', 'auto', 'python', 'frontend', 'frontend-web', 'frontend-manage', 'integration', 'containers', 'security', 'bootstrap', 'compose', 'icloud', 'diagnostics'], upload_artifacts: ['false', 'true'] },
+  'gcp-health.yml': {
+    operation: ['health', 'cpu', 'media'],
+    target: ['image', 'video', 'all'],
+    image_input: [],
+    video_input: [],
+    confirm: ['false', 'true'],
+  },
+  'ci.yml': {
+    scope: [
+      'all',
+      'auto',
+      'python',
+      'frontend',
+      'frontend-web',
+      'frontend-manage',
+      'integration',
+      'containers',
+      'security',
+      'bootstrap',
+      'compose',
+      'icloud',
+      'diagnostics',
+    ],
+    upload_artifacts: ['false', 'true'],
+  },
   'npm-lockfiles.yml': { operation: ['npm', 'python', 'security'], package_path: [], target_branch: [] },
-  'release.yml': { action: ['plan', 'build', 'deploy', 'build-and-deploy'], target: ['api', 'media', 'web', 'manage', 'all'], source: ['main', 'last'], sha: [], engine: ['legacy', 'preview', 'verify'], confirm: ['false', 'true'] },
-  'frontend-release.yml': { action: ['build', 'build-and-deploy'], app: ['all', 'web', 'manage'], sha: [], request_id: [] },
+  'release.yml': {
+    action: ['plan', 'build', 'deploy', 'build-and-deploy'],
+    target: ['api', 'media', 'web', 'manage', 'all'],
+    source: ['main', 'last'],
+    sha: [],
+    engine: ['legacy', 'preview', 'verify'],
+    confirm: ['false', 'true'],
+  },
+  'frontend-release.yml': {
+    action: ['build', 'build-and-deploy'],
+    app: ['all', 'web', 'manage'],
+    sha: [],
+    request_id: [],
+  },
   'maintenance.yml': { operation: ['validate', 'render', 'jobs-plan', 'scheduler-plan'] },
   'gcp-migrate.yml': {
     migration_mode: ['plan', 'apply', 'diagnose'],
@@ -135,7 +171,7 @@ function providerFault(url: string, status: number, body: string, responseHeader
       /^[a-z_]+=(?:read|write|admin)(?:(?:,|;)[ ]?[a-z_]+=(?:read|write|admin))*$/i.test(permissions)
         ? permissions.slice(0, 180)
         : '';
-    
+
     let upstreamMessage = '';
     try {
       const parsed = JSON.parse(body) as { message?: unknown };
@@ -157,7 +193,7 @@ function providerFault(url: string, status: number, body: string, responseHeader
             : status === 403
               ? 'GitHub recusou o acesso (403). Confirme permissões e visibilidade do repositório.'
               : 'GitHub API recusou a operação (HTTP ' + status + ').';
-              
+
     return new ApiError(
       503,
       'GITHUB_' + status,
@@ -166,14 +202,15 @@ function providerFault(url: string, status: number, body: string, responseHeader
   }
 
   if (host === 'secretmanager.googleapis.com') {
-    const reason = status === 403
-      ? 'Secret Manager recusou o acesso. Execute Setup GCP → permissions para atualizar as permissões do Manage.'
-      : status === 404
-        ? 'Secret ou versão não encontrada no projeto photointel.'
-        : status === 409
-          ? 'Esse secret já existe ou há conflito com outra operação.'
-          : 'Google Secret Manager recusou a operação (HTTP ' + status + ').';
-          
+    const reason =
+      status === 403
+        ? 'Secret Manager recusou o acesso. Execute Setup GCP → permissions para atualizar as permissões do Manage.'
+        : status === 404
+          ? 'Secret ou versão não encontrada no projeto photointel.'
+          : status === 409
+            ? 'Esse secret já existe ou há conflito com outra operação.'
+            : 'Google Secret Manager recusou a operação (HTTP ' + status + ').';
+
     return new ApiError(503, 'GCP_SECRET_MANAGER_' + status, reason);
   }
 
@@ -227,7 +264,7 @@ export async function provider(url: string, token: string, init: RequestInit = {
       .text()
       .then((x) => x.slice(0, PROVIDER_CONFIG.MAX_BODY_SLICE_BYTES))
       .catch(() => '');
-      
+
     throw providerFault(url, response.status, body, response.headers);
   }
 
@@ -277,7 +314,10 @@ export async function gh(env: Env, path: string, method = 'GET', payload?: unkno
 
   return provider('https://api.github.com/repos/' + repo + path, token, {
     method,
-    headers: { 'X-GitHub-Api-Version': PROVIDER_CONFIG.GITHUB_API_VERSION, Accept: 'application/vnd.github+json' },
+    headers: {
+      'X-GitHub-Api-Version': PROVIDER_CONFIG.GITHUB_API_VERSION,
+      Accept: 'application/vnd.github+json',
+    },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
   });
 }
@@ -321,7 +361,11 @@ export function validateConfig(value: string): void {
   try {
     parseConfiguration(value);
   } catch (error) {
-    throw new ApiError(422, 'CONFIG_REFERENCE', error instanceof Error ? error.message : 'Configuração inválida');
+    throw new ApiError(
+      422,
+      'CONFIG_REFERENCE',
+      error instanceof Error ? error.message : 'Configuração inválida',
+    );
   }
 
   if (!value.trim() || value.length > PROVIDER_CONFIG.CONFIG_MAX_LENGTH || value.includes('\0')) {
@@ -356,11 +400,15 @@ export function validateConfig(value: string): void {
 
     const data = config as Record<string, unknown>;
     const extra = data.extra_environment;
-    
+
     if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
       if ('TELEGRAM_NOTIFICATION_API_TOKEN' in extra) {
         const token = (extra as Record<string, unknown>).TELEGRAM_NOTIFICATION_API_TOKEN;
-        if (typeof token !== 'string' || token.length === 0 || token.length > PROVIDER_CONFIG.TELEGRAM_TOKEN_MAX_LENGTH) {
+        if (
+          typeof token !== 'string' ||
+          token.length === 0 ||
+          token.length > PROVIDER_CONFIG.TELEGRAM_TOKEN_MAX_LENGTH
+        ) {
           throw new ApiError(422, 'TELEGRAM_TOKEN_SIZE', 'Token Telegram inválido.');
         }
       }
@@ -478,11 +526,11 @@ export function mapCloudLogs(items: unknown): Array<Record<string, unknown>> {
 
   return items.slice(0, PROVIDER_CONFIG.MAX_LOG_ITEMS).map((entry: unknown) => {
     const e = entry as CloudRunLogEntry;
-    
+
     // A missing JSON payload must never become a visible empty {} tree.
     const payload = [e.jsonPayload, e.textPayload, e.protoPayload].find(hasLogBody);
     const http = e.httpRequest;
-    
+
     const fallback = hasLogBody(http)
       ? {
           httpRequest: {
