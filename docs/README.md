@@ -1,3 +1,18 @@
+# Documentação do Rodverse
+
+A documentação central de **Manage, Module Federation e runtime remoto** está em [`module/federation/`](module/federation/README.md).
+
+| Consulta | Documento |
+| --- | --- |
+| Arquitetura, responsabilidades e índice completo | [Module Federation](module/federation/README.md) |
+| Implementado, verificado, pendente, PRs, commits e evidências | [Status](module/federation/STATUS.md) |
+| Builds no GitHub Actions, GHCR e agente privado da VPS | [Runtime remoto](module/federation/REMOTE_RUNTIME.md) |
+| Rede, Tunnel/Access e Ports privados | [Networking](module/federation/NETWORKING.md) |
+
+As páginas refletem a branch consultada. O [PR #263](https://github.com/rodverse/rodverse/pull/263) contém as atualizações de Code e runtime ainda não integradas à main; STATUS registra as versões verificadas. Nenhum documento afirma que o fluxo completo já esteja ativo na VPS.
+
+---
+
 # Documentação técnica do Photo Intelligence Cloud
 
 **Referência de arquitetura | revisão do código de `main` em 04/11/2026 | base: `22c01bc86ce789dde937a5d215c54740ca6b93f6`**

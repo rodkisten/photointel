@@ -237,14 +237,14 @@ class WorkflowEnvTests(unittest.TestCase):
         self.assertIn("engine: typescript", worker)
         self.assertIn("node scripts/ci/adapters/photos.ts", worker)
         self.assertIn("environment: production", worker)
-        wrapper = (ROOT / ".github/workflows/deploy-worker.yml").read_text()
-        self.assertIn("uses: ./.github/workflows/frontend-release.yml", wrapper)
+        release = (ROOT / ".github/workflows/frontend-release.yml").read_text()
+        self.assertIn("uses: ./.github/workflows/_deploy.yml", release)
         self.assertNotIn("wrangler pages", worker)
         self.assertFalse((ROOT / ".github/workflows/deploy-pages.yml").exists())
         for name in (
-            "ci.yml", "bootstrap-validation.yml", "compose-validation.yml",
+            "ci.yml",
             "container-architectures.yml", "gcp-validation.yml",
-            "real-cpu-smoke.yml", "webkit-validation.yml",
+            "webkit-validation.yml",
         ):
             source = (ROOT / ".github/workflows" / name).read_text()
             self.assertNotIn("\n        uses: ./.github/actions/gcp-config\n", source)

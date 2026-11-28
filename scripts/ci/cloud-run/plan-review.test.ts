@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { reviewPlan } from './plan-review.ts';
+const resource=(actions:string[],mode='managed')=>({address:'google_cloud_run_v2_job.media',mode,change:{actions}});
+assert.deepEqual(reviewPlan({resource_changes:[resource(['update']),resource(['no-op']),resource(['read'],'data')]}),['google_cloud_run_v2_job.media: update']);
+assert.deepEqual(reviewPlan({}),[]);
+for(const actions of [['delete'],['create','delete'],['delete','create'],['forget'],[],['update','create']]) assert.throws(()=>reviewPlan({resource_changes:[resource(actions)]}));
+assert.throws(()=>reviewPlan({complete:false}));
+assert.throws(()=>reviewPlan({errored:true}));
+assert.throws(()=>reviewPlan({resource_changes:'invalid'}));
+console.log('Terraform plan review contracts passed');

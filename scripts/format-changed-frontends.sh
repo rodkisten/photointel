@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
-# Format only tracked, eligible files in the selected frontend(s).
+# Format only tracked, eligible files in the selected frontend(s) and packages.
 set -Eeuo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-target="${TARGET:-both}"
+target="${TARGET:-all}"
 mode="${MODE:-changed}"
 base_ref="${BASE_REF:-}"
 manifest="${RUNNER_TEMP:-/tmp}/photointel-format-paths.nul"
 : > "$manifest"
 
+scopes=()
 case "$target" in
-  web) scopes=(web) ;;
-  manage) scopes=(manage) ;;
-  both) scopes=(web manage) ;;
+  web) scopes=(apps/web) ;;
+  manage) scopes=(apps/manage) ;;
+  packages)
+    for pkg in packages/*; do
+      [[ -d "$pkg" ]] && scopes+=("$pkg")
+    done
+    ;;
+  all|both)
+    scopes=(apps/web apps/manage)
+    for pkg in packages/*; do
+      [[ -d "$pkg" ]] && scopes+=("$pkg")
+    done
+    ;;
   *) echo "::error::Invalid target: $target"; exit 1 ;;
 esac
 
@@ -34,7 +45,7 @@ case "$mode" in
     fi
     echo "Comparing $base_sha..HEAD"
     ;;
-  all) echo "Selecting all tracked frontend files" ;;
+  all) echo "Selecting all tracked files" ;;
   *) echo "::error::Invalid mode: $mode"; exit 1 ;;
 esac
 
@@ -44,9 +55,9 @@ selected=0
 for scope in "${scopes[@]}"; do
   paths=()
   if [[ "$mode" == changed ]]; then
-    mapfile -d '' -t paths < <(git diff --name-only -z --diff-filter=ACMR "$base_sha" HEAD -- "apps/$scope/")
+    mapfile -d '' -t paths < <(git diff --name-only -z --diff-filter=ACMR "$base_sha" HEAD -- "$scope/")
   else
-    mapfile -d '' -t paths < <(git ls-files -z -- "apps/$scope/")
+    mapfile -d '' -t paths < <(git ls-files -z -- "$scope/")
   fi
 
   lint=()
@@ -55,7 +66,7 @@ for scope in "${scopes[@]}"; do
     [[ -f "$path" ]] || continue
     case "$path" in
       *.js|*.mjs|*.cjs|*.jsx|*.ts|*.tsx)
-        lint+=("${path#apps/$scope/}")
+        lint+=("${path#"$scope/"}")
         format+=("$path")
         ;;
       *.css|*.html|*.json|*.jsonc)
@@ -77,9 +88,18 @@ for scope in "${scopes[@]}"; do
   } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
   if (( ${#lint[@]} > 0 )); then
-    if ! ( cd "apps/$scope" && ./node_modules/.bin/eslint --fix -- "${lint[@]}" ); then
-      validation_ok=false
-      echo "::warning title=ESLint ($scope)::Some rules cannot be fixed automatically; see ESLint output."
+    if [[ -x "$scope/node_modules/.bin/eslint" ]]; then
+      if ! ( cd "$scope" && ./node_modules/.bin/eslint --fix -- "${lint[@]}" ); then
+        validation_ok=false
+        echo "::warning title=ESLint ($scope)::Some rules cannot be fixed automatically; see ESLint output."
+      fi
+    elif [[ -x ./node_modules/.bin/eslint ]]; then
+      if ! ./node_modules/.bin/eslint --fix -- "${format[@]}"; then
+        validation_ok=false
+        echo "::warning title=ESLint ($scope)::Some rules cannot be fixed automatically; see ESLint output."
+      fi
+    else
+      echo "No local or root ESLint binary found for $scope; skipping ESLint."
     fi
   fi
 

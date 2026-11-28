@@ -1,3 +1,17 @@
+# Reconciliação com a main — 2026-11-28
+
+O PR #263 foi reconciliado com `15f49081` (merge do #261, consolidação de CI). Os quatro conflitos eram em `App.tsx`, `router.tsx`, `types.ts` e `worker.ts`: a formatação recente se sobrepôs às rotas Code e ao protocolo do host de módulos. A resolução mantém a navegação Code, as duas origens pareadas no `/module-host.json`, a ausência de APIs privilegiadas nos previews e as mudanças de CI da main.
+
+A consolidação de preview por artefato do #261 foi preservada. O gatilho `pull_request` remanescente de `frontend-release.yml` foi removido: CI valida e entrega artefatos ao workflow reutilizável de preview; o release de produção continua no push/manual/workflow_call. Isso elimina o build paralelo de PR que ainda contrariava o inventário de CI.
+
+A documentação agora tem atalhos no [README principal](../../../README.md), no [índice docs](../../README.md) e um índice completo no [README desta pasta](README.md). Nenhum documento foi removido ou transferido para outro repositório. A main e um PR aberto podem mostrar versões diferentes; consulte os SHAs/evidências abaixo.
+
+Verificação local após a resolução: Manage typecheck/build, **132 testes + 3 de service worker**, lint sem erros, quatro testes dos contratos de runtime e o teste do seletor de CI. Os dois novos testes de protocolo cobrem as origens Code/Sandbox e o bloqueio de API/mutações no host isolado. Actionlint passou nos workflows de build/release/preview alterados; o catálogo dessa versão da ferramenta não reconhece os labels `ubuntu-26.04` já presentes na main (esses jobs passaram na CI da main). Links relativos dos três índices foram verificados. Nova CI e preview deste merge devem ser conferidos antes de atribuir os resultados antigos ao código reconciliado.
+
+A reconciliação atualiza a branch do PR; não faz merge em produção, não ativa o runtime na VPS e não altera os demais PRs abertos. O histórico de implementação e evidência permanece abaixo.
+
+---
+
 # Current runtime block — 2026-11-28
 
 ## Implemented and published for review

@@ -1,5 +1,7 @@
 # Photo Intelligence Cloud v1.1
 
+> **Rodverse / Manage / Module Federation:** [documentação central](docs/module/federation/README.md) · [status, PRs e evidências](docs/module/federation/STATUS.md). Os guias abaixo cobrem a aplicação PhotoIntel.
+
 > **Referência arquitetural atualizada (04/11/2026, base `22c01bc`):** consulte [o índice técnico](docs/README.md) para a topologia implementada, as fronteiras de segurança e as diferenças entre código e produção. Este guia preserva procedimentos e evidências históricas; confirme sempre as flags, o ambiente implantado e as permissões reais antes de executar comandos.
 
 Catálogo privado de fotos e vídeos, preparado para bibliotecas grandes, com tags
