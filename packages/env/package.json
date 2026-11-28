@@ -10,6 +10,7 @@
     }
   },
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.mts"
+    "test": "node --experimental-strip-types --test tests/*.test.mts",
+    "pull": "node --experimental-strip-types src/pull.ts"
   }
 }
