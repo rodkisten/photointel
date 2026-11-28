@@ -1,4 +1,8 @@
-import { ISOLATED_SANDBOX_ORIGIN, moduleContentSecurityPolicy } from './features/modules/security';
+import {
+  ISOLATED_SANDBOX_ORIGIN,
+  ISOLATED_CODE_ORIGIN,
+  moduleContentSecurityPolicy,
+} from './features/modules/security';
 import { ApiError, failure, json, requireOrigin, verifyAccess } from './auth';
 import type { Env } from './auth';
 import { api } from './api';
@@ -103,9 +107,16 @@ async function handlePreview(request: Request, env: Env, location: URL): Promise
     return failure(403, 'PREVIEW_HOST', 'Preview hostname required');
   }
   if (path === '/module-host.json' && (method === 'GET' || method === 'HEAD')) {
-    const response = new Response(JSON.stringify({ mode: 'isolated-preview', sandboxOrigin: ISOLATED_SANDBOX_ORIGIN }), {
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-    });
+    const response = new Response(
+      JSON.stringify({
+        mode: 'isolated-preview',
+        sandboxOrigin: ISOLATED_SANDBOX_ORIGIN,
+        codeOrigin: ISOLATED_CODE_ORIGIN,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      },
+    );
     return applySecurityHeaders(response, true);
   }
   if (path.startsWith('/api/') || path.startsWith('/hooks/') || path.startsWith('/__')) {
@@ -122,9 +133,14 @@ async function handlePreview(request: Request, env: Env, location: URL): Promise
 }
 
 // Route external webhooks directly to the deployment router
-async function handleWebhooks(request: Request, env: Env, location: URL, context?: WorkerContext): Promise<Response> {
+async function handleWebhooks(
+  request: Request,
+  env: Env,
+  location: URL,
+  context?: WorkerContext,
+): Promise<Response> {
   const path = location.pathname;
-  
+
   if (path === '/hooks/github') {
     if (!context) throw new ApiError(503, 'WORKER_CONTEXT', 'Context unavailable');
     return githubHook(request, env, context);
@@ -132,7 +148,7 @@ async function handleWebhooks(request: Request, env: Env, location: URL, context
   if (path === '/hooks/cloud-build') {
     return cloudBuildCallback(request, env);
   }
-  
+
   return failure(404, 'HOOK_PATH', 'Route not found');
 }
 
@@ -142,13 +158,13 @@ async function handleApp(
   env: Env,
   location: URL,
   correlationId: string,
-  report: (error: unknown, provider?: string) => string | undefined
+  report: (error: unknown, provider?: string) => string | undefined,
 ): Promise<Response> {
   const method = request.method.toUpperCase();
   const path = location.pathname;
 
   const identity = await verifyAccess(request, env);
-  
+
   // Protect mutations from CSRF globally
   if (method !== 'GET' && method !== 'HEAD') {
     requireOrigin(request);
@@ -187,7 +203,7 @@ export default {
     // Userscript runtime telemetry is the single anonymous ingest route. All
     // reads and Manage operations remain behind Cloudflare Access.
     if (location.pathname === '/error/capture') {
-      return await ingestUserscriptError(request, env) || failure(404, 'NOT_FOUND', 'Route not found');
+      return (await ingestUserscriptError(request, env)) || failure(404, 'NOT_FOUND', 'Route not found');
     }
 
     // Closure to track cross-boundary incident data securely
@@ -218,9 +234,10 @@ export default {
       eventId = report(error);
       const status = error instanceof ApiError ? error.status : 502;
       const code = error instanceof ApiError ? error.code : 'UPSTREAM_FAILURE';
-      const message = error instanceof ApiError
-        ? error.message
-        : 'Falha na integração. Verifique credenciais e permissões do provedor.';
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Falha na integração. Verifique credenciais e permissões do provedor.';
 
       // Write error event strictly to stdout (omit secrets and raw stacks)
       console.error(
@@ -234,12 +251,15 @@ export default {
         }),
       );
 
-      response = json({
-        error: code,
-        message,
-        correlation_id: correlationId,
-        sentry_event_id: eventId || null,
-      }, status);
+      response = json(
+        {
+          error: code,
+          message,
+          correlation_id: correlationId,
+          sentry_event_id: eventId || null,
+        },
+        status,
+      );
     }
 
     if (response.status === 101) return response;

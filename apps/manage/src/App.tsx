@@ -85,7 +85,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
 };
 
 function sectionForPath(pathname: string): Tab {
-  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox')) return 'modules';
+  if (pathname.startsWith('/modules') || pathname.startsWith('/sandbox') || pathname.startsWith('/code')) return 'modules';
   if (pathname.startsWith('/terminal')) return 'terminal';
   if (pathname.startsWith('/jobs')) return 'jobs';
   if (pathname.startsWith('/operations')) return 'operations';

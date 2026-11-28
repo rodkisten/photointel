@@ -10,7 +10,9 @@ const smokeCsp: Plugin = {
     server.middlewares.use((_request, response, next) => {
       response.setHeader(
         'Content-Security-Policy',
-        moduleContentSecurityPolicy(true).replaceAll('https://sandbox.migos.club', 'http://localhost:4173'),
+        moduleContentSecurityPolicy(true)
+          .replaceAll('https://sandbox.migos.club', 'http://localhost:4173')
+          .replaceAll('https://shell.migos.club', 'http://localhost:4175'),
       );
       next();
     });

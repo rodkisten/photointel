@@ -1,3 +1,19 @@
+# Current checkpoint — 2026-11-28
+
+PR #262 and RodSandbox #14 are merged. This increment builds on updated main in `feat/workflow-studio-consolidation`; Shell #28 and orb #5 remain the existing implementation PRs.
+
+Implemented in this checkpoint: Code is a second independently identified trusted module; registry selection/pins are scoped per module, identity and workspace; `/code` is lazy mounted; host navigation preserves a module lifetime while URL state changes. Production policy allows reviewed Shell release artifacts only; the fixed PR #28 origin is available solely on the API-less native preview host. The SDK context does not expose a privileged workflow client.
+
+Shell now owns the extracted orb CST/editor feature packages. orb is being converted to consume their versioned archives and keeps its existing authorization/orchestration APIs. The Shell editor imports legacy drafts without deleting their originals. The Manage diagram editor still owns a separate persisted graph format; removing it requires explicit data/parity migration, which has not been verified.
+
+Verified locally so far: Manage typecheck, build and tests; Shell core/Studio/app typechecks, six CST tests, Shell Go/WASM/frontend and standalone/federated builds; orb typecheck, web build and existing API tests before final archive refresh. The first real Code smoke is still in progress. No preview deployment or Safari success is claimed for this checkpoint.
+
+Pending next: real standalone/federated and orb smoke, final package refresh, deployed SHA/CORS/cache checks, prototype host retirement after parity. Remote builds/GHCR/VPS, private Ports, authorized API adapters and Userscripts integration remain pending.
+
+---
+
+## Previous block (historical evidence; statuses below predate the merges)
+
 # Federation implementation status — 2026-11-27
 
 Approved direction remains in [README](README.md). This is an experimental first vertical slice, not a production rollout or a completed ecosystem migration.

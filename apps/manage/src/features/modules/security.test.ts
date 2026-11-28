@@ -13,6 +13,8 @@ describe('module CSP', () => {
   });
   it('does not enable telemetry connections in the isolated preview policy', () => {
     expect(moduleContentSecurityPolicy(false)).not.toContain('sentry.io');
-    expect(moduleContentSecurityPolicy(false)).toContain('https://pr14.sandbox.migos.club/modules/sandbox/');
+    expect(moduleContentSecurityPolicy(false)).toContain(
+      'https://pr-28.preview.shell.migos.club/modules/code/',
+    );
   });
 });

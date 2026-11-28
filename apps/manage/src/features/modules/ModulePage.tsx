@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { RodModuleContext, RodModuleManifest } from '@rodverse/module-sdk';
@@ -8,11 +8,13 @@ import { api } from '../../lib/client';
 import type { Meta } from '../../types';
 import { useProject } from '../../context/ProjectContext';
 import {
-  productionPolicy,
+  productionPolicies,
+  moduleDefinitions,
+  type ModuleId,
   readPreviewPolicy,
   type ModulePolicy,
   fetchManifest,
-  loadSandbox,
+  loadModule,
   type RemoteApp,
 } from './runtime';
 
@@ -50,7 +52,7 @@ function readSelection(key: string, policy: ModulePolicy): Selection {
         policy.allowedOrigins,
         policy.development,
       );
-      if (item.id !== 'sandbox' || item.name !== 'rod_sandbox') return initial(policy);
+      if (item.id !== policy.module.id || item.name !== policy.module.name) return initial(policy);
     }
     return saved;
   } catch {
@@ -62,31 +64,48 @@ function ModuleMount({
   workspace,
   identity,
   report,
+  policy,
+  repository,
 }: {
   App: RemoteApp;
   workspace: string;
   identity: string;
   report: (message: string) => void;
+  policy: ModulePolicy;
+  repository?: string;
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [context, setContext] = useState<RodModuleContext | null>(null);
+  const latest = useRef({ navigate, report });
   useEffect(() => {
-    const controller = new AbortController();
-    const events = new EventTarget();
-    const nextContext: RodModuleContext = {
+    latest.current = { navigate, report };
+  }, [navigate, report]);
+  const [scope, setScope] = useState<Omit<RodModuleContext, 'location'> | null>(null);
+  useEffect(() => {
+    const controller = new AbortController(),
+      events = new EventTarget();
+    const next: Omit<RodModuleContext, 'location'> = {
       contractMajor: 1,
       host: { name: 'Manage', version: '1.0.0', mode: 'federated' },
-      workspace: { id: workspace },
+      workspace: { id: workspace, repository },
       identity: { id: identity },
-      location: { pathname: location.pathname.replace(/^\/sandbox/, '') || '/', search: location.searchStr },
       navigate: (path) => {
         if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('..'))
           throw new Error('Invalid module path');
-        void navigate({ to: `/sandbox${path === '/' ? '' : path}`, search: { workspace } });
+        const target = new URL(path, 'https://module.invalid');
+        void latest.current.navigate({
+          to: policy.module.route + (target.pathname === '/' ? '' : target.pathname),
+          search: {
+            ...(new URLSearchParams(window.location.search).get('project')
+              ? { project: new URLSearchParams(window.location.search).get('project')! }
+              : {}),
+            ...Object.fromEntries(target.searchParams),
+            workspace,
+          },
+        });
       },
       theme: { mode: 'dark', tokens: {} },
-      notify: (message) => report(message.title),
+      notify: (message) => latest.current.report(message.title),
       events: {
         publish: (type, payload) => events.dispatchEvent(new CustomEvent(type, { detail: payload })),
         subscribe: (type, listener) => {
@@ -95,31 +114,45 @@ function ModuleMount({
           return () => events.removeEventListener(type, handler);
         },
       },
-      capabilities: ['browser.filesystem', 'browser.build', 'browser.terminal'],
+      capabilities:
+        policy.module.id === 'code'
+          ? ['workflow.edit', 'workflow.parse', 'registry.read']
+          : ['browser.filesystem', 'browser.build', 'browser.terminal'],
       api: {},
       flags: {},
-      lifecycle: { ready: () => report('Módulo montado'), dispose: () => {} },
+      lifecycle: { ready: () => latest.current.report('Módulo montado'), dispose: () => {} },
       signal: controller.signal,
     };
-    // Do not publish a scope disposed by StrictMode effect replay.
     queueMicrotask(() => {
-      if (!controller.signal.aborted) setContext(nextContext);
+      if (!controller.signal.aborted) setScope(next);
     });
     return () => controller.abort();
-  }, [workspace, identity, location.pathname, location.searchStr, navigate, report]);
+  }, [workspace, identity, repository, policy.module.id, policy.module.route]);
+  const context = scope
+    ? {
+        ...scope,
+        location: {
+          pathname: location.pathname.slice(policy.module.route.length) || '/',
+          search: location.searchStr,
+        },
+      }
+    : null;
   return context && !context.signal.aborted ? <App context={context} /> : null;
 }
 export function ModulePage() {
   const location = useLocation();
   const { project } = useProject();
+  const params = new URLSearchParams(location.searchStr);
+  const id: ModuleId =
+    location.pathname.startsWith('/code') || params.get('module') === 'code' ? 'code' : 'sandbox';
   const isolated = isIsolatedModulePreview(window.location.hostname);
   const previewPolicy = useQuery({
-    queryKey: ['module-preview-policy'],
-    queryFn: ({ signal }) => readPreviewPolicy(signal),
+    queryKey: ['module-preview-policy', id],
+    queryFn: ({ signal }) => readPreviewPolicy(signal, id),
     enabled: isolated,
     retry: false,
   });
-  const policy = isolated ? previewPolicy.data : productionPolicy;
+  const policy = isolated ? previewPolicy.data : productionPolicies[id];
   const { data: meta } = useQuery({
     queryKey: ['meta'],
     queryFn: () => api<Meta>('/meta'),
@@ -134,11 +167,12 @@ export function ModulePage() {
   if (!isolated && !meta?.email) return <p role="status">Aguardando identidade do Manage…</p>;
   return (
     <WorkspaceModules
-      key={`${isolated ? 'isolated-preview' : meta!.email}:${workspace}`}
+      key={`${id}:${isolated ? 'isolated-preview' : meta!.email}:${workspace}`}
       identity={isolated ? 'isolated-preview' : meta!.email}
       policy={policy}
       workspace={workspace}
-      mount={location.pathname.startsWith('/sandbox')}
+      mount={location.pathname.startsWith(policy.module.route)}
+      repository={project?.repository}
     />
   );
 }
@@ -147,13 +181,15 @@ function WorkspaceModules({
   mount,
   identity,
   policy,
+  repository,
 }: {
   workspace: string;
   mount: boolean;
   identity: string;
   policy: ModulePolicy;
+  repository?: string;
 }) {
-  const key = `rodverse:modules:v1:${identity}:${workspace}`;
+  const key = `rodverse:modules:v1:${identity}:${workspace}${policy.module.id === 'sandbox' ? '' : ':' + policy.module.id}`;
   const [selection, setSelection] = useState<Selection>(() => readSelection(key, policy));
   const [App, setApp] = useState<RemoteApp | null>(null);
   const [error, setError] = useState('');
@@ -161,7 +197,7 @@ function WorkspaceModules({
   const [diagnosticId] = useState(() => crypto.randomUUID());
   const [attempt, setAttempt] = useState(0);
   const manifest = useQuery({
-    queryKey: ['module-manifest', 'sandbox', selection.channel, selection.pinned?.gitSha, attempt],
+    queryKey: ['module-manifest', policy.module.id, selection.channel, selection.pinned?.gitSha, attempt],
     queryFn: ({ signal }) =>
       fetchManifest(
         selection.pinned
@@ -185,7 +221,7 @@ function WorkspaceModules({
   useEffect(() => {
     if (!mount || !selection.enabled || !manifest.data) return;
     const controller = new AbortController();
-    loadSandbox(manifest.data, controller.signal, attempt > 0, policy)
+    loadModule(manifest.data, controller.signal, attempt > 0, policy)
       .then((component) => {
         if (controller.signal.aborted) return;
         setApp(() => component);
@@ -223,8 +259,19 @@ function WorkspaceModules({
   );
   return (
     <section className="space-y-3" aria-label="Module Registry">
+      <nav aria-label="Módulos" className="flex gap-4">
+        {Object.values(moduleDefinitions).map((module) => (
+          <a
+            key={module.id}
+            className="underline"
+            href={`/modules?module=${module.id}&workspace=${encodeURIComponent(workspace)}`}
+          >
+            {module.label}
+          </a>
+        ))}
+      </nav>
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">Módulos · RodSandbox</h1>
+        <h1 className="text-lg font-semibold">Módulos · {policy.module.label}</h1>
         <span className="text-xs">Experimental · {workspace}</span>
       </header>
       <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -255,13 +302,13 @@ function WorkspaceModules({
         </span>
         <a
           className="underline"
-          href={manifest.data?.standaloneUrl || 'https://sandbox.migos.club'}
+          href={manifest.data?.standaloneUrl || policy.module.origin + policy.module.standalone}
           target="_blank"
           rel="noreferrer"
         >
           Abrir standalone
         </a>
-        <a className="underline" href={`/sandbox?workspace=${encodeURIComponent(workspace)}`}>
+        <a className="underline" href={`${policy.module.route}?workspace=${encodeURIComponent(workspace)}`}>
           Abrir no Manage
         </a>
         {selection.pinned && (
@@ -293,9 +340,16 @@ function WorkspaceModules({
       {error && failure(error)}
       {mount && selection.enabled && App && !error && (
         <ModuleBoundary key={`${manifest.data?.gitSha}:${attempt}`} fallback={failure}>
-          <Suspense fallback={<p>Carregando RodSandbox…</p>}>
+          <Suspense fallback={<p>Carregando {policy.module.label}…</p>}>
             <div style={{ height: 'min(78dvh, 1000px)', minHeight: 320 }}>
-              <ModuleMount App={App} workspace={workspace} identity={identity} report={setStatus} />
+              <ModuleMount
+                App={App}
+                workspace={workspace}
+                identity={identity}
+                report={setStatus}
+                policy={policy}
+                repository={repository}
+              />
             </div>
           </Suspense>
         </ModuleBoundary>
