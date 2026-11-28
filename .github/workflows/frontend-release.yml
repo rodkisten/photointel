@@ -15,6 +15,7 @@ on:
       - 'package-lock.json'
       - 'packages/contracts/**'
       - 'packages/env/**'
+      - 'packages/rod-module-sdk/**'
       - 'infra/cloudflare/**'
       - 'scripts/ci/**'
       - 'rodverse.config.ts'
@@ -31,6 +32,32 @@ on:
       - '.github/workflows/_deploy.yml'
       - '.github/workflows/_report.yml'
 
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - '.prettierrc.json'
+      - '.prettierignore'
+      - 'apps/web/**'
+      - 'apps/manage/**'
+      - 'packages/contracts/**'
+      - 'packages/env/**'
+      - 'packages/rod-module-sdk/**'
+      - 'infra/cloudflare/**'
+      - 'scripts/ci/**'
+      - 'rodverse.config.ts'
+      - 'infra/scripts/prepare_workflow_env.py'
+      - 'infra/scripts/cloudflare_setup.py'
+      - 'infra/scripts/diagnose_access.py'
+      - 'infra/scripts/deploy_manage.py'
+      - '.github/actions/notify/**'
+      - '.github/actions/gcp-config/**'
+      - '.github/actions/frontend-source/**'
+      - '.github/actions/frontend-build/**'
+      - '.github/workflows/frontend-release.yml'
+      - '.github/workflows/_build.yml'
+      - '.github/workflows/_deploy.yml'
+      - '.github/workflows/_report.yml'
 
   workflow_dispatch:
     inputs:
