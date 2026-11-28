@@ -1,4 +1,28 @@
-# Current block — 2026-11-28
+# Current runtime block — 2026-11-28
+
+## Implemented and published for review
+
+- Canonical runtime contracts in Rodverse (`25281d14`), strict schemas and compatibility checks; same integrity-locked package consumed by orb and Sandbox. Manage has an authenticated server adapter with opt-in production binding, and no privileged adapter in isolated previews.
+- [Sandbox #16](https://github.com/rodkisten/rodsandbox/pull/16): private Node24/Elysia Compose agent, idempotent process-recovery journal, digest-only pull, nonroot/read-only/resource limits, health rollback, explicit UI build/deploy/rollback/log controls, signed standalone Access validation, scoped persistence/lifecycle, Vite defaults, one existing preview pipeline. Agent installation bundle includes the private Tunnel network wiring; no VPS install occurred.
+- [orb #5](https://github.com/rodkisten/orb/pull/5): approved hosted-build broker, D1 reservation before dispatch, App-only fixed workflow calls, source/workflow checks, ambiguous-dispatch reconciliation and bounded provenance-validated receipts. Final formatted head `cca1e30` preserves the canonical shared editor/MCP work.
+- [github #16](https://github.com/rodkisten/github/pull/16): SHA-pinned reusable hosted GHCR workflow `a22421f5`; default-branch manual caller, immutable source, official Docker actions, per-run/attempt receipt outside checkout. All four CI checks passed at [46131439362](https://github.com/rodkisten/github/actions/runs/46131439362).
+- API-less Manage preview pairs specifically with Sandbox #16 and Code #29. Production origins do not allow these PR remotes.
+
+## Verified locally
+
+Sandbox typecheck, standalone/Federation builds and 120 tests; agent typecheck/build and seven tests; canonical contracts build/four tests; orb workspace typecheck/web build, nine API tests and API Worker dry-run; Manage typecheck/build, 130 tests plus three service-worker tests, including both preview-flag authorization cases. Workflow actionlint passed.
+
+Real workspace Docker smoke pulled two public GHCR images by digest, ran actual HTTP health checks with nonroot/read-only/resource constraints, rejected a candidate and restored the previous image. Compiled Node/Elysia served health 200 and rejected an unauthenticated target with 401. No VPS was used. [Docker evidence](evidence/runtime-docker-smoke.txt).
+
+Built standalone Chromium at 390 px loaded Runtime lazily, called the real preview Worker and received the expected 503 without infrastructure requests; mobile width and tab unmount passed with no browser exceptions. [Browser evidence](evidence/runtime-browser-smoke.txt). Live new-SHA Federation and final CI are being checked; do not infer success from a build.
+
+## Pending activation
+
+User confirmed rod-kvm4; existing administrative access method is still missing. New publishing caller is not merged into main, so no own hosted-image dispatch/publication or VPS install is claimed. Production service bindings/allowlists/secrets and dedicated Access management route are not activated. Automatic build-to-deploy outbox, private Ports URLs/HMR/expiry/revocation and physical iPhone Safari remain pending. See [REMOTE_RUNTIME](REMOTE_RUNTIME.md) and [NETWORKING](NETWORKING.md).
+
+---
+
+# Previous Code block — 2026-11-28
 
 ## Repository state
 

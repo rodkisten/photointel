@@ -1,3 +1,4 @@
+import { runtimeGateway } from './features/runtime/gateway';
 import { githubAppIdentity, githubToken } from './github-app';
 import { projectCatalogRoute } from './project-catalog';
 import { terminalCatalogRoute } from './features/terminal/catalog';
@@ -1782,6 +1783,7 @@ export async function api(
 
   // 1. Rotas modulares já extraídas (executadas sequencialmente sem prefixo rígido)
   const modularRoutes: RouteHandler[] = [
+    runtimeGateway,
     userscriptErrorsRoute,
     (req, e) => workflowStudioRoute(req, e),
     projectCatalogRoute,

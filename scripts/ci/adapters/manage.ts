@@ -61,5 +61,14 @@ const secrets: Record<string,string>={GITHUB_API_TOKEN:github,CLOUDFLARE_API_TOK
 const mapping={MANAGE_GITHUB_WEBHOOK_SECRET:'GITHUB_WEBHOOK_SECRET',MANAGE_GCP_BUILD_RELEASE_URL:'GCP_BUILD_WEBHOOK_RELEASE_URL',MANAGE_GCP_BUILD_PROVISION_URL:'GCP_BUILD_WEBHOOK_PROVISION_URL',MANAGE_GCP_BUILD_CALLBACK_SECRET:'GCP_BUILD_CALLBACK_SECRET',MANAGE_XRELAY_NOTIFICATION_URL:'XRELAY_NOTIFICATION_URL',MANAGE_XRELAY_NOTIFICATION_TOKEN:'XRELAY_NOTIFICATION_TOKEN',MANAGE_MODAL_BILLING_TOKEN:'MODAL_BILLING_TOKEN',MANAGE_SENTRY_API_TOKEN:'SENTRY_API_TOKEN'};
 for(const [key,binding] of Object.entries(mapping)) if(refs[key]||process.env[key]) secrets[binding]=secret(key);
 if(extra.MANAGE_TERMINAL_GATEWAY_URL||extra.MANAGE_TERMINAL_VMS||refs.MANAGE_TERMINAL_GATEWAY_SECRET||process.env.MANAGE_TERMINAL_GATEWAY_SECRET){if(!extra.MANAGE_TERMINAL_VMS||extra.MANAGE_TERMINAL_GATEWAY_URL!=='https://photointel-ssh.migos.club')throw new Error('Incomplete terminal config');const v=secret('MANAGE_TERMINAL_GATEWAY_SECRET');if(v.length<32)throw new Error('Invalid terminal secret');secrets.MANAGE_TERMINAL_GATEWAY_SECRET=v;}
-await publishWorker({cwd,account,token:deploy,config:{name,main:'src/worker.ts',compatibility_date:'2026-11-01',workers_dev:false,preview_urls:false,observability:{enabled:true,logs:{enabled:true,invocation_logs:false}},assets:{directory:'./dist',binding:'ASSETS',run_worker_first:true,not_found_handling:'single-page-application'},routes:[],keep_vars:true,d1_databases:[{binding:'DEPLOY_DB',database_name:name,database_id:db[0].uuid,migrations_dir:'./migrations'}],vars},migrationBinding:'DEPLOY_DB',secrets});
+// Runtime remains opt-in; previews never use this production adapter.
+const services: {binding:string;service:string}[] = [];
+if(extra.MANAGE_RUNTIME_SERVICE || refs.MANAGE_RUNTIME_CONTROL_TOKEN || process.env.MANAGE_RUNTIME_CONTROL_TOKEN){
+  if(extra.MANAGE_RUNTIME_SERVICE!=='rodsandbox')throw new Error('Invalid RodSandbox runtime service');
+  const value=secret('MANAGE_RUNTIME_CONTROL_TOKEN');
+  if(value.length<32)throw new Error('Invalid runtime control credential');
+  secrets.ROD_RUNTIME_CONTROL_TOKEN=value;
+  services.push({binding:'RODSANDBOX_RUNTIME',service:'rodsandbox'});
+}
+await publishWorker({cwd,account,token:deploy,config:{name,main:'src/worker.ts',compatibility_date:'2026-11-01',workers_dev:false,preview_urls:false,observability:{enabled:true,logs:{enabled:true,invocation_logs:false}},assets:{directory:'./dist',binding:'ASSETS',run_worker_first:true,not_found_handling:'single-page-application'},routes:[],keep_vars:true,services,d1_databases:[{binding:'DEPLOY_DB',database_name:name,database_id:db[0].uuid,migrations_dir:'./migrations'}],vars},migrationBinding:'DEPLOY_DB',secrets});
 console.log('Manage published: https://'+domain);

@@ -1,0 +1,9 @@
+2026-11-28, workspace Docker 29.9.2 / Compose 2.40.3, linux/amd64. Not rod-kvm4.
+Command: node packages/runtime-agent/tests/docker-smoke.mjs
+PASS real GHCR pull by digest, Compose --no-build, nonroot/read-only resource-limited service, actual HTTP health
+PASS real candidate health rejection and previous-image rollback; private loopback port is not exposed as a user URL
+DIGESTS sha256:637c35e46af7bc0dd3d3bcf7162e004e13ab3b370fde7cd416e2ac410b5a985a sha256:86628f2c9eaa5e84e3b98d25e26563c4a4f9b0ead9cf5656da4731d86e0621de
+SCOPE smoke-1853d85f
+
+Compiled Node24/Elysia agent, empty target policy: actual health HTTP 200; unauthenticated target request HTTP 401.
+Scoped test containers removed.

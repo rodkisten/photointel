@@ -118,7 +118,37 @@ function ModuleMount({
         policy.module.id === 'code'
           ? ['workflow.edit', 'workflow.parse', 'registry.read']
           : ['browser.filesystem', 'browser.build', 'browser.terminal'],
-      api: {},
+      api:
+        policy.module.id === 'sandbox' && !policy.isolated
+          ? {
+              'sandbox.runtime': async (input, signal) => {
+                const value = input as { path: string; method?: 'GET' | 'POST'; body?: unknown };
+                if (
+                  !value ||
+                  typeof value.path !== 'string' ||
+                  !/^\/(?:targets|status|logs|builds(?:\/[a-f0-9-]{36})?|deployments|rollbacks|operations\/[a-f0-9-]{36})(?:\?.*)?$/.test(
+                    value.path,
+                  ) ||
+                  value.path.includes('\\')
+                )
+                  throw Error('Invalid runtime path');
+                const method = value.method ?? 'GET';
+                if (!['GET', 'POST'].includes(method)) throw Error('Invalid runtime method');
+                const response = await fetch('/api/runtime' + value.path, {
+                  method,
+                  headers: value.body === undefined ? undefined : { 'Content-Type': 'application/json' },
+                  body: value.body === undefined ? undefined : JSON.stringify(value.body),
+                  credentials: 'same-origin',
+                  redirect: 'error',
+                  signal: AbortSignal.any([controller.signal, signal]),
+                });
+                const result = (await response.json()) as { error?: string };
+                if (!response.ok)
+                  throw Error(typeof result.error === 'string' ? result.error : 'Runtime unavailable');
+                return result;
+              },
+            }
+          : {},
       flags: {},
       lifecycle: { ready: () => latest.current.report('Módulo montado'), dispose: () => {} },
       signal: controller.signal,
@@ -127,7 +157,7 @@ function ModuleMount({
       if (!controller.signal.aborted) setScope(next);
     });
     return () => controller.abort();
-  }, [workspace, identity, repository, policy.module.id, policy.module.route]);
+  }, [workspace, identity, repository, policy.module.id, policy.module.route, policy.isolated]);
   const context = scope
     ? {
         ...scope,

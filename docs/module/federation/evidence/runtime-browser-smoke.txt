@@ -1,0 +1,3 @@
+2026-11-28, built standalone + local Wrangler Worker, Chromium mobile 390x844. No API mock.
+PASS built standalone at 390px: lazy Runtime, real Worker 503 preview guard, no infrastructure requests, no overflow, tab unmount and no browser exceptions
+{"status":503,"body":{"error":"Remote runtime is not configured for this deployment"},"scroll":390,"width":390}
