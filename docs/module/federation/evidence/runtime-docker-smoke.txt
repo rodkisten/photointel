@@ -7,3 +7,11 @@ SCOPE smoke-1853d85f
 
 Compiled Node24/Elysia agent, empty target policy: actual health HTTP 200; unauthenticated target request HTTP 401.
 Scoped test containers removed.
+
+GitHub Actions 46133020552, head ea3369ec1bb015efe3f573689bc8032cf5e97daf:
+runtime-agent job passed typecheck/build/eight tests, official Docker image build,
+actual packaged Node API in a read-only/resource-limited container: health HTTP 200,
+unauthenticated target HTTP 401. No Docker socket in this packaging smoke.
+https://github.com/rodkisten/rodsandbox/actions/runs/46133020552
+Initial packaging exposed lease placement outside the writable state volume;
+a36333a fixes it and adds a read-only-parent regression test. No GHCR push or VPS deployment in this CI job.

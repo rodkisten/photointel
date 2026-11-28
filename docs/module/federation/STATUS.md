@@ -10,11 +10,27 @@
 
 ## Verified locally
 
-Sandbox typecheck, standalone/Federation builds and 120 tests; agent typecheck/build and seven tests; canonical contracts build/four tests; orb workspace typecheck/web build, nine API tests and API Worker dry-run; Manage typecheck/build, 130 tests plus three service-worker tests, including both preview-flag authorization cases. Workflow actionlint passed.
+Sandbox typecheck, standalone/Federation builds and 120 tests; agent typecheck/build and eight tests; canonical contracts build/four tests; orb workspace typecheck/web build, nine API tests and API Worker dry-run; Manage typecheck/build, 130 tests plus three service-worker tests, including both preview-flag authorization cases. Workflow actionlint passed.
 
 Real workspace Docker smoke pulled two public GHCR images by digest, ran actual HTTP health checks with nonroot/read-only/resource constraints, rejected a candidate and restored the previous image. Compiled Node/Elysia served health 200 and rejected an unauthenticated target with 401. No VPS was used. [Docker evidence](evidence/runtime-docker-smoke.txt).
 
-Built standalone Chromium at 390 px loaded Runtime lazily, called the real preview Worker and received the expected 503 without infrastructure requests; mobile width and tab unmount passed with no browser exceptions. [Browser evidence](evidence/runtime-browser-smoke.txt). Live new-SHA Federation and final CI are being checked; do not infer success from a build.
+Built standalone Chromium at 390 px loaded Runtime lazily, called the real preview Worker and received the expected 503 without infrastructure requests; mobile width and tab unmount passed with no browser exceptions. [Browser evidence](evidence/runtime-browser-smoke.txt). Live Manage Federation also loaded the real Sandbox #16 SHA entry, passed React singleton/CSP, rendered the lazy Runtime with no privileged adapter/API calls, and passed isolated-frame/mobile-width/SPA-unmount checks without browser exceptions. [Live evidence](evidence/runtime-federated-smoke.txt).
+
+## Main implementation files
+
+| Repository | Paths |
+| --- | --- |
+| Rodverse | `packages/runtime-contracts/`, `apps/manage/src/features/runtime/`, module mount/policy, production publisher, existing frontend preflight and this documentation |
+| RodSandbox | `packages/runtime-agent/`, `src/runtime/`, existing `SandboxApp`/Playground, `runtime/`, `scripts/install-runtime-agent.sh`, existing Cloudflare workflow and approved-main `runtime-build.yml` caller |
+| orb | `apps/api/src/runtime/`, `migrations/0003_runtime_builds.sql`, API route/bindings, canonical contract archive/lock and policy example |
+| github | `.github/workflows/runtime-image.yml` |
+
+## Current CI / preview evidence
+
+- Manage source `a6178c4d`, followed by the npm lockfile bot `debab7bb`: [frontend release/preflight](https://github.com/rodverse/rodverse/actions/runs/46132683007) and [native preview](https://github.com/rodverse/rodverse/actions/runs/46132682959) **success**. [Live Sandbox integration](https://pr-263-photointel-manage.kisten.workers.dev/sandbox).
+- orb formatted head `cca1e30`: [all four CI targets](https://github.com/rodkisten/orb/actions/runs/46132466082) and [preview](https://github.com/rodkisten/orb/actions/runs/46132466029) **success**. [Standalone orb](https://pr5.orb.migos.club/workspace).
+- Sandbox deployment passed in [46132810519](https://github.com/rodkisten/rodsandbox/actions/runs/46132810519); [standalone](https://pr16.sandbox.migos.club/) and actual federated remote were exercised. The initial packaged-agent job exposed a startup defect: its process lease targeted the read-only parent of the state volume. Commit `a36333a` moves the lease into that volume and adds a regression test. [Final CI 46133020552](https://github.com/rodkisten/rodsandbox/actions/runs/46133020552) **passed both deployment and packaged-agent jobs** at head `ea3369e`: actual built container, read-only filesystem/resource limits, HTTP health 200 and unauthenticated target 401. Final public manifest/remote SHA `d278bcec99124d1da2ea23936147bde90a078c3d` was exercised standalone and in Manage; it is the PR merge artifact built by Actions. No image was published by this CI packaging check.
+- Rodverse [global CI](https://github.com/rodverse/rodverse/actions/runs/46132683034): frontend/Python passed, security gate failed and multiarch container build is still running at this checkpoint. Historical gitleaks gate remains enabled; inspect the completed run before attributing every finding.
 
 ## Pending activation
 
