@@ -266,11 +266,16 @@ const sandboxIndexRoute = createRoute({
   component: ModulePage,
 });
 
+const codeIndexRoute = createRoute({ getParentRoute: () => rootRoute, path: '/code', component: ModulePage });
+const codeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/code/$', component: ModulePage });
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   modulesRoute,
   sandboxRoute,
   sandboxIndexRoute,
+  codeIndexRoute,
+  codeRoute,
   deploysRoute,
   infrastructureRoute,
   triggersRoute,

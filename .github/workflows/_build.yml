@@ -129,6 +129,18 @@ jobs:
         continue-on-error: true
         run: npm --prefix packages/rod-module-sdk test
 
+      - name: Setup canonical runtime contract workspace
+        if: matrix.app == 'manage'
+        uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
+          run_install: false
+      - name: Validate remote runtime contracts
+        if: matrix.app == 'manage'
+        id: runtime_contract
+        continue-on-error: true
+        run: pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @rodverse/runtime-contracts build && pnpm --filter @rodverse/runtime-contracts test
+
       - name: "📋 Consolidar resultado · ${{ matrix.app }}"
         if: ${{ always() }}
         env:

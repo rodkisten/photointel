@@ -1,6 +1,23 @@
 # Rodverse — Module Federation architecture
 
-Status: approved product direction (2026-11-27). Experimental Sandbox/Manage implementation and local browser validation now exist; production rollout remains pending. See [implementation status/evidence](STATUS.md), [exported contracts](CONTRACTS.md), [registry](MODULE_REGISTRY.md) and [migration decisions](MIGRATION.md). RodSandbox #12 merged during implementation; its follow-up is [#14](https://github.com/rodkisten/rodsandbox/pull/14). The architecture below records approved direction and original audit; proposed sketches are superseded by those implementation documents where stated.
+Status: approved architecture, with Sandbox/Manage and Code/Studio implementations. [STATUS](STATUS.md) separates implemented, verified and pending work; [CONTRACTS](CONTRACTS.md), [MODULE_REGISTRY](MODULE_REGISTRY.md), [MIGRATION](MIGRATION.md) and [CI/CD](CI_CD.md) describe the current implementation. Rodverse #262, RodSandbox #14 and Shell #28 have merged; Code consolidation continues in [Shell #29](https://github.com/rodkisten/shell/pull/29) and the existing [orb #5](https://github.com/rodkisten/orb/pull/5). The architecture and original audit below remain historical evidence; implementation documents supersede proposed sketches and old status rows.
+
+## Índice da documentação
+
+| Documento | Conteúdo |
+| --- | --- |
+| [STATUS](STATUS.md) | Comece aqui para estado real, arquivos, commits, PRs, CI, previews, evidências e pendências |
+| [CONTRACTS](CONTRACTS.md) | Rod Module SDK e contratos do runtime |
+| [MODULE_REGISTRY](MODULE_REGISTRY.md) | Registro de módulos, origens confiáveis, versões e rollback |
+| [SECURITY](SECURITY.md) | Federação, isolamento de previews e autorização |
+| [REMOTE_RUNTIME](REMOTE_RUNTIME.md) | orb, builds hospedados, GHCR, agente Compose e requisitos de ativação |
+| [NETWORKING](NETWORKING.md) | Tunnel/Access, portas e preview privado: implementado e pendente |
+| [CI_CD](CI_CD.md) | Build, manifest, artefatos por SHA, previews e workflows compartilhados |
+| [MIGRATION](MIGRATION.md) | Consolidação Code/orb, compatibilidade e próximos gates |
+| [TROUBLESHOOTING](TROUBLESHOOTING.md) | Diagnóstico de falhas de carregamento e integração |
+| [evidence/](evidence/) | Resultados de smoke tests e validações identificáveis |
+
+A arquitetura nesta página inclui o histórico da investigação inicial. Para implementação e ativação atuais, prevalecem os documentos de status e contratos da **mesma branch/release**. A main pode estar atrás de um PR aberto; STATUS identifica os commits testados. O runtime está implementado para revisão e validado localmente/CI, sem publicação própria de imagem ou instalação na VPS declaradas.
 
 ## Decision
 

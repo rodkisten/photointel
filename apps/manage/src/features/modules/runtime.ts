@@ -1,29 +1,59 @@
 import React from 'react';
-import { ISOLATED_SANDBOX_ORIGIN } from './security';
+import { ISOLATED_SANDBOX_ORIGIN, ISOLATED_CODE_ORIGIN } from './security';
 import { loadRemote, registerRemotes } from '@module-federation/enhanced/runtime';
 import { parseModuleManifest, type RodModuleManifest, type RodModuleProps } from '@rodverse/module-sdk';
 
 // Reviewed release origins only. PR previews deliberately absent from this privileged host.
 export const development = import.meta.env.DEV || import.meta.env.MODE === 'federation-smoke';
+export const moduleDefinitions = {
+  sandbox: {
+    id: 'sandbox',
+    name: 'rod_sandbox',
+    label: 'RodSandbox',
+    origin: 'https://sandbox.migos.club',
+    manifest: '/rod-module.json',
+    route: '/sandbox',
+    standalone: '/',
+    developmentOrigin: 'http://localhost:4173',
+  },
+  code: {
+    id: 'code',
+    name: 'rod_code',
+    label: 'Code · Workflow Studio',
+    origin: 'https://shell.migos.club',
+    manifest: '/workflow/rod-module.json',
+    route: '/code',
+    standalone: '/workflow/',
+    developmentOrigin: 'http://localhost:4175',
+  },
+} as const;
+export type ModuleId = keyof typeof moduleDefinitions;
 export interface ModulePolicy {
+  module: (typeof moduleDefinitions)[ModuleId];
   allowedOrigins: readonly string[];
   development: boolean;
   channels: Record<string, string>;
   isolated: boolean;
 }
-export const productionPolicy: ModulePolicy = {
-  allowedOrigins: [
-    'https://sandbox.migos.club',
-    ...(development ? ['http://localhost:4173', 'http://127.0.0.1:4173'] : []),
-  ],
-  development,
-  isolated: false,
-  channels: {
-    production: 'https://sandbox.migos.club/rod-module.json',
-    ...(development ? { development: 'http://localhost:4173/rod-module.json' } : {}),
-  },
-};
-export async function readPreviewPolicy(signal: AbortSignal): Promise<ModulePolicy> {
+export function releasePolicy(id: ModuleId): ModulePolicy {
+  const module = moduleDefinitions[id];
+  return {
+    module,
+    allowedOrigins: [module.origin, ...(development ? [module.developmentOrigin] : [])],
+    development,
+    isolated: false,
+    channels: {
+      production: module.origin + module.manifest,
+      ...(development ? { development: module.developmentOrigin + module.manifest } : {}),
+    },
+  };
+}
+export const productionPolicy = releasePolicy('sandbox');
+export const productionPolicies = { sandbox: productionPolicy, code: releasePolicy('code') };
+export async function readPreviewPolicy(
+  signal: AbortSignal,
+  id: ModuleId = 'sandbox',
+): Promise<ModulePolicy> {
   const response = await fetch('/module-host.json', {
     cache: 'no-store',
     credentials: 'omit',
@@ -32,14 +62,20 @@ export async function readPreviewPolicy(signal: AbortSignal): Promise<ModulePoli
   });
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json'))
     throw new Error('Isolated preview host configuration unavailable');
-  const config = (await response.json()) as { mode?: string; sandboxOrigin?: string };
-  if (config.mode !== 'isolated-preview' || config.sandboxOrigin !== ISOLATED_SANDBOX_ORIGIN)
+  const config = (await response.json()) as { mode?: string; sandboxOrigin?: string; codeOrigin?: string };
+  if (
+    config.mode !== 'isolated-preview' ||
+    config.sandboxOrigin !== ISOLATED_SANDBOX_ORIGIN ||
+    config.codeOrigin !== ISOLATED_CODE_ORIGIN
+  )
     throw new Error('Untrusted preview host configuration');
+  const origin = id === 'code' ? ISOLATED_CODE_ORIGIN : ISOLATED_SANDBOX_ORIGIN;
   return {
-    allowedOrigins: [ISOLATED_SANDBOX_ORIGIN],
+    module: moduleDefinitions[id],
+    allowedOrigins: [origin],
     development: false,
     isolated: true,
-    channels: { preview: ISOLATED_SANDBOX_ORIGIN + '/rod-module.json' },
+    channels: { preview: origin + moduleDefinitions[id].manifest },
   };
 }
 export type RemoteApp = React.ComponentType<RodModuleProps>;
@@ -56,8 +92,8 @@ function trustedManifestUrl(url: string, policy: ModulePolicy) {
     parsed.search ||
     parsed.hash ||
     !(
-      /^\/rod-module.json$/.test(parsed.pathname) ||
-      /^\/modules\/sandbox\/[a-f0-9]{40}\/rod-module.json$/.test(parsed.pathname)
+      parsed.pathname === policy.module.manifest ||
+      new RegExp('^/modules/' + policy.module.id + '/[a-f0-9]{40}/rod-module\\.json$').test(parsed.pathname)
     )
   )
     throw new Error('Untrusted manifest URL');
@@ -78,12 +114,12 @@ export async function fetchManifest(
   if (!response.ok || !response.headers.get('content-type')?.includes('json'))
     throw new Error(`Module manifest HTTP ${response.status}: expected JSON (check Access)`);
   const manifest = parseModuleManifest(await response.json(), url, policy.allowedOrigins, policy.development);
-  if (manifest.id !== 'sandbox' || manifest.name !== 'rod_sandbox')
+  if (manifest.id !== policy.module.id || manifest.name !== policy.module.name)
     throw new Error('Unexpected module identity');
   return manifest;
 }
-let pinnedSha: string | undefined;
-export async function loadSandbox(
+const pinnedShas = new Map<string, string>();
+export async function loadModule(
   manifest: RodModuleManifest,
   signal: AbortSignal,
   retry = false,
@@ -95,8 +131,11 @@ export async function loadSandbox(
     policy.allowedOrigins,
     policy.development,
   );
+  if (manifest.id !== policy.module.id || manifest.name !== policy.module.name)
+    throw new Error('Unexpected module identity');
+  const pinnedSha = pinnedShas.get(manifest.id);
   if (pinnedSha && pinnedSha !== manifest.gitSha) throw new Error('Reload the page to change module version');
-  pinnedSha = manifest.gitSha;
+  pinnedShas.set(manifest.id, manifest.gitSha);
   registerRemotes([{ name: manifest.name, entry: manifest.entry, type: 'module' }], { force: retry });
   const remote = await new Promise<RemoteExports>((resolve, reject) => {
     let settled = false;

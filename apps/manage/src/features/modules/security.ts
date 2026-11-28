@@ -1,16 +1,24 @@
-// Reviewed Sandbox artifact origin only; PR remotes never enter the privileged host.
-export const ISOLATED_SANDBOX_ORIGIN = 'https://pr14.sandbox.migos.club';
+// Only reviewed origins. PR code is available solely on the API-less preview host.
+export const ISOLATED_SANDBOX_ORIGIN = 'https://pr16.sandbox.migos.club';
+export const ISOLATED_CODE_ORIGIN = 'https://pr-29.preview.shell.migos.club';
 const sandbox = 'https://sandbox.migos.club';
+const code = 'https://shell.migos.club';
 export function moduleContentSecurityPolicy(production: boolean): string {
-  const origins = production ? [sandbox] : [sandbox, ISOLATED_SANDBOX_ORIGIN];
-  const artifacts = origins.map((origin) => origin + '/modules/sandbox/').join(' ');
+  const origins = [sandbox, code, ...(production ? [] : [ISOLATED_SANDBOX_ORIGIN, ISOLATED_CODE_ORIGIN])];
+  const artifacts = [
+    sandbox + '/modules/sandbox/',
+    code + '/modules/code/',
+    ...(production
+      ? []
+      : [ISOLATED_SANDBOX_ORIGIN + '/modules/sandbox/', ISOLATED_CODE_ORIGIN + '/modules/code/']),
+  ].join(' ');
   return [
     "default-src 'self'",
     `script-src 'self' 'wasm-unsafe-eval' ${artifacts}`,
     `worker-src 'self' blob: ${artifacts}`,
     "style-src 'self' 'unsafe-inline'",
-    `connect-src 'self' ${origins.join(' ')} https://cdn.jsdelivr.net${production ? ' https://*.sentry.io' : ''}`,
-    `frame-src ${artifacts}`,
+    `connect-src 'self' ${origins.join(' ')} https://cdn.jsdelivr.net https://api.github.com https://raw.githubusercontent.com${production ? ' https://*.sentry.io' : ''}`,
+    `frame-src ${sandbox}/modules/sandbox/${production ? '' : ' ' + ISOLATED_SANDBOX_ORIGIN + '/modules/sandbox/'}`,
     "img-src 'self' data:",
     "base-uri 'none'",
     "frame-ancestors 'none'",

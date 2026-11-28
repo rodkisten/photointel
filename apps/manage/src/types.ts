@@ -1,4 +1,5 @@
 export type Tab =
+  | 'code'
   | 'modules'
   | 'projects'
   | 'terminal'

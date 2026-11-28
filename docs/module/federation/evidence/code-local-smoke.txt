@@ -1,0 +1,7 @@
+PASS standalone: demo YAML, CST graph, step ports, no iframe
+PASS official Federation remote and React singleton guard
+PASS host URL navigation preserves mounted Studio session and graph
+DIMENSIONS { height: 486.3125, width: 358, scroll: 390, viewport: 390 }
+PASS local draft reopens from shared URL, CSS scoped to Shadow DOM, DB scoped to identity/workspace
+PASS real SPA unmount
+PASS no browser exceptions; immutable remote assets, no execution credentials supplied

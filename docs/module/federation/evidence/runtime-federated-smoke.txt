@@ -1,0 +1,5 @@
+2026-11-28, deployed Manage + Sandbox #16, Chromium mobile 390x844, no remote/API mocks.
+PASS live Manage loads Sandbox #16 via real Federation and React singleton/CSP; lazy Runtime has no privileged adapter or API requests
+PASS 390px width, isolated preview frame, real SPA unmount and no browser exceptions
+ENTRIES ["https://pr16.sandbox.migos.club/modules/sandbox/d278bcec99124d1da2ea23936147bde90a078c3d/remoteEntry.js"]
+HOST https://pr-263-photointel-manage.kisten.workers.dev/sandbox

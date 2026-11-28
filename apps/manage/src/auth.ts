@@ -7,6 +7,8 @@ export interface D1Statement {
 }
 export interface D1Binding { prepare(sql: string): D1Statement; }
 export interface Env {
+  RODSANDBOX_RUNTIME?: { fetch(request: Request): Promise<Response> };
+  ROD_RUNTIME_CONTROL_TOKEN?: string;
   DEPLOY_DB?: D1Binding;
   GITHUB_WEBHOOK_SECRET?: string;
   CIRCLECI_API_TOKEN?: string;
