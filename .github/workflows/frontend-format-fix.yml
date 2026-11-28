@@ -5,14 +5,15 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "Which frontend should be fixed?"
+        description: "Which target should be fixed?"
         type: choice
         required: true
-        default: both
+        default: all
         options:
-          - both
+          - all
           - web
           - manage
+          - packages
       mode:
         description: "Only changed files, or every tracked frontend file?"
         type: choice
@@ -56,23 +57,35 @@ jobs:
             package-lock.json
             apps/web/package-lock.json
             apps/manage/package-lock.json
+            packages/**/package-lock.json
 
       - name: "📦 Install shared Prettier"
-        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        uses: rodkisten/github/console-run@main
         with:
           command: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Web ESLint"
-        if: inputs.target == 'web' || inputs.target == 'both'
+        if: inputs.target == 'web' || inputs.target == 'all'
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
           command: npm --prefix apps/web ci --ignore-scripts --no-audit --no-fund
 
       - name: "📦 Install Manage ESLint"
-        if: inputs.target == 'manage' || inputs.target == 'both'
+        if: inputs.target == 'manage' || inputs.target == 'all'
         uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
         with:
           command: npm --prefix apps/manage ci --ignore-scripts --no-audit --no-fund
+
+      - name: "📦 Install Packages dependencies"
+        if: inputs.target == 'packages' || inputs.target == 'all'
+        uses: rodkisten/github/console-run@dc39d2a9755e5a1dd3b10b81532c1b724e2d6a11
+        with:
+          command: |
+            for lockfile in packages/*/package-lock.json; do
+              if [ -f "$lockfile" ]; then
+                npm --prefix "$(dirname "$lockfile")" ci --ignore-scripts --no-audit --no-fund
+              fi
+            done
 
       - name: "🧹 ESLint --fix + Prettier --write"
         id: format
@@ -93,8 +106,8 @@ jobs:
             echo "No formatting changes to commit."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "ploocky[bot]"
+          git config user.email "5784353+github-actions[bot]@users.noreply.github.com"
           git diff --cached --stat
           git commit -m "style(frontend): auto-fix selected files with ESLint and Prettier"
           git push origin "HEAD:refs/heads/$BRANCH_NAME"
